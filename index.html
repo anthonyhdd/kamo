@@ -238,7 +238,7 @@ function initThree(){
   renderer.setClearColor(0x000000,0); renderer.outputColorSpace=THREE.SRGBColorSpace;
   scene=new THREE.Scene();
   camera3=new THREE.PerspectiveCamera(42,1,0.1,100);
-  camera3.position.set(0,1.18,5.2); camera3.lookAt(0,1.18,0);  // frame the mannequin centered on screen
+  camera3.position.set(0,1.18,7.3); camera3.lookAt(0,1.18,0);  // pulled back: smaller mannequin, dead-centered on screen
   scene.add(new THREE.HemisphereLight(0xffffff,0x555566,1.15));
   const dir=new THREE.DirectionalLight(0xffffff,1.5); dir.position.set(3.5,6,4); scene.add(dir);
   const rim=new THREE.DirectionalLight(0xbfdfff,0.5); rim.position.set(-4,2,-3); scene.add(rim);
