@@ -26,13 +26,27 @@
   #board{touch-action:none;}
 
   /* ---------- START OVERLAY ---------- */
-  #start{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;gap:16px;
-    align-items:center;justify-content:center;text-align:center;padding:30px;
-    background:radial-gradient(130% 120% at 50% 12%,#182a3d 0%,#0a0c12 60%,#05060a 100%);}
-  #start .logo{font-size:40px;filter:drop-shadow(0 6px 20px rgba(57,230,164,.35));}
-  #start h1{margin:0;font-size:30px;font-weight:900;letter-spacing:1px;}
-  #start h1 b{color:var(--accent);}
-  #start p{opacity:.72;margin:0;font-size:14.5px;max-width:300px;line-height:1.5;}
+  #start{position:absolute;inset:0;z-index:30;overflow:hidden;background:#05060a;}
+  #slideshow{position:absolute;inset:0;overflow:hidden;
+    background:radial-gradient(120% 120% at 50% 20%,#1b2a3a,#05060a 70%);}
+  #slideshow .slide{position:absolute;inset:0;background-size:cover;background-position:center;
+    opacity:0;transition:opacity 1.3s ease;will-change:opacity,transform;}
+  #slideshow .slide.active{opacity:1;animation:kb 6s ease-out both;}
+  @keyframes kb{from{transform:scale(1.03)}to{transform:scale(1.13)}}
+  .startScrim{position:absolute;inset:0;z-index:2;pointer-events:none;
+    background:linear-gradient(180deg,rgba(0,0,0,.42) 0%,rgba(0,0,0,0) 26%,rgba(0,0,0,0) 50%,rgba(5,6,10,.9) 100%);}
+  .startTop{position:absolute;z-index:3;top:calc(18px + var(--safe-t));left:0;right:0;display:flex;justify-content:center;}
+  .startTop .logo{font-weight:900;letter-spacing:2.5px;font-size:21px;text-shadow:0 2px 14px rgba(0,0,0,.7);}
+  .startTop .logo b{color:var(--accent);}
+  .startBottom{position:absolute;z-index:3;left:0;right:0;bottom:calc(30px + var(--safe-b));
+    display:flex;flex-direction:column;align-items:center;gap:16px;padding:0 24px;}
+  .startTag{text-align:center;font-size:16.5px;font-weight:700;line-height:1.38;
+    text-shadow:0 2px 12px rgba(0,0,0,.85);opacity:.96;max-width:320px;}
+  .startTag b{color:var(--accent);}
+  .startHint{font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.6;margin-top:-4px;}
+  .dots{display:flex;gap:6px;margin-top:2px;}
+  .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.35);transition:.3s;}
+  .dots i.on{background:var(--accent);width:16px;border-radius:3px;}
   .cta{margin-top:8px;border:none;border-radius:18px;padding:0 26px;height:58px;font-size:17px;font-weight:800;
     background:linear-gradient(135deg,var(--accent),#28c99b);color:#04241a;cursor:pointer;
     box-shadow:0 12px 40px rgba(57,230,164,.35);transition:transform .08s;}
@@ -54,19 +68,19 @@
 
   /* ---------- SHUTTER (state of the art) ---------- */
   #shutterWrap{position:absolute;left:50%;bottom:calc(30px + var(--safe-b));transform:translateX(-50%);z-index:15;display:none;}
-  #shutter{position:relative;width:82px;height:82px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
-  #shutter .ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,255,255,.9);
+  .shutter{position:relative;width:82px;height:82px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
+  .shutter .ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,255,255,.9);
     box-shadow:0 0 0 1px rgba(0,0,0,.25) inset, 0 8px 30px rgba(0,0,0,.5);}
-  #shutter .spin{position:absolute;inset:-6px;border-radius:50%;
+  .shutter .spin{position:absolute;inset:-6px;border-radius:50%;
     background:conic-gradient(from 0deg,var(--accent),var(--accent2),var(--accent));
     -webkit-mask:radial-gradient(circle, transparent 40px, #000 41px);mask:radial-gradient(circle, transparent 40px, #000 41px);
     opacity:.9;animation:spin 6s linear infinite;filter:blur(.3px);}
-  #shutter .core{position:absolute;inset:9px;border-radius:50%;
+  .shutter .core{position:absolute;inset:9px;border-radius:50%;
     background:radial-gradient(circle at 38% 32%, #ffffff, #e9e9ee 60%, #cfcfd6);
     box-shadow:0 4px 14px rgba(0,0,0,.4), 0 0 22px rgba(57,230,164,.25);
     transition:transform .12s cubic-bezier(.3,1.4,.5,1);animation:breathe 3.4s ease-in-out infinite;}
-  #shutter:active .core{transform:scale(.82);}
-  #shutter:active .spin{animation-duration:1.2s;}
+  .shutter:active .core{transform:scale(.82);}
+  .shutter:active .spin{animation-duration:1.2s;}
   @keyframes spin{to{transform:rotate(360deg);}}
   @keyframes breathe{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 18px rgba(57,230,164,.20);}50%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 30px rgba(57,230,164,.42);}}
   .capLabel{position:absolute;top:92px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:2px;
@@ -128,7 +142,7 @@
     <div id="loupe"></div>
 
     <div id="shutterWrap">
-      <button id="shutter" aria-label="Capturer">
+      <button id="shutter" class="shutter" aria-label="Capturer">
         <div class="spin"></div>
         <div class="ring"></div>
         <div class="core"></div>
@@ -156,14 +170,25 @@
       <div class="badge">💧 Pipette = couleur exacte du décor → camouflage parfait</div>
     </div>
 
-    <!-- START -->
+    <!-- START (home) -->
     <div id="start">
-      <div class="logo">🦎</div>
-      <h1>HI<b>DEY</b></h1>
-      <p>Cache un petit bonhomme dans ton décor, puis lance le défi : <b>« Tu me trouves ? »</b></p>
-      <button class="cta" id="startBtn">📷 Ouvrir la caméra</button>
-      <button class="mini" id="startPhoto">ou choisir une photo</button>
-      <div id="startNote" style="font-size:12px;color:#ffd27c;background:rgba(255,180,60,.12);border:1px solid rgba(255,180,60,.35);padding:9px 13px;border-radius:12px;max-width:300px;display:none;line-height:1.45;"></div>
+      <div id="slideshow">
+        <div class="slide" data-src="assets/home-1.jpg"></div>
+        <div class="slide" data-src="assets/home-2.jpg"></div>
+        <div class="slide" data-src="assets/home-3.jpg"></div>
+      </div>
+      <div class="startScrim"></div>
+      <div class="startTop"><div class="logo">HI<b>DEY</b> 🦎</div></div>
+      <div class="startBottom">
+        <div class="startTag">Cache un bonhomme dans ton décor.<br><b>Tu me trouves ? 🦎</b></div>
+        <div class="dots" id="dots"></div>
+        <button id="startBtn" class="shutter" aria-label="Ouvrir la caméra">
+          <div class="spin"></div><div class="ring"></div><div class="core"></div>
+        </button>
+        <div class="startHint">Appuie pour créer</div>
+        <button class="mini" id="startPhoto">ou choisir une photo</button>
+        <div id="startNote" style="font-size:12px;color:#ffd27c;background:rgba(255,180,60,.12);border:1px solid rgba(255,180,60,.35);padding:9px 13px;border-radius:12px;max-width:320px;display:none;line-height:1.45;"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -425,6 +450,15 @@ window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePi
 /* iOS + non-Safari can't use the web camera */
 (function(){ const ua=navigator.userAgent||""; const iOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
   if(iOS&&/CriOS|FxiOS|EdgiOS/.test(ua)){ const n=$("#startNote"); n.style.display="block"; n.innerHTML="⚠️ Sur iPhone, la caméra ne marche que dans <b>Safari</b>. Ouvre ce lien dans Safari — ou « choisir une photo »."; } })();
+
+/* ---- home slideshow (auto crossfade) ---- */
+(function slideshow(){
+  const slides=[...document.querySelectorAll("#slideshow .slide")], dotsC=$("#dots");
+  slides.forEach(s=>{ const im=new Image(); im.onload=()=>{ s.style.backgroundImage=`url(${s.dataset.src})`; }; im.src=s.dataset.src; const d=document.createElement("i"); dotsC.appendChild(d); });
+  const dots=[...dotsC.children]; let idx=0;
+  function show(i){ slides.forEach((s,k)=>s.classList.toggle("active",k===i)); dots.forEach((d,k)=>d.classList.toggle("on",k===i)); }
+  show(0); setInterval(()=>{ idx=(idx+1)%slides.length; show(idx); }, 3800);
+})();
 
 initThree();
 
