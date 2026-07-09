@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#05060a" />
 <meta name="robots" content="noindex,nofollow" />
-<title>HIDEY — trouve le petit bonhomme</title>
+<title>KAMO — trouve le petit bonhomme</title>
 <style>
   :root{
     --bg:#05060a; --panel:rgba(16,16,24,.72); --stroke:rgba(255,255,255,.14);
@@ -146,7 +146,7 @@
     <canvas id="board"></canvas>
     <div id="flash"></div>
 
-    <div class="brand">HI<b>DEY</b></div>
+    <div class="brand">KA<b>MO</b></div>
     <button id="flip" title="Changer de caméra"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
 
@@ -190,7 +190,7 @@
         <div class="slide" data-src="assets/home-3.jpg"></div>
       </div>
       <div class="startScrim"></div>
-      <div class="startTop"><div class="logo">HI<b>DEY</b> 🦎</div></div>
+      <div class="startTop"><div class="logo">KA<b>MO</b> 🦎</div></div>
       <div class="startBottom">
         <div class="startTag">Cache un bonhomme dans ton décor.<br><b>Tu me trouves ? 🦎</b></div>
         <div class="dots" id="dots"></div>
@@ -439,11 +439,11 @@ function frameForShare(){ const out=document.createElement("canvas"); out.width=
   const barH=Math.round(96*dpr); const g=c.createLinearGradient(0,out.height-barH,0,out.height); g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,.75)");
   c.fillStyle=g; c.fillRect(0,out.height-barH,out.width,barH); c.fillStyle="#fff"; c.textAlign="center";
   c.font=`800 ${Math.round(30*dpr)}px -apple-system,sans-serif`; c.fillText("Tu me trouves ? 🦎", out.width/2, out.height-Math.round(38*dpr));
-  c.font=`600 ${Math.round(15*dpr)}px -apple-system,sans-serif`; c.fillStyle="rgba(255,255,255,.7)"; c.fillText("fait avec HIDEY", out.width/2, out.height-Math.round(14*dpr)); return out; }
-async function share(){ const blob=await new Promise(r=>frameForShare().toBlob(r,"image/png")); const file=new File([blob],"hidey.png",{type:"image/png"});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Tu me trouves ?",text:"Trouve le petit bonhomme caché 🦎 #HIDEY"}); return; }catch(e){ if(e.name==="AbortError") return; } }
+  c.font=`600 ${Math.round(15*dpr)}px -apple-system,sans-serif`; c.fillStyle="rgba(255,255,255,.7)"; c.fillText("fait avec KAMO", out.width/2, out.height-Math.round(14*dpr)); return out; }
+async function share(){ const blob=await new Promise(r=>frameForShare().toBlob(r,"image/png")); const file=new File([blob],"kamo.png",{type:"image/png"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Tu me trouves ?",text:"Trouve le petit bonhomme caché 🦎 #KAMO"}); return; }catch(e){ if(e.name==="AbortError") return; } }
   save(); showHint("Partage natif indispo → image enregistrée",3000); }
-function save(){ frameForShare().toBlob(b=>{ const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="hidey.png"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }); }
+function save(){ frameForShare().toBlob(b=>{ const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.png"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }); }
 
 /* ---- wire ---- */
 $("#startBtn").onclick=startCamera;
