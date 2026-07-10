@@ -516,16 +516,23 @@ async function buildReveal(){
   });
   const blob=await done; return {blob,mime};
 }
+/* iOS WKWebView/Safari crashes on MediaRecorder canvas capture → never build the
+   video there; share the static challenge image instead (video reveal will be
+   done natively later). Desktop/Android keep the animated MP4. */
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+async function staticBlob(){ return await new Promise(r=>frameForShare().toBlob(r,"image/jpeg",0.9)); }
 async function shareReveal(){
+  if(IS_IOS){ await deliver(await staticBlob(),"jpg"); return; }
   busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
   if(media&&media.blob&&media.blob.size>2000){ await deliver(media.blob, media.mime&&media.mime.includes("mp4")?"mp4":"webm"); return; }
-  const b=await new Promise(r=>frameForShare().toBlob(r,"image/png")); await deliver(b,"png"); // fallback: static image
+  await deliver(await staticBlob(),"jpg");
 }
 async function shareStories(){
   if(!window.ReactNativeWebView){ return shareReveal(); } // only meaningful inside the native app
+  if(IS_IOS){ const d=await blobToDataURL(await staticBlob()); postNative({type:"ig-stories",ext:"jpg",mime:"image/jpeg",data:d}); return; }
   busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
   if(media&&media.blob&&media.blob.size>2000){ const d=await blobToDataURL(media.blob); postNative({type:"ig-stories",ext:media.mime&&media.mime.includes("mp4")?"mp4":"webm",mime:media.blob.type,data:d}); return; }
-  const b=await new Promise(r=>frameForShare().toBlob(r,"image/png")); const d=await blobToDataURL(b); postNative({type:"ig-stories",ext:"png",mime:"image/png",data:d});
+  const d=await blobToDataURL(await staticBlob()); postNative({type:"ig-stories",ext:"jpg",mime:"image/jpeg",data:d});
 }
 
 /* ===== ONBOARDING (once) ===== */
