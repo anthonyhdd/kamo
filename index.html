@@ -525,7 +525,8 @@ async function buildReveal(){
    video there; share the static challenge image instead (video reveal will be
    done natively later). Desktop/Android keep the animated MP4. */
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
-async function staticBlob(){ return await new Promise(r=>frameForShare().toBlob(r,"image/jpeg",0.9)); }
+function scaledShareCanvas(maxW){ const f=frameForShare(); if(f.width<=maxW) return f; const s=maxW/f.width; const o=document.createElement("canvas"); o.width=maxW; o.height=Math.round(f.height*s); const oc=o.getContext("2d"); oc.imageSmoothingQuality="high"; oc.drawImage(f,0,0,o.width,o.height); return o; }
+async function staticBlob(){ return await new Promise(r=>scaledShareCanvas(1080).toBlob(r,"image/jpeg",0.88)); }
 async function shareReveal(){
   if(IS_IOS){ await deliver(await staticBlob(),"jpg"); return; }
   busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
