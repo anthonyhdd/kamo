@@ -465,10 +465,15 @@ const PRESETS=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b
 document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz; document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); b.classList.add("active"); });
 
 /* ===== SHARE: static image + hide→reveal video ===== */
-function drawWatermark(c,W,H){ const bh=Math.round(150*dpr); const g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,.8)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
-  c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${Math.round(30*dpr)}px -apple-system,sans-serif`; c.fillText("Can you find me? 🦎", W/2, H-Math.round(58*dpr));
-  c.font=`800 ${Math.round(17*dpr)}px -apple-system,sans-serif`; c.fillStyle="#39e6a4"; c.fillText("KAMO", W/2-Math.round(46*dpr), H-Math.round(26*dpr));
-  c.fillStyle="rgba(255,255,255,.72)"; c.font=`600 ${Math.round(15*dpr)}px -apple-system,sans-serif`; c.fillText("· @kamo · kamo.app", W/2+Math.round(28*dpr), H-Math.round(26*dpr)); }
+function drawWatermark(c,W,H){ const bh=Math.round(160*dpr); const g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,.82)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
+  c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${Math.round(33*dpr)}px -apple-system,sans-serif`; c.fillText("Can you find me?", W/2, H-Math.round(62*dpr));
+  // clean single centered line: KAMO (accent) + kamo.app (white), measured spacing
+  c.textAlign="left"; const f1=`900 ${Math.round(19*dpr)}px -apple-system,sans-serif`, f2=`600 ${Math.round(16*dpr)}px -apple-system,sans-serif`;
+  const t1="KAMO", t2="   kamo.app"; c.font=f1; const w1=c.measureText(t1).width; c.font=f2; const w2=c.measureText(t2).width;
+  const sx=(W-(w1+w2))/2, y=H-Math.round(24*dpr);
+  c.fillStyle="#39e6a4"; c.font=f1; c.fillText(t1, sx, y);
+  c.fillStyle="rgba(255,255,255,.8)"; c.font=f2; c.fillText(t2, sx+w1, y);
+  c.textAlign="center"; }
 function frameForShare(){ const out=document.createElement("canvas"); out.width=board.width; out.height=board.height; const c=out.getContext("2d"); c.drawImage(board,0,0); drawWatermark(c,out.width,out.height); return out; }
 /* native bridge (when wrapped in the Expo WebView) */
 function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); return true; }catch(e){} } return false; }
@@ -476,7 +481,7 @@ function blobToDataURL(b){ return new Promise(r=>{ const fr=new FileReader(); fr
 async function deliver(blob,ext){
   if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"share",ext,mime:blob.type||"",data:d}); return; }
   const file=new File([blob],"kamo."+ext,{type:blob.type});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Can you find me?",text:"Can you find the hidden little guy? 🦎 #KAMO"}); return; }catch(e){ if(e.name==="AbortError") return; } }
+  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Can you find me?",text:"Can you find the hidden little guy? #KAMO"}); return; }catch(e){ if(e.name==="AbortError") return; } }
   const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 function saveStatic(){ frameForShare().toBlob(async b=>{ if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"png",mime:"image/png",data:d}); return; } const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.png"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }); }
