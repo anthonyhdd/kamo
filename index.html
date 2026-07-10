@@ -465,12 +465,12 @@ const PRESETS=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b
 document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz; document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); b.classList.add("active"); });
 
 /* ===== SHARE: static image + hide→reveal video ===== */
-function drawWatermark(c,W,H){ const bh=Math.round(160*dpr); const g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,.82)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
-  c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${Math.round(33*dpr)}px -apple-system,sans-serif`; c.fillText("Can you find me?", W/2, H-Math.round(62*dpr));
+function drawWatermark(c,W,H){ const u=W/390; const bh=Math.round(160*u); const g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,.82)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
+  c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${Math.round(33*u)}px -apple-system,sans-serif`; c.fillText("Can you find me?", W/2, H-Math.round(62*u));
   // clean single centered line: KAMO (accent) + kamo.app (white), measured spacing
-  c.textAlign="left"; const f1=`900 ${Math.round(19*dpr)}px -apple-system,sans-serif`, f2=`600 ${Math.round(16*dpr)}px -apple-system,sans-serif`;
+  c.textAlign="left"; const f1=`900 ${Math.round(19*u)}px -apple-system,sans-serif`, f2=`600 ${Math.round(16*u)}px -apple-system,sans-serif`;
   const t1="KAMO", t2="   kamo.app"; c.font=f1; const w1=c.measureText(t1).width; c.font=f2; const w2=c.measureText(t2).width;
-  const sx=(W-(w1+w2))/2, y=H-Math.round(24*dpr);
+  const sx=(W-(w1+w2))/2, y=H-Math.round(24*u);
   c.fillStyle="#39e6a4"; c.font=f1; c.fillText(t1, sx, y);
   c.fillStyle="rgba(255,255,255,.8)"; c.font=f2; c.fillText(t2, sx+w1, y);
   c.textAlign="center"; }
@@ -525,8 +525,8 @@ async function buildReveal(){
    video there; share the static challenge image instead (video reveal will be
    done natively later). Desktop/Android keep the animated MP4. */
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
-function scaledShareCanvas(maxW){ const f=frameForShare(); if(f.width<=maxW) return f; const s=maxW/f.width; const o=document.createElement("canvas"); o.width=maxW; o.height=Math.round(f.height*s); const oc=o.getContext("2d"); oc.imageSmoothingQuality="high"; oc.drawImage(f,0,0,o.width,o.height); return o; }
-async function staticBlob(){ return await new Promise(r=>scaledShareCanvas(1080).toBlob(r,"image/jpeg",0.88)); }
+function composeShare(maxW){ const scale=Math.min(1, maxW/board.width); const W=Math.round(board.width*scale), H=Math.round(board.height*scale); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high"; c.drawImage(board,0,0,W,H); drawWatermark(c,W,H); return o; }
+async function staticBlob(){ return await new Promise(r=>composeShare(900).toBlob(r,"image/jpeg",0.85)); }
 async function shareReveal(){
   if(IS_IOS){ await deliver(await staticBlob(),"jpg"); return; }
   busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
