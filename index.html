@@ -231,7 +231,7 @@ function initThree(){
   renderer.setClearColor(0x000000,0); renderer.outputColorSpace=THREE.SRGBColorSpace;
   scene=new THREE.Scene();
   camera3=new THREE.PerspectiveCamera(42,1,0.1,100);
-  camera3.position.set(0,1.18,7.3); camera3.lookAt(0,1.18,0);
+  camera3.position.set(0,1.0,9.4); camera3.lookAt(0,0.5,0);
   scene.add(new THREE.HemisphereLight(0xffffff,0x555566,1.15));
   const dir=new THREE.DirectionalLight(0xffffff,1.5); dir.position.set(3.5,6,4); scene.add(dir);
   const rim=new THREE.DirectionalLight(0xbfdfff,0.5); rim.position.set(-4,2,-3); scene.add(rim);
@@ -269,7 +269,10 @@ function makeCharacter(px=0){
 function clearCharacters(){ characters.forEach(c=>scene.remove(c.group)); characters=[]; selIdx=-1; }
 function sel(){ return characters[selIdx]; }
 function addHider(){
-  if(characters.length>=MAX) return;
+  if(characters.length>=MAX){ // at max → tapping again removes the last hider
+    const c=characters.pop(); if(c) scene.remove(c.group);
+    selIdx=Math.min(selIdx,characters.length-1); updateAddBtn(); showHint("Removed a hider"); return;
+  }
   const px=(characters.length%2===0? -0.7 : 0.7)*(1+Math.floor(characters.length/2)*0.4);
   makeCharacter(characters.length===0?0:px); selIdx=characters.length-1; updateAddBtn();
   if(characters.length>1) showHint("Hider added — hide them all!");
@@ -295,15 +298,15 @@ function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!render
 /* ===== CAMERA ===== */
 function camFail(msg){ showHint(msg,0); console.warn("[cam]",msg); }
 async function startCamera(){
-  if(!window.isSecureContext){ camFail("Open the link over HTTPS (Safari) for the camera."); return; }
-  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ camFail("Camera blocked by this browser. Open in Safari, or pick a photo."); return; }
+  if(!window.isSecureContext){ camFail("Open KAMO in Safari to use the camera — or pick a photo below."); return; }
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ camFail("This browser can't open the camera. Try Safari, or tap “pick a photo”."); return; }
   const tries=[{video:{facingMode:{ideal:facing}},audio:false},{video:{facingMode:facing},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){ try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stream=await navigator.mediaDevices.getUserMedia(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; enterCompose(); return; }catch(e){ lastErr=e; } }
   const n=lastErr&&lastErr.name;
-  if(n==="NotAllowedError") camFail("Camera access denied. Settings → Safari → Camera → Allow. Or pick a photo.");
-  else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera — pick a photo.");
-  else camFail("Camera unavailable. Open in Safari, or pick a photo.");
+  if(n==="NotAllowedError") camFail("KAMO needs the camera to drop your figure into the real world. Turn it on in Settings › Safari › Camera, then reopen — or pick a photo.");
+  else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera found — tap “pick a photo” to hide your figure in a picture instead.");
+  else camFail("Couldn't reach the camera — pick a photo instead.");
 }
 function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>URL.revokeObjectURL(url); photo.src=url; photo.style.display="block"; cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; enterCompose(); }
 
@@ -479,7 +482,7 @@ async function deliver(blob,ext){
 function saveStatic(){ frameForShare().toBlob(async b=>{ if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"png",mime:"image/png",data:d}); return; } const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.png"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }); }
 
 function drawRevealFrame(c,W,H,t){
-  const F=v=>Math.round(v*dpr); c.clearRect(0,0,W,H);
+  const S=W/board.width, F=v=>Math.round(v*dpr*S); c.clearRect(0,0,W,H);
   const zoom=1+Math.min(t/4600,1)*0.06, zw=W*zoom, zh=H*zoom; c.drawImage(board,(W-zw)/2,(H-zh)/2,zw,zh);
   function topText(txt){ const bh=F(120); const g=c.createLinearGradient(0,0,0,bh); g.addColorStop(0,"rgba(0,0,0,.6)"); g.addColorStop(1,"rgba(0,0,0,0)"); c.fillStyle=g; c.fillRect(0,0,W,bh);
     c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${F(30)}px -apple-system,sans-serif`; c.fillText(txt,W/2,F(64)); }
@@ -487,8 +490,8 @@ function drawRevealFrame(c,W,H,t){
     const wd=c.measureText(txt).width+F(28); c.fillStyle="rgba(0,0,0,.5)"; roundRect(c,W/2-wd/2,y-F(15),wd,F(30),F(15)); c.fill(); c.fillStyle="#fff"; c.fillText(txt,W/2,y+F(6)); }
   if(t<2100){ topText("Can you find me? 👀"); scorePill(); }
   else if(t<3400){ c.fillStyle="rgba(0,0,0,"+Math.min((t-2100)/350,1)*0.5+")"; c.fillRect(0,0,W,H);
-    hiderPoints.forEach(p=>{ c.save(); c.beginPath(); c.arc(p.x,p.y,F(72),0,7); c.closePath(); c.clip(); c.drawImage(board,(W-zw)/2,(H-zh)/2,zw,zh); c.restore();
-      c.strokeStyle="rgba(57,230,164,.95)"; c.lineWidth=F(5); c.beginPath(); c.arc(p.x,p.y,F(60)+Math.sin(t/90)*F(4),0,7); c.stroke(); });
+    hiderPoints.forEach(p=>{ c.save(); c.beginPath(); c.arc(p.x*S,p.y*S,F(72),0,7); c.closePath(); c.clip(); c.drawImage(board,(W-zw)/2,(H-zh)/2,zw,zh); c.restore();
+      c.strokeStyle="rgba(57,230,164,.95)"; c.lineWidth=F(5); c.beginPath(); c.arc(p.x*S,p.y*S,F(60)+Math.sin(t/90)*F(4),0,7); c.stroke(); });
     topText(hiderPoints.length>1?"Found them 👇":"Found it 👇"); }
   else { c.fillStyle="rgba(5,6,10,"+Math.min((t-3400)/450,1)*0.92+")"; c.fillRect(0,0,W,H); c.textAlign="center";
     c.fillStyle="#fff"; c.font=`900 ${F(52)}px -apple-system,sans-serif`; c.fillText("KAMO",W/2,H/2-F(6));
@@ -497,17 +500,18 @@ function drawRevealFrame(c,W,H,t){
 }
 function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
 async function buildReveal(){
-  const W=board.width,H=board.height; const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const c=cv.getContext("2d");
+  const SC=Math.min(1, 640/board.width); const W=Math.round(board.width*SC), H=Math.round(board.height*SC);
+  const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const c=cv.getContext("2d");
   if(!cv.captureStream||!window.MediaRecorder) return null;
   let mime=""; ["video/mp4;codecs=h264","video/mp4","video/webm;codecs=vp9","video/webm"].forEach(m=>{ try{ if(!mime&&MediaRecorder.isTypeSupported(m)) mime=m; }catch(e){} });
-  const stream=cv.captureStream(30); let rec; try{ rec=new MediaRecorder(stream, mime?{mimeType:mime,videoBitsPerSecond:6000000}:undefined); }catch(e){ return null; }
+  const stream=cv.captureStream(24); let rec; try{ rec=new MediaRecorder(stream, mime?{mimeType:mime,videoBitsPerSecond:2500000}:undefined); }catch(e){ return null; }
   const chunks=[]; rec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
   const done=new Promise(res=>{ rec.onstop=()=>res(new Blob(chunks,{type:mime||"video/webm"})); });
   const T0=performance.now(), DUR=4600; rec.start();
   await new Promise(resolve=>{
     let stopped=false; const stop=()=>{ if(stopped) return; stopped=true; clearInterval(iv); clearTimeout(safety); try{ rec.requestData&&rec.requestData(); }catch(e){} try{ rec.stop(); }catch(e){} resolve(); };
     // setInterval (not rAF) so the render still advances if the tab/app is backgrounded; hard safety cap so we never hang
-    const iv=setInterval(()=>{ const t=performance.now()-T0; drawRevealFrame(c,W,H,Math.min(t,DUR)); if(t>=DUR) stop(); }, 33);
+    const iv=setInterval(()=>{ const t=performance.now()-T0; drawRevealFrame(c,W,H,Math.min(t,DUR)); if(t>=DUR) stop(); }, 40);
     const safety=setTimeout(stop, DUR+5000);
   });
   const blob=await done; return {blob,mime};
