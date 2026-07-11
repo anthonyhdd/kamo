@@ -479,12 +479,14 @@ function frameForShare(){ const out=document.createElement("canvas"); out.width=
 function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); return true; }catch(e){} } return false; }
 function blobToDataURL(b){ return new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b); }); }
 async function deliver(blob,ext){
-  if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"share",ext,mime:blob.type||"",data:d}); return; }
   const file=new File([blob],"kamo."+ext,{type:blob.type});
+  // Web Share sheet works in Safari AND the app's WKWebView (iOS 15+) → use it first;
+  // it opens the native share sheet directly and avoids the custom bridge that was crashing.
   if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Can you find me?",text:"Can you find the hidden little guy? #KAMO"}); return; }catch(e){ if(e.name==="AbortError") return; } }
+  if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"share",ext,mime:blob.type||"",data:d}); return; }
   const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
-function saveStatic(){ frameForShare().toBlob(async b=>{ if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"png",mime:"image/png",data:d}); return; } const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.png"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); }); }
+async function saveStatic(){ await deliver(await staticBlob(),"jpg"); }
 
 function drawRevealFrame(c,W,H,t){
   const S=W/board.width, F=v=>Math.round(v*dpr*S); c.clearRect(0,0,W,H);
@@ -533,13 +535,9 @@ async function shareReveal(){
   if(media&&media.blob&&media.blob.size>2000){ await deliver(media.blob, media.mime&&media.mime.includes("mp4")?"mp4":"webm"); return; }
   await deliver(await staticBlob(),"jpg");
 }
-async function shareStories(){
-  if(!window.ReactNativeWebView){ return shareReveal(); } // only meaningful inside the native app
-  if(IS_IOS){ const d=await blobToDataURL(await staticBlob()); postNative({type:"ig-stories",ext:"jpg",mime:"image/jpeg",data:d}); return; }
-  busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
-  if(media&&media.blob&&media.blob.size>2000){ const d=await blobToDataURL(media.blob); postNative({type:"ig-stories",ext:media.mime&&media.mime.includes("mp4")?"mp4":"webm",mime:media.blob.type,data:d}); return; }
-  const d=await blobToDataURL(await staticBlob()); postNative({type:"ig-stories",ext:"jpg",mime:"image/jpeg",data:d});
-}
+/* For now both share buttons go through the Web Share sheet (Instagram is a one-tap
+   target there) — reliable, no crash. True 1-tap-into-Stories comes with native. */
+async function shareStories(){ return shareReveal(); }
 
 /* ===== ONBOARDING (once) ===== */
 function firstRun(){ try{ return !localStorage.getItem("kamo_onb"); }catch(e){ return !seenPaint; } }
