@@ -466,7 +466,7 @@ document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz
 /* ===== SHARE: static image + hide→reveal video ===== */
 function drawWatermark(c,W,H){ const u=W/390; const pad=Math.round(H*0.10); const bh=Math.round(160*u)+pad;
   const g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(.5,"rgba(0,0,0,.5)"); g.addColorStop(1,"rgba(0,0,0,.85)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
-  c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${Math.round(33*u)}px -apple-system,sans-serif`; c.fillText("Can you find me?", W/2, H-Math.round(62*u)-pad);
+  c.textAlign="center"; c.fillStyle="#fff"; var head="Find it if you can 👀", fs=33*u; c.font=`900 ${Math.round(fs)}px -apple-system,sans-serif`; while(c.measureText(head).width>W*0.9 && fs>16){ fs-=1; c.font=`900 ${Math.round(fs)}px -apple-system,sans-serif`; } c.fillText(head, W/2, H-Math.round(62*u)-pad);
   // clean single centered line: KAMO (accent) + kamo.app (white), measured spacing — kept in the IG-Stories safe zone
   c.textAlign="left"; const f1=`900 ${Math.round(19*u)}px -apple-system,sans-serif`, f2=`600 ${Math.round(16*u)}px -apple-system,sans-serif`;
   const t1="KAMO", t2="   kamo.app"; c.font=f1; const w1=c.measureText(t1).width; c.font=f2; const w2=c.measureText(t2).width;
@@ -482,7 +482,7 @@ async function deliver(blob,ext){
   const file=new File([blob],"kamo."+ext,{type:blob.type});
   // Web Share sheet works in Safari AND the app's WKWebView (iOS 15+) → use it first;
   // it opens the native share sheet directly and avoids the custom bridge that was crashing.
-  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Can you find me?",text:"Can you find the hidden little guy? #KAMO"}); return; }catch(e){ if(e.name==="AbortError") return; } }
+  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Find it if you can",text:"Find it if you can 👀 #KAMO"}); return; }catch(e){ if(e.name==="AbortError") return; } }
   if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"share",ext,mime:blob.type||"",data:d}); return; }
   const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
@@ -495,7 +495,7 @@ function drawRevealFrame(c,W,H,t){
     c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${F(30)}px -apple-system,sans-serif`; c.fillText(txt,W/2,F(64)); }
   function scorePill(){ c.textAlign="center"; const y=F(104), txt=(currentScore>=85?"🫥 ":"👀 ")+currentScore+"% hidden"; c.font=`800 ${F(17)}px -apple-system,sans-serif`;
     const wd=c.measureText(txt).width+F(28); c.fillStyle="rgba(0,0,0,.5)"; roundRect(c,W/2-wd/2,y-F(15),wd,F(30),F(15)); c.fill(); c.fillStyle="#fff"; c.fillText(txt,W/2,y+F(6)); }
-  if(t<2100){ topText("Can you find me? 👀"); scorePill(); }
+  if(t<2100){ topText("Find it if you can 👀"); scorePill(); }
   else if(t<3400){ c.fillStyle="rgba(0,0,0,"+Math.min((t-2100)/350,1)*0.5+")"; c.fillRect(0,0,W,H);
     hiderPoints.forEach(p=>{ c.save(); c.beginPath(); c.arc(p.x*S,p.y*S,F(72),0,7); c.closePath(); c.clip(); c.drawImage(board,(W-zw)/2,(H-zh)/2,zw,zh); c.restore();
       c.strokeStyle="rgba(57,230,164,.95)"; c.lineWidth=F(5); c.beginPath(); c.arc(p.x*S,p.y*S,F(60)+Math.sin(t/90)*F(4),0,7); c.stroke(); });
