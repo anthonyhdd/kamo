@@ -527,8 +527,12 @@ async function buildReveal(){
    video there; share the static challenge image instead (video reveal will be
    done natively later). Desktop/Android keep the animated MP4. */
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
-function composeShare(maxW){ const scale=Math.min(1, maxW/board.width); const W=Math.round(board.width*scale), H=Math.round(board.height*scale); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high"; c.drawImage(board,0,0,W,H); drawWatermark(c,W,H); return o; }
-async function staticBlob(){ return await new Promise(r=>composeShare(900).toBlob(r,"image/jpeg",0.85)); }
+/* Export a perfect 9:16 Instagram-Stories frame: the captured scene fills the
+   frame (cover-cropped top/bottom), caption kept in the safe zone. */
+function composeShare(W){ const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
+  const s=Math.max(W/board.width, H/board.height), dw=board.width*s, dh=board.height*s;
+  c.drawImage(board,(W-dw)/2,(H-dh)/2,dw,dh); drawWatermark(c,W,H); return o; }
+async function staticBlob(){ return await new Promise(r=>composeShare(1080).toBlob(r,"image/jpeg",0.9)); }
 async function shareReveal(){
   if(IS_IOS){ await deliver(await staticBlob(),"jpg"); return; }
   busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
