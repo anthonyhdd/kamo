@@ -163,9 +163,9 @@
       <div id="swatches"></div>
       <div class="row" style="margin-top:2px">
         <div class="row" style="gap:8px">
-          <button class="bsz" data-sz="10"><i style="width:8px;height:8px"></i></button>
-          <button class="bsz active" data-sz="22"><i style="width:14px;height:14px"></i></button>
-          <button class="bsz" data-sz="44"><i style="width:22px;height:22px"></i></button>
+          <button class="bsz" data-sz="6"><i style="width:6px;height:6px"></i></button>
+          <button class="bsz active" data-sz="14"><i style="width:11px;height:11px"></i></button>
+          <button class="bsz" data-sz="28"><i style="width:18px;height:18px"></i></button>
         </div>
         <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
         <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
@@ -440,7 +440,7 @@ function computeScore(){
 function showScore(){ scoreChip.style.display="block"; const e=currentScore>=85?"🫥":currentScore>=60?"🙈":"👀"; scoreChip.innerHTML=`${e} <b>${currentScore}%</b> hidden`; }
 
 /* ===== PAINT ===== */
-let paintColor="#8a7f6a", brush=22, painting=false, eyedrop=false; const undoStack=[];
+let paintColor="#8a7f6a", brush=14, painting=false, eyedrop=false; const undoStack=[];
 function pushUndo(){ try{ undoStack.push(ctx.getImageData(0,0,board.width,board.height)); if(undoStack.length>12) undoStack.shift(); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
 function paintAt(p){ ctx.fillStyle=paintColor; ctx.strokeStyle=paintColor; ctx.lineWidth=brush*dpr; ctx.lineCap="round"; ctx.lineJoin="round";
