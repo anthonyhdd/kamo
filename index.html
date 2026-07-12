@@ -557,7 +557,7 @@ window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePi
 /* ---- home slideshow ---- */
 (function slideshow(){
   const slides=[...document.querySelectorAll("#slideshow .slide")], dotsC=$("#dots"), ring=$("#revealRing");
-  const spots=[{x:47,y:50},{x:64,y:48},{x:50,y:53}]; // hidden-figure centre per slide (container %)
+  const spots=[{x:65,y:52},{x:48,y:52},{x:79,y:55}]; // hidden-figure centre per slide (container %)
   slides.forEach(s=>{ const im=new Image(); im.onload=()=>{ s.style.backgroundImage=`url(${s.dataset.src})`; }; im.src=s.dataset.src; const d=document.createElement("i"); dotsC.appendChild(d); });
   const dots=[...dotsC.children]; let idx=0, revealT;
   function show(i){ slides.forEach((s,k)=>s.classList.toggle("active",k===i)); dots.forEach((d,k)=>d.classList.toggle("on",k===i));
