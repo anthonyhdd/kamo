@@ -521,6 +521,7 @@ $("#pwRestore").onclick=()=>{ if(window.ReactNativeWebView){ postNative({type:"r
 window.KAMO=window.KAMO||{};
 window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); if(v) closePaywall(); };
 window.KAMO.setPrice=(txt)=>{ if(txt) $("#pwBuy").textContent="Unlock — "+txt; };
+window.KAMO.hint=(t)=>showHint(t);
 
 /* ===== SHARE: static image + hide→reveal video ===== */
 function drawWatermark(c,W,H){ const u=W/390; const pad=Math.round(H*0.10); const bh=Math.round(160*u)+pad;
