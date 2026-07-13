@@ -145,6 +145,18 @@
   .pwFine{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;}
   .pwFine a,.pwFine button{background:none;border:none;color:rgba(255,255,255,.5);font-size:12px;text-decoration:underline;cursor:pointer;padding:4px;}
   .pwClose{display:block;margin:12px auto 0;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;cursor:pointer;padding:6px;}
+  /* share target chooser */
+  #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.55);backdrop-filter:blur(5px);}
+  #shareSheet.show{display:flex;}
+  .ssCard{width:100%;max-width:460px;background:linear-gradient(180deg,#12161c,#0a0d11);border-top-left-radius:24px;border-top-right-radius:24px;border:1px solid rgba(255,255,255,.1);padding:18px 18px calc(16px + var(--safe-b));animation:pwUp .28s cubic-bezier(.2,.9,.3,1);}
+  .ssTitle{text-align:center;font-size:14px;font-weight:700;opacity:.6;margin:2px 0 14px;}
+  .ssBtn{width:100%;height:56px;margin-bottom:10px;border-radius:16px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:#fff;font-size:16px;font-weight:750;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;}
+  .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
+  .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
+  .ssBtn.snap{background:#fffc00;color:#111;border:none;}
+  .ssBtn:active{transform:scale(.98);}
+  .ssMore{background:rgba(255,255,255,.06);}
+  .ssClose{display:block;width:100%;margin-top:4px;background:none;border:none;color:rgba(255,255,255,.55);font-size:15px;font-weight:600;cursor:pointer;padding:10px;}
 </style>
 </head>
 <body>
@@ -225,10 +237,21 @@
     <button id="pwBuy" class="pwBuy">Unlock — 2,99 €</button>
     <div class="pwFine">
       <button id="pwRestore">Restore</button>
-      <a href="https://kamo.app/terms" target="_blank" rel="noopener">Terms</a>
-      <a href="https://kamo.app/privacy" target="_blank" rel="noopener">Privacy</a>
+      <button class="pwlink" data-url="https://anthonyhdd.github.io/kamo/terms.html">Terms</button>
+      <button class="pwlink" data-url="https://anthonyhdd.github.io/kamo/privacy.html">Privacy</button>
     </div>
     <button id="pwClose" class="pwClose">Maybe later</button>
+  </div>
+</div>
+
+<!-- SHARE CHOOSER -->
+<div id="shareSheet">
+  <div class="ssCard">
+    <div class="ssTitle">Share your hide</div>
+    <button class="ssBtn ig" data-target="instagram"><span class="ic">📸</span>Instagram Story</button>
+    <button class="ssBtn snap" data-target="snapchat"><span class="ic">👻</span>Snapchat</button>
+    <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More options</button>
+    <button class="ssClose" id="ssClose">Cancel</button>
   </div>
 </div>
 <input type="file" accept="image/*" id="fileInput" style="display:none" />
@@ -517,6 +540,8 @@ $("#pwClose").onclick=closePaywall;
 paywallEl.onclick=e=>{ if(e.target===paywallEl) closePaywall(); };
 $("#pwBuy").onclick=()=>{ if(window.ReactNativeWebView){ postNative({type:"purchase",product:PRODUCT_ID}); showHint("Opening checkout…"); } else { window.KAMO.setPro(true); showHint("KAMO Pro unlocked ✓"); } };
 $("#pwRestore").onclick=()=>{ if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
+function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",url:u}); } else { window.open(u,"_blank","noopener"); } }
+document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.url));
 /* native bridge — RevenueCat (native) calls these on purchase/restore success + to inject the localized price */
 window.KAMO=window.KAMO||{};
 window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); if(v) closePaywall(); };
@@ -597,11 +622,21 @@ function composeShare(W){ const H=Math.round(W*16/9); const o=document.createEle
   c.drawImage(board,(W-dw)/2,(H-dh)/2,dw,dh); drawWatermark(c,W,H); return o; }
 async function staticBlob(){ return await new Promise(r=>composeShare(1080).toBlob(r,"image/jpeg",0.9)); }
 async function shareReveal(){
+  // Native app → let the user pick Instagram Story / Snapchat / More.
+  if(window.ReactNativeWebView){ openShareSheet(); return; }
+  // Web / Safari / desktop → system share sheet (with the desktop reveal-video path).
   if(IS_IOS){ await deliver(await staticBlob(),"jpg"); return; }
   busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
   if(media&&media.blob&&media.blob.size>2000){ await deliver(media.blob, media.mime&&media.mime.includes("mp4")?"mp4":"webm"); return; }
   await deliver(await staticBlob(),"jpg");
 }
+const shareSheetEl=$("#shareSheet");
+function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); }
+function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
+async function nativeShare(target){ closeShareSheet(); const b=await staticBlob(); const d=await blobToDataURL(b); postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d}); }
+$("#ssClose").onclick=closeShareSheet;
+shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) closeShareSheet(); };
+document.querySelectorAll("#shareSheet .ssBtn").forEach(b=>b.onclick=()=>nativeShare(b.dataset.target));
 /* 1-tap → Instagram Stories: send the static image to native, which pushes it
    straight into IG Stories via react-native-share (no share sheet). */
 /* ===== ONBOARDING (once) ===== */
