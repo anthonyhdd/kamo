@@ -342,7 +342,12 @@ const POSES=[
 function fullPose(i){ const o=JSON.parse(JSON.stringify(REST)); const p=POSES[i].p; for(const k in p) o[k]=p[k]; return o; }
 function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); haptic(); showHint(POSES[char.poseIdx].label); updatePoseBar(); }
 function setPoseInstant(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); for(const k in REST){ if(k==="rootDY"){ char.charG.position.y=char.target.rootDY; continue;} char.parts[k].rotation.set(char.target[k][0],char.target[k][1],char.target[k][2]); } }
-function lerpChar(char){ const s=0.18; for(const k in REST){ if(k==="rootDY"){ char.charG.position.y+=(char.target.rootDY-char.charG.position.y)*s; continue;} const r=char.parts[k].rotation,t=char.target[k]; r.x+=(t[0]-r.x)*s; r.y+=(t[1]-r.y)*s; r.z+=(t[2]-r.z)*s; } }
+function lerpChar(char){ const s=0.18;
+  // secondary motion: limbs/torso trail the movement, then settle to rest when it stops
+  const px=char.group.position.x; if(char._lx===undefined)char._lx=px; char._vx=(char._vx||0)*0.82+(px-char._lx)*0.18; char._lx=px;
+  const v=Math.max(-0.5,Math.min(0.5,char._vx*5.5));
+  const sw={ spine:[0,0,-v*0.45], head:[0,0,-v*0.32], shL:[0,0,-v*0.8], shR:[0,0,-v*0.8], hipL:[v*0.3,0,0], hipR:[-v*0.3,0,0] };
+  for(const k in REST){ if(k==="rootDY"){ char.charG.position.y+=(char.target.rootDY-char.charG.position.y)*s; continue;} const r=char.parts[k].rotation,t=char.target[k],o=sw[k]||[0,0,0]; r.x+=((t[0]+o[0])-r.x)*s; r.y+=((t[1]+o[1])-r.y)*s; r.z+=((t[2]+o[2])-r.z)*s; } }
 function resize3(){ const w=stage.clientWidth,h=stage.clientHeight; renderer.setPixelRatio(dpr); renderer.setSize(w,h,false); camera3.aspect=w/h; camera3.updateProjectionMatrix(); }
 function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!renderer) return; characters.forEach(lerpChar); renderer.render(scene,camera3); }
 
@@ -403,7 +408,7 @@ function onMove(e){
   if(wheelOpen){ updateWheel(e.clientX,e.clientY); return; }
   const dx=e.clientX-downX, dy=e.clientY-downY;
   if(pointers.size>=2 && sel()){ clearTimeout(lpTimer); const p=[...pointers.values()]; const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); sel().group.scale.setScalar(Math.max(0.3,Math.min(3.5,scaleStart*(d/pinchStart)))); const a=Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x); sel().group.rotation.y=rotBaseY+(a-rotStart); return; }
-  if(!moved && Math.hypot(dx,dy)>10){ moved=true; clearTimeout(lpTimer); if(downHit>=0){ dragging=true; dragStartWorld=screenToWorld(e.clientX,e.clientY); dragStartPos=sel().group.position.clone(); } }
+  if(!moved && Math.hypot(dx,dy)>10){ moved=true; clearTimeout(lpTimer); if(sel()){ dragging=true; dragStartWorld=screenToWorld(e.clientX,e.clientY); dragStartPos=sel().group.position.clone(); } }
   if(dragging && sel()){ const w=screenToWorld(e.clientX,e.clientY); sel().group.position.x=dragStartPos.x+(w.x-dragStartWorld.x); sel().group.position.y=Math.max(-1.2,Math.min(2.2,dragStartPos.y+(w.y-dragStartWorld.y))); }
 }
 function onUp(e){
