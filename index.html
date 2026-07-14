@@ -30,8 +30,9 @@
   #start .aurora{position:absolute;inset:0;z-index:0;background:radial-gradient(40% 24% at 50% 42%,rgba(57,230,164,.13),transparent 72%);}
   @keyframes auroraFloat{from{transform:translate(-3%,-2%) scale(1)}to{transform:translate(4%,3%) scale(1.14)}}
   .heroWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 30px;margin-bottom:3vh;}
-  .heroLogo{font-weight:900;letter-spacing:3px;font-size:clamp(40px,13vw,54px);line-height:1;text-shadow:0 8px 34px rgba(0,0,0,.55);animation:heroFloat 4.2s ease-in-out infinite;}
-  .heroLogo b{color:var(--accent);}
+  @font-face{font-family:'Kamo';src:url('vendor/SpaceGrotesk-700.woff2') format('woff2');font-weight:700;font-display:swap;}
+  .heroLogo{font-family:'Kamo',-apple-system,sans-serif;font-weight:700;letter-spacing:-1.5px;font-size:clamp(48px,16vw,66px);line-height:1;color:#fff;text-shadow:0 8px 34px rgba(0,0,0,.55);}
+  .heroLogo b{color:#fff;font-weight:700;}
   @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
   .heroTagline{font-size:17px;font-weight:800;letter-spacing:.3px;line-height:1.3;opacity:.9;text-shadow:0 2px 14px rgba(0,0,0,.6);margin-bottom:4px;}
   .heroTagline .hl{color:var(--accent);}
@@ -39,8 +40,8 @@
   .startHint{font-size:13px;font-weight:700;letter-spacing:.3px;opacity:.7;}
   .mini{background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;}
 
-  .brand{position:absolute;top:calc(14px + var(--safe-t));left:18px;z-index:12;font-weight:900;letter-spacing:1.5px;font-size:15px;opacity:.9;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
-  .brand b{color:var(--accent);}
+  .brand{position:absolute;top:calc(14px + var(--safe-t));left:18px;z-index:12;font-family:'Kamo',-apple-system,sans-serif;font-weight:700;letter-spacing:-.4px;font-size:18px;opacity:.95;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
+  .brand b{color:#fff;}
 
   .topbtn{position:absolute;top:calc(10px + var(--safe-t));z-index:12;height:44px;border-radius:22px;
     border:1px solid var(--stroke);background:var(--panel);backdrop-filter:blur(12px);color:#fff;display:none;
@@ -62,14 +63,13 @@
 
   /* ---------- SHUTTER ---------- */
   #shutterWrap{position:absolute;left:50%;bottom:calc(30px + var(--safe-b));transform:translateX(-50%);z-index:15;display:none;}
-  .shutter{position:relative;width:82px;height:82px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
-  .shutter .ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.25) inset, 0 8px 30px rgba(0,0,0,.5);}
-  .shutter .spin{position:absolute;inset:-6px;border-radius:50%;background:conic-gradient(from 0deg,var(--accent),var(--accent2),var(--accent));
-    -webkit-mask:radial-gradient(circle, transparent 40px, #000 41px);mask:radial-gradient(circle, transparent 40px, #000 41px);opacity:.9;animation:spin 6s linear infinite;filter:blur(.3px);}
-  .shutter .core{position:absolute;inset:9px;border-radius:50%;background:radial-gradient(circle at 38% 32%, #ffffff, #e9e9ee 60%, #cfcfd6);
-    box-shadow:0 4px 14px rgba(0,0,0,.4), 0 0 22px rgba(57,230,164,.25);transition:transform .12s cubic-bezier(.3,1.4,.5,1);animation:breathe 3.4s ease-in-out infinite;}
-  .shutter:active .core{transform:scale(.82);}
-  .shutter:active .spin{animation-duration:1.2s;}
+  /* Apple-camera-style shutter: white ring + gap + white inner disc, no colour */
+  .shutter{position:relative;width:78px;height:78px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
+  .shutter .ring{position:absolute;inset:0;border-radius:50%;border:4px solid #fff;box-shadow:0 6px 22px rgba(0,0,0,.5);}
+  .shutter .spin{display:none;}
+  .shutter .core{position:absolute;inset:7px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#ffffff,#f1f1f3 72%,#e3e3e7);
+    box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .12s cubic-bezier(.3,1.4,.5,1);}
+  .shutter:active .core{transform:scale(.88);}
   @keyframes spin{to{transform:rotate(360deg);}}
   @keyframes breathe{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 18px rgba(57,230,164,.20);}50%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 30px rgba(57,230,164,.42);}}
   .capLabel{position:absolute;top:92px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:2px;opacity:.55;text-transform:uppercase;white-space:nowrap;}
@@ -208,7 +208,7 @@
     <div id="start">
       <div class="aurora"></div>
       <div class="heroWrap">
-        <div class="heroLogo">KA<b>MO</b> 🦎</div>
+        <div class="heroLogo">KAMO</div>
       </div>
       <div class="startBottom">
         <div class="heroTagline">Hide anyone in <span class="hl">plain sight</span></div>
