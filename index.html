@@ -581,6 +581,7 @@ function capture(){
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; undoStack.length=0; pushUndo();
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();
+  $("#btnShare").style.display="none"; $("#btnSave").style.display="none";  // Share/Save appear only in the finished view (after Done)
   setBrush("solid");
   currentScore=computeScore(); showScore();
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
@@ -817,7 +818,7 @@ document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode
 /* ===== ONBOARDING (once) ===== */
 function firstRun(){ try{ return !localStorage.getItem("kamo_onb"); }catch(e){ return !seenPaint; } }
 function maybeOnboard(){ if(!firstRun()) return; showHint("Tap the figure to pose",3600); setTimeout(()=>{ if(mode==="compose") showHint("Drag & pinch · then Capture ▼",3600); },3800); }
-function maybeOnboardPaint(){ if(!firstRun()) return; showHint("Eyedropper a scene color, then paint over the figure to hide it",4600); try{ localStorage.setItem("kamo_onb","1"); }catch(e){} seenPaint=true; }
+function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem("kamo_onb","1"); }catch(e){} seenPaint=true; }  /* no top hint here — the bottom badge already guides + it overlapped Done */
 
 /* ---- wire ---- */
 startEl.onclick=()=>startCamera();
@@ -868,11 +869,14 @@ function drawReveal(){ if(!beforeBoard) return; const r=board.getBoundingClientR
 function enterFinished(){ if(finished) return; finished=true; currentScore=computeScore();
   ["swatches","brushes","editRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; scoreChip.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
+  $("#btnShare").style.display=""; $("#btnSave").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
   revealX=1; drawReveal(); let rv=1; const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal(); if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim); else { revealX=0.5; drawReveal(); } }; requestAnimationFrame(anim); }
 function exitFinished(){ finished=false; revealC.style.display="none"; revealHandle.style.display="none"; revealHint.style.display="none";
   ["swatches","brushes","editRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
-  const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; showScore(); }
+  const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
+  $("#btnShare").style.display="none"; $("#btnSave").style.display="none";  // back to editing → hide Share/Save again
+  showScore(); }
 $("#btnDone").onclick=enterFinished; $("#btnEdit").onclick=exitFinished;
 revealHandle.addEventListener("pointerdown",e=>{ e.preventDefault(); revealHandle.setPointerCapture(e.pointerId); revealHandle._d=true; revealHint.style.display="none"; });
 revealHandle.addEventListener("pointermove",e=>{ if(!revealHandle._d)return; const r=board.getBoundingClientRect(); revealX=Math.max(0.02,Math.min(0.98,(e.clientX-r.left)/r.width)); drawReveal(); });
