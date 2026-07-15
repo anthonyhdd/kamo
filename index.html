@@ -155,9 +155,9 @@
   .lkico{width:12px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.72;vertical-align:-2px;margin-left:2px;}
   /* vertical brush-size slider — just the bar (no panel, no lock) */
   #sizeBar{position:absolute;right:16px;top:32%;z-index:16;width:34px;height:212px;display:none;touch-action:none;}
-  #sizeBar::before{content:"";position:absolute;left:50%;top:24px;bottom:24px;transform:translateX(-50%);width:4px;border-radius:2px;background:rgba(255,255,255,.32);box-shadow:0 1px 6px rgba(0,0,0,.55);}
-  #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:4px;border-radius:2px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.55);}
-  #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.55);pointer-events:none;}
+  #sizeBar::before{content:"";position:absolute;left:50%;top:16px;bottom:16px;transform:translateX(-50%);width:12px;border-radius:6px;background:rgba(10,12,16,.42);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.16);box-shadow:0 2px 12px rgba(0,0,0,.45);}
+  #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:5px;border-radius:3px;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);}
+  #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.6);border:1.5px solid rgba(0,0,0,.06);pointer-events:none;}
   #sizeStar{position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:12px;line-height:1;color:var(--mint);opacity:.9;pointer-events:none;display:none;text-shadow:0 1px 6px rgba(0,0,0,.6),0 0 10px rgba(95,230,164,.5);}  /* subtle Pro marker (shown to free users) */
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
@@ -855,12 +855,10 @@ $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; sta
 let capturing=false;
 function captureShot(){
   if(mode!=="compose"||capturing) return; capturing=true;
-  const c=sel()||characters[0];
-  if(c) c._punch=0.5;              // pop the figure (animate loop renders it before the freeze)
-  captureBurst(c);                 // shockwave ring from the figure
+  // no pop / shockwave ring around the figure on tap — keep only the poof on the captured screen
   haptic(26);
   $("#shutter").classList.add("snap");
-  setTimeout(()=>{ try{ capture(); } finally { capturing=false; $("#shutter").classList.remove("snap"); } }, 165);
+  setTimeout(()=>{ try{ capture(); } finally { capturing=false; $("#shutter").classList.remove("snap"); } }, 60);
 }
 $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
