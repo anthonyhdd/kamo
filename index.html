@@ -132,6 +132,29 @@
   @keyframes sheen{0%{left:-70%}55%,100%{left:175%}}
   .badge{font-size:11px;opacity:.55;text-align:center;margin-top:7px;}
   #loupe{position:absolute;width:64px;height:64px;border-radius:50%;border:3px solid #fff;z-index:22;box-shadow:0 4px 16px rgba(0,0,0,.6);display:none;pointer-events:none;transform:translate(-50%,-140%);}
+  /* Done/Edit nav */
+  .navbtn{position:absolute;top:calc(12px + var(--safe-t));right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
+  .navbtn:active{transform:scale(.94);}
+  /* vertical brush-size slider (Pro) */
+  #sizeBar{position:absolute;right:14px;top:32%;z-index:16;width:42px;height:212px;border-radius:21px;background:rgba(14,16,20,.5);backdrop-filter:blur(12px);border:1px solid var(--stroke);display:none;touch-action:none;}
+  #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:5px;border-radius:3px;background:rgba(255,255,255,.9);}
+  #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.5);pointer-events:none;}
+  #sizeLock{position:absolute;top:7px;left:50%;transform:translateX(-50%);font-size:13px;opacity:.9;display:none;}
+  #sizeBar.locked{opacity:.75;}
+  /* before/after reveal (finished view) */
+  #revealC{position:absolute;inset:0;z-index:14;display:none;}
+  #revealHandle{position:absolute;top:0;bottom:0;width:46px;z-index:15;transform:translateX(-50%);display:none;touch-action:none;align-items:center;justify-content:center;}
+  #revealHandle::before{content:"";position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:3px;background:rgba(255,255,255,.95);box-shadow:0 0 8px rgba(0,0,0,.5);}
+  #revealHandle .rhKnob{position:relative;width:46px;height:46px;border-radius:50%;background:#fff;color:#0a0b0e;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 4px 16px rgba(0,0,0,.5);}
+  #revealHint{position:absolute;left:0;right:0;top:calc(64px + var(--safe-t));z-index:15;text-align:center;font-size:13px;font-weight:700;opacity:.8;display:none;pointer-events:none;text-shadow:0 2px 8px rgba(0,0,0,.6);}
+  /* confirm sheet */
+  #confirmSheet{position:absolute;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(3,5,8,.6);backdrop-filter:blur(6px);}
+  #confirmSheet.show{display:flex;}
+  .cfCard{width:88%;max-width:360px;background:linear-gradient(180deg,#14181e,#0a0d11);border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:24px 20px 18px;text-align:center;animation:pwUp .26s cubic-bezier(.2,.9,.3,1);}
+  .cfTitle{font-size:20px;font-weight:900;}
+  .cfSub{font-size:14px;opacity:.7;margin:8px 0 18px;line-height:1.4;}
+  .cfCard .b{width:100%;margin-bottom:10px;height:52px;}
+  .cfDanger{background:#c0392b !important;border:none !important;color:#fff !important;}
   /* brush modes (solid = free, patterns = Pro) */
   #brushes{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;}
   #brushes::-webkit-scrollbar{display:none;}
@@ -185,6 +208,15 @@
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
     <div id="scoreChip"></div>
+    <button id="btnDone" class="navbtn">Done</button>
+    <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
+
+    <!-- vertical brush-size slider (Pro) -->
+    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div><div id="sizeLock">🔒</div></div>
+    <!-- before/after reveal (finished view) -->
+    <canvas id="revealC"></canvas>
+    <div id="revealHandle"><div class="rhKnob">‹ ›</div></div>
+    <div id="revealHint">Drag to reveal</div>
 
     <div id="wheel"><div id="wheelCenter"></div></div>
     <div id="loupe"></div>
@@ -199,21 +231,16 @@
     <div id="paintUI">
       <div id="swatches"></div>
       <div id="brushes"></div>
-      <div class="row" style="margin-top:2px">
-        <div class="row" style="gap:8px">
-          <button class="bsz" data-sz="10"><i style="width:7px;height:7px"></i></button>
-          <button class="bsz" data-sz="22"><i style="width:13px;height:13px"></i></button>
-          <button class="bsz active" data-sz="40"><i style="width:20px;height:20px"></i></button>
-        </div>
+      <div class="row" id="editRow" style="margin-top:2px;gap:12px">
         <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
         <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
       </div>
-      <div class="row" style="margin-top:8px">
+      <div class="row" id="actionRow" style="margin-top:8px">
         <button class="b ghost" id="btnBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Retake</button>
         <button class="b primary" id="btnShare"><svg viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>Share</button>
         <button class="b icon" id="btnSave" title="Save photo"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></button>
       </div>
-      <div class="badge">Grab a color · paint the figure · make it vanish</div>
+      <div class="badge" id="paintBadge">Grab a color · paint the figure · make it vanish</div>
     </div>
 
     <div id="busy"><div class="spinner"></div><div class="lbl">Creating your reveal…</div></div>
@@ -261,6 +288,14 @@
     <button class="ssBtn snap" data-target="snapchat"><span class="ic">👻</span>Snapchat</button>
     <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More options</button>
     <button class="ssClose" id="ssClose">Cancel</button>
+  </div>
+</div>
+<div id="confirmSheet">
+  <div class="cfCard">
+    <div class="cfTitle">Discard this hide?</div>
+    <div class="cfSub">You'll lose this drawing and go back to the camera.</div>
+    <button id="cfYes" class="b cfDanger">Discard</button>
+    <button id="cfNo" class="b ghost">Keep editing</button>
   </div>
 </div>
 <input type="file" accept="image/*" id="fileInput" style="display:none" />
@@ -383,6 +418,7 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>U
 function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
   shutterWrap.style.display="block"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
+  ["sizeBar","btnDone","btnEdit","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   flipBtn.style.display=(bgKind==="cam")?"flex":"none";
   clearCharacters(); spawnHider();
   buildPoseBar(); $("#poseBar").style.display="flex"; updatePoseBar();
@@ -390,6 +426,7 @@ function enterCompose(){
 }
 function backToCompose(){
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
+  ["sizeBar","btnDone","btnEdit","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   glCanvas.style.display="block"; shutterWrap.style.display="block"; flipBtn.style.display=(bgKind==="cam")?"flex":"none";
   $("#poseBar").style.display="flex"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
@@ -497,12 +534,14 @@ function capture(){
   renderer.render(scene,camera3);
   maskCanvas=document.createElement("canvas"); maskCanvas.width=W; maskCanvas.height=H; maskCanvas.getContext("2d").drawImage(glCanvas,0,0,W,H);
   blurCanvas=makeBlur(sceneCanvas,W,H);
+  try{ buildSwatches(extractPalette(sceneCanvas,10)); }catch(e){}   // palette from the captured photo
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; undoStack.length=0; pushUndo();
+  sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();
   setBrush("solid");
   currentScore=computeScore(); showScore();
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
@@ -520,7 +559,8 @@ function computeScore(){
 function showScore(){ scoreChip.style.display="block"; const e=currentScore>=85?"🫥":currentScore>=60?"🙈":"👀"; scoreChip.innerHTML=`${e} <b>${currentScore}%</b> hidden`; }
 
 /* ===== PAINT ===== */
-let paintColor="#8a7f6a", brush=40, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
+let paintColor="#8a7f6a", brush=24, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
+const BRUSH_MIN=8, BRUSH_MAX=46;
 function pushUndo(){ try{ undoStack.push(ctx.getImageData(0,0,board.width,board.height)); if(undoStack.length>12) undoStack.shift(); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
 function _toRGB(col){ if(col[0]==="#"){ let h=col.slice(1); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; } const m=col.match(/\d+/g); return m?[+m[0],+m[1],+m[2]]:[138,127,106]; }
@@ -545,14 +585,27 @@ board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e
 function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); showScore(); } }
 board.addEventListener("pointerup",endPaint); board.addEventListener("pointercancel",endPaint);
 
-const PRESETS=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b48a","#3a4a5a","#e8e0d0","#5a4632"];
-(function buildSwatches(){ const w=$("#swatches"); const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw active"; eye.innerHTML=`<svg viewBox="0 0 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
+let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b48a","#3a4a5a","#e8e0d0","#5a4632"];
+// pull ~n representative colors from the captured scene so the palette matches the photo
+function extractPalette(canvas,n){
+  try{ const W=canvas.width,H=canvas.height,c=canvas.getContext("2d"),data=c.getImageData(0,0,W,H).data;
+    const bk={},step=Math.max(4,Math.round(Math.min(W,H)/70));
+    for(let y=0;y<H;y+=step) for(let x=0;x<W;x+=step){ const i=(y*W+x)*4; const r=data[i],g=data[i+1],b=data[i+2];
+      const key=((r>>5)<<10)|((g>>5)<<5)|(b>>5); const o=bk[key]||(bk[key]={r:0,g:0,b:0,n:0}); o.r+=r;o.g+=g;o.b+=b;o.n++; }
+    let arr=Object.values(bk).map(o=>({r:Math.round(o.r/o.n),g:Math.round(o.g/o.n),b:Math.round(o.b/o.n),n:o.n})).sort((a,b)=>b.n-a.n);
+    const out=[]; for(const col of arr){ if(out.length>=n) break; if(out.every(o=>Math.abs(o.r-col.r)+Math.abs(o.g-col.g)+Math.abs(o.b-col.b)>44)) out.push(col); }
+    let i=0; while(out.length<n && arr.length){ out.push(arr[i%arr.length]); i++; }
+    return out.map(o=>`rgb(${o.r},${o.g},${o.b})`);
+  }catch(e){ return PALETTE; }
+}
+function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const w=$("#swatches"); if(!w) return; w.innerHTML="";
+  const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw active"; eye.innerHTML=`<svg viewBox="0 0 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
   eye.onclick=()=>{ eyedrop=true; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
-  PRESETS.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); });
+  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); });
   const pk=document.createElement("label"); pk.className="sw picker"; const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
   inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); pk.classList.add("active"); }; pk.appendChild(inp); w.appendChild(pk);
-})();
-document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz; document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); b.classList.add("active"); });
+}
+buildSwatches();
 
 /* ===== Pro brushes + paywall ===== */
 const PRODUCT_ID="com.blisscoach.kamo.pro";
@@ -564,7 +617,7 @@ function buildBrushes(){ const w=$("#brushes"); if(!w) return; w.innerHTML="";
     el.className="brush"+(b.id===brushMode?" active":"")+(locked?" locked":""); el.dataset.id=b.id;
     el.innerHTML=b.name+(locked?' <span class="lk">🔒</span>':(b.pro?' <span class="lk">✦</span>':""));
     el.onclick=()=>{ if(b.pro&&!isPro){ openPaywall(); return; } setBrush(b.id); haptic(); }; w.appendChild(el); }); }
-function refreshProUI(){ buildBrushes(); }
+function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar(); }
 buildBrushes();
 
 const paywallEl=$("#paywall");
@@ -710,9 +763,55 @@ $("#shutter").onclick=()=>{ if(mode==="compose") capture(); };
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
 $("#btnUndo").onclick=()=>{ if(undoStack.length>1){ undoStack.pop(); ctx.putImageData(undoStack[undoStack.length-1],0,0); currentScore=computeScore(); showScore(); } };
 $("#btnClear").onclick=()=>{ if(undoStack.length){ ctx.putImageData(undoStack[0],0,0); currentScore=computeScore(); showScore(); } };
-$("#btnBack").onclick=backToCompose;
 $("#btnShare").onclick=shareReveal;
 $("#btnSave").onclick=saveStatic;
+
+/* ===== brush-size slider (Pro feature) ===== */
+const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill"), sizeLock=$("#sizeLock");
+const SB_PAD=24;
+function renderSizeBar(){ if(!sizeBar) return; const t=(brush-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN);
+  const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
+  sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
+  sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
+  sizeLock.style.display=isPro?"none":"block"; sizeBar.classList.toggle("locked",!isPro); }
+function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=Math.round(BRUSH_MIN+t*(BRUSH_MAX-BRUSH_MIN)); renderSizeBar(); }
+let sizing=false;
+sizeBar.addEventListener("pointerdown",e=>{ if(!isPro){ openPaywall(); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+sizeBar.addEventListener("pointermove",e=>{ if(sizing) sizeFromEvent(e); });
+sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
+
+/* ===== Done / Edit finished view + before/after reveal ===== */
+let finished=false, revealX=0.5;
+const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
+function drawReveal(){ if(!beforeBoard) return; const r=board.getBoundingClientRect();
+  revealC.width=Math.round(r.width*dpr); revealC.height=Math.round(r.height*dpr);
+  revealC.style.cssText="position:fixed;z-index:14;display:block;left:"+r.left+"px;top:"+r.top+"px;width:"+r.width+"px;height:"+r.height+"px;";
+  const W=revealC.width,H=revealC.height, sp=Math.round(W*revealX);
+  rctx.clearRect(0,0,W,H); rctx.drawImage(board,0,0,W,H);
+  rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
+  rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*dpr,0,4*dpr,H);
+  revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
+function enterFinished(){ if(finished) return; finished=true; currentScore=computeScore();
+  ["swatches","brushes","editRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
+  sizeBar.style.display="none"; scoreChip.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
+  revealHandle.style.display="flex"; revealHint.style.display="block";
+  revealX=1; drawReveal(); let rv=1; const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal(); if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim); else { revealX=0.5; drawReveal(); } }; requestAnimationFrame(anim); }
+function exitFinished(){ finished=false; revealC.style.display="none"; revealHandle.style.display="none"; revealHint.style.display="none";
+  ["swatches","brushes","editRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
+  const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; showScore(); }
+$("#btnDone").onclick=enterFinished; $("#btnEdit").onclick=exitFinished;
+revealHandle.addEventListener("pointerdown",e=>{ e.preventDefault(); revealHandle.setPointerCapture(e.pointerId); revealHandle._d=true; revealHint.style.display="none"; });
+revealHandle.addEventListener("pointermove",e=>{ if(!revealHandle._d)return; const r=board.getBoundingClientRect(); revealX=Math.max(0.02,Math.min(0.98,(e.clientX-r.left)/r.width)); drawReveal(); });
+revealHandle.addEventListener("pointerup",()=>revealHandle._d=false); revealHandle.addEventListener("pointercancel",()=>revealHandle._d=false);
+window.addEventListener("resize",()=>{ if(finished) drawReveal(); });
+
+/* ===== Retake confirmation ===== */
+const confirmSheet=$("#confirmSheet");
+function closeConfirm(){ confirmSheet.classList.remove("show"); }
+$("#btnBack").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
+$("#cfNo").onclick=closeConfirm;
+$("#cfYes").onclick=()=>{ closeConfirm(); if(finished) exitFinished(); backToCompose(); };
+confirmSheet.onclick=e=>{ if(e.target===confirmSheet) closeConfirm(); };
 
 window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1)); if(renderer) resize3(); });
 
