@@ -582,9 +582,8 @@ function drawWatermark(c,W,H){ const u=W/390, pad=Math.round(H*0.028); c.textAli
   const bh=Math.round(H*0.26); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
   // "Can you spot it?" (big)
   c.fillStyle="#fff"; fit(c,"Can you spot it?",38*u,W,20,"700"); c.fillText("Can you spot it?", W/2, H-Math.round(104*u)-pad);
-  // referral CTA
-  const link = referralCode ? ("kamo.app/r/"+referralCode) : "kamo.app";
-  c.fillStyle="rgba(255,255,255,.82)"; c.font=`600 ${Math.round(15*u)}px -apple-system,sans-serif`; c.fillText("Tap to reveal in KAMO  ·  "+link, W/2, H-Math.round(64*u)-pad);
+  // reveal CTA (clean — the link travels in the share message, not on the image)
+  c.fillStyle="rgba(255,255,255,.82)"; c.font=`600 ${Math.round(16*u)}px -apple-system,sans-serif`; c.fillText("Tap to reveal in kamo app", W/2, H-Math.round(64*u)-pad);
   // KAMO wordmark
   c.fillStyle="#fff"; c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO", W/2, H-Math.round(28*u)-pad);
 }
@@ -662,7 +661,10 @@ async function shareReveal(){
 const shareSheetEl=$("#shareSheet");
 function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
-async function nativeShare(target){ closeShareSheet(); const b=await staticBlob(); const d=await blobToDataURL(b); postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d}); }
+async function nativeShare(target){ closeShareSheet(); const b=await staticBlob(); const d=await blobToDataURL(b);
+  const link=referralCode?("kamo.app/r/"+referralCode):"kamo.app";
+  const message="I hid someone in this photo 👀 Can you find them? Tap to reveal → "+link;
+  postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message}); }
 $("#ssClose").onclick=closeShareSheet;
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) closeShareSheet(); };
 document.querySelectorAll("#shareSheet .ssBtn").forEach(b=>b.onclick=()=>nativeShare(b.dataset.target));
