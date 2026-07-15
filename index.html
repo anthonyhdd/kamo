@@ -12,6 +12,7 @@
   :root{
     --bg:#05060a; --panel:rgba(16,16,24,.72); --stroke:rgba(255,255,255,.14);
     --accent:#ffffff; --accent2:#ffffff; --text:#f4f4f8;
+    --mint:#5fe6a4;  /* brand green (the figure's camo glow) — used as the paywall accent */
     --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
     /* TWO fonts only: --font = body everywhere, --display = the logo font (Space Grotesk) for titles/special text */
     --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
@@ -173,22 +174,34 @@
   .brush.locked{opacity:.9;}
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
-  #paywall.show{display:flex;}
-  .pwCard{width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .32s cubic-bezier(.2,.9,.3,1);}
+  #paywall.show{display:flex;animation:pwFade .28s ease;}
+  @keyframes pwFade{from{opacity:0}to{opacity:1}}
+  .pwCard{position:relative;width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
   @keyframes pwUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-  .pwKick{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--accent);text-transform:uppercase;}
+  /* soft mint glow breathing at the top of the card (on-brand, subtle) */
+  .pwCard::before{content:"";position:absolute;left:0;right:0;top:0;height:210px;pointer-events:none;border-top-left-radius:26px;border-top-right-radius:26px;
+    background:radial-gradient(72% 130px at 50% -6%, rgba(95,230,164,.22), transparent 70%);animation:pwGlow 3.8s ease-in-out infinite;}
+  @keyframes pwGlow{0%,100%{opacity:.6}50%{opacity:1}}
+  .pwCard>*{position:relative;z-index:1;}  /* content above the glow */
+  .pwKick{position:relative;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--mint);text-transform:uppercase;text-shadow:0 0 14px rgba(95,230,164,.5);}
   .pwTitle{font-family:var(--display);font-size:26px;font-weight:700;letter-spacing:-.3px;margin-top:4px;}
   .pwSub{font-size:14px;opacity:.8;margin-top:6px;line-height:1.4;}
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
-  .pwBuy{width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;}
-  .pwBuy.loading{pointer-events:none;opacity:.92;}
+  .pwBuy{position:relative;overflow:hidden;width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;animation:pwBuyGlow 3s ease-in-out infinite;}
+  /* soft mint halo breathing + a slow glossy sweep — subtle, on-brand */
+  @keyframes pwBuyGlow{0%,100%{box-shadow:0 10px 28px rgba(0,0,0,.4);}50%{box-shadow:0 10px 28px rgba(0,0,0,.4),0 0 24px rgba(95,230,164,.5);}}
+  .pwBuy::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
+  @keyframes pwBuySheen{0%{left:-60%}45%,100%{left:150%}}
+  .pwBuy.loading{pointer-events:none;opacity:.92;animation:none;}
+  .pwBuy.loading::after{display:none;}
   .pwSpin{width:20px;height:20px;border-radius:50%;border:2.6px solid rgba(10,11,14,.22);border-top-color:#0a0b0e;animation:pwspin .62s linear infinite;}
   @keyframes pwspin{to{transform:rotate(360deg);}}
   #pwPlans{display:flex;flex-direction:column;gap:10px;margin:18px 0 14px;}
   .pwPlan{display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 16px;border-radius:16px;border:1.5px solid var(--stroke);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;text-align:left;transition:border-color .18s,background .18s;}
-  .pwPlan.active{border-color:#fff;background:rgba(255,255,255,.14);}
+  .pwPlan.active{border-color:var(--mint);background:rgba(95,230,164,.10);box-shadow:0 0 0 1px rgba(95,230,164,.22),0 6px 20px rgba(95,230,164,.14);}
+  .pwPlan{transition:border-color .18s,background .18s,box-shadow .18s;}
   .pwPlanName{display:block;font-size:17px;font-weight:800;}
   .pwPlanMeta{display:block;font-size:12.5px;opacity:.62;margin-top:2px;}
   .pwPlanPrice{font-size:13px;opacity:.75;white-space:nowrap;}
