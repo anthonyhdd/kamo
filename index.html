@@ -13,10 +13,13 @@
     --bg:#05060a; --panel:rgba(16,16,24,.72); --stroke:rgba(255,255,255,.14);
     --accent:#ffffff; --accent2:#ffffff; --text:#f4f4f8;
     --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
+    /* TWO fonts only: --font = body everywhere, --display = the logo font (Space Grotesk) for titles/special text */
+    --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --display:'Kamo',"Avenir Next",-apple-system,sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
-    font-family:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    font-family:var(--font);
     overflow:hidden;overscroll-behavior:none;touch-action:none;}
   #app{position:fixed;inset:0;}
 
@@ -32,18 +35,18 @@
   @keyframes auroraFloat{from{transform:translate(-3%,-2%) scale(1)}to{transform:translate(4%,3%) scale(1.14)}}
   .heroWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 30px;margin-bottom:3vh;}
   @font-face{font-family:'Kamo';src:url('vendor/SpaceGrotesk-700.woff2') format('woff2');font-weight:700;font-display:swap;}
-  .heroLogo{font-family:'Kamo',-apple-system,sans-serif;font-weight:700;letter-spacing:-1.5px;font-size:clamp(48px,16vw,66px);line-height:1;color:#fff;text-shadow:0 8px 34px rgba(0,0,0,.55);}
+  .heroLogo{font-family:var(--display);font-weight:700;letter-spacing:-1.5px;font-size:clamp(48px,16vw,66px);line-height:1;color:#fff;text-shadow:0 8px 34px rgba(0,0,0,.55);}
   .heroLogo b{color:#fff;font-weight:700;}
   @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
   .heroTagline{font-size:17px;font-weight:800;letter-spacing:.3px;line-height:1.3;opacity:.85;text-shadow:0 2px 14px rgba(0,0,0,.6);margin:0;}
   .heroTagline .hl{color:var(--accent);}
   #heroIcon{position:relative;width:124px;height:124px;border-radius:28px;z-index:2;box-shadow:0 18px 55px rgba(0,0,0,.6);outline:1px solid rgba(255,255,255,.08);}
-  .heroFoot{position:absolute;bottom:calc(48px + var(--safe-b));left:0;right:0;text-align:center;z-index:3;font-family:'Kamo',-apple-system,sans-serif;font-weight:700;font-size:19px;letter-spacing:-.3px;color:#fff;opacity:.9;}
+  .heroFoot{position:absolute;bottom:calc(48px + var(--safe-b));left:0;right:0;text-align:center;z-index:3;font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.3px;color:#fff;opacity:.9;}
   .startBottom{position:absolute;z-index:3;left:0;right:0;bottom:calc(34px + var(--safe-b));display:flex;flex-direction:column;align-items:center;gap:12px;padding:0 24px;}
   .startHint{font-size:13px;font-weight:700;letter-spacing:.3px;opacity:.7;}
   .mini{background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;}
 
-  .brand{position:absolute;top:calc(14px + var(--safe-t));left:18px;z-index:12;font-family:'Kamo',-apple-system,sans-serif;font-weight:700;letter-spacing:-.4px;font-size:18px;opacity:.95;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
+  .brand{position:absolute;top:calc(14px + var(--safe-t));left:18px;z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;opacity:.95;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
   .brand b{color:#fff;}
 
   .topbtn{position:absolute;top:calc(10px + var(--safe-t));z-index:12;height:44px;border-radius:22px;
@@ -61,7 +64,7 @@
 
   #scoreChip{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
-    font-size:13.5px;font-weight:750;box-shadow:0 6px 20px rgba(0,0,0,.5);}
+    font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);}
   #scoreChip b{color:var(--accent);font-weight:850;}
 
   /* ---------- SHUTTER ---------- */
@@ -75,7 +78,7 @@
   .shutter:active .core{transform:scale(.88);}
   @keyframes spin{to{transform:rotate(360deg);}}
   @keyframes breathe{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 18px rgba(255,255,255,.20);}50%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 30px rgba(255,255,255,.42);}}
-  .capLabel{position:absolute;top:92px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:2px;opacity:.55;text-transform:uppercase;white-space:nowrap;}
+  .capLabel{position:absolute;top:92px;left:50%;transform:translateX(-50%);font-family:var(--display);font-size:11px;letter-spacing:2px;opacity:.55;text-transform:uppercase;white-space:nowrap;}
   /* visible pose picker (compose mode) — tap a pose directly, no blind cycling */
   #poseBar{position:absolute;left:0;right:0;bottom:calc(150px + var(--safe-b));z-index:14;display:none;justify-content:center;gap:7px;padding:0 14px;}
   #poseBar .poseBtn{flex:0 0 auto;width:48px;height:48px;border-radius:13px;border:1px solid rgba(255,255,255,.16);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s cubic-bezier(.3,1.4,.5,1),border-color .2s,background .2s;}
@@ -135,12 +138,11 @@
   /* Done/Edit nav */
   .navbtn{position:absolute;top:calc(12px + var(--safe-t));right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
   .navbtn:active{transform:scale(.94);}
-  /* vertical brush-size slider (Pro) */
-  #sizeBar{position:absolute;right:14px;top:32%;z-index:16;width:42px;height:212px;border-radius:21px;background:rgba(14,16,20,.5);backdrop-filter:blur(12px);border:1px solid var(--stroke);display:none;touch-action:none;}
-  #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:5px;border-radius:3px;background:rgba(255,255,255,.9);}
-  #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.5);pointer-events:none;}
-  #sizeLock{position:absolute;top:7px;left:50%;transform:translateX(-50%);font-size:13px;opacity:.9;display:none;}
-  #sizeBar.locked{opacity:.75;}
+  /* vertical brush-size slider — just the bar (no panel, no lock) */
+  #sizeBar{position:absolute;right:16px;top:32%;z-index:16;width:34px;height:212px;display:none;touch-action:none;}
+  #sizeBar::before{content:"";position:absolute;left:50%;top:24px;bottom:24px;transform:translateX(-50%);width:4px;border-radius:2px;background:rgba(255,255,255,.32);box-shadow:0 1px 6px rgba(0,0,0,.55);}
+  #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:4px;border-radius:2px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.55);}
+  #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.55);pointer-events:none;}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
   #revealHandle{position:absolute;top:0;bottom:0;width:46px;z-index:15;transform:translateX(-50%);display:none;touch-action:none;align-items:center;justify-content:center;}
@@ -167,8 +169,8 @@
   #paywall.show{display:flex;}
   .pwCard{width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .32s cubic-bezier(.2,.9,.3,1);}
   @keyframes pwUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-  .pwKick{font-size:12px;font-weight:800;letter-spacing:2px;color:var(--accent);text-transform:uppercase;}
-  .pwTitle{font-size:26px;font-weight:900;letter-spacing:-.3px;margin-top:4px;}
+  .pwKick{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--accent);text-transform:uppercase;}
+  .pwTitle{font-family:var(--display);font-size:26px;font-weight:700;letter-spacing:-.3px;margin-top:4px;}
   .pwSub{font-size:14px;opacity:.8;margin-top:6px;line-height:1.4;}
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
@@ -222,8 +224,8 @@
     <button id="btnDone" class="navbtn">Done</button>
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
 
-    <!-- vertical brush-size slider (Pro) -->
-    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div><div id="sizeLock">🔒</div></div>
+    <!-- vertical brush-size slider (free) -->
+    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div></div>
     <!-- before/after reveal (finished view) -->
     <canvas id="revealC"></canvas>
     <div id="revealHandle"><div class="rhKnob">‹ ›</div></div>
@@ -242,7 +244,12 @@
     <div id="paintUI">
       <div id="swatches"></div>
       <div id="brushes"></div>
-      <div class="row" id="editRow" style="margin-top:2px;gap:12px">
+      <div class="row" id="editRow" style="margin-top:2px;gap:12px;justify-content:flex-start">
+        <div class="row" id="sizeDots" style="gap:8px">
+          <button class="bsz" data-sz="12"><i style="width:7px;height:7px"></i></button>
+          <button class="bsz active" data-sz="24"><i style="width:13px;height:13px"></i></button>
+          <button class="bsz" data-sz="40"><i style="width:20px;height:20px"></i></button>
+        </div>
         <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
         <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
       </div>
@@ -270,7 +277,7 @@
   <div class="pwCard">
     <div class="pwKick">KAMO+</div>
     <div class="pwTitle">Unlock every camo brush</div>
-    <div class="pwSub">All Pro pattern brushes (Dapple · Leaf · Camo) + the brush-size slider. Blend your figure in seconds.</div>
+    <div class="pwSub">Unlock every Pro pattern brush — Dapple · Leaf · Camo — and blend your figure into any scene in seconds.</div>
     <div id="pwPlans">
       <button class="pwPlan active" data-plan="weekly">
         <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">3-day free trial</span></div>
@@ -797,19 +804,20 @@ $("#btnClear").onclick=()=>{ if(undoStack.length){ ctx.putImageData(undoStack[0]
 $("#btnShare").onclick=shareReveal;
 $("#btnSave").onclick=saveStatic;
 
-/* ===== brush-size slider (Pro feature) ===== */
-const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill"), sizeLock=$("#sizeLock");
+/* ===== brush-size slider (free) + 3 quick-size presets ===== */
+const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill");
 const SB_PAD=24;
 function renderSizeBar(){ if(!sizeBar) return; const t=(brush-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
-  sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
-  sizeLock.style.display=isPro?"none":"block"; sizeBar.classList.toggle("locked",!isPro); }
-function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=Math.round(BRUSH_MIN+t*(BRUSH_MAX-BRUSH_MIN)); renderSizeBar(); }
+  sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px"; }
+function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=Math.round(BRUSH_MIN+t*(BRUSH_MAX-BRUSH_MIN)); document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); renderSizeBar(); }
 let sizing=false;
-sizeBar.addEventListener("pointerdown",e=>{ if(!isPro){ openPaywall(); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+sizeBar.addEventListener("pointerdown",e=>{ e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 sizeBar.addEventListener("pointermove",e=>{ if(sizing) sizeFromEvent(e); });
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
+/* 3 quick size presets (bottom-left, by the Retake button) — also drive the slider */
+document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz; document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); b.classList.add("active"); renderSizeBar(); haptic(6); });
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
 let finished=false, revealX=0.5;
