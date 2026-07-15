@@ -689,6 +689,8 @@ window.KAMO.setPrice=(txt)=>{ if(txt){ const e=$("#pwWeeklyPrice"); if(e) e.text
 window.KAMO.setPrices=(p)=>{ if(!p) return; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } updatePwBuy&&updatePwBuy(); };
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
+window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; };
+window.KAMO.revealDone=()=>{ try{ busyEl.style.display="none"; }catch(e){} };
 
 /* ===== SHARE: the challenge card (hidden scene + hook + "spot it?" + referral CTA) ===== */
 let referralCode="";
@@ -762,11 +764,14 @@ async function buildReveal(){
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
 /* Export a perfect 9:16 Instagram-Stories frame: the captured scene fills the
    frame (cover-cropped top/bottom), caption kept in the safe zone. */
-function composeShare(W){ const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
-  const s=Math.max(W/board.width, H/board.height), dw=board.width*s, dh=board.height*s;
-  c.drawImage(board,(W-dw)/2,(H-dh)/2,dw,dh); drawWatermark(c,W,H); return o; }
+function composeShare(W,src){ src=src||board; const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
+  const s=Math.max(W/src.width, H/src.height), dw=src.width*s, dh=src.height*s;
+  c.drawImage(src,(W-dw)/2,(H-dh)/2,dw,dh); drawWatermark(c,W,H); return o; }
 async function staticBlob(){ return await new Promise(r=>composeShare(1080).toBlob(r,"image/jpeg",0.9)); }
 let beforeBoard=null, shareMode="challenge";
+/* native capabilities (injected by the Expo wrapper on load). {revealVideo:true} once the
+   native MP4 module ships. Absent on older builds → shares stay static (backward-safe). */
+let nativeCaps={};
 function roundRectFill(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); c.fill(); }
 function composeBeforeAfter(W){ const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
   const bb=beforeBoard||board; const s=Math.max(W/bb.width,H/bb.height), dw=bb.width*s, dh=bb.height*s, ox=(W-dw)/2, oy=(H-dh)/2;
@@ -790,9 +795,18 @@ async function shareReveal(){
 const shareSheetEl=$("#shareSheet");
 function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
-async function nativeShare(target){ closeShareSheet(); const b=await shareBlob(); const d=await blobToDataURL(b);
+async function nativeShare(target){ closeShareSheet();
   const link=referralCode?("kamo.app/r/"+referralCode):"kamo.app";
-  const message=(shareMode==="ba")?("Hide anyone in your photos 👀 kamo app → "+link):("I hid someone in this photo 👀 Can you find them? Tap to reveal → "+link);
+  const message=(shareMode==="ba")?("Now you see him. Now you don't 👀 kamo app → "+link):("I hid someone in this photo 👀 Can you find them? Tap to reveal → "+link);
+  // Before/After mode → animated reveal MP4 (native module). Falls back to the static image
+  // when the wrapper doesn't advertise the capability (older build) or has no before frame.
+  if(shareMode==="ba" && nativeCaps.revealVideo && beforeBoard){
+    const hidden=composeShare(1080, board).toDataURL("image/jpeg",0.85);      // camouflaged (shown first)
+    const revealed=composeShare(1080, beforeBoard).toDataURL("image/jpeg",0.85); // figure visible (wiped in)
+    busyEl.style.display="flex";  // "Creating your reveal…" while native encodes the MP4
+    postNative({type:"reveal-video",target,hidden,revealed,message}); return;
+  }
+  const b=await shareBlob(); const d=await blobToDataURL(b);
   postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message}); }
 $("#ssClose").onclick=closeShareSheet;
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) closeShareSheet(); };
