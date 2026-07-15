@@ -601,17 +601,17 @@ function capture(){
   renderer.render(scene,camera3);
   maskCanvas=document.createElement("canvas"); maskCanvas.width=W; maskCanvas.height=H; maskCanvas.getContext("2d").drawImage(glCanvas,0,0,W,H);
   blurCanvas=makeBlur(sceneCanvas,W,H);
-  try{ buildSwatches(extractPalette(sceneCanvas,10)); }catch(e){}   // palette from the captured photo
+  try{ buildSwatches(extractPalette(sceneCanvas,5)); }catch(e){}   // 5 palette colours from the photo (the eyedropper is the star)
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; undoStack.length=0; pushUndo();
-  sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();
+  sizeBar.style.display=isPro?"block":"none"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider is Pro-only; free users size via the 3 dots
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
   setBrush("solid");
-  currentScore=computeScore(); showScore();
+  currentScore=computeScore(); scoreChip.style.display="none";  // score chip appears after the first brush stroke, not at 0%
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
   maybeOnboardPaint();
 }
@@ -686,7 +686,7 @@ function buildBrushes(){ const w=$("#brushes"); if(!w) return; w.innerHTML="";
     el.className="brush"+(b.id===brushMode?" active":"")+(locked?" locked":""); el.dataset.id=b.id;
     el.innerHTML=b.name+(locked?' <svg class="lkico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>':(b.pro?' <span class="lk">✦</span>':""));
     el.onclick=()=>{ if(b.pro&&!isPro){ openPaywall(); return; } setBrush(b.id); haptic(); }; w.appendChild(el); }); }
-function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar(); }
+function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar(); if(mode==="paint"&&!finished&&typeof sizeBar!=="undefined"&&sizeBar) sizeBar.style.display=isPro?"block":"none"; }
 buildBrushes();
 
 const paywallEl=$("#paywall");
@@ -902,7 +902,7 @@ function enterFinished(){ if(finished) return; finished=true; currentScore=compu
   revealX=1; drawReveal(); let rv=1; const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal(); if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim); else { revealX=0.5; drawReveal(); } }; requestAnimationFrame(anim); }
 function exitFinished(){ finished=false; revealC.style.display="none"; revealHandle.style.display="none"; revealHint.style.display="none";
   ["swatches","brushes","editRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
-  const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
+  const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display=isPro?"block":"none"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
   showScore(); }
 $("#btnDone").onclick=enterFinished; $("#btnEdit").onclick=exitFinished;
