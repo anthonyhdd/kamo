@@ -59,7 +59,7 @@
 
   .hint{position:absolute;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);
-    padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:82vw;overflow:hidden;text-overflow:ellipsis;
+    padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
     box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:none;opacity:0;transition:opacity .3s;}
 
   #scoreChip{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
@@ -284,7 +284,7 @@
   <div class="pwCard">
     <div class="pwKick">KAMO+</div>
     <div class="pwTitle">Unlock every camo brush</div>
-    <div class="pwSub">Unlock every Pro pattern brush — Dapple · Leaf · Camo — and blend your figure into any scene in seconds.</div>
+    <div class="pwSub">Every Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider. Blend your figure in seconds.</div>
     <div id="pwPlans">
       <button class="pwPlan active" data-plan="weekly">
         <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">3-day free trial</span></div>
@@ -544,7 +544,7 @@ function updateWheel(px,py){
   if(dist>36){ const ang=Math.atan2(ly-cy,lx-cx), n=POSES.length; let idx=Math.round((ang+Math.PI/2)/(2*Math.PI/n)); hot=((idx%n)+n)%n; }
   if(hot!==wheelHot){ wheelHot=hot; wheelSlices.forEach((el,i)=>el.classList.toggle("hot",i===hot)); if(hot>=0) haptic(6); }
 }
-function closeWheel(commit){ wheelOpen=false; wheelEl.style.display="none"; if(commit&&wheelHot>=0&&sel()) setPose(sel(),wheelHot); else showHint("Tap a figure to pose · hold for all poses"); }
+function closeWheel(commit){ wheelOpen=false; wheelEl.style.display="none"; if(commit&&wheelHot>=0&&sel()) setPose(sel(),wheelHot); else showHint("Tap to pose · hold for more"); }
 
 /* ===== FX: poof particles ===== */
 function poof(sx,sy){
@@ -816,7 +816,7 @@ document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode
    straight into IG Stories via react-native-share (no share sheet). */
 /* ===== ONBOARDING (once) ===== */
 function firstRun(){ try{ return !localStorage.getItem("kamo_onb"); }catch(e){ return !seenPaint; } }
-function maybeOnboard(){ if(!firstRun()) return; showHint("Drag to move · tap the figure to pose · pinch to size",4200); setTimeout(()=>{ if(mode==="compose") showHint("Then tap Capture below ▼",3600); },4400); }
+function maybeOnboard(){ if(!firstRun()) return; showHint("Tap the figure to pose",3600); setTimeout(()=>{ if(mode==="compose") showHint("Drag & pinch · then Capture ▼",3600); },3800); }
 function maybeOnboardPaint(){ if(!firstRun()) return; showHint("Eyedropper a scene color, then paint over the figure to hide it",4600); try{ localStorage.setItem("kamo_onb","1"); }catch(e){} seenPaint=true; }
 
 /* ---- wire ---- */
@@ -848,7 +848,7 @@ function renderSizeBar(){ if(!sizeBar) return; const t=(brush-BRUSH_MIN)/(BRUSH_
   sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px"; }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=Math.round(BRUSH_MIN+t*(BRUSH_MAX-BRUSH_MIN)); document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); renderSizeBar(); }
 let sizing=false;
-sizeBar.addEventListener("pointerdown",e=>{ e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+sizeBar.addEventListener("pointerdown",e=>{ if(!isPro){ openPaywall(); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 sizeBar.addEventListener("pointermove",e=>{ if(sizing) sizeFromEvent(e); });
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
 /* 3 quick size presets (bottom-left, by the Retake button) — also drive the slider */
