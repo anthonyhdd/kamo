@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#05060a" />
+<meta name="apple-itunes-app" content="app-id=6789639784" />
 <meta name="robots" content="noindex,nofollow" />
 <title>KAMO — spot the hidden one</title>
 <style>
@@ -158,7 +159,10 @@
   #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.55);backdrop-filter:blur(5px);}
   #shareSheet.show{display:flex;}
   .ssCard{width:100%;max-width:460px;background:linear-gradient(180deg,#12161c,#0a0d11);border-top-left-radius:24px;border-top-right-radius:24px;border:1px solid rgba(255,255,255,.1);padding:18px 18px calc(16px + var(--safe-b));animation:pwUp .28s cubic-bezier(.2,.9,.3,1);}
-  .ssTitle{text-align:center;font-size:14px;font-weight:700;opacity:.6;margin:2px 0 14px;}
+  .ssTitle{text-align:center;font-size:14px;font-weight:700;opacity:.6;margin:2px 0 12px;}
+  #ssMode{display:flex;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);border-radius:14px;padding:4px;margin-bottom:14px;}
+  .ssTab{flex:1;height:40px;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,.6);font-size:14px;font-weight:750;cursor:pointer;transition:background .18s,color .18s;}
+  .ssTab.active{background:#fff;color:#0a0b0e;}
   .ssBtn{width:100%;height:56px;margin-bottom:10px;border-radius:16px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:#fff;font-size:16px;font-weight:750;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;}
   .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
   .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
@@ -209,7 +213,7 @@
         <button class="b primary" id="btnShare"><svg viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>Share</button>
         <button class="b icon" id="btnSave" title="Save photo"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></button>
       </div>
-      <div class="badge">Eyedropper the scene color · pick a camo brush · paint to hide · Share</div>
+      <div class="badge">Grab a color · paint the figure · make it vanish</div>
     </div>
 
     <div id="busy"><div class="spinner"></div><div class="lbl">Creating your reveal…</div></div>
@@ -228,7 +232,7 @@
   <div class="pwCard">
     <div class="pwKick">KAMO Pro</div>
     <div class="pwTitle">Unlock every camo brush</div>
-    <div class="pwSub">Blend your figure in seconds — pattern brushes that paint realistic camouflage from the colors you pick.</div>
+    <div class="pwSub">Dapple, Leaf & Camo — realistic pattern brushes that paint camouflage from the exact colors you pick. Blend in seconds.</div>
     <ul class="pwList">
       <li><b>◍</b> Dapple — soft multi-tone blend</li>
       <li><b>❦</b> Leaf — foliage texture for greenery</li>
@@ -249,6 +253,10 @@
 <div id="shareSheet">
   <div class="ssCard">
     <div class="ssTitle">Share your hide</div>
+    <div id="ssMode">
+      <button class="ssTab active" data-mode="challenge">Challenge</button>
+      <button class="ssTab" data-mode="ba">Before / After</button>
+    </div>
     <button class="ssBtn ig" data-target="instagram"><span class="ic">📸</span>Instagram Story</button>
     <button class="ssBtn snap" data-target="snapchat"><span class="ic">👻</span>Snapchat</button>
     <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More options</button>
@@ -483,6 +491,7 @@ function capture(){
   blurCanvas=makeBlur(sceneCanvas,W,H);
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
+  beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; undoStack.length=0; pushUndo();
@@ -645,6 +654,20 @@ function composeShare(W){ const H=Math.round(W*16/9); const o=document.createEle
   const s=Math.max(W/board.width, H/board.height), dw=board.width*s, dh=board.height*s;
   c.drawImage(board,(W-dw)/2,(H-dh)/2,dw,dh); drawWatermark(c,W,H); return o; }
 async function staticBlob(){ return await new Promise(r=>composeShare(1080).toBlob(r,"image/jpeg",0.9)); }
+let beforeBoard=null, shareMode="challenge";
+function roundRectFill(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); c.fill(); }
+function composeBeforeAfter(W){ const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
+  const bb=beforeBoard||board; const s=Math.max(W/bb.width,H/bb.height), dw=bb.width*s, dh=bb.height*s, ox=(W-dw)/2, oy=(H-dh)/2;
+  c.drawImage(bb,ox,oy,dw,dh);                                   // left = visible
+  c.save(); c.beginPath(); c.rect(W/2,0,W/2,H); c.clip(); c.drawImage(board,ox,oy,dw,dh); c.restore();  // right = hidden
+  c.fillStyle="rgba(255,255,255,.96)"; c.fillRect(W/2-2,0,4,H); const hy=H*0.42; c.beginPath(); c.arc(W/2,hy,Math.round(W*0.045),0,7); c.fillStyle="#fff"; c.fill();
+  const u=W/390; c.textAlign="center"; c.font=`700 ${Math.round(13*u)}px -apple-system,sans-serif`;
+  const lab=(t,x)=>{ const w=c.measureText(t).width; c.fillStyle="rgba(6,8,12,.82)"; roundRectFill(c,x-w/2-12*u,44*u,w+24*u,30*u,15*u); c.fillStyle="#fff"; c.fillText(t,x,64*u); };
+  lab("VISIBLE",W*0.25); lab("HIDDEN",W*0.75);
+  const bh=H*0.2, g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(4,6,10,0)"); g.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
+  c.fillStyle="#fff"; fit(c,"Now you see him. Now you don't.",24*u,W,14,"700"); c.fillText("Now you see him. Now you don't.",W/2,H-Math.round(76*u));
+  c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO",W/2,H-Math.round(32*u)); return o; }
+async function shareBlob(){ const canv = shareMode==="ba" ? composeBeforeAfter(1080) : composeShare(1080); return await new Promise(r=>canv.toBlob(r,"image/jpeg",0.9)); }
 async function shareReveal(){
   // Native app → let the user pick Instagram Story / Snapchat / More.
   if(window.ReactNativeWebView){ openShareSheet(); return; }
@@ -657,13 +680,14 @@ async function shareReveal(){
 const shareSheetEl=$("#shareSheet");
 function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
-async function nativeShare(target){ closeShareSheet(); const b=await staticBlob(); const d=await blobToDataURL(b);
+async function nativeShare(target){ closeShareSheet(); const b=await shareBlob(); const d=await blobToDataURL(b);
   const link=referralCode?("kamo.app/r/"+referralCode):"kamo.app";
-  const message="I hid someone in this photo 👀 Can you find them? Tap to reveal → "+link;
+  const message=(shareMode==="ba")?("Hide anyone in your photos 👀 kamo app → "+link):("I hid someone in this photo 👀 Can you find them? Tap to reveal → "+link);
   postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message}); }
 $("#ssClose").onclick=closeShareSheet;
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) closeShareSheet(); };
 document.querySelectorAll("#shareSheet .ssBtn").forEach(b=>b.onclick=()=>nativeShare(b.dataset.target));
+document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode=t.dataset.mode; document.querySelectorAll("#ssMode .ssTab").forEach(x=>x.classList.toggle("active",x===t)); haptic(8); });
 /* 1-tap → Instagram Stories: send the static image to native, which pushes it
    straight into IG Stories via react-native-share (no share sheet). */
 /* ===== ONBOARDING (once) ===== */
@@ -690,6 +714,11 @@ initThree();
    permission pre-granted). If the browser needs a user gesture (Safari) or has no
    camera, we stay on the branded start screen and the user taps "Tap to start". */
 startCamera(true);
+
+/* referral: a friend's challenge link (…/?r=<code>) — remember the code + welcome them */
+(function(){ try{ const rp=new URLSearchParams(location.search).get("r"); if(rp){ localStorage.setItem("kamo_ref",rp);  // referrer to credit (native reads this on first run)
+  setTimeout(()=>showHint("🎯 You've been challenged — now hide someone too",4200),900);
+} }catch(e){} })();
 
 /* debug bridge (?debug) */
 if(location.search.includes("debug")){
