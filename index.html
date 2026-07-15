@@ -76,6 +76,10 @@
   .shutter .core{position:absolute;inset:7px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#ffffff,#f1f1f3 72%,#e3e3e7);
     box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .12s cubic-bezier(.3,1.4,.5,1);}
   .shutter:active .core{transform:scale(.88);}
+  .shutter.snap .core{animation:snapCore .34s ease-out;}
+  .shutter.snap .ring{animation:snapRing .34s ease-out;}
+  @keyframes snapCore{0%{transform:scale(1)}28%{transform:scale(.72)}100%{transform:scale(1)}}
+  @keyframes snapRing{0%{transform:scale(1)}28%{transform:scale(.9)}60%{transform:scale(1.06)}100%{transform:scale(1)}}
   @keyframes spin{to{transform:rotate(360deg);}}
   @keyframes breathe{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 18px rgba(255,255,255,.20);}50%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 30px rgba(255,255,255,.42);}}
   .capLabel{position:absolute;top:92px;left:50%;transform:translateX(-50%);font-family:var(--display);font-size:11px;letter-spacing:2px;opacity:.55;text-transform:uppercase;white-space:nowrap;}
@@ -93,6 +97,9 @@
   @keyframes burst{0%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(calc(-50% + var(--px)),calc(-50% + var(--py))) scale(.2);opacity:0}}
   .ringpulse{position:absolute;border:3px solid var(--accent);border-radius:50%;width:24px;height:24px;transform:translate(-50%,-50%);animation:rp .65s ease-out forwards;}
   @keyframes rp{0%{width:24px;height:24px;opacity:.9}100%{width:200px;height:200px;opacity:0}}
+  /* capture snap: bright shockwave from the figure */
+  .capRing{position:absolute;border:3px solid #fff;border-radius:50%;width:34px;height:34px;transform:translate(-50%,-50%);box-shadow:0 0 22px rgba(255,255,255,.7);animation:capr .52s cubic-bezier(.2,.7,.3,1) forwards;}
+  @keyframes capr{0%{width:30px;height:30px;opacity:.95}100%{width:340px;height:340px;opacity:0}}
 
   /* busy overlay while rendering the reveal video */
   #busy{position:absolute;inset:0;z-index:50;display:none;flex-direction:column;gap:16px;align-items:center;justify-content:center;background:rgba(5,6,10,.72);backdrop-filter:blur(6px);}
@@ -411,7 +418,13 @@ function lerpChar(char){ const s=0.18; const g=char.group;
   g.position.x+=char._svx; g.position.y+=char._svy;
   // squash & stretch along the motion direction
   const spd=Math.hypot(char._svx,char._svy), st=Math.min(0.32,spd*5), hx=(Math.abs(char._svx)+1e-4)/(Math.abs(char._svx)+Math.abs(char._svy)+2e-4), cg=char.charG;
+  if(char._pfx){ cg.scale.x/=char._pfx; cg.scale.y/=char._pfy; }   // undo last frame's capture-pop so the squash spring eases the clean base
   cg.scale.x+=((1+st*hx-st*(1-hx)*0.5)-cg.scale.x)*0.3; cg.scale.y+=((1+st*(1-hx)-st*hx*0.5)-cg.scale.y)*0.3;
+  // capture pop — a quick bounded punch that decays (set by captureShot); re-applied fresh each frame so it never compounds
+  if(char._punch===undefined) char._punch=0;
+  let _pfx=1,_pfy=1;
+  if(char._punch>0.002){ _pfx=1+char._punch*0.38; _pfy=1+char._punch*0.52; char._punch*=0.78; } else char._punch=0;
+  cg.scale.x*=_pfx; cg.scale.y*=_pfy; char._pfx=_pfx; char._pfy=_pfy;
   // secondary motion: limbs/torso trail the movement, then settle to rest when it stops
   const px=g.position.x; if(char._lx===undefined)char._lx=px; char._vx=(char._vx||0)*0.86+(px-char._lx)*0.16; char._lx=px;
   const v=Math.max(-0.9,Math.min(0.9,char._vx*10));
@@ -444,14 +457,14 @@ function enterCompose(){
   ["sizeBar","btnDone","btnEdit","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   flipBtn.style.display=(bgKind==="cam")?"flex":"none";
   clearCharacters(); spawnHider();
-  buildPoseBar(); $("#poseBar").style.display="flex"; updatePoseBar();
+  buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
 function backToCompose(){
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   glCanvas.style.display="block"; shutterWrap.style.display="block"; flipBtn.style.display=(bgKind==="cam")?"flex":"none";
-  $("#poseBar").style.display="flex"; updatePoseBar();
+  $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   showHint("Reposition, then recapture");
 }
@@ -543,6 +556,9 @@ function poof(sx,sy){
     fx.appendChild(s); setTimeout(()=>s.remove(),1050); }
 }
 function boardToScreen(pt){ const r=board.getBoundingClientRect(); return { x:r.left+pt.x*(r.width/board.width), y:r.top+pt.y*(r.height/board.height) }; }
+function charScreen(char){ const v=new THREE.Vector3(); char.parts.spine.getWorldPosition(v); v.project(camera3); const r=stage.getBoundingClientRect(); return { x:r.left+(v.x*0.5+0.5)*r.width, y:r.top+(-v.y*0.5+0.5)*r.height }; }
+function captureBurst(char){ if(!char) return; const p=charScreen(char), fx=$("#fx");
+  const rp=document.createElement("div"); rp.className="capRing"; rp.style.left=p.x+"px"; rp.style.top=p.y+"px"; fx.appendChild(rp); setTimeout(()=>rp.remove(),540); }
 
 /* ===== CAPTURE ===== */
 let sceneCanvas=null, maskCanvas=null, blurCanvas=null, hiderPoints=[], currentScore=0, seenPaint=false;
@@ -791,13 +807,23 @@ document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode
    straight into IG Stories via react-native-share (no share sheet). */
 /* ===== ONBOARDING (once) ===== */
 function firstRun(){ try{ return !localStorage.getItem("kamo_onb"); }catch(e){ return !seenPaint; } }
-function maybeOnboard(){ if(!firstRun()) return; showHint("Drag to move · pinch to size · twist to turn",4200); setTimeout(()=>{ if(mode==="compose") showHint("Then tap Capture below ▼",3600); },4400); }
+function maybeOnboard(){ if(!firstRun()) return; showHint("Drag to move · tap the figure to pose · pinch to size",4200); setTimeout(()=>{ if(mode==="compose") showHint("Then tap Capture below ▼",3600); },4400); }
 function maybeOnboardPaint(){ if(!firstRun()) return; showHint("Eyedropper a scene color, then paint over the figure to hide it",4600); try{ localStorage.setItem("kamo_onb","1"); }catch(e){} seenPaint=true; }
 
 /* ---- wire ---- */
 startEl.onclick=()=>startCamera();
 $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; startCamera(); };
-$("#shutter").onclick=()=>{ if(mode==="compose") capture(); };
+let capturing=false;
+function captureShot(){
+  if(mode!=="compose"||capturing) return; capturing=true;
+  const c=sel()||characters[0];
+  if(c) c._punch=0.5;              // pop the figure (animate loop renders it before the freeze)
+  captureBurst(c);                 // shockwave ring from the figure
+  haptic(26);
+  $("#shutter").classList.add("snap");
+  setTimeout(()=>{ try{ capture(); } finally { capturing=false; $("#shutter").classList.remove("snap"); } }, 165);
+}
+$("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
 $("#btnUndo").onclick=()=>{ if(undoStack.length>1){ undoStack.pop(); ctx.putImageData(undoStack[undoStack.length-1],0,0); currentScore=computeScore(); showScore(); } };
 $("#btnClear").onclick=()=>{ if(undoStack.length){ ctx.putImageData(undoStack[0],0,0); currentScore=computeScore(); showScore(); } };
