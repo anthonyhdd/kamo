@@ -173,7 +173,10 @@
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
-  .pwBuy{width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;}
+  .pwBuy{width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;}
+  .pwBuy.loading{pointer-events:none;opacity:.92;}
+  .pwSpin{width:20px;height:20px;border-radius:50%;border:2.6px solid rgba(10,11,14,.22);border-top-color:#0a0b0e;animation:pwspin .62s linear infinite;}
+  @keyframes pwspin{to{transform:rotate(360deg);}}
   #pwPlans{display:flex;flex-direction:column;gap:10px;margin:18px 0 14px;}
   .pwPlan{display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 16px;border-radius:16px;border:1.5px solid var(--stroke);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;text-align:left;transition:border-color .18s,background .18s;}
   .pwPlan.active{border-color:#fff;background:rgba(255,255,255,.14);}
@@ -636,24 +639,32 @@ buildBrushes();
 
 const paywallEl=$("#paywall");
 function openPaywall(){ paywallEl.classList.add("show"); haptic(12); }
-function closePaywall(){ paywallEl.classList.remove("show"); }
+function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); }
+/* buy button loading state — bridges the delay before the native StoreKit sheet appears */
+let _pwBuyTimer=null;
+function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
+  clearTimeout(_pwBuyTimer);
+  if(on){ b.classList.add("loading"); b.setAttribute("aria-busy","true"); b.innerHTML='<span class="pwSpin"></span>';
+    /* native cancel doesn't call back to the web, so auto-reset if nothing resolves */
+    _pwBuyTimer=setTimeout(()=>setPwBuyLoading(false), 6000); }
+  else { b.classList.remove("loading"); b.removeAttribute("aria-busy"); updatePwBuy(); } }
 $("#pwClose").onclick=closePaywall;
 paywallEl.onclick=e=>{ if(e.target===paywallEl) closePaywall(); };
 function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
   if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||"$14.99"; b.textContent="Unlock forever — "+p; if(t) t.textContent="One-time purchase. Yours forever."; }
   else { const p=($("#pwWeeklyPrice")||{}).textContent||"$2.99"; b.textContent="Start free trial"; if(t) t.textContent="3 days free, then "+p+"/week. Cancel anytime."; } }
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); });
-$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; if(window.ReactNativeWebView){ postNative({type:"purchase",product:prod}); showHint("Opening checkout…"); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
+$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; haptic(16); if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
 function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",url:u}); } else { window.open(u,"_blank","noopener"); } }
 document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.url));
 /* native bridge — RevenueCat (native) calls these on purchase/restore success + to inject the localized price */
 window.KAMO=window.KAMO||{};
-window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); if(v) closePaywall(); };
+window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); setPwBuyLoading(false); if(v) closePaywall(); };
 window.KAMO.setPrice=(txt)=>{ if(txt){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=txt; updatePwBuy&&updatePwBuy(); } };
 window.KAMO.setPrices=(p)=>{ if(!p) return; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } updatePwBuy&&updatePwBuy(); };
-window.KAMO.hint=(t)=>showHint(t);
+window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
 
 /* ===== SHARE: the challenge card (hidden scene + hook + "spot it?" + referral CTA) ===== */
