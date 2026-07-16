@@ -42,6 +42,15 @@
   .heroTagline{font-size:17px;font-weight:800;letter-spacing:.3px;line-height:1.3;opacity:.85;text-shadow:0 2px 14px rgba(0,0,0,.6);margin:0;}
   .heroTagline .hl{color:var(--accent);}
   #heroIcon{position:relative;width:124px;height:124px;border-radius:28px;z-index:2;box-shadow:0 18px 55px rgba(0,0,0,.6);outline:1px solid rgba(255,255,255,.08);}
+  /* While booting we keep #start looking EXACTLY like the native splash
+     (icon centred on black) so the splash→web handoff stays invisible — the
+     native side holds splash.png until onLoadEnd for the same reason. The
+     hero copy/CTAs appear only if the camera never opens (see revealHero). */
+  #start.booting .heroTitle,
+  #start.booting .heroSub,
+  #start.booting .heroCta,
+  #start.booting .heroPick,
+  #start.booting #heroMsg{display:none !important;}
   /* Hero CTAs — the app MUST stay usable with no camera (denied/unavailable):
      "pick a photo" is a full path into the app that never touches getUserMedia. */
   .heroTitle{position:relative;z-index:2;margin:24px 0 0;font-family:var(--display);font-weight:700;font-size:27px;line-height:1.18;letter-spacing:-.5px;color:#fff;text-align:center;max-width:min(86vw,420px);}
@@ -321,10 +330,10 @@
     <div id="busy"><div class="spinner"></div><div class="lbl">Creating your reveal…</div></div>
 
     <!-- START (home) -->
-    <div id="start">
+    <div id="start" class="booting">
       <div class="aurora"></div>
       <img id="heroIcon" src="icon.png" alt="KAMO"/>
-      <h1 class="heroTitle">Hide a tiny figure<br/>in the real world</h1>
+      <h1 class="heroTitle">Hide a tiny figure<br/>in the real world</h1><!-- revealed only if the camera never opens -->
       <p class="heroSub">Camouflage it, then dare your friends to spot it 👀</p>
       <button id="heroStart" class="heroCta" type="button">Tap to start</button>
       <button id="heroPick" class="heroPick" type="button">or pick a photo</button>
@@ -489,6 +498,10 @@ function resize3(){ const w=stage.clientWidth,h=stage.clientHeight; renderer.set
 function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!renderer) return; characters.forEach(lerpChar); renderer.render(scene,camera3); }
 
 /* ===== CAMERA ===== */
+// Drop the splash disguise and show the real hero (title + CTAs). Called only
+// when the camera didn't open, so a normal launch stays splash→camera with no
+// flash of hero copy in between.
+function revealHero(){ startEl.classList.remove("booting"); }
 // #hint lives under the opaque #start overlay (z-index 30) → invisible on the
 // hero. Surface camera errors in #heroMsg while the start screen is up.
 function camFail(msg){
@@ -501,12 +514,12 @@ function camFail(msg){
 // auto=true => launch attempt on boot: on any failure just stay on the branded
 // start screen silently (no scary hint); the user taps "Tap to start" to retry with a gesture.
 async function startCamera(auto){
-  if(!window.isSecureContext){ if(!auto) camFail("Open KAMO in Safari to use the camera — or pick a photo below."); return; }
-  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(!auto) camFail("This browser can't open the camera. Try Safari, or tap “pick a photo”."); return; }
+  if(!window.isSecureContext){ if(auto) revealHero(); else camFail("Open KAMO in Safari to use the camera — or pick a photo below."); return; }
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero(); else camFail("This browser can't open the camera. Try Safari, or tap “pick a photo”."); return; }
   const tries=[{video:{facingMode:{ideal:facing}},audio:false},{video:{facingMode:facing},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){ try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stream=await navigator.mediaDevices.getUserMedia(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; enterCompose(); return; }catch(e){ lastErr=e; } }
-  if(auto) return; // silent — the branded start screen (with both CTAs) stays
+  if(auto){ revealHero(); return; } // camera didn't open → give the user the CTAs
   const n=lastErr&&lastErr.name;
   // inside the native app the camera setting lives under Settings › KAMO, not Safari
   const where = window.ReactNativeWebView ? "Settings › KAMO › Camera" : "Settings › Safari › Camera";
@@ -967,9 +980,14 @@ window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePi
 initThree();
 
 /* camera-first: try to open the live camera immediately on launch (native app has
-   permission pre-granted). If the browser needs a user gesture (Safari) or has no
-   camera, we stay on the branded start screen and the user taps "Tap to start". */
+   permission pre-granted). #start stays disguised as the native splash during the
+   attempt; if the camera doesn't open we revealHero() so the user always has
+   "Tap to start" + "or pick a photo" instead of a dead black screen. */
 startCamera(true);
+/* Safety net: never strand the user on the splash disguise. If the camera hasn't
+   taken us to compose in 2.5s (permission sheet left open, getUserMedia hanging,
+   an unexpected throw), show the hero CTAs anyway. */
+setTimeout(()=>{ if(mode!=="compose" && startEl.style.display!=="none") revealHero(); },2500);
 
 /* referral: a friend's challenge link (…/?r=<code>) — remember the code + welcome them */
 (function(){ try{ const rp=new URLSearchParams(location.search).get("r"); if(rp){ localStorage.setItem("kamo_ref",rp);  // referrer to credit (native reads this on first run)
