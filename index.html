@@ -91,10 +91,18 @@
 
   /* ---------- SHUTTER ---------- */
   #shutterWrap{position:absolute;left:50%;bottom:calc(30px + var(--safe-b));transform:translateX(-50%);z-index:15;display:none;}
-  /* sits on the shutter's centre line, bottom-left (camera-app convention) */
-  #btnPhoto{position:absolute;left:24px;bottom:calc(52px + var(--safe-b));z-index:15;display:none;align-items:center;justify-content:center;width:46px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,.28);background:rgba(10,12,16,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;-webkit-tap-highlight-color:transparent;}
-  #btnPhoto svg{width:23px;height:23px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
-  #btnPhoto:active{transform:scale(.94);}
+  /* bottom controls sit on the shutter's centre line (camera-app convention) */
+  .camBtn{position:absolute;bottom:calc(52px + var(--safe-b));z-index:15;display:none;align-items:center;justify-content:center;width:46px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,.28);background:rgba(10,12,16,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .camBtn svg{width:23px;height:23px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .camBtn:active{transform:scale(.94);}
+  #btnPhoto{left:24px;}
+  #btnLight{right:24px;}
+  /* torch on = the button itself lights up */
+  #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
+  #btnLight.on svg{stroke:#04120b;fill:#04120b;}
+  /* KAMO+ entry point, mirrors #flip on the other side of the wordmark */
+  #btnPlus{left:14px;width:44px;}
+  #btnPlus svg{width:21px;height:21px;fill:var(--mint);stroke:none;filter:drop-shadow(0 0 7px rgba(95,230,164,.5));}
   /* Apple-camera-style shutter: white ring + gap + white inner disc, no colour */
   .shutter{position:relative;width:78px;height:78px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
   .shutter .ring{position:absolute;inset:0;border-radius:50%;border:4px solid #fff;box-shadow:0 6px 22px rgba(0,0,0,.5);}
@@ -279,6 +287,9 @@
     <div id="flash"></div>
     <div id="fx"></div>
 
+    <button id="btnPlus" class="topbtn" title="KAMO+" aria-label="KAMO+">
+      <svg viewBox="0 0 24 24"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+    </button>
     <div class="brand">KA<b>MO</b></div>
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
@@ -303,8 +314,12 @@
       <div class="capLabel">Capture</div>
     </div>
     <!-- gallery: the photo path must stay reachable from the camera too, not only the hero -->
-    <button id="btnPhoto" aria-label="Pick a photo" title="Pick a photo">
+    <button id="btnPhoto" class="camBtn" aria-label="Pick a photo" title="Pick a photo">
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.4"/><circle cx="8.6" cy="10.2" r="1.7"/><path d="M21 16.5l-5-4.6L7 19"/></svg>
+    </button>
+    <!-- torch: only shown where it actually works (see setupTorch) -->
+    <button id="btnLight" class="camBtn" aria-label="Light" title="Light">
+      <svg viewBox="0 0 24 24"><path d="M13 2L4.5 13.2h6L9.8 22l8.7-11.2h-6z"/></svg>
     </button>
 
     <!-- PAINT UI -->
@@ -518,7 +533,7 @@ async function startCamera(auto){
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero(); else camFail("This browser can't open the camera. Try Safari, or tap “pick a photo”."); return; }
   const tries=[{video:{facingMode:{ideal:facing}},audio:false},{video:{facingMode:facing},audio:false},{video:true,audio:false}];
   let lastErr;
-  for(const c of tries){ try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stream=await navigator.mediaDevices.getUserMedia(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; enterCompose(); return; }catch(e){ lastErr=e; } }
+  for(const c of tries){ try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stream=await navigator.mediaDevices.getUserMedia(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; torchOn=false; /* new track starts with the torch off */ enterCompose(); return; }catch(e){ lastErr=e; } }
   if(auto){ revealHero(); return; } // camera didn't open → give the user the CTAs
   const n=lastErr&&lastErr.name;
   // inside the native app the camera setting lives under Settings › KAMO, not Safari
@@ -527,14 +542,14 @@ async function startCamera(auto){
   else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera found — tap “or pick a photo” below to hide your figure in a picture instead.");
   else camFail("Couldn't reach the camera — tap “or pick a photo” below instead.");
 }
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>URL.revokeObjectURL(url); photo.src=url; photo.style.display="block"; cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; enterCompose(); }
+function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>URL.revokeObjectURL(url); photo.src=url; photo.style.display="block"; cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
+  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
-  flipBtn.style.display=(bgKind==="cam")?"flex":"none";
+  flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   clearCharacters(); spawnHider();
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
@@ -543,7 +558,7 @@ function backToCompose(){
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
-  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none";
+  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   showHint("Reposition, then recapture");
@@ -658,7 +673,7 @@ function capture(){
   ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; undoStack.length=0; pushUndo();
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; Pro-gated (tap → paywall), free users can also use the 3 dots
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
@@ -738,7 +753,9 @@ function buildBrushes(){ const w=$("#brushes"); if(!w) return; w.innerHTML="";
     el.className="brush"+(b.id===brushMode?" active":"")+(locked?" locked":""); el.dataset.id=b.id;
     el.innerHTML=b.name+(locked?' <svg class="lkico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>':(b.pro?' <span class="lk">✦</span>':""));
     el.onclick=()=>{ if(b.pro&&!isPro){ openPaywall(); return; } setBrush(b.id); haptic(); }; w.appendChild(el); }); }
-function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar(); }
+function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar();
+  // nothing left to sell once they're KAMO+ → drop the top-left entry point
+  const p=$("#btnPlus"); if(p && isPro) p.style.display="none"; }
 buildBrushes();
 
 const paywallEl=$("#paywall");
@@ -907,6 +924,34 @@ $("#heroStart").onclick=e=>{ e.stopPropagation(); startCamera(); };
 // the camera is denied/unavailable (App Review devices hit exactly that).
 $("#heroPick").onclick=e=>{ e.stopPropagation(); $("#fileInput").click(); };
 $("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); $("#fileInput").click(); };
+$("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall(); };
+
+/* ---- torch ----
+   Web torch = track.applyConstraints({advanced:[{torch}]}), supported on Android
+   Chrome but NOT in WebKit/WKWebView — so on iOS this reports no capability and
+   we hide the button rather than ship a dead control. nativeCaps.torch lets a
+   native bridge take over once it exists (same pattern as revealVideo). */
+let torchOn=false;
+function torchTrack(){ return (bgKind==="cam" && stream) ? stream.getVideoTracks()[0] : null; }
+function torchAvailable(){
+  if(nativeCaps.torch) return true;
+  const t=torchTrack();
+  try{ return !!(t && t.getCapabilities && t.getCapabilities().torch); }catch(e){ return false; }
+}
+function updateLightBtn(){
+  const el=$("#btnLight"); if(!el) return;
+  const ok = mode==="compose" && bgKind==="cam" && torchAvailable();
+  el.style.display = ok ? "flex" : "none";
+  el.classList.toggle("on", ok && torchOn);
+}
+async function setTorch(on){
+  if(nativeCaps.torch){ postNative({type:"torch",on}); torchOn=on; updateLightBtn(); return; }
+  const t=torchTrack(); if(!t) return;
+  try{ await t.applyConstraints({advanced:[{torch:on}]}); torchOn=on; }
+  catch(e){ console.warn("[torch]",e); showHint("Light isn't available on this device"); torchOn=false; }
+  updateLightBtn();
+}
+$("#btnLight").onclick=e=>{ e.stopPropagation(); haptic(10); setTorch(!torchOn); };
 $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; startCamera(); };
 let capturing=false;
 function captureShot(){
