@@ -364,14 +364,18 @@
     <div class="pwKick">KAMO+</div>
     <div class="pwTitle">Unlock every camo brush</div>
     <div class="pwSub">Every Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider. Blend your figure in seconds.</div>
-    <div id="pwPlans">
-      <button class="pwPlan active" data-plan="weekly">
+    <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
+         store won't sell it. applyPlanAvailability() reveals it the moment a real
+         weekly price arrives from the native layer. Fail-safe: if no prices ever
+         arrive, we never show a plan whose purchase would fail. -->
+    <div id="pwPlans" style="display:none">
+      <button class="pwPlan" data-plan="weekly" style="display:none">
         <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">3-day free trial</span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
-      <button class="pwPlan" data-plan="lifetime">
+      <button class="pwPlan active" data-plan="lifetime">
         <div class="pwPlanTxt"><span class="pwPlanName">Lifetime</span><span class="pwPlanMeta">One-time · yours forever</span></div>
-        <div class="pwPlanPrice"><b id="pwLifetimePrice">$14.99</b></div>
+        <div class="pwPlanPrice"><b id="pwLifetimePrice">$2.99</b></div>
       </button>
     </div>
     <button id="pwBuy" class="pwBuy">Start free trial</button>
@@ -744,7 +748,8 @@ buildSwatches();
 
 /* ===== Pro brushes + paywall ===== */
 const PRODUCT_ID="com.blisscoach.kamo.pro";
-const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="weekly";
+// default to the plan we can actually sell today (the weekly sub isn't approved yet)
+const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="lifetime";
 let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
 const BRUSHES=[{id:"solid",name:"Solid",pro:false},{id:"dapple",name:"Dapple",pro:true},{id:"leaf",name:"Leaf",pro:true},{id:"disrupt",name:"Camo",pro:true}];
 function setBrush(id){ brushMode=id; document.querySelectorAll("#brushes .brush").forEach(el=>el.classList.toggle("active",el.dataset.id===id)); }
@@ -772,7 +777,7 @@ function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
 $("#pwClose").onclick=closePaywall;
 paywallEl.onclick=e=>{ if(e.target===paywallEl) closePaywall(); };
 function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
-  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||"$14.99"; b.textContent="Unlock forever — "+p; if(t) t.textContent="One-time purchase. Yours forever."; }
+  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||"$2.99"; b.textContent="Unlock forever — "+p; if(t) t.textContent="One-time purchase. Yours forever."; }
   else { const p=($("#pwWeeklyPrice")||{}).textContent||"$2.99"; b.textContent="Start free trial"; if(t) t.textContent="3 days free, then "+p+"/week. Cancel anytime."; } }
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); });
 $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; haptic(16); if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
@@ -784,7 +789,31 @@ document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.
 window.KAMO=window.KAMO||{};
 window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); setPwBuyLoading(false); if(v) closePaywall(); };
 window.KAMO.setPrice=(txt)=>{ if(txt){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=txt; updatePwBuy&&updatePwBuy(); } };
-window.KAMO.setPrices=(p)=>{ if(!p) return; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } updatePwBuy&&updatePwBuy(); };
+window.KAMO.setPrices=(p)=>{ if(!p) return; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
+/* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
+   sets prices.weekly / prices.lifetime when RevenueCat resolved that product).
+   A plan we can't sell must never be shown: tapping it opens a purchase that
+   fails ("plan not available yet") — which reads as a broken app to App Review.
+   So each plan is shown only when its price arrived; the weekly re-appears on
+   its own the day the subscription is approved. No hardcoding, no rebuild. */
+function applyPlanAvailability(p){
+  const plans=[["weekly",!!(p&&p.weekly)],["lifetime",!!(p&&p.lifetime)]];
+  let sold=0, firstSold=null;
+  plans.forEach(([name,ok])=>{
+    const el=document.querySelector('#pwPlans .pwPlan[data-plan="'+name+'"]');
+    if(!el) return;
+    el.style.display = ok ? "" : "none";
+    if(ok){ sold++; if(!firstSold) firstSold=name; }
+  });
+  // selected plan disappeared → fall back to one we can actually sell
+  const cur=document.querySelector('#pwPlans .pwPlan[data-plan="'+pwPlan+'"]');
+  if(firstSold && (!cur || cur.style.display==="none")){
+    pwPlan=firstSold;
+    document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x.dataset.plan===firstSold));
+  }
+  // single plan left → the row is just noise, the buy button already says it
+  const wrap=$("#pwPlans"); if(wrap) wrap.style.display = sold>1 ? "" : "none";
+}
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
 window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; };
