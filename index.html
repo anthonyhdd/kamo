@@ -82,6 +82,10 @@
 
   /* ---------- SHUTTER ---------- */
   #shutterWrap{position:absolute;left:50%;bottom:calc(30px + var(--safe-b));transform:translateX(-50%);z-index:15;display:none;}
+  /* sits on the shutter's centre line, bottom-left (camera-app convention) */
+  #btnPhoto{position:absolute;left:24px;bottom:calc(52px + var(--safe-b));z-index:15;display:none;align-items:center;justify-content:center;width:46px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,.28);background:rgba(10,12,16,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  #btnPhoto svg{width:23px;height:23px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  #btnPhoto:active{transform:scale(.94);}
   /* Apple-camera-style shutter: white ring + gap + white inner disc, no colour */
   .shutter{position:relative;width:78px;height:78px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
   .shutter .ring{position:absolute;inset:0;border-radius:50%;border:4px solid #fff;box-shadow:0 6px 22px rgba(0,0,0,.5);}
@@ -289,6 +293,10 @@
       <button id="shutter" class="shutter" aria-label="Capture"><div class="spin"></div><div class="ring"></div><div class="core"></div></button>
       <div class="capLabel">Capture</div>
     </div>
+    <!-- gallery: the photo path must stay reachable from the camera too, not only the hero -->
+    <button id="btnPhoto" aria-label="Pick a photo" title="Pick a photo">
+      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.4"/><circle cx="8.6" cy="10.2" r="1.7"/><path d="M21 16.5l-5-4.6L7 19"/></svg>
+    </button>
 
     <!-- PAINT UI -->
     <div id="paintUI">
@@ -510,7 +518,7 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>U
 
 function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  shutterWrap.style.display="block"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
+  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none";
@@ -522,7 +530,7 @@ function backToCompose(){
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
-  glCanvas.style.display="block"; shutterWrap.style.display="block"; flipBtn.style.display=(bgKind==="cam")?"flex":"none";
+  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none";
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   showHint("Reposition, then recapture");
@@ -637,7 +645,7 @@ function capture(){
   ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; undoStack.length=0; pushUndo();
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; Pro-gated (tap → paywall), free users can also use the 3 dots
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
@@ -885,6 +893,7 @@ $("#heroStart").onclick=e=>{ e.stopPropagation(); startCamera(); };
 // photo path never touches the camera — this is what keeps the app usable when
 // the camera is denied/unavailable (App Review devices hit exactly that).
 $("#heroPick").onclick=e=>{ e.stopPropagation(); $("#fileInput").click(); };
+$("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); $("#fileInput").click(); };
 $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; startCamera(); };
 let capturing=false;
 function captureShot(){
