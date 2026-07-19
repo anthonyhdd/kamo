@@ -696,6 +696,9 @@ function makeBlur(src,W,H){ const f=16, s=document.createElement("canvas"); s.wi
   const o=document.createElement("canvas"); o.width=W; o.height=H; const oc=o.getContext("2d"); oc.imageSmoothingEnabled=true; oc.drawImage(s,0,0,W,H); return o; }
 function projectChar(char){ const v=new THREE.Vector3(); char.parts.spine.getWorldPosition(v); v.project(camera3); if(v.z>1||v.z<-1) return null; return {x:(v.x*0.5+0.5)*board.width, y:(-v.y*0.5+0.5)*board.height}; }
 function capture(){
+  // The moment a live camera (or picked photo) becomes a paintable board — the step
+  // between "camera works" and "started painting", where a silent drop would be invisible.
+  track("photo_captured",{source:bgKind});
   const W=Math.round(stage.clientWidth*dpr), H=Math.round(stage.clientHeight*dpr); board.width=W; board.height=H;
   sceneCanvas=document.createElement("canvas"); sceneCanvas.width=W; sceneCanvas.height=H; coverInto(sceneCanvas.getContext("2d"),W,H);
   renderer.render(scene,camera3);
@@ -958,7 +961,7 @@ async function shareReveal(){
   await deliver(await staticBlob(),"jpg");
 }
 const shareSheetEl=$("#shareSheet");
-function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); }
+function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
 async function nativeShare(target){ closeShareSheet();
   const link=referralCode?("kamo.app/r/"+referralCode):"kamo.app";
@@ -1029,7 +1032,7 @@ async function setTorch(on){
   catch(e){ console.warn("[torch]",e); showHint("Light isn't available on this device"); torchOn=false; }
   updateLightBtn();
 }
-$("#btnLight").onclick=e=>{ e.stopPropagation(); haptic(10); setTorch(!torchOn); };
+$("#btnLight").onclick=e=>{ e.stopPropagation(); haptic(10); track("torch_toggled",{on:!torchOn,native:!!nativeCaps.torch}); setTorch(!torchOn); };
 $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; startCamera(); };
 let capturing=false;
 function captureShot(){
