@@ -224,6 +224,17 @@
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
+  /* KAMO+ celebration (post-purchase, plan-aware) */
+  #kamoPlus{position:absolute;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:radial-gradient(120% 90% at 50% 28%,rgba(95,230,164,.18),rgba(3,5,8,.9));backdrop-filter:blur(8px);}
+  #kamoPlus.show{display:flex;animation:pwFade .3s ease;}
+  #kamoPlus .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;}
+  #kamoPlus .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:var(--mint);font-weight:800;font-size:13px;letter-spacing:.6px;margin-bottom:18px;}
+  #kamoPlus .kpTitle{font-size:30px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:12px;}
+  #kamoPlus .kpSub{font-size:15.5px;color:rgba(255,255,255,.72);line-height:1.5;margin:0 auto 22px;max-width:320px;}
+  #kamoPlus .kpChips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:28px;}
+  #kamoPlus .kpChip{font-size:12.5px;color:rgba(255,255,255,.82);padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
+  #kamoPlus .kpGo{width:100%;padding:16px;border:none;border-radius:16px;background:var(--mint);color:#06231a;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(95,230,164,.32);}
+  #kpBurst{position:absolute;left:50%;top:-8px;width:0;height:0;pointer-events:none;}
   @keyframes pwFade{from{opacity:0}to{opacity:1}}
   .pwCard{position:relative;width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
   @keyframes pwUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -391,6 +402,22 @@
       <button class="pwlink" data-url="https://anthonyhdd.github.io/kamo/privacy.html">Privacy</button>
     </div>
     <button id="pwClose" class="pwClose">Maybe later</button>
+  </div>
+</div>
+
+<!-- KAMO+ celebration (post-purchase, plan-aware) -->
+<div id="kamoPlus">
+  <div class="kpCard">
+    <div id="kpBurst"></div>
+    <div class="kpBadge">★ KAMO+</div>
+    <div class="kpTitle">You're KAMO+ ✨</div>
+    <div class="kpSub" id="kpSub"></div>
+    <div class="kpChips">
+      <span class="kpChip">All Pro brushes</span>
+      <span class="kpChip">Fine size control</span>
+      <span class="kpChip">No limits</span>
+    </div>
+    <button class="kpGo" id="kpGo">Start blending in →</button>
   </div>
 </div>
 
@@ -805,7 +832,7 @@ buildSwatches();
 /* ===== Pro brushes + paywall ===== */
 const PRODUCT_ID="com.blisscoach.kamo.pro";
 // default to the plan we can actually sell today (the weekly sub isn't approved yet)
-const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="lifetime";
+const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="lifetime"; let pwBuyIntent=false;
 let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
 const BRUSHES=[{id:"solid",name:"Solid",pro:false},{id:"dapple",name:"Dapple",pro:true},{id:"leaf",name:"Leaf",pro:true},{id:"disrupt",name:"Camo",pro:true}];
 function setBrush(id){ brushMode=id; document.querySelectorAll("#brushes .brush").forEach(el=>el.classList.toggle("active",el.dataset.id===id)); }
@@ -838,14 +865,32 @@ function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
   if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||"$14.99"; b.textContent="Unlock forever — "+p; if(t) t.textContent="One-time purchase. Yours forever."; }
   else { const p=($("#pwWeeklyPrice")||{}).textContent||"$2.99"; b.textContent="Start free trial"; if(t) t.textContent="3 days free, then "+p+"/week. Cancel anytime."; } }
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
-$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; haptic(16); if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
+$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ track("restore_tapped"); if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
 function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",url:u}); } else { window.open(u,"_blank","noopener"); } }
 document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.url));
 /* native bridge — RevenueCat (native) calls these on purchase/restore success + to inject the localized price */
 window.KAMO=window.KAMO||{};
-window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); setPwBuyLoading(false); if(v) closePaywall(); };
+window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); setPwBuyLoading(false); if(v) closePaywall();
+  /* Celebrate ONLY a fresh purchase — not a restore, not the cold-start pro-sync (both call
+     setPro(true) too). pwBuyIntent is set only when the user taps Buy, so this fires once. */
+  if(v && pwBuyIntent){ pwBuyIntent=false; try{ showKamoPlus(); }catch(e){} } };
+/* Post-purchase moment: no avatar (it's a photo toy) — a burst, a plan-aware line, and a push
+   straight back into the toy to USE a Pro brush while the dopamine is high. */
+function kpConfetti(){ const host=$("#kpBurst"); if(!host) return; host.innerHTML=""; const cols=["#5fe6a4","#ffffff","#9affce","#5fe6a4","#c9fff0"];
+  for(let i=0;i<28;i++){ const s=document.createElement("span"); s.className="particle"; s.style.background=cols[i%cols.length];
+    const ang=Math.random()*6.283, dist=70+Math.random()*160; s.style.setProperty("--px",Math.cos(ang)*dist+"px"); s.style.setProperty("--py",(Math.sin(ang)*dist-30)+"px"); s.style.setProperty("--pd",(.8+Math.random()*.8)+"s");
+    host.appendChild(s); } setTimeout(()=>{ if(host) host.innerHTML=""; },1900); }
+function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
+  const lifetime = pwPlan==="lifetime";
+  const meta = (($("#pwWeeklyMeta")||{}).textContent)||"3-day free trial";
+  const n = (meta.match(/\d+/)||["3"])[0];
+  const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
+    ? "Every camo brush is yours — forever. Now go disappear."
+    : "Every camo brush, unlocked. Free for "+n+" days — cancel anytime.";
+  el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
+{ const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
 window.KAMO.setPrice=(txt)=>{ if(txt){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=txt; updatePwBuy&&updatePwBuy(); } };
 window.KAMO.setPrices=(p)=>{ if(!p) return; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
 /* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
