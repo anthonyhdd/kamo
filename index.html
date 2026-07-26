@@ -704,6 +704,7 @@ function capture(){
   renderer.render(scene,camera3);
   maskCanvas=document.createElement("canvas"); maskCanvas.width=W; maskCanvas.height=H; maskCanvas.getContext("2d").drawImage(glCanvas,0,0,W,H);
   blurCanvas=makeBlur(sceneCanvas,W,H);
+  paintLayer=document.createElement("canvas"); paintLayer.width=W; paintLayer.height=H; pctx=paintLayer.getContext("2d",{willReadFrequently:true});
   try{ buildSwatches(extractPalette(sceneCanvas,5)); }catch(e){}   // 5 palette colours from the photo (the eyedropper is the star)
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
@@ -732,20 +733,41 @@ function showScore(){ scoreChip.style.display="block"; const e=currentScore>=85?
 /* ===== PAINT ===== */
 let paintColor="#8a7f6a", brush=24, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
 const BRUSH_MIN=8, BRUSH_MAX=46;
-function pushUndo(){ try{ undoStack.push(ctx.getImageData(0,0,board.width,board.height)); if(undoStack.length>12) undoStack.shift(); }catch(e){} }
+/* Strokes land on their own layer, then get clipped to the figure's alpha mask
+   (maskCanvas = the three.js render captured at shutter time), so paint can NEVER
+   spill outside the silhouette — a sloppy finger still produces a clean camo.
+   The visible board is always scene + figure + clipped paint, recomposited only
+   over the stroke's dirty rect to stay 60fps at full retina resolution. */
+let paintLayer=null, pctx=null;
+function compositeBoard(){ if(!sceneCanvas) return; ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0); if(paintLayer) ctx.drawImage(paintLayer,0,0); }
+function clipPaintToFigure(x0,y0,x1,y1){
+  if(!paintLayer||!maskCanvas) return;
+  // pad covers the brush radius plus the pattern brushes' random stamp offsets (≤ R around the path)
+  const pad=brush*dpr*1.6+6;
+  const x=Math.max(0,Math.floor(Math.min(x0,x1)-pad)), y=Math.max(0,Math.floor(Math.min(y0,y1)-pad));
+  const w=Math.min(board.width,Math.ceil(Math.max(x0,x1)+pad))-x, h=Math.min(board.height,Math.ceil(Math.max(y0,y1)+pad))-y;
+  if(w<=0||h<=0) return;
+  pctx.save(); pctx.beginPath(); pctx.rect(x,y,w,h); pctx.clip();
+  pctx.globalCompositeOperation="destination-in"; pctx.drawImage(maskCanvas,0,0);
+  pctx.restore(); pctx.globalCompositeOperation="source-over";
+  ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(maskCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(paintLayer,x,y,w,h,x,y,w,h);
+}
+function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); if(undoStack.length>12) undoStack.shift(); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
 function _toRGB(col){ if(col[0]==="#"){ let h=col.slice(1); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; } const m=col.match(/\d+/g); return m?[+m[0],+m[1],+m[2]]:[138,127,106]; }
 function _shade(rgb,amt){ const f=amt<0?0:255,t=Math.abs(amt); return `rgb(${Math.round(rgb[0]+(f-rgb[0])*t)},${Math.round(rgb[1]+(f-rgb[1])*t)},${Math.round(rgb[2]+(f-rgb[2])*t)})`; }
 // Pro pattern brushes — all derive their tones from the picked scene color so they still camouflage.
 function _stamp(x,y){ const base=_toRGB(paintColor), R=brush*dpr;
-  if(brushMode==="dapple"){ for(let i=0;i<4;i++){ const rr=R*(0.28+Math.random()*0.5), ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; ctx.globalAlpha=0.5+Math.random()*0.4; ctx.fillStyle=_shade(base,(Math.random()-0.5)*0.5); ctx.beginPath(); ctx.arc(x+ox,y+oy,rr/2,0,7); ctx.fill(); } ctx.globalAlpha=1; return; }
-  if(brushMode==="leaf"){ for(let i=0;i<3;i++){ const a=Math.random()*Math.PI, ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; const g=[Math.min(255,Math.round(base[0]*0.55+Math.random()*30)),Math.min(255,Math.round(base[1]*0.6+60+Math.random()*20)),Math.min(255,Math.round(base[2]*0.5+25))]; ctx.globalAlpha=0.7; ctx.fillStyle=`rgb(${g[0]},${g[1]},${g[2]})`; ctx.save(); ctx.translate(x+ox,y+oy); ctx.rotate(a); ctx.beginPath(); ctx.ellipse(0,0,R*0.5,R*0.22,0,0,7); ctx.fill(); ctx.restore(); } ctx.globalAlpha=1; return; }
-  if(brushMode==="disrupt"){ ctx.globalAlpha=0.85; ctx.fillStyle=_shade(base,(Math.random()-0.5)*0.55); const k=5+((Math.random()*3)|0), rad=R*0.72; ctx.beginPath(); for(let i=0;i<=k;i++){ const a=i/k*Math.PI*2, rr=rad*(0.5+Math.random()*0.6), px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr; i?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath(); ctx.fill(); ctx.globalAlpha=1; return; } }
+  if(brushMode==="dapple"){ for(let i=0;i<4;i++){ const rr=R*(0.28+Math.random()*0.5), ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; pctx.globalAlpha=0.5+Math.random()*0.4; pctx.fillStyle=_shade(base,(Math.random()-0.5)*0.5); pctx.beginPath(); pctx.arc(x+ox,y+oy,rr/2,0,7); pctx.fill(); } pctx.globalAlpha=1; return; }
+  if(brushMode==="leaf"){ for(let i=0;i<3;i++){ const a=Math.random()*Math.PI, ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; const g=[Math.min(255,Math.round(base[0]*0.55+Math.random()*30)),Math.min(255,Math.round(base[1]*0.6+60+Math.random()*20)),Math.min(255,Math.round(base[2]*0.5+25))]; pctx.globalAlpha=0.7; pctx.fillStyle=`rgb(${g[0]},${g[1]},${g[2]})`; pctx.save(); pctx.translate(x+ox,y+oy); pctx.rotate(a); pctx.beginPath(); pctx.ellipse(0,0,R*0.5,R*0.22,0,0,7); pctx.fill(); pctx.restore(); } pctx.globalAlpha=1; return; }
+  if(brushMode==="disrupt"){ pctx.globalAlpha=0.85; pctx.fillStyle=_shade(base,(Math.random()-0.5)*0.55); const k=5+((Math.random()*3)|0), rad=R*0.72; pctx.beginPath(); for(let i=0;i<=k;i++){ const a=i/k*Math.PI*2, rr=rad*(0.5+Math.random()*0.6), px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr; i?pctx.lineTo(px,py):pctx.moveTo(px,py); } pctx.closePath(); pctx.fill(); pctx.globalAlpha=1; return; } }
 function _stampAlong(a,b){ const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy), step=Math.max(2,brush*dpr*0.35), n=Math.max(1,Math.floor(dist/step)); for(let i=0;i<=n;i++) _stamp(a.x+dx*i/n,a.y+dy*i/n); }
 function paintAt(p){
-  if(brushMode!=="solid"){ _stampAlong(paintAt._l||p,p); paintAt._l=p; return; }
-  ctx.fillStyle=paintColor; ctx.strokeStyle=paintColor; ctx.lineWidth=brush*dpr; ctx.lineCap="round"; ctx.lineJoin="round";
-  if(paintAt._l){ ctx.beginPath();ctx.moveTo(paintAt._l.x,paintAt._l.y);ctx.lineTo(p.x,p.y);ctx.stroke(); } ctx.beginPath();ctx.arc(p.x,p.y,(brush*dpr)/2,0,7);ctx.fill(); paintAt._l=p; }
+  const from=paintAt._l||p;
+  if(brushMode!=="solid"){ _stampAlong(from,p); paintAt._l=p; clipPaintToFigure(from.x,from.y,p.x,p.y); return; }
+  pctx.fillStyle=paintColor; pctx.strokeStyle=paintColor; pctx.lineWidth=brush*dpr; pctx.lineCap="round"; pctx.lineJoin="round";
+  if(paintAt._l){ pctx.beginPath();pctx.moveTo(paintAt._l.x,paintAt._l.y);pctx.lineTo(p.x,p.y);pctx.stroke(); } pctx.beginPath();pctx.arc(p.x,p.y,(brush*dpr)/2,0,7);pctx.fill(); paintAt._l=p;
+  clipPaintToFigure(from.x,from.y,p.x,p.y); }
 function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
 board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDefault(); board.setPointerCapture(e.pointerId); const p=pt(e);
   if(eyedrop){ const c=pick(p); const l=$("#loupe"); l.style.display="block"; l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
@@ -1044,8 +1066,8 @@ function captureShot(){
 }
 $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
-$("#btnUndo").onclick=()=>{ if(undoStack.length>1){ undoStack.pop(); ctx.putImageData(undoStack[undoStack.length-1],0,0); currentScore=computeScore(); showScore(); } };
-$("#btnClear").onclick=()=>{ if(undoStack.length){ ctx.putImageData(undoStack[0],0,0); currentScore=computeScore(); showScore(); } };
+$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); showScore(); } };
+$("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); showScore(); } };
 $("#btnShare").onclick=shareReveal;
 $("#btnSave").onclick=saveStatic;
 
