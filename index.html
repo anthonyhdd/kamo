@@ -966,7 +966,7 @@ async function deliver(blob,ext){
 function showSaved(){ const btn=$("#btnSave"); if(!btn) return; haptic(12); btn.classList.add("saved"); clearTimeout(showSaved._t); showSaved._t=setTimeout(()=>btn.classList.remove("saved"),1100); }
 window.__kamoSaved=showSaved;   // native can inject this on a CONFIRMED camera-roll save (truthful ack)
 async function saveStatic(){ const b=await staticBlob();
-  if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d}); showSaved(); return; }
+  if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d}); return; }   // native calls window.__kamoSaved() ONLY on a confirmed camera-roll write
   const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); showSaved(); }
 
 function drawRevealFrame(c,W,H,t){
