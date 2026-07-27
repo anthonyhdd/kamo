@@ -807,7 +807,7 @@ function paintAt(p){
 function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
 board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDefault(); board.setPointerCapture(e.pointerId); const p=pt(e);
   if(eyedrop){ const c=pick(p); const l=$("#loupe"); l.style.display="block"; l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
-  pushUndo(); painting=true; paintAt._l=null; paintAt(p); paintHaptic(); });
+  pushUndo(); painting=true; paintAt._l=null; paintAt(p); haptic(12); });
 board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e);
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   if(painting){ paintAt(p); paintHaptic(); } });
