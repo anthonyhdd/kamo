@@ -393,7 +393,7 @@
          arrive, we never show a plan whose purchase would fail. -->
     <div id="pwPlans" style="display:none">
       <button class="pwPlan" data-plan="weekly" style="display:none">
-        <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">3-day free trial</span></div>
+        <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">Billed weekly · cancel anytime</span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
       <button class="pwPlan active" data-plan="lifetime">
@@ -401,8 +401,8 @@
         <div class="pwPlanPrice"><b id="pwLifetimePrice">$14.99</b></div>
       </button>
     </div>
-    <button id="pwBuy" class="pwBuy">Start free trial</button>
-    <div id="pwTerms">3 days free, then $2.99/week. Cancel anytime.</div>
+    <button id="pwBuy" class="pwBuy">Get KAMO+</button>
+    <div id="pwTerms">$2.99/week. Cancel anytime.</div>
     <div class="pwFine">
       <button id="pwRestore">Restore</button>
       <button class="pwlink" data-url="https://anthonyhdd.github.io/kamo/terms.html">Terms</button>
@@ -870,7 +870,7 @@ function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
   // fallbacks must mirror the ASC products (Lifetime $14.99 / Weekly $2.99) — the
   // native layer overwrites them with the real localized StoreKit price on load
   if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||"$14.99"; b.textContent="Unlock forever — "+p; if(t) t.textContent="One-time purchase. Yours forever."; }
-  else { const p=($("#pwWeeklyPrice")||{}).textContent||"$2.99"; b.textContent="Start free trial"; if(t) t.textContent="3 days free, then "+p+"/week. Cancel anytime."; } }
+  else { const p=($("#pwWeeklyPrice")||{}).textContent||"$2.99"; b.textContent="Get KAMO+"; if(t) t.textContent=p+"/week. Cancel anytime."; } }
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
 $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
@@ -891,11 +891,9 @@ function kpConfetti(){ const host=$("#kpBurst"); if(!host) return; host.innerHTM
     host.appendChild(s); } setTimeout(()=>{ if(host) host.innerHTML=""; },1900); }
 function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
   const lifetime = pwPlan==="lifetime";
-  const meta = (($("#pwWeeklyMeta")||{}).textContent)||"3-day free trial";
-  const n = (meta.match(/\d+/)||["3"])[0];
   const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
     ? "Every camo brush is yours — forever. Now go disappear."
-    : "Every camo brush, unlocked. Free for "+n+" days — cancel anytime.";
+    : "Every camo brush, unlocked — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
 window.KAMO.setPrice=(txt)=>{ if(txt){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=txt; updatePwBuy&&updatePwBuy(); } };
