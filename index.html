@@ -458,8 +458,9 @@
 
 <script>
 /* on-screen error overlay so a failure is never a silent black screen */
-window.addEventListener("error",function(e){try{var d=document.getElementById("__err")||document.createElement("div");d.id="__err";d.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:99999;background:rgba(180,0,0,.95);color:#fff;font:12px/1.4 monospace;padding:10px;white-space:pre-wrap;max-height:45%;overflow:auto";d.textContent="JS error: "+(e.message||e)+"\n"+(e.filename||"")+":"+(e.lineno||"");document.body.appendChild(d);}catch(_){}}, true);
-window.addEventListener("unhandledrejection",function(e){try{var d=document.getElementById("__err")||document.createElement("div");d.id="__err";d.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:99999;background:rgba(180,0,0,.95);color:#fff;font:12px/1.4 monospace;padding:10px;white-space:pre-wrap;max-height:45%;overflow:auto";d.textContent="Promise error: "+(e.reason&&e.reason.message||e.reason||e);document.body.appendChild(d);}catch(_){}});
+var __DBG=location.search.includes("debug");
+window.addEventListener("error",function(e){if(!__DBG)return;try{var d=document.getElementById("__err")||document.createElement("div");d.id="__err";d.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:99999;background:rgba(180,0,0,.95);color:#fff;font:12px/1.4 monospace;padding:10px;white-space:pre-wrap;max-height:45%;overflow:auto";d.textContent="JS error: "+(e.message||e)+"\n"+(e.filename||"")+":"+(e.lineno||"");document.body.appendChild(d);}catch(_){}}, true);
+window.addEventListener("unhandledrejection",function(e){if(!__DBG)return;try{var d=document.getElementById("__err")||document.createElement("div");d.id="__err";d.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:99999;background:rgba(180,0,0,.95);color:#fff;font:12px/1.4 monospace;padding:10px;white-space:pre-wrap;max-height:45%;overflow:auto";d.textContent="Promise error: "+(e.reason&&e.reason.message||e.reason||e);document.body.appendChild(d);}catch(_){}});
 </script>
 <script type="module">
 import * as THREE from './vendor/three.module.js';
@@ -739,6 +740,8 @@ function capture(){
   // The moment a live camera (or picked photo) becomes a paintable board — the step
   // between "camera works" and "started painting", where a silent drop would be invisible.
   track("photo_captured",{source:bgKind});
+  if(torchOn) setTorch(false);   // the button is about to be hidden — never leave the light on with no way to kill it
+  endPaint._sent=false;   // new hide => paint_completed may fire again; native needs it to retry a deferred activation
   const W=Math.round(stage.clientWidth*dpr), H=Math.round(stage.clientHeight*dpr); board.width=W; board.height=H;
   sceneCanvas=document.createElement("canvas"); sceneCanvas.width=W; sceneCanvas.height=H; coverInto(sceneCanvas.getContext("2d"),W,H);
   renderer.render(scene,camera3);
@@ -792,7 +795,13 @@ function clipPaintToFigure(x0,y0,x1,y1){
   pctx.restore(); pctx.globalCompositeOperation="source-over";
   ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(maskCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(paintLayer,x,y,w,h,x,y,w,h);
 }
-function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); if(undoStack.length>12) undoStack.shift(); }catch(e){} }
+/* Cap the undo stack by MEMORY, not by step count. Each entry is a full-board ImageData
+   (~12 MB at 1179x2556 on a 15 Pro); the old fixed cap of 12 retained ~145 MB on top of
+   the capture canvases and got the WKWebView content process jetsammed — blank screen,
+   the whole hide lost. ~48 MB budget, minimum 3 steps so undo stays useful. */
+const UNDO_BUDGET=48*1024*1024;
+function undoCap(){ const per=Math.max(1,board.width*board.height*4); return Math.max(3,Math.min(12,Math.floor(UNDO_BUDGET/per))); }
+function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); const cap=undoCap(); while(undoStack.length>cap) undoStack.shift(); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
 function _toRGB(col){ if(col[0]==="#"){ let h=col.slice(1); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; } const m=col.match(/\d+/g); return m?[+m[0],+m[1],+m[2]]:[138,127,106]; }
 function _shade(rgb,amt){ const f=amt<0?0:255,t=Math.abs(amt); return `rgb(${Math.round(rgb[0]+(f-rgb[0])*t)},${Math.round(rgb[1]+(f-rgb[1])*t)},${Math.round(rgb[2]+(f-rgb[2])*t)})`; }
@@ -959,7 +968,11 @@ function updateInviteBtn(){ const b=document.getElementById("ssInvite"); if(!b) 
   b.style.display = (!window.ReactNativeWebView || nativeCaps.invite) ? "" : "none"; }
 // native torch refused/failed → don't leave the button lit claiming it's on
 window.KAMO.torchFailed=()=>{ torchOn=false; if(typeof updateLightBtn==="function") updateLightBtn(); showHint("Couldn't turn the light on"); };
-window.KAMO.revealDone=()=>{ try{ busyEl.style.display="none"; }catch(e){} };
+window.KAMO.revealDone=()=>{ clearTimeout(showBusy._t); try{ busyEl.style.display="none"; }catch(e){} };
+/* Never show a blocking overlay without an escape hatch: if native never calls
+   revealDone() (dropped bridge message, encoder hang), clear it after 25s and say so. */
+function showBusy(on){ clearTimeout(showBusy._t); try{ busyEl.style.display=on?"flex":"none"; }catch(e){}
+  if(on) showBusy._t=setTimeout(()=>{ try{ busyEl.style.display="none"; }catch(e){} showHint("Couldn't build the reveal — sharing the still instead"); },25000); }
 
 /* ===== SHARE: the challenge card (hidden scene + hook + "spot it?" + referral CTA) ===== */
 let referralCode="";
@@ -1095,7 +1108,7 @@ async function nativeShare(target){ closeShareSheet();
   if(shareMode==="ba" && nativeCaps.revealVideo && beforeBoard){
     const hidden=composeShare(1080, board).toDataURL("image/jpeg",0.85);      // camouflaged (shown first)
     const revealed=composeShare(1080, beforeBoard).toDataURL("image/jpeg",0.85); // figure visible (wiped in)
-    busyEl.style.display="flex";  // "Creating your reveal…" while native encodes the MP4
+    showBusy(true);  // "Creating your reveal…" while native encodes the MP4 (self-clears after 25s)
     postNative({type:"reveal-video",target,hidden,revealed,message,score:Math.round(currentScore||0)}); return;
   }
   const b=await shareBlob(); const d=await blobToDataURL(b);
@@ -1204,7 +1217,7 @@ document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz
 /* ===== Done / Edit finished view + before/after reveal ===== */
 let finished=false, revealX=0.5;
 const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
-function drawReveal(){ if(!beforeBoard) return; const r=board.getBoundingClientRect();
+function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoundingClientRect();
   revealC.width=Math.round(r.width*dpr); revealC.height=Math.round(r.height*dpr);
   revealC.style.cssText="position:fixed;z-index:14;display:block;left:"+r.left+"px;top:"+r.top+"px;width:"+r.width+"px;height:"+r.height+"px;";
   const W=revealC.width,H=revealC.height, sp=Math.round(W*revealX);
