@@ -650,7 +650,7 @@ function onMove(e){
   const dx=e.clientX-downX, dy=e.clientY-downY;
   if(pointers.size>=2 && sel()){ clearTimeout(lpTimer); const p=[...pointers.values()]; const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); sel().group.scale.setScalar(Math.max(0.3,Math.min(3.5,scaleStart*(d/pinchStart)))); const a=Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x); sel().group.rotation.y=rotBaseY+(a-rotStart); return; }
   if(!moved && Math.hypot(dx,dy)>10){ moved=true; clearTimeout(lpTimer); if(sel()){ dragging=true; dragStartWorld=screenToWorld(e.clientX,e.clientY); dragStartPos=sel().group.position.clone(); } }
-  if(dragging && sel()){ const c=sel(); const w=screenToWorld(e.clientX,e.clientY); c._tx=dragStartPos.x+(w.x-dragStartWorld.x); c._ty=Math.max(-1.2,Math.min(2.2,dragStartPos.y+(w.y-dragStartWorld.y))); }
+  if(dragging && sel()){ const c=sel(); const w=screenToWorld(e.clientX,e.clientY); c._tx=dragStartPos.x+(w.x-dragStartWorld.x); c._ty=dragStartPos.y+(w.y-dragStartWorld.y); }
 }
 function onUp(e){
   clearTimeout(lpTimer); pointers.delete(e.pointerId);
