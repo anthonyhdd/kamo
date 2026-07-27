@@ -256,6 +256,7 @@
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
+  .pwBuy.pwBuyOff{background:rgba(255,255,255,.28);color:rgba(10,11,14,.55);box-shadow:none;animation:none;cursor:default;}
   .pwBuy{position:relative;overflow:hidden;width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;animation:pwBuyGlow 3s ease-in-out infinite;}
   /* soft mint halo breathing + a slow glossy sweep — subtle, on-brand */
   @keyframes pwBuyGlow{0%,100%{box-shadow:0 10px 28px rgba(0,0,0,.4);}50%{box-shadow:0 10px 28px rgba(0,0,0,.4),0 0 24px rgba(95,230,164,.5);}}
@@ -296,6 +297,7 @@
   .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
   .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
   .ssBtn.snap{background:#fffc00;color:#111;border:none;}
+  .ssBtn.ssInvite{background:rgba(72,214,139,.14);border-color:rgba(72,214,139,.45);}
   .ssBtn:active{transform:scale(.98);}
   .ssMore{background:rgba(255,255,255,.06);}
   .ssClose{display:block;width:100%;margin-top:4px;background:none;border:none;color:rgba(255,255,255,.55);font-size:15px;font-weight:600;cursor:pointer;padding:10px;}
@@ -439,6 +441,8 @@
     <button class="ssBtn ig" data-target="instagram"><span class="ic">📸</span>Instagram Story</button>
     <button class="ssBtn snap" data-target="snapchat"><span class="ic">👻</span>Snapchat</button>
     <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More options</button>
+    <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
+    <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
     <button class="ssClose" id="ssClose">Cancel</button>
   </div>
 </div>
@@ -854,7 +858,12 @@ function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") r
 buildBrushes();
 
 const paywallEl=$("#paywall");
-function openPaywall(){ paywallEl.classList.add("show"); haptic(12); track("paywall_viewed"); }
+function openPaywall(){ paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
+  /* Safety net for the same split-deploy problem: an older wrapper only calls setPrices()
+     when it actually resolved a price, so a StoreKit failure there would leave this button
+     on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
+  if(!storeReady){ clearTimeout(openPaywall._t); openPaywall._t=setTimeout(()=>{
+    if(!storeReady){ storeAnswered=true; updatePwBuy(); } },6000); } }
 function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); }
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
@@ -866,11 +875,22 @@ function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
   else { b.classList.remove("loading"); b.removeAttribute("aria-busy"); updatePwBuy(); } }
 $("#pwClose").onclick=closePaywall;
 paywallEl.onclick=e=>{ if(e.target===paywallEl) closePaywall(); };
+/* Nothing is sellable until StoreKit has actually returned a price for a plan. Native
+   calls setPrices() with whatever it resolved — possibly {} — and this flips. */
+let storeReady=false;    // a real localized price arrived for at least one plan
+let storeAnswered=false; // native has told us SOMETHING, even if it was "nothing for sale"
 function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
-  // fallbacks must mirror the ASC products (Lifetime $14.99 / Weekly $2.99) — the
-  // native layer overwrites them with the real localized StoreKit price on load
-  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||"$14.99"; b.textContent="Unlock forever — "+p; if(t) t.textContent="One-time purchase. Yours forever."; }
-  else { const p=($("#pwWeeklyPrice")||{}).textContent||"$2.99"; b.textContent="Get KAMO+"; if(t) t.textContent=p+"/week. Cancel anytime."; } }
+  /* Buy stays disabled until a real localized price arrives. It used to be live from the
+     first frame while the markup showed hardcoded $14.99/$2.99: on any non-USD storefront
+     that price was simply wrong, and if offerings failed to load the tap could only ever
+     end in an error toast. No price → no purchasable plan → no Buy.
+     Three states, because "still loading" and "nothing is for sale" must not look alike —
+     otherwise a missing store key leaves a spinner-ish "Loading…" on screen forever. */
+  if(!storeReady){ b.textContent=storeAnswered?"Currently unavailable":"Loading…"; b.disabled=true; b.classList.add("pwBuyOff");
+    if(t) t.textContent=storeAnswered?"Purchases aren't available right now.":""; return; }
+  b.disabled=false; b.classList.remove("pwBuyOff");
+  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; b.textContent=p?("Unlock forever — "+p):"Unlock forever"; if(t) t.textContent="One-time purchase. Yours forever."; }
+  else { const p=($("#pwWeeklyPrice")||{}).textContent||""; b.textContent="Get KAMO+"; if(t) t.textContent=p?(p+"/week. Cancel anytime."):"Cancel anytime."; } }
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
 $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
@@ -896,8 +916,13 @@ function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
     : "Every camo brush, unlocked — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
-window.KAMO.setPrice=(txt)=>{ if(txt){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=txt; updatePwBuy&&updatePwBuy(); } };
-window.KAMO.setPrices=(p)=>{ if(!p) return; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
+/* Clear the Buy spinner without showing a toast — used when a native purchase ends with
+   no callback of its own (StoreKit cancel). Without it the button sat spinning, and
+   pointer-events:none, for the full 6s of its own safety timer. */
+window.KAMO.buyDone=()=>{ setPwBuyLoading(false); };
+/* `setPrice` (singular) was defined here and never injected by ANY native build — the
+   wrapper only ever calls setPrices. Removed rather than left as a decoy. */
+window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
 /* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
    sets prices.weekly / prices.lifetime when RevenueCat resolved that product).
    A plan we can't sell must never be shown: tapping it opens a purchase that
@@ -924,13 +949,30 @@ function applyPlanAvailability(p){
 }
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
-window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); };
+window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
+window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); };
+/* This web build deploys to GitHub Pages on its own schedule, so it can end up running
+   inside an OLDER App Store wrapper that has no `invite` message handler — the button
+   would post into the void and look broken. Show it only when the wrapper says it can
+   handle it, or when we're in a plain browser (navigator.share / clipboard both work). */
+function updateInviteBtn(){ const b=document.getElementById("ssInvite"); if(!b) return;
+  b.style.display = (!window.ReactNativeWebView || nativeCaps.invite) ? "" : "none"; }
 // native torch refused/failed → don't leave the button lit claiming it's on
 window.KAMO.torchFailed=()=>{ torchOn=false; if(typeof updateLightBtn==="function") updateLightBtn(); showHint("Couldn't turn the light on"); };
 window.KAMO.revealDone=()=>{ try{ busyEl.style.display="none"; }catch(e){} };
 
 /* ===== SHARE: the challenge card (hidden scene + hook + "spot it?" + referral CTA) ===== */
 let referralCode="";
+/* ⚠️ This used to be "kamo.app" — a domain we DON'T own. It is parked and 302s to
+   domaineasy.com/buy-domain/kamo.app, so every share KAMO ever sent pushed people to a
+   domain-for-sale page instead of the app. Real App Store listing, overridable by the
+   native wrapper with the per-install referral form (window.KAMO.setAppLink). */
+let appLink="https://apps.apple.com/app/id6789639784";
+/* The link that goes into share messages. Single source of truth: the native wrapper
+   injects the fully-built URL (campaign params included, see kamo-app/links.js). The web
+   never assembles them itself — an App Store `ct` without a `pt` is discarded by Apple,
+   so guessing here would only produce dead params. Plain Safari gets the clean listing. */
+function shareUrl(){ return appLink; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
 function drawWatermark(c,W,H){ const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
@@ -938,8 +980,9 @@ function drawWatermark(c,W,H){ const u=W/390, pad=Math.round(H*0.028); c.textAli
   const bh=Math.round(H*0.26); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
   // "Can you spot it?" (big)
   c.fillStyle="#fff"; fit(c,"Can you spot it?",38*u,W,20,"700"); c.fillText("Can you spot it?", W/2, H-Math.round(104*u)-pad);
-  // reveal CTA (clean — the link travels in the share message, not on the image)
-  c.fillStyle="rgba(255,255,255,.82)"; c.font=`600 ${Math.round(16*u)}px -apple-system,sans-serif`; c.fillText("Tap to reveal in kamo app", W/2, H-Math.round(64*u)-pad);
+  // CTA (clean — the clickable link travels in the share message, not on the image).
+  // Burned-in text can't be a long App Store URL and must not name kamo.app: we don't own it.
+  c.fillStyle="rgba(255,255,255,.82)"; c.font=`600 ${Math.round(16*u)}px -apple-system,sans-serif`; c.fillText("Hide one yourself — free on the App Store", W/2, H-Math.round(64*u)-pad);
   // KAMO wordmark
   c.fillStyle="#fff"; c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO", W/2, H-Math.round(28*u)-pad);
 }
@@ -956,15 +999,15 @@ async function deliver(blob,ext){
   const file=new File([blob],"kamo."+ext,{type:blob.type});
   // Native app: "Share" goes straight to Instagram Stories (native falls back to the
   // system share sheet if Instagram isn't installed or the story share fails).
-  if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"ig-stories",ext,mime:blob.type||"",data:d}); return; }
+  if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"ig-stories",ext,mime:blob.type||"",data:d,score:Math.round(currentScore||0)}); return; }
   // Web / Safari: system share sheet (IG-Stories deep link isn't reliable from the web).
-  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ const link=referralCode?("kamo.app/r/"+referralCode):"kamo.app"; await navigator.share({files:[file],title:"Can you spot it?",text:"I hid someone in this photo 👀 Can you find them? "+link+" #KAMO"}); return; }catch(e){ if(e.name==="AbortError") return; } }
+  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Can you spot it?",text:"I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+shareUrl()}); return; }catch(e){ if(e.name==="AbortError") return; } }
   const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 function showSaved(){ const btn=$("#btnSave"); if(!btn) return; haptic(12); btn.classList.add("saved"); clearTimeout(showSaved._t); showSaved._t=setTimeout(()=>btn.classList.remove("saved"),1100); }
 window.__kamoSaved=showSaved;   // native can inject this on a CONFIRMED camera-roll save (truthful ack)
 async function saveStatic(){ const b=await staticBlob();
-  if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d}); return; }   // native calls window.__kamoSaved() ONLY on a confirmed camera-roll write
+  if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d,score:Math.round(currentScore||0)}); return; }   // native calls window.__kamoSaved() ONLY on a confirmed camera-roll write
   const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); showSaved(); }
 
 function drawRevealFrame(c,W,H,t){
@@ -982,7 +1025,7 @@ function drawRevealFrame(c,W,H,t){
   else { c.fillStyle="rgba(5,6,10,"+Math.min((t-3400)/450,1)*0.92+")"; c.fillRect(0,0,W,H); c.textAlign="center";
     c.fillStyle="#fff"; c.font=`900 ${F(52)}px -apple-system,sans-serif`; c.fillText("KAMO",W/2,H/2-F(6));
     c.fillStyle="#fff"; c.font=`800 ${F(21)}px -apple-system,sans-serif`; c.fillText("Can you beat this?",W/2,H/2+F(30));
-    c.fillStyle="rgba(255,255,255,.72)"; c.font=`600 ${F(15)}px -apple-system,sans-serif`; c.fillText("@kamo · kamo.app",W/2,H/2+F(58)); }
+    c.fillStyle="rgba(255,255,255,.72)"; c.font=`600 ${F(15)}px -apple-system,sans-serif`; c.fillText("free on the App Store",W/2,H/2+F(58)); }
 }
 function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
 async function buildReveal(){
@@ -1040,21 +1083,38 @@ const shareSheetEl=$("#shareSheet");
 function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
 async function nativeShare(target){ closeShareSheet();
-  const link=referralCode?("kamo.app/r/"+referralCode):"kamo.app";
-  const message=(shareMode==="ba")?("Now you see him. Now you don't 👀 kamo app → "+link):("I hid someone in this photo 👀 Can you find them? Tap to reveal → "+link);
+  const link=shareUrl();
+  /* "Tap to reveal" was a promise nothing could keep — there is no backend, the shared
+     photo isn't hosted anywhere, so no link could ever reveal it. The ask is now the one
+     thing a link CAN deliver: go hide one yourself. */
+  const message=(shareMode==="ba")
+    ? ("Now you see him. Now you don't! Painted with Kamo — your turn → "+link)
+    : ("I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+link);
   // Before/After mode → animated reveal MP4 (native module). Falls back to the static image
   // when the wrapper doesn't advertise the capability (older build) or has no before frame.
   if(shareMode==="ba" && nativeCaps.revealVideo && beforeBoard){
     const hidden=composeShare(1080, board).toDataURL("image/jpeg",0.85);      // camouflaged (shown first)
     const revealed=composeShare(1080, beforeBoard).toDataURL("image/jpeg",0.85); // figure visible (wiped in)
     busyEl.style.display="flex";  // "Creating your reveal…" while native encodes the MP4
-    postNative({type:"reveal-video",target,hidden,revealed,message}); return;
+    postNative({type:"reveal-video",target,hidden,revealed,message,score:Math.round(currentScore||0)}); return;
   }
   const b=await shareBlob(); const d=await blobToDataURL(b);
-  postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message}); }
+  postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message,score:Math.round(currentScore||0)}); }
 $("#ssClose").onclick=closeShareSheet;
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) closeShareSheet(); };
-document.querySelectorAll("#shareSheet .ssBtn").forEach(b=>b.onclick=()=>nativeShare(b.dataset.target));
+/* [data-target] only — the invite button below is not an image share and must not
+   fall through to nativeShare(undefined). */
+document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>nativeShare(b.dataset.target));
+/* Pure recruitment path: text + link, no image. The image shares carry the link in
+   their caption too, but Instagram Stories can't show a caption at all, so this is the
+   only target where the ask is unambiguous. */
+$("#ssInvite").onclick=()=>{ closeShareSheet(); haptic(10);
+  const sc=Math.round(currentScore||0);
+  const text="I hid someone in a photo 👀 Bet you can't find them.\n\nHide one for me → "+shareUrl();
+  if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:sc}); return; }
+  if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(()=>{}); return; }
+  try{ navigator.clipboard.writeText(text); showHint("Invite copied — paste it to a friend"); }catch(e){ showHint("Couldn't copy the invite"); } };
+updateInviteBtn();   // plain browser → visible immediately; native → waits for setNativeCaps
 document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode=t.dataset.mode; document.querySelectorAll("#ssMode .ssTab").forEach(x=>x.classList.toggle("active",x===t)); haptic(8); });
 /* 1-tap → Instagram Stories: send the static image to native, which pushes it
    straight into IG Stories via react-native-share (no share sheet). */
@@ -1153,6 +1213,12 @@ function drawReveal(){ if(!beforeBoard) return; const r=board.getBoundingClientR
   rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*dpr,0,4*dpr,H);
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(){ if(finished) return; finished=true; currentScore=computeScore();
+  /* The real "I finished a hide" moment, and the first honest score of the run —
+     `paint_completed` fires on the FIRST brush stroke, so its score is ~0 and it can't
+     be the middle of the funnel. Native counts this and emits `essay_finished`; it
+     deliberately does NOT prompt for a rating here, because the Share/Save CTA appears
+     on this very screen and we don't compete with it. */
+  postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
   ["swatches","brushes","editRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; scoreChip.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
@@ -1174,7 +1240,11 @@ const confirmSheet=$("#confirmSheet");
 function closeConfirm(){ confirmSheet.classList.remove("show"); }
 $("#btnBack").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
 $("#cfNo").onclick=closeConfirm;
-$("#cfYes").onclick=()=>{ closeConfirm(); if(finished) exitFinished(); backToCompose(); };
+/* Going back for another hide after finishing one is the strongest satisfaction signal
+   KAMO gets that isn't a share — and unlike the reveal screen there's no CTA here to
+   compete with, so this is where the rating soft-ask fires. */
+$("#cfYes").onclick=()=>{ const wasFinished=finished, sc=Math.round(currentScore||0); closeConfirm(); if(finished) exitFinished(); backToCompose();
+  if(wasFinished) postNative({type:"review-moment",reason:"retake",score:sc}); };
 confirmSheet.onclick=e=>{ if(e.target===confirmSheet) closeConfirm(); };
 
 window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1)); if(renderer) resize3(); });
@@ -1195,8 +1265,14 @@ setTimeout(()=>{ if(mode!=="compose" && startEl.style.display!=="none") revealHe
    all handlers exist; native ignores it when running as plain web (no bridge). */
 track("app_opened",{referred:!!new URLSearchParams(location.search).get("r")});
 
-/* referral: a friend's challenge link (…/?r=<code>) — remember the code + welcome them */
-(function(){ try{ const rp=new URLSearchParams(location.search).get("r"); if(rp){ localStorage.setItem("kamo_ref",rp);  // referrer to credit (native reads this on first run)
+/* Referral welcome: someone opened the WEB build via a friend's …/?r=<code> link.
+   This used to also stash the code in localStorage "for native to read on first run" —
+   nothing in kamo-app ever read it, the WebView loads a fixed URL with no ?r= to begin
+   with, and `incognito` wiped the key on every launch anyway. Three reasons it could
+   never have worked. Referral credit now travels through AppsFlyer deferred deep linking
+   (kamo-app/attribution.js), which survives the App Store round-trip; all this does is
+   greet a web visitor. */
+(function(){ try{ if(new URLSearchParams(location.search).get("r")){
   setTimeout(()=>showHint("🎯 You've been challenged — now hide someone too",4200),900);
 } }catch(e){} })();
 
