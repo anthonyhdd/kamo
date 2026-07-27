@@ -28,7 +28,8 @@
   #stage{position:absolute;inset:0;overflow:hidden;background:#111;}
   #cam,#photo,#board{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;}
   /* WebKit paints a native ▶ overlay on any <video> that isn't playing yet — never wanted on the live camera feed */
-  #cam::-webkit-media-controls,#cam::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none;}
+  #cam::-webkit-media-controls,#cam::-webkit-media-controls-start-playback-button,#cam::-webkit-media-controls-overlay-play-button,#cam::-webkit-media-controls-panel{display:none!important;-webkit-appearance:none;}
+  video::-webkit-media-controls-overlay-play-button,video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none;}
   #gl{position:absolute;inset:0;width:100%;height:100%;display:none;touch-action:none;}
   #board{touch-action:none;}
 
