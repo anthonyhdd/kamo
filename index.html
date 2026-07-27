@@ -537,10 +537,10 @@ function lerpChar(char){ const s=0.18; const g=char.group;
   if(char._tx===undefined){ char._tx=g.position.x; char._ty=g.position.y; }
   char._svx=(char._svx+(char._tx-g.position.x)*0.4)*0.7; char._svy=(char._svy+(char._ty-g.position.y)*0.4)*0.7;
   g.position.x+=char._svx; g.position.y+=char._svy;
-  // squash & stretch along the motion direction
-  const spd=Math.hypot(char._svx,char._svy), st=Math.min(0.32,spd*5), hx=(Math.abs(char._svx)+1e-4)/(Math.abs(char._svx)+Math.abs(char._svy)+2e-4), cg=char.charG;
-  if(char._pfx){ cg.scale.x/=char._pfx; cg.scale.y/=char._pfy; }   // undo last frame's capture-pop so the squash spring eases the clean base
-  cg.scale.x+=((1+st*hx-st*(1-hx)*0.5)-cg.scale.x)*0.3; cg.scale.y+=((1+st*(1-hx)-st*hx*0.5)-cg.scale.y)*0.3;
+  // no motion stretch — keep the character's true scale while dragging; just ease back to base (1)
+  const cg=char.charG;
+  if(char._pfx){ cg.scale.x/=char._pfx; cg.scale.y/=char._pfy; }   // undo last frame's capture-pop so the spring eases the clean base
+  cg.scale.x+=(1-cg.scale.x)*0.3; cg.scale.y+=(1-cg.scale.y)*0.3;
   // capture pop — a quick bounded punch that decays (set by captureShot); re-applied fresh each frame so it never compounds
   if(char._punch===undefined) char._punch=0;
   let _pfx=1,_pfy=1;
