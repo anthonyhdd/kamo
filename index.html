@@ -628,7 +628,7 @@ function enterCompose(){
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
-function backToCompose(){
+function backToCompose(){ shadeScratch=null; shctx=null;
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
@@ -782,7 +782,43 @@ const BRUSH_MIN=8, BRUSH_MAX=46;
    The visible board is always scene + figure + clipped paint, recomposited only
    over the stroke's dirty rect to stay 60fps at full retina resolution. */
 let paintLayer=null, pctx=null;
-function compositeBoard(){ if(!sceneCanvas) return; ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0); if(paintLayer) ctx.drawImage(paintLayer,0,0); }
+function compositeBoard(){ if(!sceneCanvas) return; ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
+  if(paintLayer){ ctx.drawImage(paintLayer,0,0); applyShading(0,0,board.width,board.height); } }
+
+/* SHADING PASS — keeps the figure three-dimensional after it has been painted.
+   paintLayer is opaque, so covering the mannequin also erased everything the 3D render
+   gave it: the lit side, the shaded side, and the contact shadow on the ground. The
+   result read as a flat sticker, which is exactly what breaks the illusion.
+   maskCanvas already holds that lighting (a white MeshStandardMaterial under a hemisphere
+   plus two directional lights), so multiplying it back over the paint restores the form
+   while leaving the chosen colour intact: white-lit areas multiply to ~no change, shadowed
+   areas darken. Clipped to the painted pixels only — unpainted figure keeps its own render
+   and must not be darkened twice. */
+let shadeScratch=null, shctx=null;
+/* Preview-gated on purpose: a version of the app is in App Store review right now, and
+   this file deploys straight to production for every user and for the reviewer. Open
+   …/kamo/?shade=1 in Safari to judge it; flip the default to 0.75 once it is approved. */
+const SHADE_STRENGTH=/[?&]shade=1/.test(location.search)?0.75:0;   // 1 = full multiply (harsh), 0 = flat, as before
+function applyShading(x,y,w,h){
+  if(!SHADE_STRENGTH||!maskCanvas||!paintLayer||w<=0||h<=0) return;
+  if(!shadeScratch||shadeScratch.width!==board.width||shadeScratch.height!==board.height){
+    shadeScratch=document.createElement("canvas");
+    shadeScratch.width=board.width; shadeScratch.height=board.height;
+    shctx=shadeScratch.getContext("2d");
+  }
+  if(!shctx) return;
+  shctx.save();
+  shctx.beginPath(); shctx.rect(x,y,w,h); shctx.clip();
+  shctx.clearRect(x,y,w,h);
+  shctx.drawImage(maskCanvas,0,0);                                    // the shaded render
+  shctx.globalCompositeOperation="destination-in";
+  shctx.drawImage(paintLayer,0,0);                                    // keep only where painted
+  shctx.restore();
+  ctx.save();
+  ctx.globalCompositeOperation="multiply"; ctx.globalAlpha=SHADE_STRENGTH;
+  ctx.drawImage(shadeScratch,x,y,w,h,x,y,w,h);
+  ctx.restore();
+}
 function clipPaintToFigure(x0,y0,x1,y1){
   if(!paintLayer||!maskCanvas) return;
   // pad covers the brush radius plus the pattern brushes' random stamp offsets (≤ R around the path)
@@ -794,12 +830,13 @@ function clipPaintToFigure(x0,y0,x1,y1){
   pctx.globalCompositeOperation="destination-in"; pctx.drawImage(maskCanvas,0,0);
   pctx.restore(); pctx.globalCompositeOperation="source-over";
   ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(maskCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(paintLayer,x,y,w,h,x,y,w,h);
+  applyShading(x,y,w,h);   // same pass on the incremental path, bounded to the dirty rect
 }
 /* Cap the undo stack by MEMORY, not by step count. Each entry is a full-board ImageData
    (~12 MB at 1179x2556 on a 15 Pro); the old fixed cap of 12 retained ~145 MB on top of
    the capture canvases and got the WKWebView content process jetsammed — blank screen,
    the whole hide lost. ~48 MB budget, minimum 3 steps so undo stays useful. */
-const UNDO_BUDGET=48*1024*1024;
+const UNDO_BUDGET=36*1024*1024;   // lowered: the shading scratch canvas now takes a slice of the same budget
 function undoCap(){ const per=Math.max(1,board.width*board.height*4); return Math.max(3,Math.min(12,Math.floor(UNDO_BUDGET/per))); }
 function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); const cap=undoCap(); while(undoStack.length>cap) undoStack.shift(); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
