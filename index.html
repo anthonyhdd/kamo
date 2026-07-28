@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- 12 KB, and it is the first glyph set on screen. Preloading it alongside
+     font-display:block means the hero paints once, in Space Grotesk, instead of
+     flashing a fallback face on the launch screen. -->
+<link rel="preload" href="vendor/SpaceGrotesk-700.woff2" as="font" type="font/woff2" crossorigin>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -38,7 +42,11 @@
   #start .aurora{position:absolute;inset:0;z-index:0;background:radial-gradient(40% 24% at 50% 42%,rgba(255,255,255,.13),transparent 72%);}
   @keyframes auroraFloat{from{transform:translate(-3%,-2%) scale(1)}to{transform:translate(4%,3%) scale(1.14)}}
   .heroWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 30px;margin-bottom:3vh;}
-  @font-face{font-family:'Kamo';src:url('vendor/SpaceGrotesk-700.woff2') format('woff2');font-weight:700;font-display:swap;}
+  /* block, not swap: the hero logo is the first thing on screen, and swap renders it in
+     the fallback for a beat before snapping to Space Grotesk — a visible font change on
+     the launch screen. block keeps it invisible until the font lands (12 KB, preloaded
+     in <head>), then paints once, correctly. */
+  @font-face{font-family:'Kamo';src:url('vendor/SpaceGrotesk-700.woff2') format('woff2');font-weight:700;font-display:block;}
   .heroLogo{font-family:var(--display);font-weight:700;letter-spacing:-1.5px;font-size:clamp(48px,16vw,66px);line-height:1;color:#fff;text-shadow:0 8px 34px rgba(0,0,0,.55);}
   .heroLogo b{color:#fff;font-weight:700;}
   @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -457,6 +465,15 @@
 <input type="file" accept="image/*" id="fileInput" style="display:none" />
 
 <script>
+/* FIRST PAINT SIGNAL — runs here on purpose.
+   This classic script sits after the #start markup and before the module script, so it
+   executes as soon as the hero is parsed and BEFORE ./vendor/three.module.js is even
+   fetched. The native wrapper used to hide its splash on the WebView's onLoadEnd, which
+   waits for every resource — 1.27 MB of three.js included — so the user stared at the
+   launch screen for the whole download and parse even though the screen underneath was
+   ready in a few hundred ms. Native hides the splash on this message instead. */
+try{ if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({type:"dom-ready"})); }catch(e){}
+
 /* on-screen error overlay so a failure is never a silent black screen */
 var __DBG=location.search.includes("debug");
 window.addEventListener("error",function(e){if(!__DBG)return;try{var d=document.getElementById("__err")||document.createElement("div");d.id="__err";d.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:99999;background:rgba(180,0,0,.95);color:#fff;font:12px/1.4 monospace;padding:10px;white-space:pre-wrap;max-height:45%;overflow:auto";d.textContent="JS error: "+(e.message||e)+"\n"+(e.filename||"")+":"+(e.lineno||"");document.body.appendChild(d);}catch(_){}}, true);
@@ -800,9 +817,9 @@ let shadeScratch=null, shctx=null;
    the colour in the shadowed areas — subtle is the point, so the default is low.
    Preview-gated (default 0) because a version is in App Store review right now and this
    file deploys straight to production for every user and for the reviewer. */
-const SHADE_DEFAULT=0.3;
+const SHADE_DEFAULT=0.3;   // requested "pas trop marqué" — 0.3 keeps the colour and only returns the volume
 const SHADE_STRENGTH=(()=>{ const m=/[?&]shade(?:=([^&]*))?/.exec(location.search);
-  if(!m) return 0;                                  // absent -> off, as in production
+  if(!m) return SHADE_DEFAULT;                      // on by default now; ?shade=0 disables
   const v=parseFloat(m[1]);                         // present but unparseable -> default on
   return Number.isFinite(v)?Math.max(0,Math.min(1,v)):SHADE_DEFAULT; })();
 function applyShading(x,y,w,h){
