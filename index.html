@@ -795,10 +795,16 @@ function compositeBoard(){ if(!sceneCanvas) return; ctx.drawImage(sceneCanvas,0,
    areas darken. Clipped to the painted pixels only — unpainted figure keeps its own render
    and must not be darkened twice. */
 let shadeScratch=null, shctx=null;
-/* Preview-gated on purpose: a version of the app is in App Store review right now, and
-   this file deploys straight to production for every user and for the reviewer. Open
-   …/kamo/?shade=1 in Safari to judge it; flip the default to 0.75 once it is approved. */
-const SHADE_STRENGTH=/[?&]shade=1/.test(location.search)?0.75:0;   // 1 = full multiply (harsh), 0 = flat, as before
+/* Strength is dialable from the URL so it can be judged on a real device without a
+   redeploy: …/kamo/?shade=0.3 . 0 = flat, as before. 1 = full multiply, which crushes
+   the colour in the shadowed areas — subtle is the point, so the default is low.
+   Preview-gated (default 0) because a version is in App Store review right now and this
+   file deploys straight to production for every user and for the reviewer. */
+const SHADE_DEFAULT=0.3;
+const SHADE_STRENGTH=(()=>{ const m=/[?&]shade(?:=([^&]*))?/.exec(location.search);
+  if(!m) return 0;                                  // absent -> off, as in production
+  const v=parseFloat(m[1]);                         // present but unparseable -> default on
+  return Number.isFinite(v)?Math.max(0,Math.min(1,v)):SHADE_DEFAULT; })();
 function applyShading(x,y,w,h){
   if(!SHADE_STRENGTH||!maskCanvas||!paintLayer||w<=0||h<=0) return;
   if(!shadeScratch||shadeScratch.width!==board.width||shadeScratch.height!==board.height){
