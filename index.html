@@ -538,7 +538,26 @@ function makeCharacter(px=0){
   setPoseInstant(char,0);
   characters.push(char); return char;
 }
-function clearCharacters(){ characters.forEach(c=>scene.remove(c.group)); characters=[]; selIdx=-1; }
+/* scene.remove() only detaches from the scene graph — three.js keeps every geometry and
+   material alive on the GPU until dispose() fires its event, and dropping the JS
+   reference does NOT free the WebGL buffers. enterCompose() rebuilds the whole 12-mesh
+   figure on every camera grant, camera flip and photo pick, so each one leaked 48 GL
+   buffers (~165 KB) that were never deleted: measured as a straight line, 48 -> 384 over
+   8 cycles, with deleteBuffer never called once.
+   Every geometry and material here is created per-mesh by capsule()/WHITE(), never
+   shared, so disposing them cannot affect a surviving character. */
+function clearCharacters(){
+  characters.forEach(c=>{
+    scene.remove(c.group);
+    c.group.traverse(o=>{
+      if(!o.isMesh) return;
+      if(o.geometry) o.geometry.dispose();
+      const mats=Array.isArray(o.material)?o.material:(o.material?[o.material]:[]);
+      mats.forEach(m=>{ if(m.map) m.map.dispose(); m.dispose(); });
+    });
+  });
+  characters=[]; selIdx=-1;
+}
 function sel(){ return characters[selIdx]; }
 function spawnHider(){ makeCharacter(0); selIdx=0; }
 
@@ -1348,9 +1367,21 @@ document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz
 /* ===== Done / Edit finished view + before/after reveal ===== */
 let finished=false, revealX=0.5;
 const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
+/* Assigning canvas width/height ALWAYS reallocates the backing store — even when the
+   value is unchanged. This runs on every rAF of the Done animation AND on every
+   pointermove of the reveal drag, so at 1290x2796 it was discarding and re-allocating
+   ~14 MB per frame: ~744 MB just to open the Done screen, and ~2.4 GB across a single
+   drag of the handle. Per hide. That is the device-wide memory pressure behind the phone
+   locking up after a few paints.
+   Size it only when the size actually changed. The canvas is still cleared explicitly by
+   the clearRect below — that used to be a side effect of the resize — so nothing that
+   relied on the reallocation is lost. cssText is cached for the same reason: reassigning
+   it every frame forces a style parse for a string that only changes on rotate/resize. */
 function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoundingClientRect();
-  revealC.width=Math.round(r.width*dpr); revealC.height=Math.round(r.height*dpr);
-  revealC.style.cssText="position:fixed;z-index:14;display:block;left:"+r.left+"px;top:"+r.top+"px;width:"+r.width+"px;height:"+r.height+"px;";
+  const cw=Math.round(r.width*dpr), ch=Math.round(r.height*dpr);
+  if(revealC.width!==cw||revealC.height!==ch){ revealC.width=cw; revealC.height=ch; }
+  const css="position:fixed;z-index:14;display:block;left:"+r.left+"px;top:"+r.top+"px;width:"+r.width+"px;height:"+r.height+"px;";
+  if(drawReveal._css!==css){ drawReveal._css=css; revealC.style.cssText=css; }
   const W=revealC.width,H=revealC.height, sp=Math.round(W*revealX);
   rctx.clearRect(0,0,W,H); rctx.drawImage(board,0,0,W,H);
   rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
