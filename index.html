@@ -645,7 +645,15 @@ function enterCompose(){
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
+/* Reached only from the Retake confirmation (#cfYes), which calls exitFinished() first —
+   so `finished` is already false and nothing still needs beforeBoard or the reveal. The
+   hide is being thrown away by explicit user confirmation, so drop its buffers now
+   instead of holding ~100 MB of full-retina canvases through the entire compose/camera
+   session that follows. capture() rebuilds every one of them. */
 function backToCompose(){ shadeScratch=null; shctx=null;
+  undoStack.length=0;
+  sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
+  board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
@@ -759,6 +767,14 @@ function capture(){
   track("photo_captured",{source:bgKind});
   if(torchOn) setTorch(false);   // the button is about to be hidden — never leave the light on with no way to kill it
   endPaint._sent=false;   // new hide => paint_completed may fire again; native needs it to retry a deferred activation
+  // Release the PREVIOUS hide BEFORE allocating the new one. Six full-retina canvases at
+  // ~14 MB each plus the undo stack: allocating the new set while the old set was still
+  // referenced doubled the peak, and `undoStack.length=0` used to sit further down —
+  // AFTER all six allocations — so a retake carried ~43 MB of dead undo frames straight
+  // through the spike. Recapture was the most reliable way to kill the content process.
+  undoStack.length=0;
+  sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null;
+  paintLayer=null; pctx=null; shadeScratch=null; shctx=null;
   const W=Math.round(stage.clientWidth*dpr), H=Math.round(stage.clientHeight*dpr); board.width=W; board.height=H;
   sceneCanvas=document.createElement("canvas"); sceneCanvas.width=W; sceneCanvas.height=H; coverInto(sceneCanvas.getContext("2d"),W,H);
   renderer.render(scene,camera3);
@@ -771,7 +787,7 @@ function capture(){
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
-  mode="paint"; $("#paintUI").style.display="block"; undoStack.length=0; pushUndo();
+  mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; Pro-gated (tap → paywall), free users can also use the 3 dots
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
   setBrush("solid");
@@ -780,12 +796,37 @@ function capture(){
   maybeOnboardPaint();
 }
 
-/* ===== CAMO SCORE ===== */
+/* ===== CAMO SCORE =====
+   This runs on EVERY stroke release (and on undo, and on clear). It used to read three
+   FULL-BOARD ImageData buffers to do it — ~14 MB each at 1290x2796, so ~43 MB of
+   transient allocation per stroke, on top of the ~100 MB the capture canvases already
+   hold and the ~43 MB of undo stack. That is what jetsammed the WKWebView content
+   process mid-paint: the app went blank a few strokes in and the whole hide was lost.
+   The loop only ever LOOKED at every step-th pixel (1 in ~81 at retina), so reading at
+   full resolution was pure waste. Downscale each source into one reused scratch canvas
+   sized to exactly the old sample grid and read that instead — ~0.2 MB per source.
+   Smoothing is off so it stays a point sample and the score matches the old build.
+   Reading `board` (the canvas) rather than `ctx` also avoids a GPU->CPU readback of the
+   visible, compositor-backed canvas on every single stroke. */
+let scoreScratch=null, sscx=null;
+function _sampleData(src,sw,sh,W,H){
+  if(!scoreScratch||scoreScratch.width!==sw||scoreScratch.height!==sh){
+    scoreScratch=document.createElement("canvas"); scoreScratch.width=sw; scoreScratch.height=sh;
+    sscx=scoreScratch.getContext("2d",{willReadFrequently:true});
+  }
+  if(!sscx) return null;
+  sscx.imageSmoothingEnabled=false;
+  sscx.clearRect(0,0,sw,sh);                 // maskCanvas carries alpha — must not accumulate
+  sscx.drawImage(src,0,0,W,H,0,0,sw,sh);
+  return sscx.getImageData(0,0,sw,sh).data;  // fresh buffer each call, so the three don't alias
+}
 function computeScore(){
   if(!maskCanvas||!blurCanvas) return 0;
   const W=board.width,H=board.height,step=Math.max(3,Math.round(Math.min(W,H)/140));
-  let bd,md,gd; try{ bd=ctx.getImageData(0,0,W,H).data; md=maskCanvas.getContext("2d").getImageData(0,0,W,H).data; gd=blurCanvas.getContext("2d").getImageData(0,0,W,H).data; }catch(e){ return currentScore; }
-  let n=0,sum=0; for(let y=0;y<H;y+=step) for(let x=0;x<W;x+=step){ const i=(y*W+x)*4; if(md[i+3]>128){ const dr=bd[i]-gd[i],dg=bd[i+1]-gd[i+1],db=bd[i+2]-gd[i+2]; sum+=Math.sqrt(dr*dr+dg*dg+db*db); n++; } }
+  const sw=Math.max(1,Math.ceil(W/step)), sh=Math.max(1,Math.ceil(H/step));
+  let bd,md,gd; try{ bd=_sampleData(board,sw,sh,W,H); md=_sampleData(maskCanvas,sw,sh,W,H); gd=_sampleData(blurCanvas,sw,sh,W,H); }catch(e){ return currentScore; }
+  if(!bd||!md||!gd) return currentScore;
+  let n=0,sum=0; for(let i=0;i<md.length;i+=4){ if(md[i+3]>128){ const dr=bd[i]-gd[i],dg=bd[i+1]-gd[i+1],db=bd[i+2]-gd[i+2]; sum+=Math.sqrt(dr*dr+dg*dg+db*db); n++; } }
   if(!n) return 0; return Math.max(0,Math.min(100,Math.round(100-(sum/n)/120*100)));
 }
 function showScore(){ scoreChip.style.display="block"; const e=currentScore>=85?"🫥":currentScore>=60?"🙈":"👀"; scoreChip.innerHTML=`${e} <b>${currentScore}%</b> hidden`; }
@@ -890,9 +931,14 @@ board.addEventListener("pointerup",endPaint); board.addEventListener("pointercan
 let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b48a","#3a4a5a","#e8e0d0","#5a4632"];
 // pull ~n representative colors from the captured scene so the palette matches the photo
 function extractPalette(canvas,n){
-  try{ const W=canvas.width,H=canvas.height,c=canvas.getContext("2d"),data=c.getImageData(0,0,W,H).data;
+  // Same full-res-read problem as computeScore, and it fires from capture() — the one
+  // moment every capture canvas is being allocated at once, so the transient 14 MB lands
+  // exactly on the peak. It samples 1 pixel in ~4900, so read the sample grid instead.
+  try{ const W=canvas.width,H=canvas.height;
     const bk={},step=Math.max(4,Math.round(Math.min(W,H)/70));
-    for(let y=0;y<H;y+=step) for(let x=0;x<W;x+=step){ const i=(y*W+x)*4; const r=data[i],g=data[i+1],b=data[i+2];
+    const sw=Math.max(1,Math.ceil(W/step)), sh=Math.max(1,Math.ceil(H/step));
+    const data=_sampleData(canvas,sw,sh,W,H); if(!data) return PALETTE;
+    for(let i=0;i<data.length;i+=4){ const r=data[i],g=data[i+1],b=data[i+2];
       const key=((r>>5)<<10)|((g>>5)<<5)|(b>>5); const o=bk[key]||(bk[key]={r:0,g:0,b:0,n:0}); o.r+=r;o.g+=g;o.b+=b;o.n++; }
     let arr=Object.values(bk).map(o=>({r:Math.round(o.r/o.n),g:Math.round(o.g/o.n),b:Math.round(o.b/o.n),n:o.n})).sort((a,b)=>b.n-a.n);
     const out=[]; for(const col of arr){ if(out.length>=n) break; if(out.every(o=>Math.abs(o.r-col.r)+Math.abs(o.g-col.g)+Math.abs(o.b-col.b)>44)) out.push(col); }
