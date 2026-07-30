@@ -1218,15 +1218,14 @@ $("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall(); };
 
 /* ---- torch ----
    Web torch = track.applyConstraints({advanced:[{torch}]}), supported on Android
-   Chrome but NOT in WebKit/WKWebView — so on iOS this reports no capability and
-   we hide the button rather than ship a dead control. nativeCaps.torch lets a
-   native bridge take over once it exists (same pattern as revealVideo). */
+   Chrome but NOT in WebKit/WKWebView — so on iOS this reports no capability and the
+   button hides itself rather than ship a dead control. See setTorch for why there is
+   deliberately no native bridge behind it. */
 let torchOn=false;
 function torchTrack(){ return (bgKind==="cam" && stream) ? stream.getVideoTracks()[0] : null; }
 function torchAvailable(){
   const t=torchTrack();
-  try{ if(t && t.getCapabilities && t.getCapabilities().torch) return true; }catch(e){}
-  return !!nativeCaps.torch;   // fallback only — see setTorch for why WebKit goes first
+  try{ return !!(t && t.getCapabilities && t.getCapabilities().torch); }catch(e){ return false; }
 }
 function updateLightBtn(){
   const el=$("#btnLight"); if(!el) return;
@@ -1234,38 +1233,38 @@ function updateLightBtn(){
   el.style.display = ok ? "flex" : "none";
   el.classList.toggle("on", ok && torchOn);
 }
-/* Torch, WEBKIT FIRST — order is the whole fix.
+/* Torch: ONLY through the track WebKit itself owns. There is no native fallback, and
+   that absence is the fix — two attempts died here.
+
    The native module drives AVCaptureDevice.torchMode from the app process, on the
-   assumption (written in its own header) that the torch is "device-level, independent of
-   who owns the capture session". That does not hold here: WKWebView captures in a
+   assumption (written in its own header) that the torch is "device-level, independent
+   of who owns the capture session". That does not hold: WKWebView captures in a
    SEPARATE process, so lockForConfiguration() on the same physical device makes iOS
-   arbitrate — and it resolves the conflict by interrupting WebKit's session. The light
-   came on and the preview went black.
-   Toggling through the track WebKit itself owns cannot interrupt WebKit. Native stays as
-   the fallback for iOS versions that don't advertise the capability. */
-async function trackTorchOK(t){ try{ return !!(t && t.getCapabilities && t.getCapabilities().torch); }catch(e){ return false; } }
+   arbitrate, and it resolves the conflict by interrupting WebKit's session — light on,
+   preview black.
+
+   Trying WebKit first did nothing, because WebKit never advertises `torch` in
+   getCapabilities() on iOS: the check was always false and every iOS tap fell straight
+   back into the branch that blacks the screen. The recovery timer never fired either —
+   an interrupted session keeps the track `live` and unmuted, it just stops delivering
+   frames, so `t.muted || t.readyState!=="live"` stayed false while the user sat on a
+   black screen.
+
+   So: no capability, no button (updateLightBtn hides it). Android Chrome keeps a real
+   torch via applyConstraints. Bringing the light back on iOS means the app process
+   owning the camera — native AVCaptureSession behind a transparent WebView, still
+   photo handed to usePhoto() on capture — not another attempt at reaching around
+   WebKit. */
 async function setTorch(on){
   const t=torchTrack();
-  if(await trackTorchOK(t)){
-    try{ await t.applyConstraints({advanced:[{torch:on}]}); torchOn=on; updateLightBtn();
-      track("torch_toggled",{on,path:"webkit"}); return; }
-    catch(e){ console.warn("[torch] webkit refused",e); }
+  if(!t || !torchAvailable()){ torchOn=false; updateLightBtn(); return; }
+  try{
+    await t.applyConstraints({advanced:[{torch:on}]});
+    torchOn=on; updateLightBtn(); track("torch_toggled",{on,path:"webkit"});
+  }catch(e){
+    console.warn("[torch] refused",e);
+    torchOn=false; updateLightBtn(); showHint("Couldn't turn the light on");
   }
-  if(nativeCaps.torch){
-    postNative({type:"torch",on}); torchOn=on; updateLightBtn();
-    track("torch_toggled",{on,path:"native"});
-    /* If this is the path that kills the preview, don't leave the user on a black
-       screen: the track goes muted / not-live when iOS interrupts WebKit. Recover. */
-    if(t) setTimeout(()=>{ if(bgKind==="cam" && (t.muted||t.readyState!=="live")){
-      track("torch_broke_preview",{on});
-      postNative({type:"torch",on:false}); torchOn=false; updateLightBtn();
-      showHint("The light interrupted the camera — light turned back off");
-      startCamera(true);
-    } },700);
-    return;
-  }
-  if(!t) return;
-  showHint("Light isn't available on this device"); torchOn=false; updateLightBtn();
 }
 $("#btnLight").onclick=e=>{ e.stopPropagation(); haptic(10); setTorch(!torchOn); };   // setTorch emits torch_toggled with the path it actually used
 $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; startCamera(); };
