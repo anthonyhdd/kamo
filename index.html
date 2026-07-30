@@ -669,7 +669,7 @@ function enterCompose(){
    hide is being thrown away by explicit user confirmation, so drop its buffers now
    instead of holding ~100 MB of full-retina canvases through the entire compose/camera
    session that follows. capture() rebuilds every one of them. */
-function backToCompose(){ shadeScratch=null; shctx=null;
+function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
@@ -793,7 +793,7 @@ function capture(){
   // through the spike. Recapture was the most reliable way to kill the content process.
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null;
-  paintLayer=null; pctx=null; shadeScratch=null; shctx=null;
+  paintLayer=null; pctx=null; figLayer=null; figctx=null; shadeSrc=null;
   const W=Math.round(stage.clientWidth*dpr), H=Math.round(stage.clientHeight*dpr); board.width=W; board.height=H;
   sceneCanvas=document.createElement("canvas"); sceneCanvas.width=W; sceneCanvas.height=H; coverInto(sceneCanvas.getContext("2d"),W,H);
   renderer.render(scene,camera3);
@@ -802,7 +802,8 @@ function capture(){
   paintLayer=document.createElement("canvas"); paintLayer.width=W; paintLayer.height=H; pctx=paintLayer.getContext("2d",{willReadFrequently:true});
   try{ buildSwatches(extractPalette(sceneCanvas,5)); }catch(e){}   // 5 palette colours from the photo (the eyedropper is the star)
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
-  ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
+  buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
+  compositeBoard();
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
@@ -859,49 +860,92 @@ const BRUSH_MIN=8, BRUSH_MAX=46;
    The visible board is always scene + figure + clipped paint, recomposited only
    over the stroke's dirty rect to stay 60fps at full retina resolution. */
 let paintLayer=null, pctx=null;
-function compositeBoard(){ if(!sceneCanvas) return; ctx.drawImage(sceneCanvas,0,0); ctx.drawImage(maskCanvas,0,0);
-  if(paintLayer){ ctx.drawImage(paintLayer,0,0); applyShading(0,0,board.width,board.height); } }
+function compositeBoard(){ if(!sceneCanvas) return; composeInto(0,0,board.width,board.height); }
 
-/* SHADING PASS — keeps the figure three-dimensional after it has been painted.
-   paintLayer is opaque, so covering the mannequin also erased everything the 3D render
-   gave it: the lit side, the shaded side, and the contact shadow on the ground. The
-   result read as a flat sticker, which is exactly what breaks the illusion.
-   maskCanvas already holds that lighting (a white MeshStandardMaterial under a hemisphere
-   plus two directional lights), so multiplying it back over the paint restores the form
-   while leaving the chosen colour intact: white-lit areas multiply to ~no change, shadowed
-   areas darken. Clipped to the painted pixels only — unpainted figure keeps its own render
-   and must not be darkened twice. */
-let shadeScratch=null, shctx=null;
+/* FIGURE COMPOSITE — why a well-painted figure used to stay visible.
+   The board was built as scene -> maskCanvas -> paintLayer, with paintLayer's alpha first
+   capped to the mask's via destination-in. Two things leaked through, and neither could be
+   painted away:
+     1. The mask's silhouette is ANTIALIASED. At an edge pixel of alpha a, the white render
+        went down at a and the paint's alpha was capped to a as well, so the pixel ended up
+        scene(1-a)^2 + white*a(1-a) + paint*a — a permanent bright fringe tracing the whole
+        figure. Measured at mean 14 / max 51 RGB from the background on a flat scene.
+     2. The shading pass MULTIPLIED the lit render back over the paint. Multiply can only
+        darken, and the render's mean luminance is well under white, so the figure always
+        came out ~10% darker than the background it was supposed to match: mean 14, max 34,
+        on a mathematically perfect paint job. That was the dark silhouette.
+   Now the figure is composed in its own layer: the render first, then the paint via
+   source-atop, which writes colour only where the layer is already opaque and leaves the
+   mask's alpha untouched — so the antialiased edge carries PAINT, not white.
+   The shading is then applied to that layer with soft-light against a source re-centred on
+   the render's own MEAN luminance (128 = no change). Soft-light both lightens and darkens,
+   so volume survives while the figure's average stays on the background instead of sinking
+   below it. With a perfect paint job: interior 14.1 -> 10.7, edge 14.0 -> 9.3.
+   shadeSrc is half-resolution — lighting is low-frequency, and it measured identically
+   (interior 10.7 vs 10.8) at a quarter of the memory. It replaces the old full-size
+   shadeScratch, so this costs ~3 MB, not ~14. */
+let figLayer=null, figctx=null, shadeSrc=null;
 /* Strength is dialable from the URL so it can be judged on a real device without a
-   redeploy: …/kamo/?shade=0.3 . 0 = flat, as before. 1 = full multiply, which crushes
-   the colour in the shadowed areas — subtle is the point, so the default is low.
-   Preview-gated (default 0) because a version is in App Store review right now and this
-   file deploys straight to production for every user and for the reviewer. */
-const SHADE_DEFAULT=0.3;   // requested "pas trop marqué" — 0.3 keeps the colour and only returns the volume
+   redeploy: …/kamo/?shade=0.5 . 0 = flat (maximum camouflage), 1 = full soft-light. */
+const SHADE_DEFAULT=0.5;   // neutral soft-light: 0.5 restores the volume 0.3-multiply gave, without the darkening
 const SHADE_STRENGTH=(()=>{ const m=/[?&]shade(?:=([^&]*))?/.exec(location.search);
-  if(!m) return SHADE_DEFAULT;                      // on by default now; ?shade=0 disables
+  if(!m) return SHADE_DEFAULT;                      // on by default; ?shade=0 disables
   const v=parseFloat(m[1]);                         // present but unparseable -> default on
   return Number.isFinite(v)?Math.max(0,Math.min(1,v)):SHADE_DEFAULT; })();
-function applyShading(x,y,w,h){
-  if(!SHADE_STRENGTH||!maskCanvas||!paintLayer||w<=0||h<=0) return;
-  if(!shadeScratch||shadeScratch.width!==board.width||shadeScratch.height!==board.height){
-    shadeScratch=document.createElement("canvas");
-    shadeScratch.width=board.width; shadeScratch.height=board.height;
-    shctx=shadeScratch.getContext("2d");
+const SHADE_CONTRAST=1.0;  // how far the render's own luminance spread is carried into the soft-light source
+/* Built once per capture from maskCanvas (which never changes after the shutter), so the
+   per-stroke path is a plain drawImage — cheaper than the old version, which re-drew and
+   re-masked the render on every dirty rect. */
+function buildShadeSrc(){
+  shadeSrc=null;
+  if(!SHADE_STRENGTH||!maskCanvas) return;
+  const sw=Math.max(1,Math.round(board.width/2)), sh=Math.max(1,Math.round(board.height/2));
+  const c=document.createElement("canvas"); c.width=sw; c.height=sh;
+  const g=c.getContext("2d",{willReadFrequently:true});
+  g.drawImage(maskCanvas,0,0,board.width,board.height,0,0,sw,sh);
+  let im; try{ im=g.getImageData(0,0,sw,sh); }catch(e){ return; }
+  const d=im.data;
+  let sum=0,n=0;
+  for(let i=0;i<d.length;i+=4) if(d[i+3]>250){ sum+=0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2]; n++; }
+  if(!n) return;
+  const Lm=sum/n;
+  for(let i=0;i<d.length;i+=4){
+    if(!d[i+3]) continue;
+    const L=0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2];
+    const v=Math.max(0,Math.min(255,Math.round(128+(L-Lm)*SHADE_CONTRAST)));
+    d[i]=d[i+1]=d[i+2]=v;
   }
-  if(!shctx) return;
-  shctx.save();
-  shctx.beginPath(); shctx.rect(x,y,w,h); shctx.clip();
-  shctx.clearRect(x,y,w,h);
-  shctx.drawImage(maskCanvas,0,0);                                    // the shaded render
-  shctx.globalCompositeOperation="destination-in";
-  shctx.drawImage(paintLayer,0,0);                                    // keep only where painted
-  shctx.restore();
-  ctx.save();
-  ctx.globalCompositeOperation="multiply"; ctx.globalAlpha=SHADE_STRENGTH;
-  ctx.drawImage(shadeScratch,x,y,w,h,x,y,w,h);
-  ctx.restore();
+  g.putImageData(im,0,0); shadeSrc=c;
 }
+/* Rebuild the figure layer over a dirty rect and blit scene+figure onto the board. */
+function composeInto(x,y,w,h){
+  if(!sceneCanvas||!maskCanvas||w<=0||h<=0) return;
+  if(!figLayer||figLayer.width!==board.width||figLayer.height!==board.height){
+    figLayer=document.createElement("canvas");
+    figLayer.width=board.width; figLayer.height=board.height;
+    figctx=figLayer.getContext("2d");
+  }
+  if(!figctx) return;
+  figctx.save();
+  figctx.beginPath(); figctx.rect(x,y,w,h); figctx.clip();
+  figctx.clearRect(x,y,w,h);
+  figctx.drawImage(maskCanvas,0,0);                                  // the lit render
+  if(paintLayer){
+    figctx.globalCompositeOperation="source-atop";                   // paint keeps the mask's alpha
+    figctx.drawImage(paintLayer,0,0);
+  }
+  if(shadeSrc&&SHADE_STRENGTH){
+    figctx.globalCompositeOperation="soft-light"; figctx.globalAlpha=SHADE_STRENGTH;
+    figctx.drawImage(shadeSrc,0,0,shadeSrc.width,shadeSrc.height,0,0,board.width,board.height);
+    figctx.globalAlpha=1;
+  }
+  figctx.restore(); figctx.globalCompositeOperation="source-over";
+  ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h);
+  ctx.drawImage(figLayer,x,y,w,h,x,y,w,h);
+}
+/* paintLayer is no longer pre-clipped to the silhouette — source-atop in composeInto()
+   discards anything outside it, and clipping here is what capped the edge alpha and
+   produced the white fringe. */
 function clipPaintToFigure(x0,y0,x1,y1){
   if(!paintLayer||!maskCanvas) return;
   // pad covers the brush radius plus the pattern brushes' random stamp offsets (≤ R around the path)
@@ -909,11 +953,7 @@ function clipPaintToFigure(x0,y0,x1,y1){
   const x=Math.max(0,Math.floor(Math.min(x0,x1)-pad)), y=Math.max(0,Math.floor(Math.min(y0,y1)-pad));
   const w=Math.min(board.width,Math.ceil(Math.max(x0,x1)+pad))-x, h=Math.min(board.height,Math.ceil(Math.max(y0,y1)+pad))-y;
   if(w<=0||h<=0) return;
-  pctx.save(); pctx.beginPath(); pctx.rect(x,y,w,h); pctx.clip();
-  pctx.globalCompositeOperation="destination-in"; pctx.drawImage(maskCanvas,0,0);
-  pctx.restore(); pctx.globalCompositeOperation="source-over";
-  ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(maskCanvas,x,y,w,h,x,y,w,h); ctx.drawImage(paintLayer,x,y,w,h,x,y,w,h);
-  applyShading(x,y,w,h);   // same pass on the incremental path, bounded to the dirty rect
+  composeInto(x,y,w,h);
 }
 /* Cap the undo stack by MEMORY, not by step count. Each entry is a full-board ImageData
    (~12 MB at 1179x2556 on a 15 Pro); the old fixed cap of 12 retained ~145 MB on top of
