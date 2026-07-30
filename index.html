@@ -1224,9 +1224,9 @@ $("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall(); };
 let torchOn=false;
 function torchTrack(){ return (bgKind==="cam" && stream) ? stream.getVideoTracks()[0] : null; }
 function torchAvailable(){
-  if(nativeCaps.torch) return true;
   const t=torchTrack();
-  try{ return !!(t && t.getCapabilities && t.getCapabilities().torch); }catch(e){ return false; }
+  try{ if(t && t.getCapabilities && t.getCapabilities().torch) return true; }catch(e){}
+  return !!nativeCaps.torch;   // fallback only — see setTorch for why WebKit goes first
 }
 function updateLightBtn(){
   const el=$("#btnLight"); if(!el) return;
@@ -1234,14 +1234,40 @@ function updateLightBtn(){
   el.style.display = ok ? "flex" : "none";
   el.classList.toggle("on", ok && torchOn);
 }
+/* Torch, WEBKIT FIRST — order is the whole fix.
+   The native module drives AVCaptureDevice.torchMode from the app process, on the
+   assumption (written in its own header) that the torch is "device-level, independent of
+   who owns the capture session". That does not hold here: WKWebView captures in a
+   SEPARATE process, so lockForConfiguration() on the same physical device makes iOS
+   arbitrate — and it resolves the conflict by interrupting WebKit's session. The light
+   came on and the preview went black.
+   Toggling through the track WebKit itself owns cannot interrupt WebKit. Native stays as
+   the fallback for iOS versions that don't advertise the capability. */
+async function trackTorchOK(t){ try{ return !!(t && t.getCapabilities && t.getCapabilities().torch); }catch(e){ return false; } }
 async function setTorch(on){
-  if(nativeCaps.torch){ postNative({type:"torch",on}); torchOn=on; updateLightBtn(); return; }
-  const t=torchTrack(); if(!t) return;
-  try{ await t.applyConstraints({advanced:[{torch:on}]}); torchOn=on; }
-  catch(e){ console.warn("[torch]",e); showHint("Light isn't available on this device"); torchOn=false; }
-  updateLightBtn();
+  const t=torchTrack();
+  if(await trackTorchOK(t)){
+    try{ await t.applyConstraints({advanced:[{torch:on}]}); torchOn=on; updateLightBtn();
+      track("torch_toggled",{on,path:"webkit"}); return; }
+    catch(e){ console.warn("[torch] webkit refused",e); }
+  }
+  if(nativeCaps.torch){
+    postNative({type:"torch",on}); torchOn=on; updateLightBtn();
+    track("torch_toggled",{on,path:"native"});
+    /* If this is the path that kills the preview, don't leave the user on a black
+       screen: the track goes muted / not-live when iOS interrupts WebKit. Recover. */
+    if(t) setTimeout(()=>{ if(bgKind==="cam" && (t.muted||t.readyState!=="live")){
+      track("torch_broke_preview",{on});
+      postNative({type:"torch",on:false}); torchOn=false; updateLightBtn();
+      showHint("The light interrupted the camera — light turned back off");
+      startCamera(true);
+    } },700);
+    return;
+  }
+  if(!t) return;
+  showHint("Light isn't available on this device"); torchOn=false; updateLightBtn();
 }
-$("#btnLight").onclick=e=>{ e.stopPropagation(); haptic(10); track("torch_toggled",{on:!torchOn,native:!!nativeCaps.torch}); setTorch(!torchOn); };
+$("#btnLight").onclick=e=>{ e.stopPropagation(); haptic(10); setTorch(!torchOn); };   // setTorch emits torch_toggled with the path it actually used
 $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; startCamera(); };
 let capturing=false;
 function captureShot(){
