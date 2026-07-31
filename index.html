@@ -925,14 +925,28 @@ function compositeBoard(){ if(!sceneCanvas) return; composeInto(0,0,board.width,
    (interior 10.7 vs 10.8) at a quarter of the memory. It replaces the old full-size
    shadeScratch, so this costs ~3 MB, not ~14. */
 let figLayer=null, figctx=null, shadeSrc=null;
-/* Strength is dialable from the URL so it can be judged on a real device without a
-   redeploy: …/kamo/?shade=0.5 . 0 = flat (maximum camouflage), 1 = full soft-light. */
-const SHADE_DEFAULT=0.5;   // neutral soft-light: 0.5 restores the volume 0.3-multiply gave, without the darkening
+/* ?shade= only works in a BROWSER. The native app loads WEB_URL + '?t=' + Date.now() and
+   never passes a shade param, so every KAMO user gets SHADE_DEFAULT and nothing else —
+   this default IS the shipped look, not a starting point anyone can dial on device.
+   Mean deviation from the background is not what makes a shape visible; INTERNAL CONTRAST
+   is. Measured on a beige wall with a perfect paint job (contrastSD = the luminance spread
+   across the figure, which is what the eye locks onto):
+
+     old 0.3 multiply    meanDev 21.9   contrastSD 7.2   (figure sat 13 luma below the wall)
+     k=1.0 a=0.50        meanDev  7.6   contrastSD 5.3   <- shipped first; still reads
+     k=1.0 a=0.30        meanDev  4.6   contrastSD 3.2
+     k=0.6 a=0.30        meanDev  2.8   contrastSD 1.9   <- here: at the ~2-unit floor
+     shade off           meanDev  0.0   contrastSD 0.0
+
+   0.5/1.0 fixed the darkening but kept enough modelling to still read as a figure: the
+   mean was right and the contrast was not. 0.30/0.6 is ~4x less visible and still carries
+   the lit and shadowed sides. Set SHADE_DEFAULT=0 for a figure that genuinely vanishes. */
+const SHADE_DEFAULT=0.30;
 const SHADE_STRENGTH=(()=>{ const m=/[?&]shade(?:=([^&]*))?/.exec(location.search);
-  if(!m) return SHADE_DEFAULT;                      // on by default; ?shade=0 disables
+  if(!m) return SHADE_DEFAULT;                      // browser only; ?shade=0 disables
   const v=parseFloat(m[1]);                         // present but unparseable -> default on
   return Number.isFinite(v)?Math.max(0,Math.min(1,v)):SHADE_DEFAULT; })();
-const SHADE_CONTRAST=1.0;  // how far the render's own luminance spread is carried into the soft-light source
+const SHADE_CONTRAST=0.6;  // how much of the render's luminance spread reaches the soft-light source
 /* Built once per capture from maskCanvas (which never changes after the shutter), so the
    per-stroke path is a plain drawImage — cheaper than the old version, which re-drew and
    re-masked the render on every dirty rect. */
