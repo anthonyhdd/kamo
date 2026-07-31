@@ -1180,13 +1180,13 @@ function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") r
 buildBrushes();
 
 const paywallEl=$("#paywall");
-function openPaywall(){ pauseTimer("paywall"); paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
+function openPaywall(){ paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
   /* Safety net for the same split-deploy problem: an older wrapper only calls setPrices()
      when it actually resolved a price, so a StoreKit failure there would leave this button
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
   if(!storeReady){ clearTimeout(openPaywall._t); openPaywall._t=setTimeout(()=>{
     if(!storeReady){ storeAnswered=true; updatePwBuy(); } },6000); } }
-function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); resumeTimer("paywall"); }
+function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); }
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
 function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
@@ -1533,9 +1533,44 @@ function resumeTimer(reason){
    wall-clock time, not frame time — has already drained to empty. You would return to a
    hide that auto-captured and auto-finished while the screen was off. Freeze on hide,
    restore the remaining time on show. */
-document.addEventListener("visibilitychange",()=>{
-  if(document.hidden) pauseTimer("hidden"); else resumeTimer("hidden");
-});
+/* THE CLOCK READS THE SCREEN — it is not told.
+   Pausing used to be paired calls: openPaywall() paused, closePaywall() resumed. That is
+   a bug waiting to happen. Miss a resume and the round freezes with no way out, which is
+   unrecoverable and looks like the app hanging. It had already gone wrong once: #kamoPlus
+   takes over the whole screen and paused nothing at all.
+   So the pause is now DERIVED from live state every time anything relevant changes. There
+   is nothing to pair, so nothing can be left unpaired. And the failure mode inverts: an
+   overlay this does not know about lets the clock keep RUNNING (recoverable — the round
+   just ends) instead of freezing it forever.
+   Anything new that covers the screen only needs data-blocks-timer on it — including
+   whatever a paywall experiment adds. */
+const TIMER_BLOCKERS="#paywall,#shareSheet,#confirmSheet,#kamoPlus,[data-blocks-timer]";
+function timerBlocked(){
+  if(document.hidden) return true;
+  const els=document.querySelectorAll(TIMER_BLOCKERS);
+  for(const el of els){
+    if(el.classList.contains("show")) return true;
+    if(el.hasAttribute("data-blocks-timer") && getComputedStyle(el).display!=="none") return true;
+  }
+  return false;
+}
+function syncTimerPause(){ if(timerBlocked()) pauseTimer("ui"); else resumeTimer("ui"); }
+document.addEventListener("visibilitychange",syncTimerPause);
+/* Scoped to the overlays, so ordinary class churn (swatch .active, the countdown's own
+   .tick) does not wake it. */
+(function watchBlockers(){
+  const mo=new MutationObserver(syncTimerPause);
+  const attach=()=>document.querySelectorAll(TIMER_BLOCKERS).forEach(el=>{
+    if(el.__timerWatched) return; el.__timerWatched=true;
+    mo.observe(el,{attributes:true,attributeFilter:["class","style"]});
+  });
+  attach();
+  // pick up overlays added later (a new paywall surface, say)
+  new MutationObserver(()=>{ attach(); syncTimerPause(); }).observe(document.body,{childList:true,subtree:true});
+  // last-resort self-heal: any tap re-derives, so a missed mutation can never strand the
+  // round in a paused state
+  document.addEventListener("pointerdown",syncTimerPause,true);
+})();
 /* NO HARD CUT. Expiry used to fire mid-gesture: the paint clock could land between two
    points of a stroke you were still drawing, and the aim clock could snatch the shutter
    while you were still dragging the figure into place. Both feel like the app grabbing the
@@ -1741,8 +1776,8 @@ window.addEventListener("resize",()=>{ if(finished) drawReveal(); });
 
 /* ===== Retake confirmation ===== */
 const confirmSheet=$("#confirmSheet");
-function closeConfirm(){ confirmSheet.classList.remove("show"); resumeTimer("confirm"); }
-$("#btnBack").onclick=()=>{ pauseTimer("confirm"); confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
+function closeConfirm(){ confirmSheet.classList.remove("show"); }
+$("#btnBack").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
 $("#cfNo").onclick=closeConfirm;
 /* Going back for another hide after finishing one is the strongest satisfaction signal
    KAMO gets that isn't a share — and unlike the reveal screen there's no CTA here to
