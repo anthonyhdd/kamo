@@ -129,6 +129,10 @@
     75%{opacity:.9;transform:translate(-50%,0) scale(1);}
     100%{opacity:0;transform:translate(-50%,0) scale(.92);}}
   #timerNum.crit{color:#ff8b84;}
+  @media (prefers-reduced-motion: reduce){
+    #timerNum.tick{animation:none;opacity:1;transform:translate(-50%,0) scale(1);}
+    #timerBar.run,#timerBar{transition:none;}
+  }
   /* Phase label — tiny, sits under the wordmark, tells you WHICH clock is running. */
   #timerTag{position:absolute;top:calc(38px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
     font-family:var(--display);font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
@@ -724,7 +728,7 @@ function enterCompose(){
   $(".brand").classList.remove("mid");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   clearCharacters(); spawnHider();
-  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose") capture(); });
+  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } });
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
@@ -744,7 +748,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   resumeCamera();   // paused for the whole hide by capture()
-  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose") capture(); });
+  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } });
   showHint("Reposition, then recapture");
 }
 
@@ -841,7 +845,7 @@ function captureBurst(char){ if(!char) return; const p=charScreen(char), fx=$("#
 
 /* ===== CAPTURE ===== */
 let sceneCanvas=null, maskCanvas=null, blurCanvas=null, hiderPoints=[], currentScore=0, seenPaint=false;
-let roundStartedAt=0, roundMs=0;   // capture -> Done. The number the user is actually playing against.
+let roundStartedAt=0, roundMs=0, captureWasAuto=false;   // capture -> Done. The number the user is actually playing against.
 function coverInto(g,cw,ch){ let src,sw,sh; if(bgKind==="cam"&&cam.videoWidth){src=cam;sw=cam.videoWidth;sh=cam.videoHeight;} else if(bgKind==="photo"&&photo.naturalWidth){src=photo;sw=photo.naturalWidth;sh=photo.naturalHeight;} else { g.fillStyle="#223"; g.fillRect(0,0,cw,ch); return; }
   const sr=sw/sh,dr=cw/ch; let rw,rh,rx,ry; if(sr>dr){rh=sh;rw=sh*dr;rx=(sw-rw)/2;ry=0;}else{rw=sw;rh=sw/dr;rx=0;ry=(sh-rh)/2;} g.drawImage(src,rx,ry,rw,rh,0,0,cw,ch); }
 function makeBlur(src,W,H){ const f=16, s=document.createElement("canvas"); s.width=Math.max(1,Math.round(W/f)); s.height=Math.max(1,Math.round(H/f)); s.getContext("2d").drawImage(src,0,0,s.width,s.height);
@@ -850,7 +854,8 @@ function projectChar(char){ const v=new THREE.Vector3(); char.parts.spine.getWor
 function capture(){
   // The moment a live camera (or picked photo) becomes a paintable board — the step
   // between "camera works" and "started painting", where a silent drop would be invisible.
-  track("photo_captured",{source:bgKind});
+  track("photo_captured",{source:bgKind,timed:timerArmed(),auto:!!captureWasAuto});   // auto => the aim clock fired, not the user
+  captureWasAuto=false;   // consumed — the next capture is a thumb until the clock says otherwise
   if(torchOn) setTorch(false);   // the button is about to be hidden — never leave the light on with no way to kill it
   endPaint._sent=false;   // new hide => paint_completed may fire again; native needs it to retry a deferred activation
   // Release the PREVIOUS hide BEFORE allocating the new one. Six full-retina canvases at
@@ -863,8 +868,7 @@ function capture(){
   paintLayer=null; pctx=null; figLayer=null; figctx=null; shadeSrc=null;
   /* Cap the paint resolution at the width everything is EXPORTED at.
      Every share path renders 1080 wide — composeShare(1080), composeBeforeAfter(1080) and
-     the reveal-video frames — and frameForShare(), the only full-board export, is dead
-     code nothing calls. So at dpr 3 the board was 1290x2796 and every pixel above 1080 was
+     the reveal-video frames. So at dpr 3 the board was 1290x2796 and every pixel above 1080 was
      downscaled away on the way out, while seven full-board canvases plus every undo frame
      paid for it. Capping to the export width takes ~30% off all of them for nothing the
      user can see. On phones already at or below 1080 nothing changes — Math.min(1).
@@ -894,7 +898,7 @@ function capture(){
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=true;   // sceneCanvas was just replaced; every round starts on Auto
   roundStartedAt=Date.now(); roundMs=0;
-  startTimer("paint",PAINT_SECONDS,()=>{ if(mode==="paint"&&!finished) enterFinished(); });
+  startTimer("paint",PAINT_SECONDS,()=>{ if(mode==="paint"&&!finished) enterFinished(true); });
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
   maybeOnboardPaint();
 }
@@ -1114,7 +1118,7 @@ board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDef
 board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e);
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   if(painting){ paintAt(p); paintHaptic(); } });
-function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0)}); } } }
+function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed()}); } } }
 board.addEventListener("pointerup",endPaint); board.addEventListener("pointercancel",endPaint);
 
 let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b48a","#3a4a5a","#e8e0d0","#5a4632"];
@@ -1174,13 +1178,13 @@ function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") r
 buildBrushes();
 
 const paywallEl=$("#paywall");
-function openPaywall(){ pauseTimer(); paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
+function openPaywall(){ pauseTimer("paywall"); paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
   /* Safety net for the same split-deploy problem: an older wrapper only calls setPrices()
      when it actually resolved a price, so a StoreKit failure there would leave this button
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
   if(!storeReady){ clearTimeout(openPaywall._t); openPaywall._t=setTimeout(()=>{
     if(!storeReady){ storeAnswered=true; updatePwBuy(); } },6000); } }
-function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); resumeTimer(); }
+function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); resumeTimer("paywall"); }
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
 function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
@@ -1306,7 +1310,6 @@ function drawWatermark(c,W,H){ const u=W/390, pad=Math.round(H*0.028); c.textAli
   // KAMO wordmark
   c.fillStyle="#fff"; c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO", W/2, H-Math.round(28*u)-pad);
 }
-function frameForShare(){ const out=document.createElement("canvas"); out.width=board.width; out.height=board.height; const c=out.getContext("2d"); c.drawImage(board,0,0); drawWatermark(c,out.width,out.height); return out; }
 /* native bridge (when wrapped in the Expo WebView) */
 function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); return true; }catch(e){} } return false; }
 /* Analytics. The whole pre-share funnel (hero → camera → paint) lives here in the
@@ -1467,7 +1470,7 @@ function timerArmed(){ return !firstRun(); }
 function stopTimer(){
   if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
   if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
-  timerPhase=null; timerEnd=0; _timerPaused=0; _timerResume=null; _timerOnExpire=null;
+  timerPhase=null; timerEnd=0; _timerPaused=0; _timerResume=null; _timerOnExpire=null; _pauseReasons.clear();
   timerBar.style.display="none"; timerBar.className=""; timerBar.style.transition="none"; timerBar.style.transform="scaleX(1)";
   timerTag.style.display="none"; timerNum.style.display="none"; timerNum.className="";
 }
@@ -1475,7 +1478,11 @@ function stopTimer(){
    paywall being the one that matters. A timer running behind a paywall is unfair, and it
    turns the paywall into a thing to dismiss rather than read. */
 let _timerPaused=0, _timerResume=null, _timerOnExpire=null;
-function pauseTimer(){
+/* Reason-counted, because these overlap: open the paywall, background the app, come back
+   -> a single boolean would resume a clock the paywall still wants frozen. */
+const _pauseReasons=new Set();
+function pauseTimer(reason){
+  _pauseReasons.add(reason||"generic");
   if(!timerPhase||_timerPaused) return;
   _timerPaused=Math.max(0,timerEnd-Date.now());
   _timerResume={phase:timerPhase,onExpire:_timerOnExpire};
@@ -1484,12 +1491,22 @@ function pauseTimer(){
   const w=timerBar.getBoundingClientRect().width, full=window.innerWidth||1;
   timerBar.style.transition="none"; timerBar.style.transform="scaleX("+(w/full)+")";
 }
-function resumeTimer(){
+function resumeTimer(reason){
+  _pauseReasons.delete(reason||"generic");
+  if(_pauseReasons.size) return;                 // something else still wants it frozen
   if(!_timerPaused||!_timerResume) return;
   const left=_timerPaused/1000, r=_timerResume;
   _timerPaused=0; _timerResume=null;
   startTimer(r.phase,left,r.onExpire);
 }
+/* BACKGROUNDING. Without this the round expires in your pocket: iOS suspends the page,
+   the setTimeout fires the instant you come back, and the CSS bar — which animates on
+   wall-clock time, not frame time — has already drained to empty. You would return to a
+   hide that auto-captured and auto-finished while the screen was off. Freeze on hide,
+   restore the remaining time on show. */
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden) pauseTimer("hidden"); else resumeTimer("hidden");
+});
 function startTimer(phase,seconds,onExpire){
   stopTimer();
   if(!timerArmed()) return;
@@ -1650,8 +1667,12 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
   rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*paintDpr,0,4*paintDpr,H);
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
-function enterFinished(){ if(finished) return; finished=true;
+function enterFinished(auto){ if(finished) return; finished=true;
   roundMs=roundStartedAt?Date.now()-roundStartedAt:0; stopTimer();
+  /* NOT allow-listed in kamo-app yet, so it is inert until the next native build — the
+     name is added there in the same change. Until then the aim-clock signal rides on
+     photo_captured.auto, which flows today. */
+  track("round_finished",{seconds:roundSeconds(),auto:!!auto,coverage:Math.round(computeScore()||0),timed:timerArmed()});
   currentScore=computeScore();
   /* The real "I finished a hide" moment, and the first honest score of the run —
      `paint_completed` fires on the FIRST brush stroke, so its score is ~0 and it can't
@@ -1670,7 +1691,7 @@ function exitFinished(){ finished=false; revealC.style.display="none"; revealHan
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
   scoreChip.style.display="none"; }   // the time belongs to the reveal, not the editor
-$("#btnDone").onclick=enterFinished; $("#btnEdit").onclick=exitFinished;
+$("#btnDone").onclick=()=>enterFinished(false); $("#btnEdit").onclick=exitFinished;
 revealHandle.addEventListener("pointerdown",e=>{ e.preventDefault(); revealHandle.setPointerCapture(e.pointerId); revealHandle._d=true; revealHint.style.display="none"; });
 revealHandle.addEventListener("pointermove",e=>{ if(!revealHandle._d)return; const r=board.getBoundingClientRect(); revealX=Math.max(0.02,Math.min(0.98,(e.clientX-r.left)/r.width)); drawReveal(); });
 revealHandle.addEventListener("pointerup",()=>revealHandle._d=false); revealHandle.addEventListener("pointercancel",()=>revealHandle._d=false);
@@ -1678,8 +1699,8 @@ window.addEventListener("resize",()=>{ if(finished) drawReveal(); });
 
 /* ===== Retake confirmation ===== */
 const confirmSheet=$("#confirmSheet");
-function closeConfirm(){ confirmSheet.classList.remove("show"); }
-$("#btnBack").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
+function closeConfirm(){ confirmSheet.classList.remove("show"); resumeTimer("confirm"); }
+$("#btnBack").onclick=()=>{ pauseTimer("confirm"); confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
 $("#cfNo").onclick=closeConfirm;
 /* Going back for another hide after finishing one is the strongest satisfaction signal
    KAMO gets that isn't a share — and unlike the reveal screen there's no CTA here to
