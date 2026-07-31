@@ -102,6 +102,37 @@
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
     font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);}
   #scoreChip b{color:var(--accent);font-weight:850;}
+  /* ---- Round timer ----------------------------------------------------------
+     A hairline that drains along the very top edge, above everything, out of the way
+     of both the shutter (aim phase) and the figure (paint phase) — one position that
+     works for both because it is read peripherally, not looked at.
+     It animates with a single CSS transform transition, NOT a rAF loop: transform is
+     compositor-only, so the whole timer costs zero per-frame JS and zero allocation.
+     That matters here — a per-frame timer is exactly the shape of bug that was making
+     this app take the phone down. */
+  #timerBar{position:fixed;top:0;left:0;height:3px;width:100%;z-index:30;display:none;
+    transform-origin:left center;transform:scaleX(1);
+    background:linear-gradient(90deg,var(--accent),#8ef0bd);
+    box-shadow:0 0 12px rgba(95,230,164,.55);will-change:transform;}
+  #timerBar.run{transition:transform linear;}
+  #timerBar.warn{background:linear-gradient(90deg,#ffb648,#ffd08a);box-shadow:0 0 12px rgba(255,182,72,.6);}
+  #timerBar.crit{background:linear-gradient(90deg,#ff5f57,#ff9a94);box-shadow:0 0 14px rgba(255,95,87,.65);}
+  /* The number only exists for the last few seconds — silent until it matters. */
+  #timerNum{position:absolute;top:calc(52px + var(--safe-t));left:50%;z-index:29;display:none;
+    font-family:var(--display);font-weight:850;font-size:44px;line-height:1;color:#fff;
+    text-shadow:0 3px 18px rgba(0,0,0,.65);pointer-events:none;
+    transform:translate(-50%,0) scale(1);opacity:0;}
+  #timerNum.tick{animation:tickPop .92s cubic-bezier(.2,.9,.25,1) both;}
+  @keyframes tickPop{
+    0%{opacity:0;transform:translate(-50%,0) scale(1.5);}
+    18%{opacity:1;transform:translate(-50%,0) scale(1);}
+    75%{opacity:.9;transform:translate(-50%,0) scale(1);}
+    100%{opacity:0;transform:translate(-50%,0) scale(.92);}}
+  #timerNum.crit{color:#ff8b84;}
+  /* Phase label — tiny, sits under the wordmark, tells you WHICH clock is running. */
+  #timerTag{position:absolute;top:calc(38px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
+    font-family:var(--display);font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:rgba(255,255,255,.72);text-shadow:0 2px 8px rgba(0,0,0,.7);pointer-events:none;}
 
   /* ---------- SHUTTER ---------- */
   #shutterWrap{position:absolute;left:50%;bottom:calc(30px + var(--safe-b));transform:translateX(-50%);z-index:15;display:none;}
@@ -174,6 +205,11 @@
   .sw.picker{overflow:hidden;background:conic-gradient(red,#ff0,#0f0,#0ff,#00f,#f0f,red);}
   .sw.picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;}
   #eyedrop{display:flex;align-items:center;justify-content:center;}
+  /* Auto camo — the default, and the only chip that is a capability rather than a colour,
+     so it carries the accent tint to read as "the magic one" beside the palette. */
+  #autoSw{display:flex;align-items:center;justify-content:center;background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.5);}
+  #autoSw svg{stroke:var(--accent);}
+  #autoSw.active{background:rgba(95,230,164,.30);}
   .sw svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
   .bsz{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--stroke);background:rgba(255,255,255,.06);cursor:pointer;}
   .bsz.active{border-color:var(--accent);background:rgba(255,255,255,.15);}
@@ -324,6 +360,7 @@
       <svg viewBox="0 0 24 24"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
     </button>
     <div class="brand">KA<b>MO</b></div>
+    <div id="timerBar"></div><div id="timerTag"></div><div id="timerNum"></div>
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
     <div id="scoreChip"></div>
@@ -687,6 +724,7 @@ function enterCompose(){
   $(".brand").classList.remove("mid");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   clearCharacters(); spawnHider();
+  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose") capture(); });
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
@@ -706,6 +744,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   resumeCamera();   // paused for the whole hide by capture()
+  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose") capture(); });
   showHint("Reposition, then recapture");
 }
 
@@ -802,6 +841,7 @@ function captureBurst(char){ if(!char) return; const p=charScreen(char), fx=$("#
 
 /* ===== CAPTURE ===== */
 let sceneCanvas=null, maskCanvas=null, blurCanvas=null, hiderPoints=[], currentScore=0, seenPaint=false;
+let roundStartedAt=0, roundMs=0;   // capture -> Done. The number the user is actually playing against.
 function coverInto(g,cw,ch){ let src,sw,sh; if(bgKind==="cam"&&cam.videoWidth){src=cam;sw=cam.videoWidth;sh=cam.videoHeight;} else if(bgKind==="photo"&&photo.naturalWidth){src=photo;sw=photo.naturalWidth;sh=photo.naturalHeight;} else { g.fillStyle="#223"; g.fillRect(0,0,cw,ch); return; }
   const sr=sw/sh,dr=cw/ch; let rw,rh,rx,ry; if(sr>dr){rh=sh;rw=sh*dr;rx=(sw-rw)/2;ry=0;}else{rw=sw;rh=sw/dr;rx=0;ry=(sh-rh)/2;} g.drawImage(src,rx,ry,rw,rh,0,0,cw,ch); }
 function makeBlur(src,W,H){ const f=16, s=document.createElement("canvas"); s.width=Math.max(1,Math.round(W/f)); s.height=Math.max(1,Math.round(H/f)); s.getContext("2d").drawImage(src,0,0,s.width,s.height);
@@ -851,7 +891,10 @@ function capture(){
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; Pro-gated (tap → paywall), free users can also use the 3 dots
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
   setBrush("solid");
-  currentScore=computeScore(); scoreChip.style.display="none";  // score chip appears after the first brush stroke, not at 0%
+  currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
+  scenePat=null; autoCamo=true;   // sceneCanvas was just replaced; every round starts on Auto
+  roundStartedAt=Date.now(); roundMs=0;
+  startTimer("paint",PAINT_SECONDS,()=>{ if(mode==="paint"&&!finished) enterFinished(); });
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
   maybeOnboardPaint();
 }
@@ -880,18 +923,51 @@ function _sampleData(src,sw,sh,W,H){
   sscx.drawImage(src,0,0,W,H,0,0,sw,sh);
   return sscx.getImageData(0,0,sw,sh).data;  // fresh buffer each call, so the three don't alias
 }
+/* WHAT `currentScore` MEANS NOW — read this before changing it.
+   It used to be "% hidden": board-vs-blur colour distance inside the silhouette. That
+   number was noise. It punished you for the shading pass, it moved when the light moved,
+   and with auto-camo paint it is meaningless — so it is gone from the UI entirely.
+   It is now PAINT COVERAGE, 0-100: how much of the figure you actually covered.
+   That is deliberate and it is load-bearing. The NATIVE side gates the App Store review
+   prompt on this value (storeReview.js: MIN_SCORE = 30, and >= 85 picks the "Nice hide"
+   title). Native ships in a build we have not cut, so whatever crosses the bridge must
+   stay a 0-100 quality number. Sending seconds would read a fast 12s round as a botched
+   hide and silently suppress review prompts forever. Coverage keeps that gate honest:
+   someone who painted a fifth of the figure really did botch it.
+   The USER-FACING score is the round time — see showScore(). */
 function computeScore(){
-  if(!maskCanvas||!blurCanvas) return 0;
+  if(!maskCanvas||!paintLayer) return 0;
   const W=board.width,H=board.height,step=Math.max(3,Math.round(Math.min(W,H)/140));
   const sw=Math.max(1,Math.ceil(W/step)), sh=Math.max(1,Math.ceil(H/step));
-  let bd,md,gd; try{ bd=_sampleData(board,sw,sh,W,H); md=_sampleData(maskCanvas,sw,sh,W,H); gd=_sampleData(blurCanvas,sw,sh,W,H); }catch(e){ return currentScore; }
-  if(!bd||!md||!gd) return currentScore;
-  let n=0,sum=0; for(let i=0;i<md.length;i+=4){ if(md[i+3]>128){ const dr=bd[i]-gd[i],dg=bd[i+1]-gd[i+1],db=bd[i+2]-gd[i+2]; sum+=Math.sqrt(dr*dr+dg*dg+db*db); n++; } }
-  if(!n) return 0; return Math.max(0,Math.min(100,Math.round(100-(sum/n)/120*100)));
+  let md,pd; try{ md=_sampleData(maskCanvas,sw,sh,W,H); pd=_sampleData(paintLayer,sw,sh,W,H); }catch(e){ return currentScore; }
+  if(!md||!pd) return currentScore;
+  let fig=0,painted=0;
+  for(let i=0;i<md.length;i+=4){ if(md[i+3]>128){ fig++; if(pd[i+3]>128) painted++; } }
+  if(!fig) return 0; return Math.max(0,Math.min(100,Math.round(painted/fig*100)));
 }
-function showScore(){ scoreChip.style.display="block"; const e=currentScore>=85?"🫥":currentScore>=60?"🙈":"👀"; scoreChip.innerHTML=`${e} <b>${currentScore}%</b> hidden`; }
+function roundSeconds(){ return Math.max(1,Math.round((roundMs||(roundStartedAt?Date.now()-roundStartedAt:0))/1000)); }
+/* Shown once, on the reveal. Time is the score people can compare, brag about and beat —
+   "% hidden" was a number nobody could act on. */
+function showScore(){
+  scoreChip.style.display="block";
+  scoreChip.innerHTML=`🫥 vanished in <b>${roundSeconds()}s</b>`;
+}
 
 /* ===== PAINT ===== */
+/* AUTO-CAMO — the app's actual promise, "make it vanish".
+   A single picked colour can never hide a figure on a real surface: a wall has texture and
+   a light gradient, so a flat patch reads instantly no matter how well the colour is
+   matched. sceneCanvas already holds the exact background, pixel-aligned with paintLayer
+   (both W x H, same capture), so a no-repeat pattern anchored at 0,0 paints each pixel
+   with the background that is actually behind it. The figure takes on the real surface.
+   Picking a swatch or eyedropping switches to flat colour — a deliberate, stylised choice
+   the user opts into, with the Auto chip to come back. */
+let autoCamo=true, scenePat=null;
+function paintStyle(){
+  if(!autoCamo) return paintColor;
+  if(!scenePat&&sceneCanvas&&pctx){ try{ scenePat=pctx.createPattern(sceneCanvas,"no-repeat"); }catch(e){ scenePat=null; } }
+  return scenePat||paintColor;
+}
 let paintColor="#8a7f6a", brush=24, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
 const BRUSH_MIN=8, BRUSH_MAX=46;
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
@@ -1020,25 +1096,25 @@ function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.le
 function _toRGB(col){ if(col[0]==="#"){ let h=col.slice(1); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; } const m=col.match(/\d+/g); return m?[+m[0],+m[1],+m[2]]:[138,127,106]; }
 function _shade(rgb,amt){ const f=amt<0?0:255,t=Math.abs(amt); return `rgb(${Math.round(rgb[0]+(f-rgb[0])*t)},${Math.round(rgb[1]+(f-rgb[1])*t)},${Math.round(rgb[2]+(f-rgb[2])*t)})`; }
 // Pro pattern brushes — all derive their tones from the picked scene color so they still camouflage.
-function _stamp(x,y){ const base=_toRGB(paintColor), R=brush*paintDpr;
-  if(brushMode==="dapple"){ for(let i=0;i<4;i++){ const rr=R*(0.28+Math.random()*0.5), ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; pctx.globalAlpha=0.5+Math.random()*0.4; pctx.fillStyle=_shade(base,(Math.random()-0.5)*0.5); pctx.beginPath(); pctx.arc(x+ox,y+oy,rr/2,0,7); pctx.fill(); } pctx.globalAlpha=1; return; }
-  if(brushMode==="leaf"){ for(let i=0;i<3;i++){ const a=Math.random()*Math.PI, ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; const g=[Math.min(255,Math.round(base[0]*0.55+Math.random()*30)),Math.min(255,Math.round(base[1]*0.6+60+Math.random()*20)),Math.min(255,Math.round(base[2]*0.5+25))]; pctx.globalAlpha=0.7; pctx.fillStyle=`rgb(${g[0]},${g[1]},${g[2]})`; pctx.save(); pctx.translate(x+ox,y+oy); pctx.rotate(a); pctx.beginPath(); pctx.ellipse(0,0,R*0.5,R*0.22,0,0,7); pctx.fill(); pctx.restore(); } pctx.globalAlpha=1; return; }
-  if(brushMode==="disrupt"){ pctx.globalAlpha=0.85; pctx.fillStyle=_shade(base,(Math.random()-0.5)*0.55); const k=5+((Math.random()*3)|0), rad=R*0.72; pctx.beginPath(); for(let i=0;i<=k;i++){ const a=i/k*Math.PI*2, rr=rad*(0.5+Math.random()*0.6), px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr; i?pctx.lineTo(px,py):pctx.moveTo(px,py); } pctx.closePath(); pctx.fill(); pctx.globalAlpha=1; return; } }
+function _stamp(x,y){ const base=_toRGB(paintColor), R=brush*paintDpr, AS=autoCamo?paintStyle():null;
+  if(brushMode==="dapple"){ for(let i=0;i<4;i++){ const rr=R*(0.28+Math.random()*0.5), ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; pctx.globalAlpha=0.5+Math.random()*0.4; pctx.fillStyle=AS||_shade(base,(Math.random()-0.5)*0.5); pctx.beginPath(); pctx.arc(x+ox,y+oy,rr/2,0,7); pctx.fill(); } pctx.globalAlpha=1; return; }
+  if(brushMode==="leaf"){ for(let i=0;i<3;i++){ const a=Math.random()*Math.PI, ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; const g=[Math.min(255,Math.round(base[0]*0.55+Math.random()*30)),Math.min(255,Math.round(base[1]*0.6+60+Math.random()*20)),Math.min(255,Math.round(base[2]*0.5+25))]; pctx.globalAlpha=0.7; pctx.fillStyle=AS||`rgb(${g[0]},${g[1]},${g[2]})`; pctx.save(); pctx.translate(x+ox,y+oy); pctx.rotate(a); pctx.beginPath(); pctx.ellipse(0,0,R*0.5,R*0.22,0,0,7); pctx.fill(); pctx.restore(); } pctx.globalAlpha=1; return; }
+  if(brushMode==="disrupt"){ pctx.globalAlpha=0.85; pctx.fillStyle=AS||_shade(base,(Math.random()-0.5)*0.55); const k=5+((Math.random()*3)|0), rad=R*0.72; pctx.beginPath(); for(let i=0;i<=k;i++){ const a=i/k*Math.PI*2, rr=rad*(0.5+Math.random()*0.6), px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr; i?pctx.lineTo(px,py):pctx.moveTo(px,py); } pctx.closePath(); pctx.fill(); pctx.globalAlpha=1; return; } }
 function _stampAlong(a,b){ const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy), step=Math.max(2,brush*paintDpr*0.35), n=Math.max(1,Math.floor(dist/step)); for(let i=0;i<=n;i++) _stamp(a.x+dx*i/n,a.y+dy*i/n); }
 function paintAt(p){
   const from=paintAt._l||p;
   if(brushMode!=="solid"){ _stampAlong(from,p); paintAt._l=p; clipPaintToFigure(from.x,from.y,p.x,p.y); return; }
-  pctx.fillStyle=paintColor; pctx.strokeStyle=paintColor; pctx.lineWidth=brush*paintDpr; pctx.lineCap="round"; pctx.lineJoin="round";
+  const st=paintStyle(); pctx.fillStyle=st; pctx.strokeStyle=st; pctx.lineWidth=brush*paintDpr; pctx.lineCap="round"; pctx.lineJoin="round";
   if(paintAt._l){ pctx.beginPath();pctx.moveTo(paintAt._l.x,paintAt._l.y);pctx.lineTo(p.x,p.y);pctx.stroke(); } pctx.beginPath();pctx.arc(p.x,p.y,(brush*paintDpr)/2,0,7);pctx.fill(); paintAt._l=p;
   clipPaintToFigure(from.x,from.y,p.x,p.y); }
-function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
+function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; autoCamo=false; setAutoChip(); document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
 board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDefault(); board.setPointerCapture(e.pointerId); const p=pt(e);
   if(eyedrop){ const c=pick(p); const l=$("#loupe"); l.style.display="block"; l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   pushUndo(); painting=true; paintAt._l=null; paintAt(p); haptic(12); });
 board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e);
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   if(painting){ paintAt(p); paintHaptic(); } });
-function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); showScore(); /* score = how well hidden; the one quality signal KAMO has, and the step right before sharing */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0)}); } } }
+function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0)}); } } }
 board.addEventListener("pointerup",endPaint); board.addEventListener("pointercancel",endPaint);
 
 let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b48a","#3a4a5a","#e8e0d0","#5a4632"];
@@ -1059,10 +1135,22 @@ function extractPalette(canvas,n){
     return out.map(o=>`rgb(${o.r},${o.g},${o.b})`);
   }catch(e){ return PALETTE; }
 }
+/* The Auto chip is FIRST and active by default: auto-camo is the default way to paint,
+   and the palette below it is the opt-out for people who want a stylised flat colour. */
+function setAutoChip(){
+  const a=document.getElementById("autoSw"); if(!a) return;
+  a.classList.toggle("active",autoCamo);
+  if(autoCamo) document.querySelectorAll(".sw").forEach(x=>{ if(x!==a) x.classList.remove("active"); });
+}
 function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const w=$("#swatches"); if(!w) return; w.innerHTML="";
-  const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw active"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
-  eye.onclick=()=>{ eyedrop=true; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
-  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); });
+  const auto=document.createElement("div"); auto.id="autoSw"; auto.className="sw"+(autoCamo?" active":"");
+  auto.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z"/></svg>`;
+  auto.title="Auto camo";
+  auto.onclick=()=>{ autoCamo=true; eyedrop=false; setAutoChip(); showHint("Auto camo — just paint over the figure"); };
+  w.appendChild(auto);
+  const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
+  eye.onclick=()=>{ eyedrop=true; autoCamo=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
+  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); });
   const pk=document.createElement("label"); pk.className="sw picker"; const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
   inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); pk.classList.add("active"); }; pk.appendChild(inp); w.appendChild(pk);
 }
@@ -1086,13 +1174,13 @@ function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") r
 buildBrushes();
 
 const paywallEl=$("#paywall");
-function openPaywall(){ paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
+function openPaywall(){ pauseTimer(); paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
   /* Safety net for the same split-deploy problem: an older wrapper only calls setPrices()
      when it actually resolved a price, so a StoreKit failure there would leave this button
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
   if(!storeReady){ clearTimeout(openPaywall._t); openPaywall._t=setTimeout(()=>{
     if(!storeReady){ storeAnswered=true; updatePwBuy(); } },6000); } }
-function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); }
+function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); resumeTimer(); }
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
 function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
@@ -1247,7 +1335,7 @@ function drawRevealFrame(c,W,H,t){
   const zoom=1+Math.min(t/4600,1)*0.06, zw=W*zoom, zh=H*zoom; c.drawImage(board,(W-zw)/2,(H-zh)/2,zw,zh);
   function topText(txt){ const bh=F(120); const g=c.createLinearGradient(0,0,0,bh); g.addColorStop(0,"rgba(0,0,0,.6)"); g.addColorStop(1,"rgba(0,0,0,0)"); c.fillStyle=g; c.fillRect(0,0,W,bh);
     c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${F(30)}px -apple-system,sans-serif`; c.fillText(txt,W/2,F(64)); }
-  function scorePill(){ c.textAlign="center"; const y=F(104), txt=(currentScore>=85?"🫥 ":"👀 ")+currentScore+"% hidden"; c.font=`800 ${F(17)}px -apple-system,sans-serif`;
+  function scorePill(){ c.textAlign="center"; const y=F(104), txt="🫥 vanished in "+roundSeconds()+"s"; c.font=`800 ${F(17)}px -apple-system,sans-serif`;
     const wd=c.measureText(txt).width+F(28); c.fillStyle="rgba(0,0,0,.5)"; roundRect(c,W/2-wd/2,y-F(15),wd,F(30),F(15)); c.fill(); c.fillStyle="#fff"; c.fillText(txt,W/2,y+F(6)); }
   if(t<2100){ topText("Find it if you can 👀"); scorePill(); }
   else if(t<3400){ c.fillStyle="rgba(0,0,0,"+Math.min((t-2100)/350,1)*0.5+")"; c.fillRect(0,0,W,H);
@@ -1355,6 +1443,84 @@ function firstRun(){ try{ return !localStorage.getItem("kamo_onb"); }catch(e){ r
 function maybeOnboard(){ if(!firstRun()) return; showHint("Tap the figure to pose",3600); setTimeout(()=>{ if(mode==="compose") showHint("Drag & pinch · then Capture ▼",3600); },3800); }
 function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem("kamo_onb","1"); }catch(e){} seenPaint=true; }  /* no top hint here — the bottom badge already guides + it overlapped Done */
 
+/* ===== ROUND TIMER =========================================================
+   KAMO was a toy you could wander away from: nothing ever ended, `paint_completed`
+   fired on the first stroke, and reaching the reveal — the only shareable moment —
+   needed a deliberate Done tap that most people never gave. A clock fixes both ends.
+   It creates the tension the format is built on, and it GUARANTEES every round lands
+   on the reveal, which is the share surface.
+
+   AIM (15s)   -> auto-capture. PAINT (45s) -> auto-Done -> reveal.
+   60s a round: long enough to paint properly now that colour-picking is automatic,
+   short enough to replay and to fit inside a clip.
+
+   NOT armed on the very first hide. First run is for teaching — maybeOnboard() is
+   still showing "Tap the figure to pose" at that moment, and a countdown on top of
+   an explanation converts onboarding into a fail state.
+
+   Driven by ONE CSS transition on a transform. No rAF, no per-frame JS, no
+   allocation; the only timers are two setTimeouts. */
+const AIM_SECONDS=15, PAINT_SECONDS=45;
+const timerBar=$("#timerBar"), timerTag=$("#timerTag"), timerNum=$("#timerNum");
+let timerEnd=0, timerPhase=null, _timerDone=null, _timerTick=null;
+function timerArmed(){ return !firstRun(); }
+function stopTimer(){
+  if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
+  if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
+  timerPhase=null; timerEnd=0; _timerPaused=0; _timerResume=null; _timerOnExpire=null;
+  timerBar.style.display="none"; timerBar.className=""; timerBar.style.transition="none"; timerBar.style.transform="scaleX(1)";
+  timerTag.style.display="none"; timerNum.style.display="none"; timerNum.className="";
+}
+/* Pause/resume, so the clock never drains behind something the user cannot act on — the
+   paywall being the one that matters. A timer running behind a paywall is unfair, and it
+   turns the paywall into a thing to dismiss rather than read. */
+let _timerPaused=0, _timerResume=null, _timerOnExpire=null;
+function pauseTimer(){
+  if(!timerPhase||_timerPaused) return;
+  _timerPaused=Math.max(0,timerEnd-Date.now());
+  _timerResume={phase:timerPhase,onExpire:_timerOnExpire};
+  if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
+  if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
+  const w=timerBar.getBoundingClientRect().width, full=window.innerWidth||1;
+  timerBar.style.transition="none"; timerBar.style.transform="scaleX("+(w/full)+")";
+}
+function resumeTimer(){
+  if(!_timerPaused||!_timerResume) return;
+  const left=_timerPaused/1000, r=_timerResume;
+  _timerPaused=0; _timerResume=null;
+  startTimer(r.phase,left,r.onExpire);
+}
+function startTimer(phase,seconds,onExpire){
+  stopTimer();
+  if(!timerArmed()) return;
+  _timerOnExpire=onExpire;
+  timerPhase=phase; timerEnd=Date.now()+seconds*1000;
+  timerTag.textContent = phase==="aim" ? "Find a spot" : "Make it vanish";
+  timerTag.style.display="block";
+  timerBar.style.display="block";
+  timerBar.className=""; timerBar.style.transition="none"; timerBar.style.transform="scaleX(1)";
+  // next frame, so the browser commits scaleX(1) before the transition to 0 begins
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(timerPhase!==phase) return;
+    timerBar.style.transition="transform "+seconds+"s linear";
+    timerBar.style.transform="scaleX(0)";
+  }));
+  _timerDone=setTimeout(()=>{ _timerDone=null; if(timerPhase===phase){ stopTimer(); onExpire(); } }, seconds*1000);
+  // countdown only for the last 5s: silent until it matters, then loud
+  const lead=Math.max(0,(seconds-5)*1000);
+  _timerTick=setTimeout(function tick(){
+    if(timerPhase!==phase) return;
+    const left=Math.ceil((timerEnd-Date.now())/1000);
+    if(left<=0) return;
+    timerBar.classList.add(left<=3?"crit":"warn");
+    timerNum.style.display="block";
+    timerNum.textContent=left;
+    timerNum.className=""; void timerNum.offsetWidth; timerNum.className="tick"+(left<=3?" crit":"");
+    haptic(left<=3?14:8);
+    _timerTick=setTimeout(tick,1000);
+  }, lead);
+}
+
 /* ---- wire ---- */
 startEl.onclick=()=>startCamera();
 // The tap must ALWAYS visibly do something — App Review called this button
@@ -1437,8 +1603,8 @@ function captureShot(){
 }
 $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
-$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); showScore(); } };
-$("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); showScore(); } };
+$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); } };
+$("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); } };
 $("#btnShare").onclick=shareReveal;
 $("#btnSave").onclick=saveStatic;
 
@@ -1484,7 +1650,9 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
   rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*paintDpr,0,4*paintDpr,H);
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
-function enterFinished(){ if(finished) return; finished=true; currentScore=computeScore();
+function enterFinished(){ if(finished) return; finished=true;
+  roundMs=roundStartedAt?Date.now()-roundStartedAt:0; stopTimer();
+  currentScore=computeScore();
   /* The real "I finished a hide" moment, and the first honest score of the run —
      `paint_completed` fires on the FIRST brush stroke, so its score is ~0 and it can't
      be the middle of the funnel. Native counts this and emits `essay_finished`; it
@@ -1492,7 +1660,8 @@ function enterFinished(){ if(finished) return; finished=true; currentScore=compu
      on this very screen and we don't compete with it. */
   postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
   ["swatches","brushes","editRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
-  sizeBar.style.display="none"; scoreChip.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
+  sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
+  showScore();   // "vanished in Xs" — the number the round was played for
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
   revealX=1; drawReveal(); let rv=1; const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal(); if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim); else { revealX=0.5; drawReveal(); } }; requestAnimationFrame(anim); }
@@ -1500,7 +1669,7 @@ function exitFinished(){ finished=false; revealC.style.display="none"; revealHan
   ["swatches","brushes","editRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
-  showScore(); }
+  scoreChip.style.display="none"; }   // the time belongs to the reveal, not the editor
 $("#btnDone").onclick=enterFinished; $("#btnEdit").onclick=exitFinished;
 revealHandle.addEventListener("pointerdown",e=>{ e.preventDefault(); revealHandle.setPointerCapture(e.pointerId); revealHandle._d=true; revealHint.style.display="none"; });
 revealHandle.addEventListener("pointermove",e=>{ if(!revealHandle._d)return; const r=board.getBoundingClientRect(); revealX=Math.max(0.02,Math.min(0.98,(e.clientX-r.left)/r.width)); drawReveal(); });
