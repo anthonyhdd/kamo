@@ -488,6 +488,11 @@ const startEl=$("#start"), hintEl=$("#hint"), shutterWrap=$("#shutterWrap"), fli
 const wheelEl=$("#wheel"), wheelCenter=$("#wheelCenter"), flashEl=$("#flash"), scoreChip=$("#scoreChip"), busyEl=$("#busy");
 const ctx=board.getContext("2d",{willReadFrequently:true});
 let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+/* The board's effective pixel ratio once PAINT_MAX_W has been applied — see capture().
+   Everything that sizes brush geometry uses THIS, not dpr, so strokes keep their
+   on-screen thickness whatever the backing store ends up being. */
+const PAINT_MAX_W=1080;      // = the width every share path exports at
+let paintDpr=dpr;
 let mode="compose", bgKind=null, facing="environment", stream=null;
 
 function showHint(t,ms=2600){ hintEl.textContent=t; hintEl.style.opacity=t?1:0; clearTimeout(showHint._t); if(t&&ms) showHint._t=setTimeout(()=>hintEl.style.opacity=0,ms); }
@@ -618,6 +623,27 @@ function camFail(msg){
    WKWebView can never settle — it neither resolves nor rejects. startCamera then
    awaits forever, no message is ever shown, and the button looks dead. Racing it
    against a timeout turns that hang into a normal failure we can talk about. */
+/* The camera keeps STREAMING for the whole painting session. capture() hides the <video>
+   element but never touches the tracks, so on a long hide WebKit goes on decoding and
+   delivering frames nobody will ever look at — the scene was frozen into sceneCanvas at
+   the shutter and the live feed is not read again until Retake. That is continuous work in
+   the same content process that is already holding the paint canvases.
+   Disabling the tracks stops frame delivery; it does NOT tear the capture session down, so
+   there is nothing to re-acquire and no way for this to fail — resuming is a flag flip.
+   (Fully stopping the tracks would also release the native session and save more power,
+   but re-acquiring getUserMedia on iOS is exactly the flaky path gumSafe() exists to
+   defend against — it cost an App Review rejection once — so that is not worth trading a
+   guaranteed-reversible pause for without a device to test on.) */
+function suspendCamera(){
+  if(bgKind!=="cam"||!stream) return;
+  try{ stream.getVideoTracks().forEach(t=>t.enabled=false); }catch(_){}
+  try{ cam.pause(); }catch(_){}
+}
+function resumeCamera(){
+  if(bgKind!=="cam"||!stream) return;
+  try{ stream.getVideoTracks().forEach(t=>t.enabled=true); }catch(_){}
+  try{ const q=cam.play(); if(q&&q.catch) q.catch(()=>{}); }catch(_){}
+}
 function gumSafe(c, ms=3500){
   return Promise.race([
     navigator.mediaDevices.getUserMedia(c),
@@ -679,6 +705,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
+  resumeCamera();   // paused for the whole hide by capture()
   showHint("Reposition, then recapture");
 }
 
@@ -794,13 +821,26 @@ function capture(){
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null;
   paintLayer=null; pctx=null; figLayer=null; figctx=null; shadeSrc=null;
-  const W=Math.round(stage.clientWidth*dpr), H=Math.round(stage.clientHeight*dpr); board.width=W; board.height=H;
+  /* Cap the paint resolution at the width everything is EXPORTED at.
+     Every share path renders 1080 wide — composeShare(1080), composeBeforeAfter(1080) and
+     the reveal-video frames — and frameForShare(), the only full-board export, is dead
+     code nothing calls. So at dpr 3 the board was 1290x2796 and every pixel above 1080 was
+     downscaled away on the way out, while seven full-board canvases plus every undo frame
+     paid for it. Capping to the export width takes ~30% off all of them for nothing the
+     user can see. On phones already at or below 1080 nothing changes — Math.min(1).
+     paintDpr replaces dpr everywhere brush geometry is computed, so a stroke keeps exactly
+     the same on-screen thickness against the smaller backing store. */
+  const rawW=stage.clientWidth*dpr, rawH=stage.clientHeight*dpr;
+  const capScale=Math.min(1, PAINT_MAX_W/Math.max(1,rawW));
+  const W=Math.round(rawW*capScale), H=Math.round(rawH*capScale); board.width=W; board.height=H;
+  paintDpr=W/Math.max(1,stage.clientWidth);
   sceneCanvas=document.createElement("canvas"); sceneCanvas.width=W; sceneCanvas.height=H; coverInto(sceneCanvas.getContext("2d"),W,H);
   renderer.render(scene,camera3);
   maskCanvas=document.createElement("canvas"); maskCanvas.width=W; maskCanvas.height=H; maskCanvas.getContext("2d").drawImage(glCanvas,0,0,W,H);
   blurCanvas=makeBlur(sceneCanvas,W,H);
   paintLayer=document.createElement("canvas"); paintLayer.width=W; paintLayer.height=H; pctx=paintLayer.getContext("2d",{willReadFrequently:true});
   try{ buildSwatches(extractPalette(sceneCanvas,5)); }catch(e){}   // 5 palette colours from the photo (the eyedropper is the star)
+  suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
   compositeBoard();
@@ -949,7 +989,7 @@ function composeInto(x,y,w,h){
 function clipPaintToFigure(x0,y0,x1,y1){
   if(!paintLayer||!maskCanvas) return;
   // pad covers the brush radius plus the pattern brushes' random stamp offsets (≤ R around the path)
-  const pad=brush*dpr*1.6+6;
+  const pad=brush*paintDpr*1.6+6;
   const x=Math.max(0,Math.floor(Math.min(x0,x1)-pad)), y=Math.max(0,Math.floor(Math.min(y0,y1)-pad));
   const w=Math.min(board.width,Math.ceil(Math.max(x0,x1)+pad))-x, h=Math.min(board.height,Math.ceil(Math.max(y0,y1)+pad))-y;
   if(w<=0||h<=0) return;
@@ -966,16 +1006,16 @@ function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.le
 function _toRGB(col){ if(col[0]==="#"){ let h=col.slice(1); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; } const m=col.match(/\d+/g); return m?[+m[0],+m[1],+m[2]]:[138,127,106]; }
 function _shade(rgb,amt){ const f=amt<0?0:255,t=Math.abs(amt); return `rgb(${Math.round(rgb[0]+(f-rgb[0])*t)},${Math.round(rgb[1]+(f-rgb[1])*t)},${Math.round(rgb[2]+(f-rgb[2])*t)})`; }
 // Pro pattern brushes — all derive their tones from the picked scene color so they still camouflage.
-function _stamp(x,y){ const base=_toRGB(paintColor), R=brush*dpr;
+function _stamp(x,y){ const base=_toRGB(paintColor), R=brush*paintDpr;
   if(brushMode==="dapple"){ for(let i=0;i<4;i++){ const rr=R*(0.28+Math.random()*0.5), ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; pctx.globalAlpha=0.5+Math.random()*0.4; pctx.fillStyle=_shade(base,(Math.random()-0.5)*0.5); pctx.beginPath(); pctx.arc(x+ox,y+oy,rr/2,0,7); pctx.fill(); } pctx.globalAlpha=1; return; }
   if(brushMode==="leaf"){ for(let i=0;i<3;i++){ const a=Math.random()*Math.PI, ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; const g=[Math.min(255,Math.round(base[0]*0.55+Math.random()*30)),Math.min(255,Math.round(base[1]*0.6+60+Math.random()*20)),Math.min(255,Math.round(base[2]*0.5+25))]; pctx.globalAlpha=0.7; pctx.fillStyle=`rgb(${g[0]},${g[1]},${g[2]})`; pctx.save(); pctx.translate(x+ox,y+oy); pctx.rotate(a); pctx.beginPath(); pctx.ellipse(0,0,R*0.5,R*0.22,0,0,7); pctx.fill(); pctx.restore(); } pctx.globalAlpha=1; return; }
   if(brushMode==="disrupt"){ pctx.globalAlpha=0.85; pctx.fillStyle=_shade(base,(Math.random()-0.5)*0.55); const k=5+((Math.random()*3)|0), rad=R*0.72; pctx.beginPath(); for(let i=0;i<=k;i++){ const a=i/k*Math.PI*2, rr=rad*(0.5+Math.random()*0.6), px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr; i?pctx.lineTo(px,py):pctx.moveTo(px,py); } pctx.closePath(); pctx.fill(); pctx.globalAlpha=1; return; } }
-function _stampAlong(a,b){ const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy), step=Math.max(2,brush*dpr*0.35), n=Math.max(1,Math.floor(dist/step)); for(let i=0;i<=n;i++) _stamp(a.x+dx*i/n,a.y+dy*i/n); }
+function _stampAlong(a,b){ const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy), step=Math.max(2,brush*paintDpr*0.35), n=Math.max(1,Math.floor(dist/step)); for(let i=0;i<=n;i++) _stamp(a.x+dx*i/n,a.y+dy*i/n); }
 function paintAt(p){
   const from=paintAt._l||p;
   if(brushMode!=="solid"){ _stampAlong(from,p); paintAt._l=p; clipPaintToFigure(from.x,from.y,p.x,p.y); return; }
-  pctx.fillStyle=paintColor; pctx.strokeStyle=paintColor; pctx.lineWidth=brush*dpr; pctx.lineCap="round"; pctx.lineJoin="round";
-  if(paintAt._l){ pctx.beginPath();pctx.moveTo(paintAt._l.x,paintAt._l.y);pctx.lineTo(p.x,p.y);pctx.stroke(); } pctx.beginPath();pctx.arc(p.x,p.y,(brush*dpr)/2,0,7);pctx.fill(); paintAt._l=p;
+  pctx.fillStyle=paintColor; pctx.strokeStyle=paintColor; pctx.lineWidth=brush*paintDpr; pctx.lineCap="round"; pctx.lineJoin="round";
+  if(paintAt._l){ pctx.beginPath();pctx.moveTo(paintAt._l.x,paintAt._l.y);pctx.lineTo(p.x,p.y);pctx.stroke(); } pctx.beginPath();pctx.arc(p.x,p.y,(brush*paintDpr)/2,0,7);pctx.fill(); paintAt._l=p;
   clipPaintToFigure(from.x,from.y,p.x,p.y); }
 function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
 board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDefault(); board.setPointerCapture(e.pointerId); const p=pt(e);
@@ -1189,7 +1229,7 @@ async function saveStatic(){ const b=await staticBlob();
   const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); showSaved(); }
 
 function drawRevealFrame(c,W,H,t){
-  const S=W/board.width, F=v=>Math.round(v*dpr*S); c.clearRect(0,0,W,H);
+  const S=W/board.width, F=v=>Math.round(v*paintDpr*S); c.clearRect(0,0,W,H);
   const zoom=1+Math.min(t/4600,1)*0.06, zw=W*zoom, zh=H*zoom; c.drawImage(board,(W-zw)/2,(H-zh)/2,zw,zh);
   function topText(txt){ const bh=F(120); const g=c.createLinearGradient(0,0,0,bh); g.addColorStop(0,"rgba(0,0,0,.6)"); g.addColorStop(1,"rgba(0,0,0,0)"); c.fillStyle=g; c.fillRect(0,0,W,bh);
     c.textAlign="center"; c.fillStyle="#fff"; c.font=`900 ${F(30)}px -apple-system,sans-serif`; c.fillText(txt,W/2,F(64)); }
@@ -1418,14 +1458,17 @@ const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#rev
    relied on the reallocation is lost. cssText is cached for the same reason: reassigning
    it every frame forces a style parse for a string that only changes on rotate/resize. */
 function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoundingClientRect();
-  const cw=Math.round(r.width*dpr), ch=Math.round(r.height*dpr);
+  // paintDpr, not dpr: everything drawn here is board-sized, so matching the board's own
+  // pixel ratio makes it a 1:1 blit instead of upscaling a 1080-wide board into a 1290-wide
+  // canvas — sharper by definition, and one less full-board allocation's worth of memory.
+  const cw=Math.round(r.width*paintDpr), ch=Math.round(r.height*paintDpr);
   if(revealC.width!==cw||revealC.height!==ch){ revealC.width=cw; revealC.height=ch; }
   const css="position:fixed;z-index:14;display:block;left:"+r.left+"px;top:"+r.top+"px;width:"+r.width+"px;height:"+r.height+"px;";
   if(drawReveal._css!==css){ drawReveal._css=css; revealC.style.cssText=css; }
   const W=revealC.width,H=revealC.height, sp=Math.round(W*revealX);
   rctx.clearRect(0,0,W,H); rctx.drawImage(board,0,0,W,H);
   rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
-  rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*dpr,0,4*dpr,H);
+  rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*paintDpr,0,4*paintDpr,H);
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(){ if(finished) return; finished=true; currentScore=computeScore();
   /* The real "I finished a hide" moment, and the first honest score of the run —
