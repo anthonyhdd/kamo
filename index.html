@@ -728,7 +728,7 @@ function enterCompose(){
   $(".brand").classList.remove("mid");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   clearCharacters(); spawnHider();
-  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } });
+  startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
@@ -748,7 +748,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   resumeCamera();   // paused for the whole hide by capture()
-  startTimer("aim",AIM_SECONDS,()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } });
+  startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   showHint("Reposition, then recapture");
 }
 
@@ -782,7 +782,7 @@ function onUp(e){
   clearTimeout(lpTimer); pointers.delete(e.pointerId);
   if(wheelOpen){ closeWheel(true); return; }
   if(!moved && performance.now()-downT<450 && mode==="compose" && pointers.size===0 && downHit>=0){ selIdx=downHit; setPose(sel(),sel().poseIdx+1); }
-  if(pointers.size===0){ dragging=false; downHit=-1; }
+  if(pointers.size===0){ dragging=false; downHit=-1; flushExpire(); }
 }
 glCanvas.addEventListener("pointerdown",onDown);
 glCanvas.addEventListener("pointermove",onMove);
@@ -845,7 +845,7 @@ function captureBurst(char){ if(!char) return; const p=charScreen(char), fx=$("#
 
 /* ===== CAPTURE ===== */
 let sceneCanvas=null, maskCanvas=null, blurCanvas=null, hiderPoints=[], currentScore=0, seenPaint=false;
-let roundStartedAt=0, roundMs=0, captureWasAuto=false;   // capture -> Done. The number the user is actually playing against.
+let roundStartedAt=0, roundMs=0, captureWasAuto=false, aimStartedAt=0, aimGiven=0;   // capture -> Done. The number the user is actually playing against.
 function coverInto(g,cw,ch){ let src,sw,sh; if(bgKind==="cam"&&cam.videoWidth){src=cam;sw=cam.videoWidth;sh=cam.videoHeight;} else if(bgKind==="photo"&&photo.naturalWidth){src=photo;sw=photo.naturalWidth;sh=photo.naturalHeight;} else { g.fillStyle="#223"; g.fillRect(0,0,cw,ch); return; }
   const sr=sw/sh,dr=cw/ch; let rw,rh,rx,ry; if(sr>dr){rh=sh;rw=sh*dr;rx=(sw-rw)/2;ry=0;}else{rw=sw;rh=sw/dr;rx=0;ry=(sh-rh)/2;} g.drawImage(src,rx,ry,rw,rh,0,0,cw,ch); }
 function makeBlur(src,W,H){ const f=16, s=document.createElement("canvas"); s.width=Math.max(1,Math.round(W/f)); s.height=Math.max(1,Math.round(H/f)); s.getContext("2d").drawImage(src,0,0,s.width,s.height);
@@ -854,7 +854,9 @@ function projectChar(char){ const v=new THREE.Vector3(); char.parts.spine.getWor
 function capture(){
   // The moment a live camera (or picked photo) becomes a paintable board — the step
   // between "camera works" and "started painting", where a silent drop would be invisible.
-  track("photo_captured",{source:bgKind,timed:timerArmed(),auto:!!captureWasAuto});   // auto => the aim clock fired, not the user
+  track("photo_captured",{source:bgKind,timed:timerArmed(),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
+  if(timerArmed()&&aimStartedAt) recordAim(aimGiven,(Date.now()-aimStartedAt)/1000,captureWasAuto);
+  aimStartedAt=0;
   captureWasAuto=false;   // consumed — the next capture is a thumb until the clock says otherwise
   if(torchOn) setTorch(false);   // the button is about to be hidden — never leave the light on with no way to kill it
   endPaint._sent=false;   // new hide => paint_completed may fire again; native needs it to retry a deferred activation
@@ -898,7 +900,7 @@ function capture(){
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=true;   // sceneCanvas was just replaced; every round starts on Auto
   roundStartedAt=Date.now(); roundMs=0;
-  startTimer("paint",PAINT_SECONDS,()=>{ if(mode==="paint"&&!finished) enterFinished(true); });
+  startTimer("paint",PAINT_SECONDS,()=>runExpire(()=>{ if(mode==="paint"&&!finished) enterFinished(true); }));
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
   maybeOnboardPaint();
 }
@@ -1119,7 +1121,7 @@ board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   if(painting){ paintAt(p); paintHaptic(); } });
 function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed()}); } } }
-board.addEventListener("pointerup",endPaint); board.addEventListener("pointercancel",endPaint);
+board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
 
 let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b48a","#3a4a5a","#e8e0d0","#5a4632"];
 // pull ~n representative colors from the captured scene so the palette matches the photo
@@ -1463,14 +1465,41 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
 
    Driven by ONE CSS transition on a transform. No rAF, no per-frame JS, no
    allocation; the only timers are two setTimeouts. */
-const AIM_SECONDS=15, PAINT_SECONDS=45;
+/* AIM is adaptive; PAINT is fixed. That split is deliberate.
+   PAINT stays at 45s for everyone because the round time is the score — it is only worth
+   comparing or beating if the challenge is identical every round.
+   AIM is just "get ready", and 15s was my guess, not a measurement. Guessing it wrong is
+   costly in both directions: too tight and the clock snatches a badly-framed shot, too
+   loose and the round opens with dead air. So it fits itself to the person instead:
+   remember how long their recent captures actually took and give them that plus headroom,
+   clamped to a sane band. Someone who lines up a shot in 4s gets a taut 10s; someone the
+   clock keeps beating gets pushed out toward 25s until it stops beating them.
+   Adjusts only BETWEEN rounds, so the clock never changes under you mid-aim. */
+const AIM_DEFAULT=15, AIM_MIN=10, AIM_MAX=25, PAINT_SECONDS=45;
+function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
+function aimSeconds(){
+  const h=aimHistory(); if(h.length<2) return AIM_DEFAULT;
+  const recent=h.slice(-4);
+  // any round the clock had to finish means they needed more time than they got
+  if(recent.slice(-2).every(r=>r.auto)) return Math.min(AIM_MAX, (recent[recent.length-1].s||AIM_DEFAULT)+5);
+  const manual=recent.filter(r=>!r.auto).map(r=>r.t).sort((a,b)=>a-b);
+  if(!manual.length) return AIM_DEFAULT;
+  const med=manual[manual.length>>1];
+  return Math.max(AIM_MIN, Math.min(AIM_MAX, Math.round(med*1.6)));
+}
+function recordAim(seconds,took,auto){
+  try{
+    const h=aimHistory(); h.push({s:seconds,t:Math.round(took),auto:!!auto});
+    localStorage.setItem("kamo_aim",JSON.stringify(h.slice(-8)));
+  }catch(e){}
+}
 const timerBar=$("#timerBar"), timerTag=$("#timerTag"), timerNum=$("#timerNum");
 let timerEnd=0, timerPhase=null, _timerDone=null, _timerTick=null;
 function timerArmed(){ return !firstRun(); }
 function stopTimer(){
   if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
   if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
-  timerPhase=null; timerEnd=0; _timerPaused=0; _timerResume=null; _timerOnExpire=null; _pauseReasons.clear();
+  timerPhase=null; timerEnd=0; _timerPaused=0; _timerResume=null; _timerOnExpire=null; _pauseReasons.clear(); pendingExpire=null;
   timerBar.style.display="none"; timerBar.className=""; timerBar.style.transition="none"; timerBar.style.transform="scaleX(1)";
   timerTag.style.display="none"; timerNum.style.display="none"; timerNum.className="";
 }
@@ -1507,11 +1536,24 @@ function resumeTimer(reason){
 document.addEventListener("visibilitychange",()=>{
   if(document.hidden) pauseTimer("hidden"); else resumeTimer("hidden");
 });
+/* NO HARD CUT. Expiry used to fire mid-gesture: the paint clock could land between two
+   points of a stroke you were still drawing, and the aim clock could snatch the shutter
+   while you were still dragging the figure into place. Both feel like the app grabbing the
+   controls out of your hands, which is the fastest way to make a timer feel hostile
+   instead of exciting.
+   The clock still expires exactly on time — it just waits for your finger to come up
+   before acting. A stroke takes a fraction of a second, so this costs nothing against the
+   clock and removes the whole class of "it cut me off". */
+let pendingExpire=null;
+function midGesture(){ return painting || dragging || pointers.size>0; }
+function runExpire(fn){ if(midGesture()){ pendingExpire=fn; return; } fn(); }
+function flushExpire(){ const f=pendingExpire; if(!f) return; pendingExpire=null; f(); }
 function startTimer(phase,seconds,onExpire){
   stopTimer();
   if(!timerArmed()) return;
   _timerOnExpire=onExpire;
   timerPhase=phase; timerEnd=Date.now()+seconds*1000;
+  if(phase==="aim"){ aimStartedAt=Date.now(); aimGiven=seconds; }
   timerTag.textContent = phase==="aim" ? "Find a spot" : "Make it vanish";
   timerTag.style.display="block";
   timerBar.style.display="block";
