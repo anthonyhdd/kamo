@@ -31,9 +31,26 @@
   /* ---------- STAGE ---------- */
   #stage{position:absolute;inset:0;overflow:hidden;background:#111;}
   #cam,#photo,#board{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;}
-  /* WebKit paints a native ▶ overlay on any <video> that isn't playing yet — never wanted on the live camera feed */
+  /* THE ▶/⏸ OVERLAY. WebKit decides on its own to paint a native transport control over
+     <video id="cam">, and page CSS cannot take it away. These pseudo-element rules were
+     tried twice (1803c0b, then d9171eb widened them) and neither did anything, because
+     they name the LEGACY controls shadow DOM — modern iOS builds the controls from
+     `modern-media-controls`, whose internals are not exposed as ::-webkit-media-controls-*
+     at all. There is no selector that reaches them. They are kept only so a third attempt
+     doesn't get spent rediscovering that.
+     The button is killed in JS instead: #camView below takes over the preview and the
+     <video> is faded out entirely — see camTick(). */
   #cam::-webkit-media-controls,#cam::-webkit-media-controls-start-playback-button,#cam::-webkit-media-controls-overlay-play-button,#cam::-webkit-media-controls-panel{display:none!important;-webkit-appearance:none;}
   video::-webkit-media-controls-overlay-play-button,video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none;}
+  /* The preview the user actually sees. Sits directly above #cam in paint order (DOM order,
+     no z-index needed) and is filled from the video every frame. */
+  #camView{position:absolute;inset:0;width:100%;height:100%;display:none;}
+  /* Applied only once #camView has proven it can paint a frame. `opacity:0` and NOT
+     `display:none` on purpose: a display:none <video> stops updating its frames on iOS,
+     which would freeze the very source #camView is drawing from. Opacity keeps the element
+     composited and decoding while taking the whole subtree — native control included —
+     down to nothing. */
+  #cam.headless{opacity:0;pointer-events:none;}
   #gl{position:absolute;inset:0;width:100%;height:100%;display:none;touch-action:none;}
   #board{touch-action:none;}
 
@@ -353,7 +370,12 @@
 </head>
 <body><div id="app">
   <div id="stage">
-    <video id="cam" playsinline autoplay muted></video>
+    <!-- No `autoplay`. startCamera() calls cam.play() explicitly the moment srcObject is set,
+         so the attribute bought nothing — and WebKit force-displays a transport control on an
+         autoplay <video> it thinks it may have to block (Low Power Mode is the common one).
+         disablepictureinpicture/disableremoteplayback drop the other two native affordances. -->
+    <video id="cam" playsinline muted disablepictureinpicture disableremoteplayback></video>
+    <canvas id="camView"></canvas>
     <img id="photo" alt="" />
     <canvas id="gl"></canvas>
     <canvas id="board"></canvas>
@@ -524,7 +546,7 @@ window.addEventListener("unhandledrejection",function(e){if(!__DBG)return;try{va
 import * as THREE from './vendor/three.module.js';
 
 const $=s=>document.querySelector(s);
-const stage=$("#stage"), cam=$("#cam"), photo=$("#photo"), glCanvas=$("#gl"), board=$("#board");
+const stage=$("#stage"), cam=$("#cam"), camView=$("#camView"), photo=$("#photo"), glCanvas=$("#gl"), board=$("#board");
 const startEl=$("#start"), hintEl=$("#hint"), shutterWrap=$("#shutterWrap"), flipBtn=$("#flip");
 const wheelEl=$("#wheel"), wheelCenter=$("#wheelCenter"), flashEl=$("#flash"), scoreChip=$("#scoreChip"), busyEl=$("#busy");
 const ctx=board.getContext("2d",{willReadFrequently:true});
@@ -664,6 +686,50 @@ function camFail(msg){
    WKWebView can never settle — it neither resolves nor rejects. startCamera then
    awaits forever, no message is ever shown, and the button looks dead. Racing it
    against a timeout turns that hang into a normal failure we can talk about. */
+/* ===== THE PREVIEW IS A CANVAS, NOT THE <video> =====
+   WebKit paints its own ▶/⏸ transport control over the camera <video> and page CSS cannot
+   remove it (see the pseudo-element note in the stylesheet — two commits were spent proving
+   that). So the <video> stops being what the user looks at. It keeps streaming, off-screen
+   at opacity 0, and every frame is blitted into #camView instead. A <canvas> has no native
+   controls to paint, so there is nothing left for WebKit to decorate.
+
+   The handover is self-verifying: the video stays fully visible until a frame has actually
+   landed on the canvas, and only then does `headless` fade it out. If the blit ever fails —
+   no frames, a lost context, anything — the worst case is today's behaviour (video visible,
+   button on top), never a black preview.
+
+   Everything downstream is untouched: capture() still reads `cam` directly through
+   coverInto(), and the torch code still owns the track. This is a display swap only.
+
+   Sizing matches the board exactly (stage x dpr, capped at PAINT_MAX_W), so the preview is
+   now literally what capture() will produce rather than an approximation of it. The backing
+   store is released the moment the preview stops — it is ~10 MB and capture() is where this
+   content process has historically been jetsammed, so it must not still be held at the
+   moment those seven canvases get allocated. */
+let camRaf=0;
+function sizeCamView(){
+  const rawW=stage.clientWidth*dpr, rawH=stage.clientHeight*dpr;
+  const s=Math.min(1, PAINT_MAX_W/Math.max(1,rawW));
+  const w=Math.max(1,Math.round(rawW*s)), h=Math.max(1,Math.round(rawH*s));
+  if(camView.width!==w||camView.height!==h){ camView.width=w; camView.height=h; }
+}
+function camTick(){
+  camRaf=requestAnimationFrame(camTick);
+  if(bgKind!=="cam"||!cam.videoWidth) return;   // no frame yet → the <video> stays visible
+  try{
+    sizeCamView();
+    const g=camView.getContext("2d");
+    if(!g) return;
+    coverInto(g,camView.width,camView.height);
+  }catch(_){ return; }                          // never hand over on a blit that didn't land
+  if(camView.style.display!=="block"){ camView.style.display="block"; cam.classList.add("headless"); }
+}
+function startCamView(){ if(!camRaf) camTick(); }
+function stopCamView(){
+  if(camRaf){ cancelAnimationFrame(camRaf); camRaf=0; }
+  camView.style.display="none"; cam.classList.remove("headless");
+  camView.width=1; camView.height=1;             // release the backing store
+}
 /* The camera keeps STREAMING for the whole painting session. capture() hides the <video>
    element but never touches the tracks, so on a long hide WebKit goes on decoding and
    delivering frames nobody will ever look at — the scene was frozen into sceneCanvas at
@@ -677,6 +743,7 @@ function camFail(msg){
    guaranteed-reversible pause for without a device to test on.) */
 function suspendCamera(){
   if(bgKind!=="cam"||!stream) return;
+  stopCamView();
   try{ stream.getVideoTracks().forEach(t=>t.enabled=false); }catch(_){}
   try{ cam.pause(); }catch(_){}
 }
@@ -684,6 +751,7 @@ function resumeCamera(){
   if(bgKind!=="cam"||!stream) return;
   try{ stream.getVideoTracks().forEach(t=>t.enabled=true); }catch(_){}
   try{ const q=cam.play(); if(q&&q.catch) q.catch(()=>{}); }catch(_){}
+  startCamView();
 }
 function gumSafe(c, ms=3500){
   return Promise.race([
@@ -727,7 +795,7 @@ async function startCamera(auto){
   const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stream=await gumSafe(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
+    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
     catch(e){ lastErr=e;
       // Permission-level refusals (and the iOS hang) won't be fixed by loosening
       // constraints — retrying just costs another timeout before we can say anything.
@@ -747,7 +815,7 @@ async function startCamera(auto){
   else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera found — tap “or pick a photo” below to hide your figure in a picture instead.");
   else camFail("Couldn't reach the camera — tap “or pick a photo” below instead.");
 }
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>URL.revokeObjectURL(url); photo.src=url; photo.style.display="block"; cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
+function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>URL.revokeObjectURL(url); photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
@@ -896,6 +964,7 @@ function capture(){
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null;
   paintLayer=null; pctx=null; figLayer=null; figctx=null; shadeSrc=null;
+  stopCamView();   // the preview canvas is another full-size backing store — drop it BEFORE the six below, not after (suspendCamera() further down would be too late to matter)
   /* Cap the paint resolution at the width everything is EXPORTED at.
      Every share path renders 1080 wide — composeShare(1080), composeBeforeAfter(1080) and
      the reveal-video frames. So at dpr 3 the board was 1290x2796 and every pixel above 1080 was
