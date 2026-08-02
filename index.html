@@ -691,15 +691,43 @@ function gumSafe(c, ms=3500){
     new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error("camera timed out"),{name:"TimeoutError"})), ms))
   ]);
 }
+/* ASK FOR A REAL RESOLUTION. Without width/height constraints WebKit hands back its
+   default 640x480 — the single biggest reason the capture screen looked soft.
+   The board is `stage` sized at up to PAINT_MAX_W (1080) wide, and coverInto() crops the
+   frame to the screen's tall aspect before scaling: from a 480x640 portrait frame only
+   ~295x640 survives the crop, then gets blown up to 1080 wide. That is a ~3.7x upscale on
+   the preview, on the frozen board, and on every share/reveal export downstream — all of
+   it from a source that never had the pixels. At 1080x1920 the same crop keeps ~886x1920,
+   so it lands at ~1.2x and the softness is gone.
+
+   Orientation matters: iOS reports the track already rotated to the interface, so in
+   portrait the track IS 1080x1920 and asking for width:1920 would score the 4K preset as
+   the closest match — needless decode cost in a content process that has been jetsammed
+   before. Ask in the orientation we are actually in.
+
+   These are `ideal`, never `exact`: a device that can't do 1080 degrades to its best
+   instead of throwing OverconstrainedError, so the fallback chain below is untouched in
+   practice. The two constraint-free entries stay after them anyway, for any engine that
+   chokes on the hints outright. */
+function hdHint(){
+  const portrait=(window.innerHeight||0)>=(window.innerWidth||0);
+  return portrait ? {width:{ideal:1080},height:{ideal:1920}} : {width:{ideal:1920},height:{ideal:1080}};
+}
+// What the camera actually gave us. Constraints are a request, not a contract, and the
+// answer varies by device and facing — worth knowing before blaming the renderer again.
+function camSize(){
+  try{ const s=stream.getVideoTracks()[0].getSettings(); return {cam_w:s.width||null,cam_h:s.height||null}; }
+  catch(_){ return {cam_w:null,cam_h:null}; }
+}
 // auto=true => launch attempt on boot: on any failure just stay on the branded
 // start screen silently (no scary hint); the user taps "Tap to start" to retry with a gesture.
 async function startCamera(auto){
   if(!window.isSecureContext){ if(auto) revealHero(); else camFail("Open KAMO in Safari to use the camera — or pick a photo below."); return; }
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero(); else camFail("This browser can't open the camera. Try Safari, or tap “pick a photo”."); return; }
-  const tries=[{video:{facingMode:{ideal:facing}},audio:false},{video:{facingMode:facing},audio:false},{video:true,audio:false}];
+  const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stream=await gumSafe(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto}); enterCompose(); return; }
+    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stream=await gumSafe(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
     catch(e){ lastErr=e;
       // Permission-level refusals (and the iOS hang) won't be fixed by loosening
       // constraints — retrying just costs another timeout before we can say anything.
