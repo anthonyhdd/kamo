@@ -515,10 +515,19 @@
   #kamoPlus.show,#kamoHome.show{display:flex;animation:pwFade .3s ease;}
   .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;animation:kpRise .4s cubic-bezier(.2,.9,.3,1);}
   @keyframes kpRise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
-  .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:var(--mint);font-weight:800;font-size:13px;letter-spacing:.6px;margin-bottom:18px;
+  /* THE KAMO FACE, like everything else that speaks for the brand. The badge and the
+     headline were both set in --font (Avenir) while the paywall's kicker and title next
+     door are in --display — so the two sheets said the same things in two different voices.
+     The title also picks up the paywall's exact shimmer: same stops, same 3.4s clock. */
+  .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:var(--mint);
+    font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;
     animation:pwGlow 2.8s ease-in-out infinite;}
-  .kpTitle{font-size:30px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:12px;}
-  .kpSub{font-size:15.5px;color:rgba(255,255,255,.72);line-height:1.5;margin:0 auto 22px;max-width:320px;}
+  .kpTitle{font-family:var(--display);font-size:28px;font-weight:700;letter-spacing:-.3px;line-height:1.14;margin-bottom:10px;
+    background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
+    background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:pwShimmer 3.4s linear infinite;}
+  .kpSub{font-size:14.5px;color:rgba(255,255,255,.72);line-height:1.45;margin:0 auto 20px;max-width:320px;}
   .kpChips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:28px;}
   .kpChip{font-size:12.5px;color:rgba(255,255,255,.82);padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
   .kpGo{width:100%;padding:16px;border:none;border-radius:16px;background:var(--mint);color:#06231a;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(95,230,164,.32);}
@@ -526,10 +535,25 @@
   /* The numbers are the point of the home sheet, so they get the display face and the size.
      Three columns rather than a list: it reads as a scoreboard at a glance, which is what a
      member opening this wants — not a settings screen. */
-  .kpStats{display:flex;gap:9px;justify-content:center;margin:0 0 22px;}
-  .kpStat{flex:1 1 0;min-width:0;padding:13px 6px 11px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid var(--stroke);}
-  .kpStat b{display:block;font-family:var(--display);font-size:25px;font-weight:900;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
-  .kpStat span{display:block;margin-top:5px;font-size:10.5px;font-weight:750;letter-spacing:.7px;text-transform:uppercase;color:rgba(255,255,255,.55);}
+  /* The numbers arrive one after another rather than all at once — the card rises, then the
+     three cards land left to right on a 90ms stagger while their values count up. Three
+     things moving in sequence reads as a scoreboard filling in; the same three appearing
+     together read as a static table. */
+  .kpStats{display:flex;gap:9px;justify-content:center;margin:0 0 20px;}
+  .kpStat{flex:1 1 0;min-width:0;padding:14px 6px 12px;border-radius:16px;position:relative;overflow:hidden;
+    background:linear-gradient(180deg,rgba(95,230,164,.09),rgba(255,255,255,.04));border:1px solid rgba(95,230,164,.20);
+    opacity:0;animation:kpStatIn .5s cubic-bezier(.2,.9,.3,1) forwards;}
+  .kpStat:nth-child(1){animation-delay:.16s;} .kpStat:nth-child(2){animation-delay:.25s;} .kpStat:nth-child(3){animation-delay:.34s;}
+  @keyframes kpStatIn{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+  /* One slow pass of light across the row, once each, after they have landed. Staggered with
+     the cards so it reads as the same gesture continuing rather than a second effect. */
+  .kpStat::after{content:"";position:absolute;top:0;left:-70%;width:45%;height:100%;pointer-events:none;
+    background:linear-gradient(100deg,transparent,rgba(180,255,220,.16),transparent);transform:skewX(-18deg);
+    animation:pwBuySheen 3.8s ease-in-out infinite;}
+  .kpStat:nth-child(2)::after{animation-delay:.18s;} .kpStat:nth-child(3)::after{animation-delay:.36s;}
+  .kpStat b{display:block;font-family:var(--display);font-size:27px;font-weight:900;color:#fff;line-height:1;font-variant-numeric:tabular-nums;
+    text-shadow:0 2px 14px rgba(95,230,164,.28);}
+  .kpStat span{display:block;margin-top:5px;font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.55);}
   /* Quiet exit under the CTA — the sheet is a place you visit, not a modal you must clear. */
   .kpClose{display:block;width:100%;margin-top:11px;background:none;border:none;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px;}
   @keyframes pwFade{from{opacity:0}to{opacity:1}}
@@ -891,8 +915,13 @@
       <span class="kpChip">75s rounds</span>
       <span class="kpChip">Clean export</span>
     </div>
-    <button class="kpGo" id="khGo">Back to hiding →</button>
-    <button class="kpClose" id="khClose">Close</button>
+    <!-- THE CTA POINTS OUTWARD. "Back to hiding" was a dismiss button wearing the primary
+         slab: it did the same thing as Close, in the loudest style on the card. A member
+         opening this is looking at their own numbers, which is the one moment a brag costs
+         them nothing — so the primary action is now sharing them, and going back to the
+         camera is the quiet one under it. -->
+    <button class="kpGo" id="khShare">Share my stats</button>
+    <button class="kpClose" id="khClose">Back to hiding</button>
   </div>
 </div>
 
@@ -2138,10 +2167,13 @@ function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
   const s=readStats(), n=s.n||0;
   const t=$("#khTitle"), sub=$("#khSub");
-  if(t) t.textContent = n ? (n===1 ? "One hide down" : n+" hides and counting") : "Ready when you are";
+  /* The headline is the achievement, not the screen's name. "Ready when you are" was a
+     label on an empty state; a member with 12 hides should be met with the 12. */
+  if(t) t.textContent = n ? (n===1 ? "First one down" : n+" people hidden") : "Nothing hidden yet";
   if(sub) sub.textContent = n
-    ? "Everything's unlocked. Beat your own time."
-    : "Everything's unlocked. Go make something disappear.";
+    ? (s.bestSec ? ("Your best vanish took "+s.bestSec+"s. Think anyone can beat it?")
+                 : "Every tool is yours. Now go beat your own time.")
+    : "Every tool is yours. Go make someone disappear.";
   el.classList.add("show"); haptic(12);
   countUp($("#khHides"),n);
   countUp($("#khBest"),s.bestSec||null,"s");
@@ -2149,8 +2181,22 @@ function openKamoHome(){
   track("member_home_opened",{hides:n});
 }
 function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show"); }
-{ const g=$("#khGo"), c=$("#khClose");
-  if(g) g.onclick=()=>{ closeKamoHome(); haptic(10); };
+/* The brag, built from the same stats the card is showing. Text + link only — there is no
+   image here, so this rides the invite path (the one native branch that takes a message
+   with no attachment) rather than the share-target one. */
+function shareStats(){
+  const s=readStats(), n=s.n||0;
+  const bits=[n===1?"1 hide":n+" hides"];
+  if(s.bestSec) bits.push("fastest "+s.bestSec+"s");
+  if(s.bestCov) bits.push(s.bestCov+"% covered");
+  const text="KAMO+ · "+bits.join(" · ")+"\n\nI hide people in plain sight. Beat me → "+shareUrl();
+  track("stats_shared",{hides:n});
+  if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:Math.round(s.bestCov||0)}); return; }
+  if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(()=>{}); return; }
+  try{ navigator.clipboard.writeText(text); showHint("Stats copied — paste them anywhere"); }catch(e){ showHint("Couldn't copy that"); }
+}
+{ const g=$("#khShare"), c=$("#khClose");
+  if(g) g.onclick=()=>{ haptic(12); shareStats(); closeKamoHome(); };
   if(c) c.onclick=()=>{ closeKamoHome(); haptic(8); };
   /* Tapping the backdrop closes too — the card is the sheet, everything outside it is not. */
   const el=$("#kamoHome"); if(el) el.onclick=e=>{ if(e.target===el) closeKamoHome(); }; }
