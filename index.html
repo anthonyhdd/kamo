@@ -2002,7 +2002,14 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   const cw=Math.round(r.width*paintDpr), ch=Math.round(r.height*paintDpr);
   if(revealC.width!==cw||revealC.height!==ch){ revealC.width=cw; revealC.height=ch; }
   const css="position:fixed;z-index:14;display:block;left:"+r.left+"px;top:"+r.top+"px;width:"+r.width+"px;height:"+r.height+"px;";
-  if(drawReveal._css!==css){ drawReveal._css=css; revealC.style.cssText=css; }
+  /* NO MEMO HERE — it broke every hide after the first.
+     This used to cache the css string and skip the write when the geometry was unchanged.
+     But exitFinished() and the two teardown paths set revealC.style.display="none"
+     DIRECTLY on the element without touching that cache. On a retake the board rect is
+     identical, so the string matched, the write was skipped, and the reveal canvas stayed
+     hidden: the slider did nothing and the unpainted body never came back. Re-asserting
+     the style every frame is one property write and cannot go stale. */
+  revealC.style.cssText=css;
   const W=revealC.width,H=revealC.height, sp=Math.round(W*revealX);
   rctx.clearRect(0,0,W,H); rctx.drawImage(board,0,0,W,H);
   rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
