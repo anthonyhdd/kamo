@@ -99,7 +99,11 @@
   .startHint{font-size:13px;font-weight:700;letter-spacing:.3px;opacity:.7;}
   .mini{background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;}
 
-  .brand{position:absolute;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
+  /* TAPPABLE. It was pointer-events:none decoration; it now opens the member home for a
+     KAMO+ user and the paywall for everyone else, so it needs to take a tap — with padding,
+     because an 18px wordmark is under the 44px touch minimum on its own. */
+  .brand{position:absolute;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);
+    cursor:pointer;padding:6px 14px;margin:-6px -14px;-webkit-tap-highlight-color:transparent;}
   /* One solid white word. Both halves were already #fff, but only "MO" is inside a <b>:
      the display face ships a single weight, so the browser synthesised a bold for it and
      "MO" rendered visibly thicker and brighter than "KA". Same weight = uniformly white. */
@@ -363,6 +367,10 @@
   #btnEdit{background:rgba(16,16,20,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
     color:#fff;border:1px solid var(--stroke);box-shadow:0 4px 14px rgba(0,0,0,.35);font-weight:700;}
   .brand.mid{left:50%;transform:translateX(-50%);}   /* centered on the captured (paint/finished) screen */
+  /* AFTER .brand.mid on purpose. Both selectors are (0,2,0), so source order decides — put
+     the press state above .mid and the wordmark stops reacting to taps on the paint screen,
+     which is precisely where a member is most likely to reach for it. */
+  .brand:active{transform:translateX(-50%) scale(.94);}
   /* Retake as a top-left nav button, aligned with Done */
   #btnBack{position:absolute;top:calc(var(--safe-t) - 12px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   #btnBack svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
@@ -402,16 +410,31 @@
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
   /* KAMO+ celebration (post-purchase, plan-aware) */
-  #kamoPlus{position:absolute;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:radial-gradient(120% 90% at 50% 28%,rgba(95,230,164,.18),rgba(3,5,8,.9));backdrop-filter:blur(8px);}
-  #kamoPlus.show{display:flex;animation:pwFade .3s ease;}
-  #kamoPlus .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;}
-  #kamoPlus .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:var(--mint);font-weight:800;font-size:13px;letter-spacing:.6px;margin-bottom:18px;}
-  #kamoPlus .kpTitle{font-size:30px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:12px;}
-  #kamoPlus .kpSub{font-size:15.5px;color:rgba(255,255,255,.72);line-height:1.5;margin:0 auto 22px;max-width:320px;}
-  #kamoPlus .kpChips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:28px;}
-  #kamoPlus .kpChip{font-size:12.5px;color:rgba(255,255,255,.82);padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
-  #kamoPlus .kpGo{width:100%;padding:16px;border:none;border-radius:16px;background:var(--mint);color:#06231a;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(95,230,164,.32);}
+  /* TWO SHEETS, ONE LOOK. #kamoPlus is the one-time welcome after a purchase; #kamoHome is
+     what tapping the wordmark opens for a member, every time. They are the same object at
+     two moments — badge, big line, chips, one mint CTA — so the styles lost their #kamoPlus
+     prefix rather than being duplicated. Nothing else in the app uses .kp* classes. */
+  #kamoPlus,#kamoHome{position:absolute;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:radial-gradient(120% 90% at 50% 28%,rgba(95,230,164,.18),rgba(3,5,8,.9));backdrop-filter:blur(8px);}
+  #kamoPlus.show,#kamoHome.show{display:flex;animation:pwFade .3s ease;}
+  .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;animation:kpRise .4s cubic-bezier(.2,.9,.3,1);}
+  @keyframes kpRise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+  .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:var(--mint);font-weight:800;font-size:13px;letter-spacing:.6px;margin-bottom:18px;
+    animation:pwGlow 2.8s ease-in-out infinite;}
+  .kpTitle{font-size:30px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:12px;}
+  .kpSub{font-size:15.5px;color:rgba(255,255,255,.72);line-height:1.5;margin:0 auto 22px;max-width:320px;}
+  .kpChips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:28px;}
+  .kpChip{font-size:12.5px;color:rgba(255,255,255,.82);padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
+  .kpGo{width:100%;padding:16px;border:none;border-radius:16px;background:var(--mint);color:#06231a;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(95,230,164,.32);}
   #kpBurst{position:absolute;left:50%;top:-8px;width:0;height:0;pointer-events:none;}
+  /* The numbers are the point of the home sheet, so they get the display face and the size.
+     Three columns rather than a list: it reads as a scoreboard at a glance, which is what a
+     member opening this wants — not a settings screen. */
+  .kpStats{display:flex;gap:9px;justify-content:center;margin:0 0 22px;}
+  .kpStat{flex:1 1 0;min-width:0;padding:13px 6px 11px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid var(--stroke);}
+  .kpStat b{display:block;font-family:var(--display);font-size:25px;font-weight:900;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
+  .kpStat span{display:block;margin-top:5px;font-size:10.5px;font-weight:750;letter-spacing:.7px;text-transform:uppercase;color:rgba(255,255,255,.55);}
+  /* Quiet exit under the CTA — the sheet is a place you visit, not a modal you must clear. */
+  .kpClose{display:block;width:100%;margin-top:11px;background:none;border:none;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px;}
   @keyframes pwFade{from{opacity:0}to{opacity:1}}
   .pwCard{position:relative;width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
   @keyframes pwUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -657,12 +680,39 @@
     <div class="kpBadge">★ KAMO+</div>
     <div class="kpTitle">You're KAMO+ ✨</div>
     <div class="kpSub" id="kpSub"></div>
+    <!-- Chips describe what KAMO+ actually is now. "All Pro brushes" outlived the brushes. -->
     <div class="kpChips">
-      <span class="kpChip">All Pro brushes</span>
-      <span class="kpChip">Fine size control</span>
-      <span class="kpChip">No limits</span>
+      <span class="kpChip">Every color</span>
+      <span class="kpChip">Fine brush</span>
+      <span class="kpChip">75s rounds</span>
+      <span class="kpChip">Clean export</span>
     </div>
     <button class="kpGo" id="kpGo">Start blending in →</button>
+  </div>
+</div>
+
+<!-- MEMBER HOME — what the wordmark opens once you own KAMO+. Free users get the paywall
+     from the same tap. Deliberately the same object as the welcome above at a later moment:
+     same badge, same card, same chips. What changes is that it leads with YOUR numbers,
+     because after the purchase the interesting thing is no longer the offer. -->
+<div id="kamoHome" data-blocks-timer>
+  <div class="kpCard">
+    <div class="kpBadge">★ KAMO+</div>
+    <div class="kpTitle" id="khTitle">Your hides</div>
+    <div class="kpSub" id="khSub"></div>
+    <div class="kpStats">
+      <div class="kpStat"><b id="khHides">0</b><span>Hides</span></div>
+      <div class="kpStat"><b id="khBest">—</b><span>Fastest</span></div>
+      <div class="kpStat"><b id="khCov">—</b><span>Best cover</span></div>
+    </div>
+    <div class="kpChips">
+      <span class="kpChip">Every color</span>
+      <span class="kpChip">Fine brush</span>
+      <span class="kpChip">75s rounds</span>
+      <span class="kpChip">Clean export</span>
+    </div>
+    <button class="kpGo" id="khGo">Back to hiding →</button>
+    <button class="kpClose" id="khClose">Close</button>
   </div>
 </div>
 
@@ -1771,11 +1821,75 @@ function kpConfetti(){ const host=$("#kpBurst"); if(!host) return; host.innerHTM
     host.appendChild(s); } setTimeout(()=>{ if(host) host.innerHTML=""; },1900); }
 function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
   const lifetime = pwPlan==="lifetime";
+  /* "Every camo brush" outlived the brushes by two releases. What was actually bought is
+     the colour picker, the fine brush and the clock. */
   const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
-    ? "Every camo brush is yours — forever. Now go disappear."
-    : "Every camo brush, unlocked — cancel anytime.";
+    ? "Every color, the fine brush and 75-second rounds — yours forever. Now go disappear."
+    : "Every color, the fine brush and 75-second rounds — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
+
+/* ===== MEMBER HOME =========================================================
+   The wordmark is now the one control that means "KAMO" rather than "a tool": free users
+   get the offer, members get their numbers. Before this the wordmark was decoration
+   (pointer-events:none) and a member had NO surface at all — every KAMO+ pixel in the app
+   was a sales pitch aimed at someone who had already paid.
+
+   The stats are local-only and deliberately tiny. They exist to be looked at, not to be a
+   profile: nothing here is synced, nothing identifies anyone, and a wipe costs the user a
+   scoreboard rather than their purchase (which lives in RevenueCat, not here). */
+const STATS_KEY="kamo_stats";
+function readStats(){ try{ return JSON.parse(localStorage.getItem(STATS_KEY)||"{}")||{}; }catch(e){ return {}; } }
+function recordHide(sec,cov){
+  try{ const s=readStats();
+    s.n=(s.n||0)+1;
+    /* Fastest, not average: the round is scored on time, so the personal best is the number
+       the player is actually chasing. Guarded against the 1s floor roundSeconds() returns. */
+    if(sec>0 && (!s.bestSec || sec<s.bestSec)) s.bestSec=sec;
+    if(cov>(s.bestCov||0)) s.bestCov=cov;
+    localStorage.setItem(STATS_KEY,JSON.stringify(s));
+  }catch(e){}   // storage full or blocked → the scoreboard is stale, the round still counts
+}
+/* Numbers roll up on open. It is the only motion the sheet needs — the card already rises
+   and the badge already breathes — and it makes a personal best feel like an achievement
+   rather than a table cell. ~600ms, eased, and it lands EXACTLY on the target value
+   (the final frame assigns `to` directly rather than trusting the interpolation). */
+function countUp(el,to,suffix){
+  if(!el) return;
+  if(!to && to!==0){ el.textContent="—"; return; }
+  const dur=600, t0=performance.now();
+  const step=now=>{
+    const k=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-k,3);
+    el.textContent = (k>=1 ? to : Math.round(to*e)) + (suffix||"");
+    if(k<1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function openKamoHome(){
+  const el=$("#kamoHome"); if(!el) return;
+  const s=readStats(), n=s.n||0;
+  const t=$("#khTitle"), sub=$("#khSub");
+  if(t) t.textContent = n ? (n===1 ? "One hide down" : n+" hides and counting") : "Ready when you are";
+  if(sub) sub.textContent = n
+    ? "Everything's unlocked. Beat your own time."
+    : "Everything's unlocked. Go make something disappear.";
+  el.classList.add("show"); haptic(12);
+  countUp($("#khHides"),n);
+  countUp($("#khBest"),s.bestSec||null,"s");
+  countUp($("#khCov"),s.bestCov||null,"%");
+  track("member_home_opened",{hides:n});
+}
+function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show"); }
+{ const g=$("#khGo"), c=$("#khClose");
+  if(g) g.onclick=()=>{ closeKamoHome(); haptic(10); };
+  if(c) c.onclick=()=>{ closeKamoHome(); haptic(8); };
+  /* Tapping the backdrop closes too — the card is the sheet, everything outside it is not. */
+  const el=$("#kamoHome"); if(el) el.onclick=e=>{ if(e.target===el) closeKamoHome(); }; }
+/* THE WORDMARK. Members get their home; everyone else gets the offer, tagged `brand` so
+   this entry point is separable in the funnel from the ✦ button next to it. No pitch key:
+   tapping the logo is curiosity, not a refusal, so it keeps the generic copy. */
+{ const b=document.querySelector(".brand");
+  if(b) b.onclick=()=>{ if(isPro) openKamoHome(); else openPaywall("brand"); }; }
 /* Clear the Buy spinner without showing a toast — used when a native purchase ends with
    no callback of its own (StoreKit cancel). Without it the button sat spinning, and
    pointer-events:none, for the full 6s of its own safety timer. */
@@ -2462,6 +2576,9 @@ function enterFinished(auto){ if(finished) return; finished=true;
      photo_captured.auto, which flows today. */
   track("round_finished",{seconds:roundSeconds(),auto:!!auto,coverage:Math.round(computeScore()||0),timed:timerArmed()});
   currentScore=computeScore();
+  /* Feed the member home. Every finished hide counts, including one the clock ended — the
+     scoreboard reports what happened, it is not a reward for playing a certain way. */
+  recordHide(roundSeconds(),Math.round(currentScore||0));
   /* The real "I finished a hide" moment, and the first honest score of the run —
      `paint_completed` fires on the FIRST brush stroke, so its score is ~0 and it can't
      be the middle of the funnel. Native counts this and emits `essay_finished`; it
