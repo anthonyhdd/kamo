@@ -21,6 +21,18 @@
     /* TWO fonts only: --font = body everywhere, --display = the logo font (Space Grotesk) for titles/special text */
     --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
     --display:'Kamo',"Avenir Next",-apple-system,sans-serif;
+    /* THE LIT EDGE, in two strengths. Same sweep, same 3.4s pwShimmer clock, different peak.
+       --ring is for surfaces we control: the paywall card is a dark green panel and its peak
+       was blowing out to pure white, which on a calm sheet reads as a glare rather than a
+       highlight. It tops out at #8ef0bd — the timer bar's own light mint — so the ring stays
+       one colour instead of turning into a white streak.
+       --ring-hi keeps the old white peak, and only for edges drawn ON A PHOTO (the Share CTA
+       and the reveal knob): there the background is unknowable and could be a bright sky, so
+       the highlight has to out-brighten anything underneath it or the edge disappears.
+       Named rather than repeated because three copies of one gradient string is three places
+       to forget. */
+    --ring:linear-gradient(100deg,rgba(95,230,164,.20) 22%,rgba(95,230,164,.52) 42%,#8ef0bd 50%,rgba(95,230,164,.52) 58%,rgba(95,230,164,.20) 78%);
+    --ring-hi:linear-gradient(100deg,rgba(95,230,164,.34) 22%,#d6fff0 42%,#fff 50%,#d6fff0 58%,rgba(95,230,164,.34) 78%);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
@@ -288,7 +300,7 @@
      sheen — a mint ring on white would be a third effect on a button that already has two. */
   #btnShare.smoky{color:#fff;border:1.5px solid transparent;
     background:linear-gradient(#050908,#050908) padding-box,
-      linear-gradient(100deg,rgba(95,230,164,.34) 22%,#d6fff0 42%,#fff 50%,#d6fff0 58%,rgba(95,230,164,.34) 78%) border-box;
+      var(--ring-hi) border-box;
     background-size:auto,260% 100%;
     box-shadow:0 8px 26px rgba(0,0,0,.5),0 6px 22px rgba(95,230,164,.16);
     animation:pwShimmer 3.4s linear infinite;animation-delay:.9s;}
@@ -459,7 +471,7 @@
   #revealHandle .rhKnob{position:relative;width:46px;height:46px;border-radius:50%;
     color:#fff;border:1.5px solid transparent;
     background:linear-gradient(180deg,rgba(17,43,34,.94),rgba(10,22,18,.94)) padding-box,
-      linear-gradient(100deg,rgba(95,230,164,.34) 22%,#d6fff0 42%,#fff 50%,#d6fff0 58%,rgba(95,230,164,.34) 78%) border-box;
+      var(--ring-hi) border-box;
     background-size:auto,260% 100%;
     -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
     display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;
@@ -554,9 +566,9 @@
      on the same 3.4s pwShimmer clock as the trial badge and the buy label, so the three
      mint accents pulse together rather than beating against each other. */
   .pwPlan.active{border-color:transparent;background:linear-gradient(180deg,rgba(17,43,34,.97),rgba(12,30,24,.97));background-clip:padding-box;
-    box-shadow:0 6px 22px rgba(95,230,164,.16);}
+    box-shadow:0 6px 20px rgba(95,230,164,.10);}   /* halo eased too — it was reinforcing the same glare */
   .pwPlan.active::before{content:"";position:absolute;inset:-1.5px;border-radius:17.5px;z-index:-1;pointer-events:none;
-    background:linear-gradient(100deg,rgba(95,230,164,.34) 22%,#d6fff0 42%,#fff 50%,#d6fff0 58%,rgba(95,230,164,.34) 78%);
+    background:var(--ring);
     background-size:260% 100%;animation:pwShimmer 3.4s linear infinite;animation-delay:.9s;}
   .pwPlan{transition:border-color .18s,background .18s,box-shadow .18s;}
   .pwPlanName{display:block;font-size:17px;font-weight:800;}
@@ -2225,7 +2237,10 @@ window.__kamoSaved=showSaved;   // native can inject this on a CONFIRMED camera-
    challenge image while "Before / After" is lit would be the button ignoring the control
    sitting right above it. (staticBlob() is still the challenge-only path used by the web
    share route, which has no tabs.) */
-async function saveStatic(){ const b=await shareBlob();
+/* Save counts as a destination too. It is not a share, but it is one of the ways out of
+   that sheet, and a breakdown missing it would make the others look larger than they are. */
+async function saveStatic(){ track("share_target_tapped",{target:"save",mode:shareMode,score:Math.round(currentScore||0)});
+  const b=await shareBlob();
   if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d,score:Math.round(currentScore||0)}); return; }   // native calls window.__kamoSaved() ONLY on a confirmed camera-roll write
   const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); showSaved(); }
 
@@ -2385,12 +2400,26 @@ $("#ssClose").onclick=()=>dismissShareSheet("cancel");
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdrop"); };
 /* [data-target] only — the invite button below is not an image share and must not
    fall through to nativeShare(undefined). */
-document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>nativeShare(b.dataset.target));
+/* EVERY DESTINATION TAP, NAMED. The sheet had no per-target event at all: the funnel could
+   see it open (share_opened) and see a share land (native share_completed), but the choice
+   in between was invisible, and TikTok — the destination the ads are driving to — was the
+   one we most needed to count.
+   ⚠️ This will NOT flow on the build people are running tonight. analytics.js keeps a
+   WEB_EVENTS allow-list and the wrapper silently drops anything not on it; the live list
+   predates share_dismissed, share_mode_selected AND round_finished (none of the three exist
+   in the Amplitude project at all, which is how we know). Added to WEB_EVENTS on the app
+   side in the same pass, so it starts flowing with the next release.
+   `mode` rides along because a TikTok tap on the reveal MP4 and on the static image are
+   different products, and the native side reports them as different `kind`s. */
+document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
+  track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
+  nativeShare(b.dataset.target); });
 /* Pure recruitment path: text + link, no image. The image shares carry the link in
    their caption too, but Instagram Stories can't show a caption at all, so this is the
    only target where the ask is unambiguous. */
 $("#ssInvite").onclick=()=>{ closeShareSheet(); haptic(10);
   const sc=Math.round(currentScore||0);
+  track("share_target_tapped",{target:"invite",mode:shareMode,score:sc});
   const text="I hid someone in a photo 👀 Bet you can't find them.\n\nHide one for me → "+shareUrl();
   if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:sc}); return; }
   if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(()=>{}); return; }
