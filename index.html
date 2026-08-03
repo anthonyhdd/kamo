@@ -612,9 +612,15 @@
 <div id="shareSheet">
   <div class="ssCard">
     <div class="ssTitle">Share your hide</div>
+    <!-- BEFORE/AFTER IS THE DEFAULT — it is the only mode that produces the reveal MP4,
+         and the MP4 is the format this app exists to make. Challenge was the default for
+         KAMO's whole life and the cost was hiding the differentiator behind a tab: 70
+         share sheets opened on the static image against 5 on the reveal, i.e. ~93% of
+         users never switched. Not a preference — nobody saw the choice.
+         Must stay in sync with `shareMode`'s initial value below. -->
     <div id="ssMode">
-      <button class="ssTab active" data-mode="challenge">Challenge</button>
-      <button class="ssTab" data-mode="ba">Before / After</button>
+      <button class="ssTab" data-mode="challenge">Challenge</button>
+      <button class="ssTab active" data-mode="ba">Before / After</button>
     </div>
     <button class="ssBtn ig" data-target="instagram"><span class="ic">📸</span>Instagram Story</button>
     <button class="ssBtn snap" data-target="snapchat"><span class="ic">👻</span>Snapchat</button>
@@ -1691,7 +1697,7 @@ window.KAMO.revealDone=()=>{ clearTimeout(showBusy._t); try{ busyEl.style.displa
 function showBusy(on){ clearTimeout(showBusy._t); try{ busyEl.style.display=on?"flex":"none"; }catch(e){}
   if(on) showBusy._t=setTimeout(()=>{ try{ busyEl.style.display="none"; }catch(e){} showHint("Couldn't build the reveal — sharing the still instead"); },25000); }
 
-/* ===== SHARE: the challenge card (hidden scene + hook + "spot it?" + referral CTA) ===== */
+/* ===== SHARE: the challenge card (hidden scene + wordmark + referral CTA) ===== */
 let referralCode="";
 /* ⚠️ This used to be "kamo.app" — a domain we DON'T own. It is parked and 302s to
    domaineasy.com/buy-domain/kamo.app, so every share KAMO ever sent pushed people to a
@@ -1707,15 +1713,19 @@ const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else syst
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
 function drawWatermark(c,W,H){ const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
   // bottom scrim
-  const bh=Math.round(H*0.22); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
-  /* Two lines, not three. The middle one used to read "Hide one yourself — free on the App
-     Store"; it is gone by request. Everything below was re-spaced rather than left with the
-     hole: the hook moved down from 104u to 78u and the scrim shrank from .26H to .22H, so
-     the block still sits tight against the bottom edge instead of floating above a band of
-     empty gradient. The clickable link was never on the image anyway — it travels in the
-     share message (see nativeShare) — so nothing is lost by dropping the burned-in ask. */
-  // "Can you spot it?" (big)
-  c.fillStyle="#fff"; fit(c,"Can you spot it?",38*u,W,20,"700"); c.fillText("Can you spot it?", W/2, H-Math.round(78*u)-pad);
+  const bh=Math.round(H*0.14); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
+  /* ONE line now: the wordmark. This block has lost a line twice, and both times the fix
+     was to re-space rather than leave a hole — an overlay that floats above a band of empty
+     gradient reads as a rendering bug, not as restraint.
+       3 lines: hook at 104u, scrim .26H  ("Hide one yourself — free on the App Store")
+       2 lines: hook at  78u, scrim .22H  ("Can you spot it?")
+       1 line:            —   scrim .14H
+     The hook is gone by request. Nothing is lost by dropping it: it was never the clickable
+     part — the link travels in the share message (see nativeShare) — and on the reveal MP4,
+     now the default share, a static "Can you spot it?" was actively wrong, because the
+     video answers its own question two seconds later.
+     .14H keeps the gradient's .45 midpoint just above the wordmark's baseline, so it still
+     sits on dark pixels over a bright photo instead of disappearing into it. */
   // KAMO wordmark
   c.fillStyle="#fff"; c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO", W/2, H-Math.round(28*u)-pad);
 }
@@ -1738,7 +1748,9 @@ async function deliver(blob,ext){
   // system share sheet if Instagram isn't installed or the story share fails).
   if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"ig-stories",ext,mime:blob.type||"",data:d,score:Math.round(currentScore||0)}); return; }
   // Web / Safari: system share sheet (IG-Stories deep link isn't reliable from the web).
-  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"Can you spot it?",text:"I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+shareUrl()}); return; }catch(e){ if(e.name==="AbortError") return; } }
+  /* `title` was "Can you spot it?" too — the same hook the watermark used to burn in, and
+     it surfaces on the share the same way, so it goes with it. The wordmark is the title. */
+  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"KAMO",text:"I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+shareUrl()}); return; }catch(e){ if(e.name==="AbortError") return; } }
   const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 function showSaved(){ const btn=$("#btnSave"); if(!btn) return; haptic(12); btn.classList.add("saved"); clearTimeout(showSaved._t); showSaved._t=setTimeout(()=>btn.classList.remove("saved"),1100); }
@@ -1799,7 +1811,13 @@ function composeShare(W,src){ src=src||board; const H=Math.round(W*16/9); const 
   const s=Math.max(W/src.width, H/src.height), dw=src.width*s, dh=src.height*s;
   c.drawImage(src,(W-dw)/2,(H-dh)/2,dw,dh); drawWatermark(c,W,H); return o; }
 async function staticBlob(){ return await new Promise(r=>composeShare(1080).toBlob(r,"image/jpeg",0.9)); }
-let beforeBoard=null, shareMode="challenge";
+/* "ba" (Before / After) is the default — see the tab markup for why. It is the ONLY mode
+   that reaches the reveal MP4 (nativeShare below gates on it), and the encoder is not the
+   reason it was hidden: `reveal_video_render_failed` has never once fired, and the average
+   render is 795 ms. Sub-second and perfect, gated behind a tab 93% of users never tapped.
+   Safe either way — with no reveal module and no before-frame, composeBeforeAfter() falls
+   back to `board` and the share stays a static image. */
+let beforeBoard=null, shareMode="ba";
 /* native capabilities (injected by the Expo wrapper on load). {revealVideo:true} once the
    native MP4 module ships. Absent on older builds → shares stay static (backward-safe). */
 let nativeCaps={};
