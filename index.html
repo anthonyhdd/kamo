@@ -507,8 +507,24 @@
   .pwSpin{width:20px;height:20px;border-radius:50%;border:2.6px solid rgba(10,11,14,.22);border-top-color:#0a0b0e;animation:pwspin .62s linear infinite;}
   @keyframes pwspin{to{transform:rotate(360deg);}}
   #pwPlans{display:flex;flex-direction:column;gap:10px;margin:18px 0 14px;}
-  .pwPlan{display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 16px;border-radius:16px;border:1.5px solid var(--stroke);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;text-align:left;transition:border-color .18s,background .18s;}
-  .pwPlan.active{border-color:var(--mint);background:rgba(95,230,164,.10);box-shadow:0 0 0 1px rgba(95,230,164,.22),0 6px 20px rgba(95,230,164,.14);}
+  .pwPlan{position:relative;z-index:0;display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 16px;border-radius:16px;border:1.5px solid var(--stroke);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;text-align:left;transition:border-color .18s,background .18s;}
+  /* SELECTED = A LIT GRADIENT EDGE, not a flat mint line. The ring lives on a ::before at
+     inset:-1.5px sitting behind the row, and the row's own fill is clipped to padding-box
+     so it does not paint over the border area — that is the whole trick, and it degrades
+     safely: if a browser ignores it the ring simply does not show and the row still reads
+     as selected from its tint and shadow. (The alternative, two backgrounds with
+     background-clip:padding-box,border-box, fails LOUD on an engine that drops it — the
+     whole row floods with the gradient.)
+     The fill has to be opaque here for the same reason: a translucent one would let the
+     ring glow through the middle of the row.
+     Delayed 0.9s so the card finishes rising before anything starts moving; it then sweeps
+     on the same 3.4s pwShimmer clock as the trial badge and the buy label, so the three
+     mint accents pulse together rather than beating against each other. */
+  .pwPlan.active{border-color:transparent;background:linear-gradient(180deg,rgba(17,43,34,.97),rgba(12,30,24,.97));background-clip:padding-box;
+    box-shadow:0 6px 22px rgba(95,230,164,.16);}
+  .pwPlan.active::before{content:"";position:absolute;inset:-1.5px;border-radius:17.5px;z-index:-1;pointer-events:none;
+    background:linear-gradient(100deg,rgba(95,230,164,.34) 22%,#d6fff0 42%,#fff 50%,#d6fff0 58%,rgba(95,230,164,.34) 78%);
+    background-size:260% 100%;animation:pwShimmer 3.4s linear infinite;animation-delay:.9s;}
   .pwPlan{transition:border-color .18s,background .18s,box-shadow .18s;}
   .pwPlanName{display:block;font-size:17px;font-weight:800;}
   .pwPlanMeta{display:block;font-size:12.5px;opacity:.62;margin-top:2px;}
@@ -534,8 +550,20 @@
   @keyframes pwShimmer{0%{background-position:135% 0}100%{background-position:-35% 0}}
   .pwPlanPrice{font-size:13px;opacity:.75;white-space:nowrap;}
   .pwPlanPrice b{font-size:19px;font-weight:900;color:#fff;}
-  #pwTerms{font-size:12px;opacity:.6;text-align:center;margin-top:10px;line-height:1.4;}
+  #pwTerms{font-size:12px;opacity:.6;text-align:center;margin-top:10px;line-height:1.4;transition:opacity .26s;}
+  #pwTerms.fade{opacity:0;}
   .pwBuy:active{transform:scale(.98);}
+  /* THE LABEL, NOT THE BUTTON. background-clip:text clips the entire background to the
+     glyphs, so putting this on .pwBuy would delete the white slab it is written on — hence
+     the span. Deep green rather than --mint: the sweep has to stay legible against white,
+     and #5fe6a4 on #fff is barely darker than the paper. */
+  .pwBuyTxt{background:linear-gradient(100deg,#0a0b0e 30%,#0a0b0e 43%,#0f9e60 50%,#0a0b0e 57%,#0a0b0e 70%);
+    background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:pwShimmer 3.4s linear infinite;}
+  /* Disabled ("Loading…", "Currently unavailable") must not shimmer — a dead button that
+     animates reads as a live one. */
+  .pwBuy.pwBuyOff .pwBuyTxt{background:none;-webkit-text-fill-color:currentColor;color:currentColor;animation:none;}
   .pwFine{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;}
   .pwFine a,.pwFine button{background:none;border:none;color:rgba(255,255,255,.5);font-size:12px;text-decoration:underline;cursor:pointer;padding:4px;}
   .pwClose{display:block;margin:12px auto 0;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;cursor:pointer;padding:6px;}
@@ -1844,7 +1872,7 @@ function openPaywall(source){
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
   if(!storeReady){ clearTimeout(openPaywall._t); openPaywall._t=setTimeout(()=>{
     if(!storeReady){ storeAnswered=true; updatePwBuy(); } },6000); } }
-function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); }
+function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); stopTermsRotate(); }
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
 function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
@@ -1859,25 +1887,55 @@ paywallEl.onclick=e=>{ if(e.target===paywallEl) closePaywall(); };
    calls setPrices() with whatever it resolved — possibly {} — and this flips. */
 let storeReady=false;    // a real localized price arrived for at least one plan
 let storeAnswered=false; // native has told us SOMETHING, even if it was "nothing for sale"
-function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
+/* THE REASSURANCE LINE. It used to restate the offer — "Free for 3 days, then 2,99 EUR/week.
+   Cancel anytime." — directly under a button that already said "Try free for 3 days" and a
+   plan row that already showed "3 days free" and "2,99 EUR/week". Three copies of the same
+   sentence in 200px of screen. It now carries only the reassurance, alternating so both
+   objections get answered without a second line of type.
+   ⚠️ "No charge today", NOT "no card required". On iOS a StoreKit trial still bills the
+   Apple ID automatically on day 4, and a user without a payment method on file is prompted
+   to add one before the trial can start — so "no card required" would be false for some
+   users and misleading for all, in the one place Apple reads most carefully (3.1.2). This
+   says the true version of the same reassurance. One string to change if that call is
+   overridden.
+   Apple disclosure is unaffected by the removal: price, billing period and trial length are
+   all still on screen in the plan rows above (Weekly / "3 days free" / 2,99 EUR per week). */
+const PW_REASSURE=["Cancel anytime","No charge today"];
+let _termsTimer=null,_termsIdx=0;
+function stopTermsRotate(){ if(_termsTimer){ clearInterval(_termsTimer); _termsTimer=null; } }
+function setTerms(txt){ stopTermsRotate(); const t=$("#pwTerms"); if(t){ t.classList.remove("fade"); t.textContent=txt; } }
+function startTermsRotate(){
+  const t=$("#pwTerms"); if(!t) return;
+  stopTermsRotate(); _termsIdx=0; t.classList.remove("fade"); t.textContent=PW_REASSURE[0];
+  /* Cross-fade rather than a hard swap: at 12px and 60% opacity a hard cut reads as a
+     glitch. Cleared in closePaywall() so it is not still ticking behind a shut sheet. */
+  _termsTimer=setInterval(()=>{
+    t.classList.add("fade");
+    setTimeout(()=>{ _termsIdx=(_termsIdx+1)%PW_REASSURE.length; t.textContent=PW_REASSURE[_termsIdx]; t.classList.remove("fade"); },270);
+  },3400);
+}
+/* The label needs its own element so the shimmer can clip to the glyphs without taking the
+   button's white background with it. Built as a node, not innerHTML — the string carries a
+   store-localized price. */
+function setBuyLabel(b,txt){ b.textContent=""; const sp=document.createElement("span"); sp.className="pwBuyTxt"; sp.textContent=txt; b.appendChild(sp); }
+function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is written only through setTerms/startTermsRotate now */
   /* Buy stays disabled until a real localized price arrives. It used to be live from the
      first frame while the markup showed hardcoded $14.99/$2.99: on any non-USD storefront
      that price was simply wrong, and if offerings failed to load the tap could only ever
      end in an error toast. No price → no purchasable plan → no Buy.
      Three states, because "still loading" and "nothing is for sale" must not look alike —
      otherwise a missing store key leaves a spinner-ish "Loading…" on screen forever. */
-  if(!storeReady){ b.textContent=storeAnswered?"Currently unavailable":"Loading…"; b.disabled=true; b.classList.add("pwBuyOff");
-    if(t) t.textContent=storeAnswered?"Purchases aren't available right now.":""; return; }
+  if(!storeReady){ setBuyLabel(b,storeAnswered?"Currently unavailable":"Loading…"); b.disabled=true; b.classList.add("pwBuyOff");
+    setTerms(storeAnswered?"Purchases aren't available right now.":""); return; }
   b.disabled=false; b.classList.remove("pwBuyOff");
-  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; b.textContent=p?("Unlock forever — "+p):"Unlock forever"; if(t) t.textContent="One-time purchase. Yours forever."; }
+  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; setBuyLabel(b,p?("Unlock forever — "+p):"Unlock forever"); setTerms("One-time purchase. Yours forever."); }
   else { const p=($("#pwWeeklyPrice")||{}).textContent||"";
     /* An unadvertised free trial converts barely better than no trial at all: the user
        decides whether to tap Buy from THIS button, long before Apple's sheet shows them
-       the offer. So the trial arm says so on the button, and the terms line carries the
-       full price + billing terms Apple requires next to it (guideline 3.1.2). */
-    if(trialOn()){ b.textContent="Try free for "+trialLabel;
-      if(t) t.textContent=p?("Free for "+trialLabel+", then "+p+"/week. Cancel anytime."):("Free for "+trialLabel+", then billed weekly. Cancel anytime."); }
-    else { b.textContent="Get KAMO+"; if(t) t.textContent=p?(p+"/week. Cancel anytime."):"Cancel anytime."; } } }
+       the offer. So the trial arm says so on the button. The price and billing period that
+       used to be repeated underneath are in the plan rows above — see PW_REASSURE. */
+    if(trialOn()){ setBuyLabel(b,"Try free for "+trialLabel); startTermsRotate(); }
+    else { setBuyLabel(b,"Get KAMO+"); startTermsRotate(); } } }
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
    able to re-render it on its own once the store reports a real trial length, and because
    updatePwBuy() bails early while the store is still loading — the plan row is on screen
