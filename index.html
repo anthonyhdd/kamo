@@ -228,7 +228,13 @@
        their own specular highlight and drop shadow rather than from a black wall. */
     background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.38) 42%,rgba(5,6,10,.78));}
   .row{display:flex;gap:8px;align-items:center;justify-content:center;}
-  #btnAgain{flex-basis:100%;margin-top:2px;background:none;border:none;cursor:pointer;
+  /* Snapchat-shaped bottom: one full-width CTA, then the quieter actions on a line of
+     their own under it. #btnShare takes the whole row so Save wraps below rather than
+     sitting beside it as a competing dark circle. Scoped to the id — the shared
+     .b.primary rule is used by the confirm card too. */
+  #btnShare{flex:1 1 100%;}
+  #btnSave{margin-top:2px;}
+  #btnAgain{flex-basis:auto;margin-top:2px;background:none;border:none;cursor:pointer;
     color:rgba(255,255,255,.62);font-family:var(--font);font-size:13.5px;font-weight:600;
     padding:8px 0 2px;text-shadow:0 1px 4px rgba(0,0,0,.6);}
   #btnAgain:active{color:#fff;}
