@@ -233,6 +233,15 @@
      sitting beside it as a competing dark circle. Scoped to the id — the shared
      .b.primary rule is used by the confirm card too. */
   #btnShare{flex:1 1 100%;}
+  /* Smoky Share button. The `smoky` class is added by JS ONLY once a WebGL context and a
+     compiled program actually exist, so a device that refuses the context keeps the plain
+     white button rather than a dead dark slab. */
+  #shareFx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;display:none;}
+  #btnShare.smoky #shareFx{display:block;}
+  #btnShare .shareIn{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:9px;}
+  #btnShare.smoky{background:#050908;color:#fff;box-shadow:0 8px 26px rgba(0,0,0,.5);animation:none;}
+  #btnShare.smoky::after{content:none;}   /* the sheen sweep would fight the smoke */
+  #btnShare.smoky .shareIn{text-shadow:0 1px 6px rgba(0,0,0,.75);}
   #btnSave{margin-top:2px;}
   #btnAgain{flex-basis:auto;margin-top:2px;background:none;border:none;cursor:pointer;
     color:rgba(255,255,255,.62);font-family:var(--font);font-size:13.5px;font-weight:600;
@@ -479,7 +488,7 @@
         <!-- The generic export glyph said "a file is leaving your phone". The eye says what
              the share is FOR: someone on the other end has to find the figure. Copy follows
              the same line as the home screen ("dare your friends to spot it"). -->
-        <button class="b primary" id="btnShare"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3.2"/></svg>Dare them to spot it</button>
+        <button class="b primary" id="btnShare"><canvas id="shareFx" aria-hidden="true"></canvas><span class="shareIn"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3.2"/></svg>Share now</span></button>
         <button class="b icon" id="btnSave" title="Save photo"><svg class="dl" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg><svg class="chk" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>
         <!-- Going again is the strongest satisfaction signal KAMO gets (it is what the
              rating prompt and the paywall both hang off) and it was only reachable from
@@ -1979,6 +1988,84 @@ const confirmSheet=$("#confirmSheet");
 function closeConfirm(){ confirmSheet.classList.remove("show"); }
 $("#btnBack").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
 $("#btnAgain").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
+
+/* ===== SMOKY SHARE BUTTON =====
+   Fractal-noise smoke behind the Share CTA. Adapted from Tim Wilson's "Smoky Button"
+   (https://codepen.io/TWilson/pen/PoVjzgY, MIT) with three deliberate departures:
+
+   1. NO CDN. The original pulls `fragment-canvas` from esm.sh as an ES module. KAMO is a
+      single self-contained file served off GitHub Pages into a WebView — a runtime import
+      from a third-party CDN is a new way for the screen to break, for ~30 lines of
+      boilerplate we can just write.
+   2. SIX octaves of fbm, not eight, and the fragment shader runs five fbm calls per pixel.
+      That is 30 noise lookups per pixel per frame instead of 40, and at this button's size
+      the difference is invisible.
+   3. IT STOPS WHEN IT IS NOT ON SCREEN. This canvas sits on the reveal screen, the same
+      screen whose canvas compositing has jetsammed the WKWebView content process before.
+      An IntersectionObserver kills the RAF the moment #actionRow is hidden (a display:none
+      element reports ratio 0), and visibilitychange kills it when the app backgrounds.
+      Nothing animates while painting, on the camera, or in the background.
+
+   Colours are KAMO's mint rather than the original's blue/magenta. */
+(function(){
+  const cv=document.getElementById("shareFx"), btn=document.getElementById("btnShare");
+  if(!cv||!btn) return;
+  let gl=null,prog=null,uRes=null,uT=null,raf=0,t0=0,visible=false;
+  try{ gl=cv.getContext("webgl",{alpha:false,antialias:false,depth:false,stencil:false,powerPreference:"low-power"}); }catch(_){ gl=null; }
+  if(!gl) return;   // no context → the plain white button stays
+  const VERT="attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
+  const FRAG=`precision mediump float;uniform vec2 iResolution;uniform float iTime;
+float random(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);float a=random(i),b=random(i+vec2(1,0)),c=random(i+vec2(0,1)),d=random(i+vec2(1,1));
+vec2 u=f*f*(3.-2.*f);return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;}
+float fbm(vec2 p){float v=0.,a=.5;vec2 sh=vec2(20.);mat2 rot=mat2(cos(.5),sin(.5),-sin(.5),cos(.5));
+for(int i=0;i<6;i++){v+=a*noise(p);p=rot*p*2.+sh;a*=.5;}return v;}
+void main(){vec2 uv=(gl_FragCoord.xy-.5*iResolution.xy)/iResolution.y;uv*=.5;
+vec2 q=vec2(fbm(uv+.20*iTime),fbm(uv+vec2(5.,1.)));
+vec2 r=vec2(fbm(uv+3.*q+vec2(1.2,3.2)+.2*iTime),fbm(uv+3.*q+vec2(8.8,2.8)+.2*iTime));
+float f=fbm(uv+r);
+vec3 color=mix(vec3(0.),vec3(0.0,0.55,0.32),clamp((f*f)*6.,0.,5.));
+color=mix(color,vec3(0.37,0.90,0.64),clamp(length(q)*length(q),0.,1.));
+color=mix(color,vec3(0.88,1.0,0.94),clamp(length(r.x),0.,.1));
+color=vec3(0.02,0.12,0.08)+(f*f*f+.6*f*f+.6*f)*color;
+/* Darkened to 0.58. At full brightness the mint highlights washed out the white
+   label — the original CodePen keeps its text legible with a bg-black/50 panel
+   behind it, which would mean a pill inside a pill here. Dimming the smoke does
+   the same job with nothing extra on screen. */
+gl_FragColor=vec4(color*0.58,1.);}`;
+  function shader(type,src){ const sh=gl.createShader(type); gl.shaderSource(sh,src); gl.compileShader(sh);
+    return gl.getShaderParameter(sh,gl.COMPILE_STATUS)?sh:null; }
+  try{
+    const vs=shader(gl.VERTEX_SHADER,VERT), fs=shader(gl.FRAGMENT_SHADER,FRAG);
+    if(!vs||!fs) return;
+    prog=gl.createProgram(); gl.attachShader(prog,vs); gl.attachShader(prog,fs); gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) return;
+    gl.useProgram(prog);
+    const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+    const loc=gl.getAttribLocation(prog,"p"); gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+    uRes=gl.getUniformLocation(prog,"iResolution"); uT=gl.getUniformLocation(prog,"iTime");
+  }catch(_){ return; }
+  /* DPR capped at 2: the button is ~350x56 CSS px, so even at 2 this is a small surface,
+     and an uncapped DPR3 would be 2.25x the fragment work for no visible gain. */
+  function size(){
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    const w=Math.max(1,Math.round(cv.clientWidth*dpr)), h=Math.max(1,Math.round(cv.clientHeight*dpr));
+    if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; gl.viewport(0,0,w,h); gl.uniform2f(uRes,w,h); }
+  }
+  function frame(now){ raf=0; if(!visible) return;
+    if(!t0) t0=now;
+    try{ size(); gl.uniform1f(uT,(now-t0)/1000); gl.drawArrays(gl.TRIANGLES,0,3); }catch(_){ visible=false; return; }
+    raf=requestAnimationFrame(frame); }
+  function start(){ if(visible||document.hidden) return; visible=true; if(!raf) raf=requestAnimationFrame(frame); }
+  function stop(){ visible=false; if(raf){ cancelAnimationFrame(raf); raf=0; } }
+  btn.classList.add("smoky");
+  try{
+    new IntersectionObserver(es=>{ es.forEach(e=>e.isIntersecting?start():stop()); },{threshold:0}).observe(cv);
+  }catch(_){ start(); }
+  document.addEventListener("visibilitychange",()=>{ document.hidden?stop():(cv.clientWidth?start():0); });
+})();
 $("#cfNo").onclick=closeConfirm;
 /* Going back for another hide after finishing one is the strongest satisfaction signal
    KAMO gets that isn't a share — and unlike the reveal screen there's no CTA here to
