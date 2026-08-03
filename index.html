@@ -1227,8 +1227,8 @@ function projectChar(char){ const v=new THREE.Vector3(); char.parts.spine.getWor
 function capture(){
   // The moment a live camera (or picked photo) becomes a paintable board — the step
   // between "camera works" and "started painting", where a silent drop would be invisible.
-  track("photo_captured",{source:bgKind,timed:timerArmed(),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
-  if(timerArmed()&&aimStartedAt) recordAim(aimGiven,(Date.now()-aimStartedAt)/1000,captureWasAuto);
+  track("photo_captured",{source:bgKind,timed:timerArmed("aim"),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
+  if(timerArmed("aim")&&aimStartedAt) recordAim(aimGiven,(Date.now()-aimStartedAt)/1000,captureWasAuto);
   aimStartedAt=0;
   captureWasAuto=false;   // consumed — the next capture is a thumb until the clock says otherwise
   if(torchOn) setTorch(false);   // the button is about to be hidden — never leave the light on with no way to kill it
@@ -1566,7 +1566,7 @@ board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDef
 board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e);
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   if(painting){ paintAt(p); paintHaptic(); } });
-function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed()}); } } }
+function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } } }
 board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
 
 /* FOUR, to match what extractPalette() is asked for. This list is only ever the fallback
@@ -2211,9 +2211,11 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    less to do. Shorter also sharpens the KAMO+ clock: 22 -> 75 is a difference you feel,
    where 45 -> 90 was just two long rounds.
 
-   NOT armed on the very first hide. First run is for teaching — maybeOnboard() is
-   still showing "Tap the figure to pose" at that moment, and a countdown on top of
-   an explanation converts onboarding into a fail state.
+   ARMED FROM THE FIRST HIDE, both phases. It used to skip hide one entirely, which meant
+   a new player met the product with no clock anywhere and no idea it was a timed game.
+   First run still gets protection, but as a longer AIM window (FIRST_AIM_SECONDS) rather
+   than as no clock: maybeOnboard() needs 7.2s to teach, and an 8s aim would fire on the
+   beat it finishes.
 
    Driven by ONE CSS transition on a transform. No rAF, no per-frame JS, no
    allocation; the only timers are two setTimeouts. */
@@ -2249,7 +2251,15 @@ const AIM_DEFAULT=8, AIM_MIN=6, AIM_MAX=14, PAINT_SECONDS=22;
 const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
 function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
+/* HIDE ONE ONLY. maybeOnboard() spends 7.2s on two hints; this leaves ~8s of aiming after
+   they clear, which is a normal round. It replaces "no clock at all on the first hide" —
+   the player now sees the countdown from their first second and learns the rule by reading
+   it, instead of discovering on hide two that this was a timed game all along.
+   Read BEFORE the history branch on purpose: aimHistory() is empty on hide one, so that
+   branch would hand back the standard 8s and put the tutorial in a race it loses. */
+const FIRST_AIM_SECONDS=15;
 function aimSeconds(){
+  if(firstRun()) return FIRST_AIM_SECONDS;
   /* Pro gets the bonus AND a raised ceiling. Adding the bonus alone would do almost
      nothing for the people who most want it: anyone the clock keeps beating is already
      pinned at AIM_MAX, so the bonus would be clamped straight back off. */
@@ -2271,7 +2281,20 @@ function recordAim(seconds,took,auto){
 }
 const timerBar=$("#timerBar"), timerTag=$("#timerTag"), timerNum=$("#timerNum");
 let timerEnd=0, timerPhase=null, _timerDone=null, _timerTick=null, _timerSec=null;
-function timerArmed(){ return !firstRun(); }
+/* BOTH CLOCKS RUN FROM THE FIRST HIDE. They used to run from the SECOND: a first-time
+   player got no timer on either screen — not a subtle one, none — so the entire premise of
+   the product was missing until a second hide most people never reach. That is why the bar
+   "wasn't there": on hide one it was never started.
+   The reason it was off is real, and is now handled in aimSeconds() instead of here.
+   maybeOnboard() spends 7.2s teaching ("Tap the figure to pose", then "Drag & pinch · then
+   Capture"), and an 8s aim clock would auto-capture on the beat that explanation finishes —
+   a fail state handed to someone in their first ten seconds. So hide one gets a longer AIM
+   WINDOW rather than no clock at all: the countdown is visible and honest from the first
+   second, it just isn't racing the tutorial. Paint needs no such grace — by then there is
+   nothing left to teach (maybeOnboardPaint deliberately shows no hint) and the round is
+   the thing.
+   Kept as a function, and still called per phase, so a future phase can opt out again. */
+function timerArmed(){ return true; }
 function stopTimer(){
   if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
   if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
@@ -2366,7 +2389,7 @@ function runExpire(fn){ if(midGesture()){ pendingExpire=fn; return; } fn(); }
 function flushExpire(){ const f=pendingExpire; if(!f) return; pendingExpire=null; f(); }
 function startTimer(phase,seconds,onExpire){
   stopTimer();
-  if(!timerArmed()) return;
+  if(!timerArmed(phase)) return;
   _timerOnExpire=onExpire;
   timerPhase=phase; timerEnd=Date.now()+seconds*1000;
   if(phase==="aim"){ aimStartedAt=Date.now(); aimGiven=seconds; }
@@ -2574,7 +2597,7 @@ function enterFinished(auto){ if(finished) return; finished=true;
      goes for `share_dismissed` and `share_mode_selected` added below. None of it measures
      anything until a build ships. Until then the aim-clock signal rides on
      photo_captured.auto, which flows today. */
-  track("round_finished",{seconds:roundSeconds(),auto:!!auto,coverage:Math.round(computeScore()||0),timed:timerArmed()});
+  track("round_finished",{seconds:roundSeconds(),auto:!!auto,coverage:Math.round(computeScore()||0),timed:timerArmed("paint"),aim_timed:timerArmed("aim")});
   currentScore=computeScore();
   /* Feed the member home. Every finished hide counts, including one the clock ended — the
      scoreboard reports what happened, it is not a reward for playing a certain way. */
