@@ -341,6 +341,26 @@
      its actual size back, and the icon goes to 19px to match `.sw svg`. */
   #swatchTools button.b.icon{width:34px;height:34px;background:rgba(10,12,16,.62);}
   #swatchTools button.b.icon svg{width:19px;height:19px;}
+  /* NARROW PHONES (iPhone SE 1st gen / iPod touch, 320pt). At the default sizes the row
+     needs ~366px and overflowed by ~46px there, so the last colour sat permanently under
+     the pinned tools — the exact defect that cost the palette its fifth colour on wider
+     screens. Shrinking is the right lever rather than dropping to three colours: the whole
+     row is still one tap deep, just tighter. 34 -> 30px controls plus tighter gaps saves
+     ~51px, which clears it with room to spare. 30px is still above the practical minimum
+     for a round target in a row with 7px between neighbours.
+     Breakpoint is 374px, not 360: the row needs ~366px at full size, so 361-374 (a 360pt
+     iPhone 12 mini, or any device in Display Zoom) would have overflowed just above a 360
+     cutoff — the same bug, moved rather than fixed. 375 is the narrowest width that fits
+     at 34px, so it is the correct edge. */
+  @media (max-width:374px){
+    #swatchRow{gap:7px;}
+    #swatches{gap:7px;}
+    #swatchTools{gap:6px;padding-left:4px;}
+    .sw{width:30px;height:30px;}
+    .sw svg{width:17px;height:17px;}
+    #swatchTools button.b.icon{width:30px;height:30px;}
+    #swatchTools button.b.icon svg{width:17px;height:17px;}
+  }
   button.b.icon:active{background:rgba(255,255,255,.16);border-color:var(--accent);color:var(--accent);}
   #btnSave{position:relative;}
   #btnSave .chk{display:none;}
