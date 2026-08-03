@@ -465,11 +465,17 @@
          weekly price arrives from the native layer. Fail-safe: if no prices ever
          arrive, we never show a plan whose purchase would fail. -->
     <div id="pwPlans" style="display:none">
-      <button class="pwPlan" data-plan="weekly" style="display:none">
+      <!-- Weekly is the DEFAULT selection: it is the plan the subscription business runs
+           on, and preselecting the lifetime was steering people to a one-time payment
+           (purchase attempts ran 2:1 lifetime over weekly). It still starts hidden until a
+           real weekly price arrives — applyPlanAvailability() reveals it, and falls back to
+           whatever IS sellable if the weekly never resolves, so this default can never
+           strand the user on a plan the store won't sell. -->
+      <button class="pwPlan active" data-plan="weekly" style="display:none">
         <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">Billed weekly · cancel anytime</span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
-      <button class="pwPlan active" data-plan="lifetime">
+      <button class="pwPlan" data-plan="lifetime">
         <div class="pwPlanTxt"><span class="pwPlanName">Lifetime</span><span class="pwPlanMeta">One-time · yours forever</span></div>
         <div class="pwPlanPrice"><b id="pwLifetimePrice">$14.99</b></div>
       </button>
@@ -1262,7 +1268,7 @@ buildSwatches();
 /* ===== Pro brushes + paywall ===== */
 const PRODUCT_ID="com.blisscoach.kamo.pro";
 // default to the plan we can actually sell today (the weekly sub isn't approved yet)
-const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="lifetime"; let pwBuyIntent=false;
+const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="weekly"; /* must stay in sync with the .active plan in the markup */ let pwBuyIntent=false;
 let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
 const BRUSHES=[{id:"solid",name:"Solid",pro:false},{id:"dapple",name:"Dapple",pro:true},{id:"leaf",name:"Leaf",pro:true},{id:"disrupt",name:"Camo",pro:true}];
 function setBrush(id){ brushMode=id; document.querySelectorAll("#brushes .brush").forEach(el=>el.classList.toggle("active",el.dataset.id===id)); }
