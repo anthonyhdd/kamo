@@ -263,55 +263,62 @@
     background:linear-gradient(90deg,rgba(8,10,14,0),rgba(8,10,14,.75));}
   #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;flex:1 1 auto;min-width:0;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
-  /* Swatches read as glass beads, not flat discs: a specular highlight up top, a soft
-     occlusion at the bottom, and a drop shadow to lift them off the scene. Without the
-     inner shading the pale palette entries (#e8e0d0) vanished into a bright photo. */
-  .sw{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.28);position:relative;cursor:pointer;
-      box-shadow:inset 0 1.5px 2px rgba(255,255,255,.45), inset 0 -2px 5px rgba(0,0,0,.32), 0 2px 7px rgba(0,0,0,.38);
+  /* ONE outline for every round control in the bottom row. Three treatments used to share
+     that row at the same 34px: swatches had a 2px white border plus inset "glass bead"
+     shading, Undo/Clear had button.b's 1px --stroke border with a backdrop blur, and the
+     eyedropper/auto chips overrode the border to mint. Same size, three outlines — which is
+     exactly what made the strip look assembled from spare parts. The rule below is the only
+     outline; the drop shadow (not the inset shading) is what keeps a pale swatch off a
+     bright photo. Selection is unchanged: white ring, dark gap. */
+  .sw,#swatchTools button.b.icon{border:1.5px solid rgba(255,255,255,.34);
+      box-shadow:0 2px 6px rgba(0,0,0,.40);}
+  .sw{flex:0 0 auto;width:34px;height:34px;border-radius:50%;position:relative;cursor:pointer;
       transition:transform .18s cubic-bezier(.2,.9,.3,1), border-color .18s, box-shadow .18s;}
   .sw:active{transform:scale(.9);}
   /* White ring, with a dark gap so it reads on any photo. Scale kept small — the row
      scrolls horizontally, so anything bigger clips against the container. */
-  .sw.active{border-color:#fff;transform:scale(1.06);
-      box-shadow:0 0 0 2px rgba(0,0,0,.55), 0 0 0 4px #fff, inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
-      box-shadow:0 0 0 2px var(--accent), inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
-  /* The all-colours button. A conic rainbow says "every colour" instantly; the mosaic tiles
-     that used to sit here said "a paint style", which is what this button no longer is. */
-  /* ALL-COLOURS BUTTON. A colour RING, not a beach ball: the old
-     conic-gradient(red,#ff0,#0f0,...) was six blown-out primaries next to a row of muted
-     camo browns and greens, and it looked like a placeholder. This uses hues already in the
-     product (--mint, and the timer bar's amber and red) and punches a dark core through the
-     middle, so it reads as "pick a colour" instead of "rainbow sticker".
-     Bigger than a plain swatch on purpose — it is a control, not a colour, and it is the
-     one thing in this row we are actually selling. */
-  .sw.picker{overflow:hidden;width:42px;height:42px;
-    background:
-      radial-gradient(circle at 50% 50%, #0a0c10 0 34%, rgba(10,12,16,0) 35%),
-      conic-gradient(from 210deg,#ff5f57,#ffb648,#ffe98a,#5fe6a4,#67d1d5,#7aa2ff,#b98cff,#ff5f57);}
-  .swLk{position:absolute;right:-1px;bottom:-2px;font-size:10px;color:var(--mint);
+  .sw.active,#swatchTools button.b.icon.active{border-color:#fff;transform:scale(1.06);
+      box-shadow:0 0 0 2px rgba(0,0,0,.55), 0 0 0 4px #fff, 0 2px 8px rgba(0,0,0,.45);}
+  /* ALL-COLOURS BUTTON — a conic rainbow, because "every colour" has to be readable at a
+     glance; the mosaic tiles that used to sit here said "a paint style", which is exactly
+     what this button stopped being.
+     A COLOUR, not a widget. It sits in a row of 34px colour dots, so it is one too — same
+     size, filled edge to edge. The 42px ring with a dark core read as a black button that
+     had wandered in from another UI. Multicolour is the whole message: this is the swatch
+     that is every swatch. Hues are the product's own (--mint, the timer bar's amber/red). */
+  .sw.picker{overflow:hidden;
+    background:conic-gradient(from 210deg,#ff5f57,#ffb648,#ffe98a,#5fe6a4,#67d1d5,#7aa2ff,#b98cff,#ff5f57);}
+  /* Inside the edge, not hanging off it: `.sw.picker` clips (overflow:hidden) so the old
+     right:-1px/bottom:-2px sliced the lock badge in half on the one button we're selling. */
+  .swLk{position:absolute;right:1px;bottom:0;font-size:10px;color:var(--mint);
     text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 8px rgba(95,230,164,.6);pointer-events:none;}
   .sw.picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;}
   /* The eyedropper is the strongest tool in the row — on a textured surface, matching the
      scene's actual colour is the only way to hide anything — and it was styled exactly
      like a paint swatch. Tinted so it reads as a tool at a glance. */
+  /* Tint only — no border override. The mint border these two carried was an ID-specificity
+     rule, so it beat `.sw.active` and a selected eyedropper never actually showed the white
+     selection ring. The fill still says "tool, not colour". */
   #eyedrop{display:flex;align-items:center;justify-content:center;
-    background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.55);}
+    background:rgba(95,230,164,.16);}
   #eyedrop svg{stroke:var(--accent);}
   #eyedrop.active{background:rgba(95,230,164,.34);}
-  /* Auto camo — the default, and the only chip that is a capability rather than a colour,
-     so it carries the accent tint to read as "the magic one" beside the palette. */
-  #autoSw{display:flex;align-items:center;justify-content:center;background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.5);}
-  #autoSw svg{stroke:var(--accent);}
-  #autoSw.active{background:rgba(95,230,164,.30);}
+  /* #autoSw is gone with the Auto camo chip (buildSwatches() no longer creates it), so its
+     rules went with it — a selector for an element that is never built is a trap for the
+     next person reading this row. The autoCamo FLAG is still there, permanently false; see
+     the note above the paint state. */
   .sw svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-  .bsample{width:22px;height:22px;border-radius:7px;vertical-align:middle;   /* no margin: .brush is inline-flex with gap:6px */
-    border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.05);flex:0 0 auto;}
-  .brush.locked .bsample{opacity:.72;}
   button.b{position:relative;overflow:hidden;border:1px solid var(--stroke);background:rgba(255,255,255,.07);color:var(--text);border-radius:16px;height:48px;padding:0 16px;font-size:14px;font-weight:650;letter-spacing:.2px;
     display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;backdrop-filter:blur(10px);transition:transform .12s cubic-bezier(.3,1.5,.5,1),background .2s,border-color .2s,color .2s;}
   button.b:active{transform:scale(.9);}
   button.b svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;}
   button.b.icon{width:48px;padding:0;border-radius:50%;}
+  /* The two tools that live in the colour row are colour-sized, so the whole strip reads as
+     one row of round controls instead of two mismatched groups. Scoped to #swatchTools on
+     purpose: #btnSave is also a .b.icon but it sits beside the 48px Share slab in
+     #actionRow, where shrinking it would break that pairing instead of fixing anything. */
+  #swatchTools button.b.icon{width:34px;height:34px;}
+  #swatchTools button.b.icon svg{width:17px;height:17px;}
   button.b.icon:active{background:rgba(255,255,255,.16);border-color:var(--accent);color:var(--accent);}
   #btnSave{position:relative;}
   #btnSave .chk{display:none;}
@@ -349,7 +356,12 @@
   #sizeBar::before{content:"";position:absolute;left:50%;top:16px;bottom:16px;transform:translateX(-50%);width:8px;border-radius:4px;background:rgba(10,12,16,.42);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.16);box-shadow:0 2px 12px rgba(0,0,0,.45);}
   #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:4px;border-radius:2px;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);}
   #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.6);border:1.5px solid rgba(0,0,0,.06);pointer-events:none;}
-  #sizeStar{position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:12px;line-height:1;color:var(--mint);opacity:.9;pointer-events:none;display:none;text-shadow:0 1px 6px rgba(0,0,0,.6),0 0 10px rgba(95,230,164,.5);}  /* subtle Pro marker (shown to free users) */
+  /* Was a mint ✦ — a Pro badge where a SCALE belongs. The bar's job is to say "small at the
+     bottom, big at the top", and it could only say it once you already dragged. This is the
+     biggest brush, drawn at the top as a plain white dot, so the range is legible at rest.
+     White to match the thumb and the fill: one material, not a second colour language. */
+  #sizeStar{position:absolute;top:0;left:50%;transform:translateX(-50%);width:26px;height:26px;border-radius:50%;
+    background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.55);opacity:.55;pointer-events:none;display:none;}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
   #revealHandle{position:absolute;top:0;bottom:0;width:46px;z-index:15;transform:translateX(-50%);display:none;touch-action:none;align-items:center;justify-content:center;}
@@ -367,13 +379,6 @@
   .cfCard .b{width:100%;margin-bottom:10px;height:52px;}
   #cfNo{border:1.5px solid var(--mint) !important;background:rgba(95,230,164,.12) !important;color:#fff !important;box-shadow:0 0 0 1px rgba(95,230,164,.2),0 6px 18px rgba(95,230,164,.12);}
   .cfDanger{background:rgba(220,60,50,.14) !important;border:1px solid rgba(220,60,50,.5) !important;color:#ff7a70 !important;}
-  /* brush modes (solid = free, patterns = Pro) */
-  #brushes{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;}
-  #brushes::-webkit-scrollbar{display:none;}
-  .brush{flex:0 0 auto;position:relative;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:17px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
-  .brush.active{border-color:var(--accent);background:rgba(255,255,255,.16);color:var(--accent);}
-  .brush .lk{font-size:11px;opacity:.85;}
-  .brush.locked{opacity:.9;}
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
@@ -500,7 +505,7 @@
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
 
     <!-- vertical brush-size slider (free) -->
-    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div><div id="sizeStar">✦</div></div>
+    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div><div id="sizeStar"></div></div>
     <!-- before/after reveal (finished view) -->
     <canvas id="revealC"></canvas>
     <div id="revealHandle"><div class="rhKnob">‹ ›</div></div>
@@ -537,7 +542,6 @@
           <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
         </div>
       </div>
-      <div id="brushes"></div>
       <!-- #editRow is gone. It held the three preset brush sizes — deleted when size became
            a KAMO+ tool, because they were its free substitute — and Undo/Clear, which moved
            up beside the colours. An empty row left behind is just margin nobody can see. -->
@@ -1193,9 +1197,8 @@ function capture(){
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
-  sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; Pro-gated (tap → paywall), free users can also use the 3 dots
+  sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; KAMO+ only — tapping it opens the paywall, and the free preset dots that used to sit under it are gone
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
-  setBrush("solid");
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
@@ -1288,6 +1291,15 @@ function paintStyle(){
   if(!scenePat&&sceneCanvas&&pctx){ try{ scenePat=pctx.createPattern(sceneCanvas,"no-repeat"); }catch(e){ scenePat=null; } }
   return scenePat||paintColor;
 }
+/* brushMode is now PERMANENTLY "solid". Dapple, Leaf and Camo are gone: all three varied
+   only the VALUE of one chosen colour (Leaf worse — it added +60 to the green channel and
+   painted green whatever you picked, ignoring your choice outright), so none of them did
+   what camouflage actually needs, which is several distinct colours from the real
+   background. They were Pro, and they were the weakest thing KAMO+ sold.
+   The flag and the _stamp()/_stampAlong() branches it drives are LEFT IN PLACE, unreachable.
+   Same call already made twice in this file for autoCamo and for mosaic: that is the hot
+   paint path, and a bad edit there breaks painting outright for everyone. Deleting four
+   provably-dead lines is not worth that risk at this hour. */
 let paintColor="#8a7f6a", brush=20, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
 /* PENCIL AT ONE END, ROLLER AT THE OTHER. Was 8-46 and linear.
    Linear over a wide range is unusable: at 2-64 the whole pencil zone (2-10) would sit in
@@ -1489,7 +1501,7 @@ function setAutoChip(){
   a.classList.toggle("active",autoCamo);
   if(autoCamo) document.querySelectorAll(".sw").forEach(x=>{ if(x!==a) x.classList.remove("active"); });
 }
-function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const w=$("#swatches"); if(!w) return; w.innerHTML=""; let firstColorSw=null;
+function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const w=$("#swatches"); if(!w) return; w.innerHTML=""; let firstColorSw=null, keepSw=null;
   /* AUTO CAMO IS GONE — the swatch that used to sit here painted the scene's own pixels
      back over the figure, which made the figure vanish without the player choosing
      anything. It removed the game: there was no colour to read, no judgement to make, and
@@ -1505,11 +1517,17 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      free substitute that makes the paid one unsellable. */
   const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
   eye.onclick=()=>{ eyedrop=true; autoCamo=false; mosaic=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
-  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; });
+  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; if(c===paintColor) keepSw=s; });
   /* Auto used to be the selected swatch on every round, so something was always lit. With
      it gone nothing is, while paintColor still holds a colour — the player would paint in
-     a shade no swatch shows as chosen. Select the first palette entry and paint with it. */
-  if(firstColorSw && !w.querySelector(".sw.active")){ paintColor=PALETTE[0]; firstColorSw.classList.add("active"); }
+     a shade no swatch shows as chosen. Select the first palette entry and paint with it.
+     `keepSw` first, because this function now also runs MID-ROUND from refreshProUI() (on
+     purchase / on the taste grant). Without it, buying KAMO+ while painting would silently
+     throw away the colour you were painting with and snap you back to PALETTE[0]. */
+  if(!w.querySelector(".sw.active")){
+    if(keepSw) keepSw.classList.add("active");
+    else if(firstColorSw){ paintColor=PALETTE[0]; firstColorSw.classList.add("active"); }
+  }
   /* THE FREE RAINBOW PICKER IS GONE, and removing it is the whole point of this change.
      All-colours is now what the KAMO+ button sells. Leaving a free `<input type="color">`
      sitting one swatch to its left would have made it the exact thing that has kept this
@@ -1558,21 +1576,21 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
   const prev=$("#allColSw"); if(prev) prev.remove();
   if(tools) tools.insertBefore(mo, tools.firstChild); else w.appendChild(mo);
 }
-/* buildSwatches() is NOT called here any more. It now reads canPro() for the mosaic
-   lock, and canPro/proTaste are declared below — calling it here hit the temporal
-   dead zone and threw before the module finished loading, which kills everything.
-   The initial build now sits next to buildBrushes() past those declarations. */
+/* buildSwatches() is NOT called here any more. It reads canPro() for the all-colours lock,
+   and canPro/proTaste are declared below — calling it here hit the temporal dead zone and
+   threw before the module finished loading, which kills everything. The initial build sits
+   past those declarations. */
 
-/* ===== Pro brushes + paywall ===== */
+/* ===== KAMO+ + paywall ===== */
 const PRODUCT_ID="com.blisscoach.kamo.pro";
 // default to the plan we can actually sell today (the weekly sub isn't approved yet)
 const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="weekly"; /* must stay in sync with the .active plan in the markup */ let pwBuyIntent=false;
 let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
-/* ONE FREE ROUND WITH THE PRO BRUSHES.
-   Describing Dapple sells nothing when a free brush is sitting right next to it — every
-   locked tool here has a substitute, which is why nobody was blocked and nobody bought.
-   So the second hide runs with everything unlocked, once per install. After that the
-   substitute stops feeling equivalent, which is the entire pitch.
+/* ONE FREE ROUND WITH THE KAMO+ TOOLS.
+   The second hide runs with everything unlocked, once per install, so the difference is
+   felt rather than described. What it now demonstrates is all-colours, the continuous size
+   slider and the doubled clock — the brushes it was originally written for are gone, and
+   the free substitutes that made every one of those locks pointless are gone with them.
    `proTaste` is round-scoped and never persisted: the GRANT is remembered so it can't
    repeat, the unlock itself dies with the round. */
 let proTaste=false;
@@ -1585,56 +1603,24 @@ function maybeGrantTaste(){
   if(!isPro && !tasteGranted() && bumpHides()===2){
     proTaste=true;
     try{ localStorage.setItem("kamo_taste","1"); }catch(e){}
-    showHint("KAMO+ brushes unlocked for this hide",3400);
+    showHint("KAMO+ unlocked for this hide — all colors, any size, more time",3400);
   }
   /* Refresh on the way OUT too, not just in: without this the row kept showing the
-     brushes unlocked for the rest of the session after the free round ended. */
+     KAMO+ tools unlocked for the rest of the session after the free round ended. */
   if(was!==proTaste) refreshProUI();
 }
-const BRUSHES=[{id:"solid",name:"Solid",pro:false},{id:"dapple",name:"Dapple",pro:true},{id:"leaf",name:"Leaf",pro:true},{id:"disrupt",name:"Camo",pro:true}];
-function setBrush(id){ brushMode=id; document.querySelectorAll("#brushes .brush").forEach(el=>el.classList.toggle("active",el.dataset.id===id)); }
-/* A 22x22 sample of what each Pro brush actually lays down. Deliberately drawn with the
-   same shapes _stamp() uses — scattered discs for Dapple, rotated blades for Leaf,
-   angular patches for Camo — so the chip is an honest preview and not decoration.
-   Drawn once per row build; no animation loop, nothing to pause. */
-function brushSample(id){
-  try{
-    const S=22, c=document.createElement("canvas");
-    c.width=S*2; c.height=S*2; c.className="bsample";
-    const g=c.getContext("2d"); if(!g) return null;
-    g.scale(2,2);
-    const base=[122,116,96];
-    const sh=a=>{const f=a<0?0:255,t=Math.abs(a);
-      return `rgb(${Math.round(base[0]+(f-base[0])*t)},${Math.round(base[1]+(f-base[1])*t)},${Math.round(base[2]+(f-base[2])*t)})`;};
-    const rnd=(n=>()=>((n=(n*1103515245+12345)&0x7fffffff)/0x7fffffff))(id.length*7919);
-    if(id==="dapple"){ for(let i=0;i<7;i++){ g.globalAlpha=.55+rnd()*.4; g.fillStyle=sh((rnd()-.5)*.55);
-        g.beginPath(); g.arc(rnd()*S,rnd()*S,1.6+rnd()*3.1,0,7); g.fill(); } }
-    else if(id==="leaf"){ for(let i=0;i<6;i++){ g.globalAlpha=.6+rnd()*.35;
-        g.fillStyle=`rgb(${Math.round(base[0]*.55+rnd()*30)},${Math.round(base[1]*.6+60+rnd()*20)},${Math.round(base[2]*.5+25)})`;
-        g.save(); g.translate(rnd()*S,rnd()*S); g.rotate(rnd()*Math.PI);
-        g.beginPath(); g.ellipse(0,0,3.4+rnd()*1.6,1.2+rnd()*.8,0,0,7); g.fill(); g.restore(); } }
-    else { for(let i=0;i<5;i++){ g.globalAlpha=.85; g.fillStyle=sh((rnd()-.5)*.6);
-        const cx=rnd()*S, cy=rnd()*S, k=5+((rnd()*3)|0), rad=2.6+rnd()*2.6;
-        g.beginPath(); for(let j=0;j<=k;j++){ const a=j/k*Math.PI*2, rr=rad*(.5+rnd()*.6);
-          const px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr; j?g.lineTo(px,py):g.moveTo(px,py); }
-        g.closePath(); g.fill(); } }
-    return c;
-  }catch(e){ return null; }
-}
-function buildBrushes(){ const w=$("#brushes"); if(!w) return; w.innerHTML="";
-  BRUSHES.forEach(b=>{ const el=document.createElement("button"); const locked=b.pro&&!canPro();
-    el.className="brush"+(b.id===brushMode?" active":"")+(locked?" locked":""); el.dataset.id=b.id;
-    /* A padlock tells you that you cannot have it. A sample tells you what it is — which
-       is the only thing that could make a locked brush worth paying for, since the free
-       Solid brush is a working substitute for all three. */
-    el.innerHTML=b.name+(b.pro?' <span class="lk">✦</span>':"");
-    if(b.pro){ const pv=brushSample(b.id); if(pv) el.insertBefore(pv,el.firstChild); }
-    el.onclick=()=>{ if(b.pro&&!canPro()){ openPaywall(); return; } setBrush(b.id); haptic(); }; w.appendChild(el); }); }
-function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar();
+/* buildSwatches() BELONGS HERE. The all-colours button decides at BUILD time whether it
+   gets an <input type="color"> or a padlock (`if(canPro())`), so without a rebuild the
+   thing you just paid for stayed locked: tapping it re-opened the paywall you had just
+   bought from. It self-healed on the next capture(), which is the worst possible timing —
+   the buyer checks immediately. This used to call buildBrushes() and rebuilt the row as a
+   side effect; that went out with the brushes and took the rebuild with it.
+   Safe to call repeatedly: buildSwatches() removes the previous #allColSw before
+   re-inserting it, and it keeps the currently-painted colour selected. */
+function refreshProUI(){ buildSwatches(); if(typeof renderSizeBar==="function") renderSizeBar();
   // nothing left to sell once they're KAMO+ → drop the top-left entry point
   const p=$("#btnPlus"); if(p && isPro) p.style.display="none"; }
 buildSwatches();   // safe here: past the isPro/proTaste declarations canPro() reads
-buildBrushes();
 
 const paywallEl=$("#paywall");
 function openPaywall(){ paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
@@ -2029,9 +2015,11 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    It creates the tension the format is built on, and it GUARANTEES every round lands
    on the reveal, which is the share surface.
 
-   AIM (15s)   -> auto-capture. PAINT (45s) -> auto-Done -> reveal.
-   60s a round: long enough to paint properly now that colour-picking is automatic,
-   short enough to replay and to fit inside a clip.
+   AIM (10s)   -> auto-capture. PAINT (30s) -> auto-Done -> reveal.
+   ~40s a round, down from 60. The old numbers were set when the colour row still had a free
+   all-colours picker and three pattern brushes to work through; with that gone there is less
+   to do and 45s of paint was dead air at the end. Shorter also sharpens the KAMO+ clock:
+   30 -> 75 is a difference you feel, where 45 -> 90 was two long rounds.
 
    NOT armed on the very first hide. First run is for teaching — maybeOnboard() is
    still showing "Tap the figure to pose" at that moment, and a countdown on top of
@@ -2049,7 +2037,7 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    clamped to a sane band. Someone who lines up a shot in 4s gets a taut 10s; someone the
    clock keeps beating gets pushed out toward 25s until it stops beating them.
    Adjusts only BETWEEN rounds, so the clock never changes under you mid-aim. */
-const AIM_DEFAULT=15, AIM_MIN=10, AIM_MAX=25, PAINT_SECONDS=45;
+const AIM_DEFAULT=10, AIM_MIN=7, AIM_MAX=18, PAINT_SECONDS=30;
 /* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
    what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
    round, unlike a brush that has a free substitute sitting next to it.
@@ -2060,7 +2048,7 @@ const AIM_DEFAULT=15, AIM_MIN=10, AIM_MAX=25, PAINT_SECONDS=45;
    still shows "vanished in 50s", the limit only decides when the clock takes the round
    away. What does change is coverage: 45s auto-Done can end a hide mid-paint, so Pro hides
    will trend better-covered. Accepted deliberately — that IS the perk. */
-const PRO_PAINT_SECONDS=90, PRO_AIM_BONUS=10, PRO_AIM_MAX=40;
+const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
 function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
 function aimSeconds(){
@@ -2299,7 +2287,9 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
   sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
-  if(sizeStar) sizeStar.style.display=canPro()?"none":"block"; }  /* ✦ Pro hint for free users */
+  /* Always shown now — it is the top of the SCALE, not a Pro badge, so it reads the same
+     whether or not you can drag the bar. */
+  if(sizeStar) sizeStar.style.display="block"; }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
@@ -2370,14 +2360,14 @@ function enterFinished(auto){ if(finished) return; finished=true;
      deliberately does NOT prompt for a rating here, because the Share/Save CTA appears
      on this very screen and we don't compete with it. */
   postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
-  ["swatchRow","brushes","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
+  ["swatchRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
   showScore();   // "vanished in Xs" — the number the round was played for
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
   revealX=1; drawReveal(); let rv=1; const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal(); if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim); else { revealX=0.5; drawReveal(); } }; requestAnimationFrame(anim); }
 function exitFinished(){ finished=false; revealC.style.display="none"; revealHandle.style.display="none"; revealHint.style.display="none";
-  ["swatchRow","brushes"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
+  ["swatchRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
   scoreChip.style.display="none"; }   // the time belongs to the reveal, not the editor
