@@ -119,8 +119,14 @@
      margin-left moves the BOX: left:50% effectively became left:50% - 14px, and the
      translateX(-50%) then centred it about the wrong point. The vertical -6px is fine —
      it keeps the glyphs at their original y — but horizontal must stay 0 and let the
-     padded box centre itself. */
-  .brand{position:absolute;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);
+     padded box centre itself.
+     VERTICAL: 18.5px, not 14px, so the glyphs centre on the SAME LINE as Retake and Done.
+     Those are 40px tall starting at safe-t+10, i.e. centred on 30; the wordmark's 23px of
+     glyph height therefore has to start at 30 - 11.5. At 14px it sat 4.5px high and the
+     three read as two rows rather than one. (The ✦/flip chips on the compose screen are
+     44px, centred on 32 — 2px off this line, which is below the threshold where anyone
+     sees it, and Retake/Done are the pairing that matters.) */
+  .brand{position:absolute;top:calc(18.5px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);
     cursor:pointer;padding:6px 14px;margin:-6px 0;-webkit-tap-highlight-color:transparent;}
   /* One solid white word. Both halves were already #fff, but only "MO" is inside a <b>:
      the display face ships a single weight, so the browser synthesised a bold for it and
@@ -437,6 +443,12 @@
      the press state above .mid and the wordmark stops reacting to taps on the paint screen,
      which is precisely where a member is most likely to reach for it. */
   .brand:active{transform:translateX(-50%) scale(.94);}
+  /* The + a member has actually paid for. Mint against the white wordmark and set slightly
+     smaller and raised, so it reads as a suffix on the logo rather than a fourth letter.
+     Hidden by default. Revealed at load from the stored entitlement, and again by
+     refreshProUI() on purchase and on restore. */
+  .brandPlus{display:none;color:var(--mint);font-size:.72em;font-weight:700;vertical-align:super;
+    margin-left:1px;text-shadow:0 0 12px rgba(95,230,164,.55);}
   /* Retake as a top-left nav button, aligned with Done */
   #btnBack{position:absolute;top:calc(var(--safe-t) + 10px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   #btnBack svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
@@ -737,7 +749,7 @@
     <button id="btnPlus" class="topbtn" title="KAMO+" aria-label="KAMO+">
       <svg viewBox="0 0 24 24"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
     </button>
-    <div class="brand">KA<b>MO</b></div>
+    <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
     <div id="timerBar"></div><div id="timerTag"></div><div id="timerNum"></div>
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
@@ -1984,8 +1996,20 @@ function maybeGrantTaste(){
    re-inserting it, and it keeps the currently-painted colour selected. */
 function refreshProUI(){ buildSwatches(); if(typeof renderSizeBar==="function") renderSizeBar();
   // nothing left to sell once they're KAMO+ → drop the top-left entry point
-  const p=$("#btnPlus"); if(p && isPro) p.style.display="none"; }
+  const p=$("#btnPlus"); if(p && isPro) p.style.display="none";
+  /* The wordmark becomes KAMO+ for a member. Gated on isPro, NOT canPro(): the free taste
+     round hands over the tools for one hide, and stamping the logo for it would tell someone
+     they own a subscription they have not bought — and then take it back when the round
+     ends. The + is a statement of membership, so only a real one earns it. */
+  const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 buildSwatches();   // safe here: past the isPro/proTaste declarations canPro() reads
+/* The + set directly, NOT via refreshProUI(). refreshProUI() calls renderSizeBar(), which
+   reads the `sizeBar` const declared much further down — calling it here would hit exactly
+   the temporal dead zone that already forced buildSwatches() to move to this line. This is
+   one style write and it covers the cold start: a returning subscriber whose isPro came
+   from localStorage sees the + on the first frame, without waiting for the native pro-sync
+   to call setPro(). */
+{ const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 
 const paywallEl=$("#paywall");
 /* ANSWER THE TAP. Four different locks opened the same generic sheet, so someone who
