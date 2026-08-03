@@ -228,6 +228,10 @@
        their own specular highlight and drop shadow rather than from a black wall. */
     background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.38) 42%,rgba(5,6,10,.78));}
   .row{display:flex;gap:8px;align-items:center;justify-content:center;}
+  #btnAgain{flex-basis:100%;margin-top:2px;background:none;border:none;cursor:pointer;
+    color:rgba(255,255,255,.62);font-family:var(--font);font-size:13.5px;font-weight:600;
+    padding:8px 0 2px;text-shadow:0 1px 4px rgba(0,0,0,.6);}
+  #btnAgain:active{color:#fff;}
   #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
   /* Swatches read as glass beads, not flat discs: a specular highlight up top, a soft
@@ -244,7 +248,13 @@
       box-shadow:0 0 0 2px var(--accent), inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
   .sw.picker{overflow:hidden;background:conic-gradient(red,#ff0,#0f0,#0ff,#00f,#f0f,red);}
   .sw.picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;}
-  #eyedrop{display:flex;align-items:center;justify-content:center;}
+  /* The eyedropper is the strongest tool in the row — on a textured surface, matching the
+     scene's actual colour is the only way to hide anything — and it was styled exactly
+     like a paint swatch. Tinted so it reads as a tool at a glance. */
+  #eyedrop{display:flex;align-items:center;justify-content:center;
+    background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.55);}
+  #eyedrop svg{stroke:var(--accent);}
+  #eyedrop.active{background:rgba(95,230,164,.34);}
   /* Auto camo — the default, and the only chip that is a capability rather than a colour,
      so it carries the accent tint to read as "the magic one" beside the palette. */
   #autoSw{display:flex;align-items:center;justify-content:center;background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.5);}
@@ -279,6 +289,11 @@
      14px, deliberately unmoved. */
   .navbtn{position:absolute;top:calc(var(--safe-t) - 12px);right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
   .navbtn:active{transform:scale(.94);}
+  /* Edit is NOT a primary action. It shared .navbtn with Done, so on the reveal screen it
+     rendered as a solid white pill in the strongest corner — competing with Share, which
+     is the only action on that screen worth anything. Same dark glass as Retake now. */
+  #btnEdit{background:rgba(16,16,20,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    color:#fff;border:1px solid var(--stroke);box-shadow:0 4px 14px rgba(0,0,0,.35);font-weight:700;}
   .brand.mid{left:50%;transform:translateX(-50%);}   /* centered on the captured (paint/finished) screen */
   /* Retake as a top-left nav button, aligned with Done */
   #btnBack{position:absolute;top:calc(var(--safe-t) - 12px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
@@ -454,9 +469,18 @@
         <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
         <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
       </div>
-      <div class="row" id="actionRow" style="margin-top:8px">
-        <button class="b primary" id="btnShare"><svg viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>Share</button>
+      <div class="row" id="actionRow" style="margin-top:8px;flex-wrap:wrap">
+        <!-- The generic export glyph said "a file is leaving your phone". The eye says what
+             the share is FOR: someone on the other end has to find the figure. Copy follows
+             the same line as the home screen ("dare your friends to spot it"). -->
+        <button class="b primary" id="btnShare"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3.2"/></svg>Dare them to spot it</button>
         <button class="b icon" id="btnSave" title="Save photo"><svg class="dl" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg><svg class="chk" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>
+        <!-- Going again is the strongest satisfaction signal KAMO gets (it is what the
+             rating prompt and the paywall both hang off) and it was only reachable from
+             the chevron in the top-left corner. flex-basis:100% drops it onto its own line
+             under Share, and living inside #actionRow means it inherits that row's
+             show/hide with no extra wiring. -->
+        <button id="btnAgain">Hide another one</button>
       </div>
       <!-- The instruction line that used to sit here ("Grab a color · paint the figure ·
            make it vanish") is gone. Both JS references to #paintBadge — the hide in
@@ -1090,7 +1114,10 @@ function roundSeconds(){ return Math.max(1,Math.round((roundMs||(roundStartedAt?
    "% hidden" was a number nobody could act on. */
 function showScore(){
   scoreChip.style.display="block";
-  scoreChip.innerHTML=`🫥 vanished in <b>${roundSeconds()}s</b>`;
+  /* Coverage first, time second. The chip used to report only the round time — a
+     speedrun number. How well it is hidden is the thing worth bragging about and the
+     reason to go again, and it was computed (currentScore) and shown nowhere. */
+  scoreChip.innerHTML=`🫥 <b>${Math.max(0,Math.min(100,Math.round(currentScore||0)))}%</b> hidden · ${roundSeconds()}s`;
 }
 
 /* ===== PAINT ===== */
@@ -1945,6 +1972,7 @@ window.addEventListener("resize",()=>{ if(finished) drawReveal(); });
 const confirmSheet=$("#confirmSheet");
 function closeConfirm(){ confirmSheet.classList.remove("show"); }
 $("#btnBack").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
+$("#btnAgain").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
 $("#cfNo").onclick=closeConfirm;
 /* Going back for another hide after finishing one is the strongest satisfaction signal
    KAMO gets that isn't a share — and unlike the reveal screen there's no CTA here to
