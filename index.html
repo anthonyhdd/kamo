@@ -451,6 +451,11 @@
   .ssBtn:active{transform:scale(.98);}
   .ssMore{background:rgba(255,255,255,.06);}
   .ssClose{display:block;width:100%;margin-top:4px;background:none;border:none;color:rgba(255,255,255,.55);font-size:15px;font-weight:600;cursor:pointer;padding:10px;}
+  /* Quiet on purpose — mint text on nothing, no slab, no border. It sits between the share
+     buttons and Cancel so it is read on the way past rather than stepped over. Loud here
+     would cost shares, and shares are the growth loop. */
+  .ssPlus{display:block;width:100%;margin-top:2px;background:none;border:none;color:var(--mint);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px 10px;-webkit-tap-highlight-color:transparent;}
+  .ssPlus:active{opacity:.6;}
 </style>
 </head>
 <body><div id="app">
@@ -562,7 +567,13 @@
          `score` is paint coverage, so "cover the whole figure in fewer strokes" is what
          these tools literally do — outcome-led and still true. -->
     <div class="pwTitle">Disappear faster, better, stronger</div>
-    <div class="pwSub">Pro pattern brushes and fine size control — cover the whole figure in fewer strokes, and score higher on every hide.</div>
+    <!-- LEADS WITH THE THINGS THAT HAVE NO FREE SUBSTITUTE. The old line sold brushes and
+         the size slider, and this file's own notes admit why that never converted: the free
+         Solid brush does the job, so nobody was ever blocked. A clean export and a clock
+         that stops taking the round away are both things you cannot get by using the app
+         differently. Brushes moved to the end, where they belong — as a bonus, not the
+         pitch. Keep this in sync with the share-sheet line (#ssPlus). -->
+    <div class="pwSub">Export with no KAMO mark, and double the clock — 90s to paint instead of 45. Plus every Pro pattern brush and fine size control.</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -627,6 +638,12 @@
     <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More options</button>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
+    <!-- THE PITCH, AT THE MOMENT IT LANDS. The paywall used to fire mid-round, on tapping a
+         locked brush — precisely when the free brush sitting next to it makes the case for
+         you. Here the user has a finished hide and is about to post it, which is the only
+         moment the watermark is a real problem. Deliberately a quiet line and not another
+         slab: it must not compete with the share buttons, which are the growth loop. -->
+    <button class="ssPlus" id="ssPlus" style="display:none">✦ Export without the KAMO mark</button>
     <button class="ssClose" id="ssClose">Cancel</button>
   </div>
 </div>
@@ -1161,7 +1178,7 @@ function capture(){
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
-  startTimer("paint",PAINT_SECONDS,()=>runExpire(()=>{ if(mode==="paint"&&!finished) enterFinished(true); }));
+  startTimer("paint",paintSeconds(),()=>runExpire(()=>{ if(mode==="paint"&&!finished) enterFinished(true); }));
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
   maybeOnboardPaint();
 }
@@ -1711,7 +1728,18 @@ let appLink="https://apps.apple.com/app/id6789639784";
 function shareUrl(){ return appLink; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
-function drawWatermark(c,W,H){ const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
+function drawWatermark(c,W,H){
+  /* KAMO+ EXPORTS CLEAN. This is the thing being sold now, and it is deliberately the one
+     perk gated on `isPro` rather than canPro(): the free taste round unlocks brushes and
+     the longer clock, but it must NOT hand out a watermark-free export. Everything else
+     the taste grants dies with the round; an exported file leaves the app and never comes
+     back, so giving one away free would be giving away the product itself.
+     The trade is understood: paying users stop carrying the wordmark into Instagram, so
+     the viral loop keeps running on the free tier — which is the overwhelming majority.
+     Gating the reveal VIDEO instead would have cost every free user the format that
+     actually travels, which is the opposite of what this app needs. */
+  if(isPro) return;
+  const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
   // bottom scrim
   const bh=Math.round(H*0.14); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
   /* ONE line now: the wordmark. This block has lost a line twice, and both times the fix
@@ -1827,10 +1855,17 @@ function composeBeforeAfter(W){ const H=Math.round(W*16/9); const o=document.cre
   c.drawImage(bb,ox,oy,dw,dh);                                   // left = visible
   c.save(); c.beginPath(); c.rect(W/2,0,W/2,H); c.clip(); c.drawImage(board,ox,oy,dw,dh); c.restore();  // right = hidden
   c.fillStyle="rgba(255,255,255,.96)"; c.fillRect(W/2-2,0,4,H); const hy=H*0.42; c.beginPath(); c.arc(W/2,hy,Math.round(W*0.045),0,7); c.fillStyle="#fff"; c.fill();
-  const u=W/390; c.textAlign="center";
-  const bh=H*0.2, g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(4,6,10,0)"); g.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
-  c.fillStyle="#fff"; fit(c,"Now you see him. Now you don't.",24*u,W,14,"700"); c.fillText("Now you see him. Now you don't.",W/2,H-Math.round(76*u));
-  c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO",W/2,H-Math.round(32*u)); return o; }
+  /* Same deal as drawWatermark: KAMO+ exports this side-by-side clean too. This composer
+     paints its own overlay rather than calling drawWatermark, so it needs its own guard —
+     miss it and the static Before/After would still ship branded for a paying user, which
+     is exactly the kind of half-applied gate that makes people ask for a refund. */
+  if(!isPro){
+    const u=W/390; c.textAlign="center";
+    const bh=H*0.2, g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(4,6,10,0)"); g.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
+    c.fillStyle="#fff"; fit(c,"Now you see him. Now you don't.",24*u,W,14,"700"); c.fillText("Now you see him. Now you don't.",W/2,H-Math.round(76*u));
+    c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO",W/2,H-Math.round(32*u));
+  }
+  return o; }
 async function shareBlob(){ const canv = shareMode==="ba" ? composeBeforeAfter(1080) : composeShare(1080); return await new Promise(r=>canv.toBlob(r,"image/jpeg",0.9)); }
 async function shareReveal(){
   // Native app → let the user pick Instagram Story / Snapchat / More.
@@ -1842,7 +1877,12 @@ async function shareReveal(){
   await deliver(await staticBlob(),"jpg");
 }
 const shareSheetEl=$("#shareSheet");
-function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); track("share_opened",{score:Math.round(currentScore||0)}); }
+function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10);
+  /* Re-evaluated every open, not once at load: setPro() can flip mid-session (purchase,
+     restore, or a revoked entitlement) and a stale pitch shown to someone who just paid is
+     the fastest way to look broken. */
+  { const p=$("#ssPlus"); if(p) p.style.display = isPro ? "none" : "block"; }
+  track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
    closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
@@ -1896,6 +1936,9 @@ if(window.ReactNativeWebView){
     invite.parentNode.insertBefore(saveBtn,invite);
   }
 }
+/* Closes the sheet rather than stacking the paywall on top of it — two sheets deep is how
+   you lose both. Not counted as a dismissal: they didn't walk away, they went to buy. */
+$("#ssPlus").onclick=()=>{ closeShareSheet(); haptic(10); track("plan_selected",{plan:"watermark_pitch"}); openPaywall(); };
 $("#ssClose").onclick=()=>dismissShareSheet("cancel");
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdrop"); };
 /* [data-target] only — the invite button below is not an image share and must not
@@ -1952,16 +1995,32 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    clock keeps beating gets pushed out toward 25s until it stops beating them.
    Adjusts only BETWEEN rounds, so the clock never changes under you mid-aim. */
 const AIM_DEFAULT=15, AIM_MIN=10, AIM_MAX=25, PAINT_SECONDS=45;
+/* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
+   what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
+   round, unlike a brush that has a free substitute sitting next to it.
+   Gated on canPro(), NOT isPro: the free taste round should demonstrate this, the same way
+   it demonstrates the brushes. The watermark is the one perk held back to real payers.
+   ⚠️ The comment above argues PAINT must stay identical for everyone "because the round
+   time is the score". That still holds for the DISPLAYED time — a Pro user who takes 50s
+   still shows "vanished in 50s", the limit only decides when the clock takes the round
+   away. What does change is coverage: 45s auto-Done can end a hide mid-paint, so Pro hides
+   will trend better-covered. Accepted deliberately — that IS the perk. */
+const PRO_PAINT_SECONDS=90, PRO_AIM_BONUS=10, PRO_AIM_MAX=40;
+function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
 function aimSeconds(){
-  const h=aimHistory(); if(h.length<2) return AIM_DEFAULT;
+  /* Pro gets the bonus AND a raised ceiling. Adding the bonus alone would do almost
+     nothing for the people who most want it: anyone the clock keeps beating is already
+     pinned at AIM_MAX, so the bonus would be clamped straight back off. */
+  const pro=canPro(), bonus=pro?PRO_AIM_BONUS:0, hi=pro?PRO_AIM_MAX:AIM_MAX;
+  const h=aimHistory(); if(h.length<2) return AIM_DEFAULT+bonus;
   const recent=h.slice(-4);
   // any round the clock had to finish means they needed more time than they got
-  if(recent.slice(-2).every(r=>r.auto)) return Math.min(AIM_MAX, (recent[recent.length-1].s||AIM_DEFAULT)+5);
+  if(recent.slice(-2).every(r=>r.auto)) return Math.min(hi, (recent[recent.length-1].s||AIM_DEFAULT)+5+bonus);
   const manual=recent.filter(r=>!r.auto).map(r=>r.t).sort((a,b)=>a-b);
-  if(!manual.length) return AIM_DEFAULT;
+  if(!manual.length) return AIM_DEFAULT+bonus;
   const med=manual[manual.length>>1];
-  return Math.max(AIM_MIN, Math.min(AIM_MAX, Math.round(med*1.6)));
+  return Math.max(AIM_MIN, Math.min(hi, Math.round(med*1.6)+bonus));
 }
 function recordAim(seconds,took,auto){
   try{
