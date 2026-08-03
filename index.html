@@ -1844,6 +1844,19 @@ async function shareReveal(){
 const shareSheetEl=$("#shareSheet");
 function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10); track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
+/* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
+   closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
+   counting those as dismissals would make every successful share look like an abandon.
+   This is the missing half of the biggest leak in the funnel: over 30 days 72 users opened
+   this sheet and only 39 completed a share, and just 13 of the 33 who dropped out were
+   visible (as native `share_cancelled`, which fires on iOS's OWN sheet, further down).
+   The other ~20 closed this one and left no trace at all. `mode` rides along so the leak
+   can be read per share format now that Before/After is the default. */
+function dismissShareSheet(via){
+  if(!shareSheetEl.classList.contains("show")) return;   // never double-count
+  track("share_dismissed",{via,mode:shareMode,score:Math.round(currentScore||0)});
+  closeShareSheet();
+}
 async function nativeShare(target){ closeShareSheet();
   const link=shareUrl();
   /* "Tap to reveal" was a promise nothing could keep — there is no backend, the shared
@@ -1883,8 +1896,8 @@ if(window.ReactNativeWebView){
     invite.parentNode.insertBefore(saveBtn,invite);
   }
 }
-$("#ssClose").onclick=closeShareSheet;
-shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) closeShareSheet(); };
+$("#ssClose").onclick=()=>dismissShareSheet("cancel");
+shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdrop"); };
 /* [data-target] only — the invite button below is not an image share and must not
    fall through to nativeShare(undefined). */
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>nativeShare(b.dataset.target));
@@ -1898,7 +1911,12 @@ $("#ssInvite").onclick=()=>{ closeShareSheet(); haptic(10);
   if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(()=>{}); return; }
   try{ navigator.clipboard.writeText(text); showHint("Invite copied — paste it to a friend"); }catch(e){ showHint("Couldn't copy the invite"); } };
 updateInviteBtn();   // plain browser → visible immediately; native → waits for setNativeCaps
-document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode=t.dataset.mode; document.querySelectorAll("#ssMode .ssTab").forEach(x=>x.classList.toggle("active",x===t)); haptic(8); });
+/* The tab switch was never tracked, which is why "93% of users never leave the default
+   tab" had to be inferred from the share_completed kind split instead of measured. Now
+   that Before/After IS the default, the question flips to whether people actively switch
+   BACK to the static image — that is the signal that would justify reverting, and nothing
+   in the funnel could see it. */
+document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode=t.dataset.mode; document.querySelectorAll("#ssMode .ssTab").forEach(x=>x.classList.toggle("active",x===t)); haptic(8); track("share_mode_selected",{mode:shareMode}); });
 /* 1-tap → Instagram Stories: send the static image to native, which pushes it
    straight into IG Stories via react-native-share (no share sheet). */
 /* ===== ONBOARDING (once) ===== */
@@ -2218,8 +2236,13 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(auto){ if(finished) return; finished=true;
   roundMs=roundStartedAt?Date.now()-roundStartedAt:0; stopTimer();
-  /* NOT allow-listed in kamo-app yet, so it is inert until the next native build — the
-     name is added there in the same change. Until then the aim-clock signal rides on
+  /* Allow-listed in kamo-app's source, but NOT in the build users are running: as of
+     2026-08-03 `round_finished` does not exist in the Amplitude project at all, while the
+     web has been firing it for as long as this line has existed. That is the proof that
+     the LIVE native build is behind main — every event name added to WEB_EVENTS since the
+     last App Store release is being dropped on the floor by the wrapper, silently. Same
+     goes for `share_dismissed` and `share_mode_selected` added below. None of it measures
+     anything until a build ships. Until then the aim-clock signal rides on
      photo_captured.auto, which flows today. */
   track("round_finished",{seconds:roundSeconds(),auto:!!auto,coverage:Math.round(computeScore()||0),timed:timerArmed()});
   currentScore=computeScore();
