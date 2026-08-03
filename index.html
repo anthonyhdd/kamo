@@ -375,7 +375,17 @@
   @keyframes pwGlow{0%,100%{opacity:.6}50%{opacity:1}}
   .pwCard>*{position:relative;z-index:1;}  /* content above the glow */
   .pwKick{position:relative;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--mint);text-transform:uppercase;text-shadow:0 0 14px rgba(95,230,164,.5);}
-  .pwTitle{font-family:var(--display);font-size:26px;font-weight:700;letter-spacing:-.3px;margin-top:4px;}
+  /* Same mint sweep as #pwWeeklyMeta below (pwShimmer, 3.4s): a gradient clipped to the
+     glyphs with the fill made transparent. The base stops are WHITE here rather than the
+     meta line's grey — the title has to read as a solid white headline with a band moving
+     through it, not as dimmed secondary text.
+     26 -> 24px: "Disappear faster, better, stronger" wraps to two lines in the card, and
+     24 keeps that second line from crowding the subtitle. */
+  .pwTitle{font-family:var(--display);font-size:24px;font-weight:700;letter-spacing:-.3px;margin-top:4px;line-height:1.18;
+    background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
+    background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:pwShimmer 3.4s linear infinite;}
   .pwSub{font-size:14px;opacity:.8;margin-top:6px;line-height:1.4;}
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
@@ -544,7 +554,7 @@
          hides the figure, the preset sizes work. Nobody is blocked, so nobody buys.
          `score` is paint coverage, so "cover the whole figure in fewer strokes" is what
          these tools literally do — outcome-led and still true. -->
-    <div class="pwTitle">Disappear faster</div>
+    <div class="pwTitle">Disappear faster, better, stronger</div>
     <div class="pwSub">Pro pattern brushes and fine size control — cover the whole figure in fewer strokes, and score higher on every hide.</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
