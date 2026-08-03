@@ -445,7 +445,11 @@
         <button class="b primary" id="btnShare"><svg viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>Share</button>
         <button class="b icon" id="btnSave" title="Save photo"><svg class="dl" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg><svg class="chk" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>
       </div>
-      <div class="badge" id="paintBadge">Grab a color · paint the figure · make it vanish</div>
+      <!-- The instruction line that used to sit here ("Grab a color · paint the figure ·
+           make it vanish") is gone. Both JS references to #paintBadge — the hide in
+           enterFinished() and the restore in exitFinished() — are null-guarded, so they
+           no-op rather than throw. -->
+
     </div>
 
     <div id="busy"><div class="spinner"></div><div class="lbl">Creating your reveal…</div></div>
