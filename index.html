@@ -121,10 +121,16 @@
      turning it into a padded pill grew it to ~26px tall, so at 40px it now runs to ~66px
      and the hint at 50px was landing on its lower half — "Tap the figure to pose" printed
      through "FIND A SPOT · 15S" on the first screen a new user ever sees.
-     The three now stack cleanly: wordmark to ~36, pill 44-72, hint from 80. Safe as a
-     constant offset — both clocks arm on every hide now, so the pill is present whenever a
-     hint is, and there is no state where the hint would float alone with a gap above it. */
-  .hint{position:absolute;top:calc(80px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
+     The pill also had to clear the TOP BUTTONS, not just the wordmark. Retake/Done (40px)
+     and the ✦/flip chips (44px) all start at safe-t+10, so anything centred above ~54
+     collides with them as soon as the label is long — "MAKE IT VANISH · 22S" ran into Done
+     at 320px. The pill sits below all of them rather than being shrunk to fit: the label
+     length depends on the phase AND the seconds, so a size that works for one string is a
+     size that breaks on the next.
+     Final stack: bar 0-5, wordmark 14-37 and buttons 10-54 (centred vs edges, no clash),
+     pill 58-86, hint from 92. Constant offsets are safe — both clocks arm on every hide, so
+     the pill is present whenever a hint is. */
+  .hint{position:absolute;top:calc(92px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);
     padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
     box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:none;opacity:0;transition:opacity .3s;}
@@ -173,7 +179,7 @@
      only clock was a hairline at the top edge, hidden under the notch. A round you cannot
      see the end of is not a round, it just interrupts you. A pill so it survives a bright
      photo; tabular digits so the width doesn't jitter as it counts down. */
-  #timerTag{position:absolute;top:calc(44px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
+  #timerTag{position:absolute;top:calc(58px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
     font-family:var(--display);font-size:12px;font-weight:850;letter-spacing:1.2px;text-transform:uppercase;
     font-variant-numeric:tabular-nums;padding:5px 11px;border-radius:999px;white-space:nowrap;
     background:rgba(8,10,14,.52);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
@@ -277,15 +283,21 @@
      where .ssSave sets its own spacing — an unscoped `#btnSave{margin-top}` is an id
      selector and would outrank that class rule wherever the button ended up. */
   #actionRow #btnSave{margin-top:2px;}
-  /* Colours scroll; Undo/Clear do not. `min-width:0` on the scroller is what makes that
-     work — without it a flex item refuses to shrink below its content width, so the tools
-     would be shoved off the right edge instead of the colours scrolling underneath them. */
-  #swatchRow{display:flex;align-items:center;gap:10px;}
-  /* No fade on the left edge any more. It existed to hide a colour scrolling underneath the
-     tools — but the row no longer overflows (the palette is 4 colours, see extractPalette),
-     so there was nothing to hide and it read as a black smear sitting on the photo. */
-  #swatchTools{flex:0 0 auto;display:flex;gap:8px;padding-left:8px;position:relative;}
-  #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;flex:1 1 auto;min-width:0;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
+  /* ONE ROW, NOT TWO GROUPS. The colours used to be a stretching scroller (flex:1 1 auto)
+     with the tools pinned to its right, which pushed a visible gap between them and made
+     the strip read as two separate clusters — and at four colours it could still scroll,
+     so a control could hide off-screen.
+     At three colours the whole row is 7 controls / ~292px and fits any phone outright, so
+     the scroller stops stretching (flex:0 1 auto) and the row centres as a single unit.
+     Reading order is now exactly: eyedropper · three colours · all-colours · undo · clear.
+     That order is not set here — it falls out of buildSwatches() filling #swatches and the
+     picker being inserted at the head of #swatchTools. */
+  #swatchRow{display:flex;align-items:center;justify-content:center;gap:9px;}
+  /* Same gap and no left padding, so the two containers are invisible as containers — the
+     seam between colours and tools was the padding-left:8px plus a wider gap, on top of the
+     stretch. (The black fade that used to live here went with the overflow it was hiding.) */
+  #swatchTools{flex:0 0 auto;display:flex;gap:9px;position:relative;}
+  #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 0 9px;scrollbar-width:none;flex:0 1 auto;min-width:0;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
   /* ONE outline for every round control in the bottom row. Three treatments used to share
      that row at the same 34px: swatches had a 2px white border plus inset "glass bead"
@@ -348,21 +360,13 @@
      its actual size back, and the icon goes to 19px to match `.sw svg`. */
   #swatchTools button.b.icon{width:34px;height:34px;background:rgba(10,12,16,.62);}
   #swatchTools button.b.icon svg{width:19px;height:19px;}
-  /* NARROW PHONES (iPhone SE 1st gen / iPod touch, 320pt). At the default sizes the row
-     needs ~366px and overflowed by ~46px there, so the last colour sat permanently under
-     the pinned tools — the exact defect that cost the palette its fifth colour on wider
-     screens. Shrinking is the right lever rather than dropping to three colours: the whole
-     row is still one tap deep, just tighter. 34 -> 30px controls plus tighter gaps saves
-     ~51px, which clears it with room to spare. 30px is still above the practical minimum
-     for a round target in a row with 7px between neighbours.
-     Breakpoint is 374px, not 360: the row needs ~366px at full size, so 361-374 (a 360pt
-     iPhone 12 mini, or any device in Display Zoom) would have overflowed just above a 360
-     cutoff — the same bug, moved rather than fixed. 375 is the narrowest width that fits
-     at 34px, so it is the correct edge. */
+  /* NARROW PHONES (iPhone SE 1st gen / iPod touch, 320pt). Kept even though three colours
+     now fit 320 with ~44px to spare: it buys the row breathing space rather than pressing
+     it to the screen edges, and it is the safety net if a control is ever added back. */
   @media (max-width:374px){
     #swatchRow{gap:7px;}
     #swatches{gap:7px;}
-    #swatchTools{gap:6px;padding-left:4px;}
+    #swatchTools{gap:7px;}
     .sw{width:30px;height:30px;}
     .sw svg{width:17px;height:17px;}
     #swatchTools button.b.icon{width:30px;height:30px;}
@@ -386,7 +390,7 @@
      (<StatusBar hidden/> in App.js), so nothing is drawn up there, and both buttons
      sit at the left/right edges — clear of the centred Dynamic Island. KAMO stays at
      14px, deliberately unmoved. */
-  .navbtn{position:absolute;top:calc(var(--safe-t) - 12px);right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
+  .navbtn{position:absolute;top:calc(var(--safe-t) + 10px);right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
   .navbtn:active{transform:scale(.94);}
   /* Edit is NOT a primary action. It shared .navbtn with Done, so on the reveal screen it
      rendered as a solid white pill in the strongest corner — competing with Share, which
@@ -399,7 +403,7 @@
      which is precisely where a member is most likely to reach for it. */
   .brand:active{transform:translateX(-50%) scale(.94);}
   /* Retake as a top-left nav button, aligned with Done */
-  #btnBack{position:absolute;top:calc(var(--safe-t) - 12px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
+  #btnBack{position:absolute;top:calc(var(--safe-t) + 10px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   #btnBack svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
   #btnBack:active{transform:scale(.94);}
   /* clean padlock icon for locked (Pro) brushes — replaces the emoji */
@@ -518,12 +522,31 @@
   /* share target chooser */
   #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.55);backdrop-filter:blur(5px);}
   #shareSheet.show{display:flex;}
-  .ssCard{width:100%;max-width:460px;background:linear-gradient(180deg,#12161c,#0a0d11);border-top-left-radius:24px;border-top-right-radius:24px;border:1px solid rgba(255,255,255,.1);padding:18px 18px calc(16px + var(--safe-b));animation:pwUp .28s cubic-bezier(.2,.9,.3,1);}
-  .ssTitle{text-align:center;font-size:14px;font-weight:700;opacity:.6;margin:2px 0 12px;}
-  #ssMode{display:flex;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);border-radius:14px;padding:4px;margin-bottom:14px;}
-  .ssTab{flex:1;height:40px;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,.6);font-size:14px;font-weight:750;cursor:pointer;transition:background .18s,color .18s;}
+  /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
+     gradient, same 26px corners, same rise, same breathing mint glow — because the two are
+     the only full-width sheets in the app and they were speaking in different voices: the
+     paywall in the display face on green, this one in flat grey with a dimmed 14px label.
+     Only the padding is overridden, tighter than the paywall's: this sheet has to stay
+     short. It is the growth loop, and a sheet that runs past the fold costs shares. */
+  .ssCard{width:100%;max-width:460px;padding:20px 20px calc(16px + var(--safe-b));}
+  .ssCard .pwTitle{font-size:22px;}
+  .ssCard .pwSub{margin-bottom:14px;}
+  #ssMode{display:flex;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);border-radius:14px;padding:4px;margin-bottom:12px;}
+  .ssTab{flex:1;height:38px;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,.6);font-size:14px;font-weight:800;cursor:pointer;transition:background .18s,color .18s;}
   .ssTab.active{background:#fff;color:#0a0b0e;}
-  .ssBtn{width:100%;height:56px;margin-bottom:10px;border-radius:16px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:#fff;font-size:16px;font-weight:750;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;}
+  /* Matching .pwBuy's geometry and weight — 16px radius, 900 on the label — so a share
+     destination and the paywall's CTA read as the same class of button. */
+  .ssBtn{width:100%;height:54px;margin-bottom:9px;border-radius:16px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:#fff;font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+  /* MORE + SAVE SHARE A LINE. Stacked, they were two full-width slabs carrying the two
+     least-used actions in the sheet, and they pushed the KAMO+ line and Cancel toward the
+     fold. Side by side costs one line instead of two. On the web Save stays on the action
+     row, so this row holds More alone and it simply spans the width. */
+  .ssRow2{display:flex;gap:9px;}
+  .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;}
+  /* The sheen from the paywall CTA, on the one destination we most want tapped. Same
+     keyframes, same timing — it is the shared vocabulary, not a second effect. */
+  .ssBtn.ig{position:relative;overflow:hidden;}
+  .ssBtn.ig::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
   .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
   .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
   .ssBtn.snap{background:#fffc00;color:#111;border:none;}
@@ -533,13 +556,13 @@
      already had, because that swap is the truthful "actually written to the camera roll"
      ack that native drives via window.__kamoSaved. */
   .ssBtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;}
-  /* Keeping is not sharing — a gap stops it reading as a fourth destination in the list
-     above it. Air rather than a rule: every row here is already a bordered pill, and a
-     separator line between pills just adds a fifth edge to look at. */
-  .ssBtn.ssSave{margin-top:14px;}
-  .ssBtn:active{transform:scale(.98);}
+  /* No top margin any more — Save is not a fourth destination stacked under the others, it
+     sits beside More on its own line, and the line break already does the separating that
+     the 14px of air used to do. */
+  .ssBtn:active{transform:scale(.96);}
   .ssMore{background:rgba(255,255,255,.06);}
-  .ssClose{display:block;width:100%;margin-top:4px;background:none;border:none;color:rgba(255,255,255,.55);font-size:15px;font-weight:600;cursor:pointer;padding:10px;}
+  /* Same quiet dismiss as the paywall's "Maybe later". */
+  .ssClose{display:block;width:100%;margin-top:2px;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;font-weight:700;cursor:pointer;padding:8px;}
   /* Quiet on purpose — mint text on nothing, no slab, no border. It sits between the share
      buttons and Cancel so it is read on the way past rather than stepped over. Loud here
      would cost shares, and shares are the growth loop. */
@@ -745,8 +768,13 @@
 
 <!-- SHARE CHOOSER -->
 <div id="shareSheet">
-  <div class="ssCard">
-    <div class="ssTitle">Share your hide</div>
+  <div class="ssCard pwCard">
+    <!-- Same voice as the paywall: mint kicker, display-face headline with the shimmer.
+         The old "Share your hide" was a dimmed grey label that described the sheet instead
+         of selling the action. This asks the question the post is going to ask. No subtitle
+         — the sheet has to stay short, and the headline already carries the idea. -->
+    <div class="pwKick">Share</div>
+    <div class="pwTitle" style="margin-bottom:14px">Bet they can't spot it</div>
     <!-- BEFORE/AFTER IS THE DEFAULT — it is the only mode that produces the reveal MP4,
          and the MP4 is the format this app exists to make. Challenge was the default for
          KAMO's whole life and the cost was hiding the differentiator behind a tab: 70
@@ -759,7 +787,11 @@
     </div>
     <button class="ssBtn ig" data-target="instagram"><span class="ic">📸</span>Instagram Story</button>
     <button class="ssBtn snap" data-target="snapchat"><span class="ic">👻</span>Snapchat</button>
-    <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More options</button>
+    <!-- More and Save share this line — see .ssRow2. On native, JS moves #btnSave in here;
+         on the web it stays on the action row and More spans the width alone. -->
+    <div class="ssRow2" id="ssRow2">
+      <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
+    </div>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
     <!-- THE PITCH, AT THE MOMENT IT LANDS. The paywall used to fire mid-round, on tapping a
@@ -768,7 +800,7 @@
          moment the watermark is a real problem. Deliberately a quiet line and not another
          slab: it must not compete with the share buttons, which are the growth loop. -->
     <button class="ssPlus" id="ssPlus" style="display:none">✦ Export without the KAMO mark</button>
-    <button class="ssClose" id="ssClose">Cancel</button>
+    <button class="ssClose" id="ssClose">Not now</button>
   </div>
 </div>
 <div id="confirmSheet">
@@ -1290,7 +1322,7 @@ function capture(){
      was permanently sliced by the tools pinned to the right — a colour you could see but
      never fully tap. Nothing scrolls into view any more, which is the point: everything in
      this row is reachable without discovering that it scrolls. */
-  try{ buildSwatches(extractPalette(sceneCanvas,4)); }catch(e){}
+  try{ buildSwatches(extractPalette(sceneCanvas,3)); }catch(e){}
   try{ maybeGrantTaste(); }catch(e){}   // the free Pro round, if this is the one
   suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
@@ -1599,7 +1631,7 @@ board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.ad
 /* FOUR, to match what extractPalette() is asked for. This list is only ever the fallback
    (extractPalette throws), and at ten entries that fallback overflowed the row — the one
    path where the swatches are widest is the one nobody would ever test. */
-let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b"];
+let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a"];
 // pull ~n representative colors from the captured scene so the palette matches the photo
 function extractPalette(canvas,n){
   // Same full-res-read problem as computeScore, and it fires from capture() — the one
@@ -2190,8 +2222,13 @@ if(window.ReactNativeWebView){
     saveBtn.removeAttribute("title");
     // .dl / .chk are the existing saved-state swap (#btnSave.saved flips them), so the
     // label rides along with the icon for free — no second state to keep in sync.
-    saveBtn.insertAdjacentHTML("beforeend",'<span class="dl">Save to Photos</span><span class="chk">Saved to Photos</span>');
-    invite.parentNode.insertBefore(saveBtn,invite);
+    saveBtn.insertAdjacentHTML("beforeend",'<span class="dl">Save</span><span class="chk">Saved</span>');
+    /* Into the More row, not above the invite. Two full-width slabs for the two
+       least-used actions pushed the KAMO+ line and Cancel toward the fold; sharing a
+       line costs one row instead of two. Falls back to the old position if the row is
+       ever removed, so this cannot strand Save somewhere unreachable. */
+    const row2=document.getElementById("ssRow2");
+    if(row2) row2.appendChild(saveBtn); else invite.parentNode.insertBefore(saveBtn,invite);
   }
 }
 /* Closes the sheet rather than stacking the paywall on top of it — two sheets deep is how
