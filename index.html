@@ -99,9 +99,7 @@
   .startHint{font-size:13px;font-weight:700;letter-spacing:.3px;opacity:.7;}
   .mini{background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;}
 
-  /* 17px, not 14: Retake and Done moved up to 8px and are 40px tall, so their optical
-     centre is 28. The wordmark's ~21px line box needs 17 to land on the same line. */
-  .brand{position:absolute;top:calc(17px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
+  .brand{position:absolute;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
   .brand b{color:#fff;}
 
   .topbtn{position:absolute;top:calc(10px + var(--safe-t));z-index:12;height:44px;border-radius:22px;
@@ -112,16 +110,10 @@
   #flip:active svg{transform:rotate(180deg);}
   .topbtn:active{transform:scale(.9);}
 
-  /* The message bubble under the wordmark — same liquid glass as the top-bar buttons so
-     the whole header reads as one material. */
   .hint{position:absolute;top:calc(50px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
-    background:linear-gradient(165deg,rgba(255,255,255,.18),rgba(10,11,14,.44));
-    -webkit-backdrop-filter:blur(22px) saturate(185%);backdrop-filter:blur(22px) saturate(185%);
-    border:1px solid rgba(255,255,255,.28);
+    background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);
     padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
-    text-shadow:0 1px 3px rgba(0,0,0,.5);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.36), 0 8px 26px rgba(0,0,0,.48);
-    pointer-events:none;opacity:0;transition:opacity .3s;}
+    box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:none;opacity:0;transition:opacity .3s;}
 
   #scoreChip{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
@@ -227,7 +219,7 @@
   #paintUI{position:absolute;left:0;right:0;bottom:0;z-index:15;display:none;padding:10px 12px calc(12px + var(--safe-b));
     background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.86) 32%,var(--bg));}
   .row{display:flex;gap:8px;align-items:center;justify-content:center;}
-  #swatches{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;}
+  #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
   /* Swatches read as glass beads, not flat discs: a specular highlight up top, a soft
      occlusion at the bottom, and a drop shadow to lift them off the scene. Without the
@@ -236,7 +228,10 @@
       box-shadow:inset 0 1.5px 2px rgba(255,255,255,.45), inset 0 -2px 5px rgba(0,0,0,.32), 0 2px 7px rgba(0,0,0,.38);
       transition:transform .18s cubic-bezier(.2,.9,.3,1), border-color .18s, box-shadow .18s;}
   .sw:active{transform:scale(.9);}
-  .sw.active{border-color:#fff;transform:scale(1.12);
+  /* White ring, with a dark gap so it reads on any photo. Scale kept small — the row
+     scrolls horizontally, so anything bigger clips against the container. */
+  .sw.active{border-color:#fff;transform:scale(1.06);
+      box-shadow:0 0 0 2px rgba(0,0,0,.55), 0 0 0 4px #fff, inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
       box-shadow:0 0 0 2px var(--accent), inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
   .sw.picker{overflow:hidden;background:conic-gradient(red,#ff0,#0f0,#0ff,#00f,#f0f,red);}
   .sw.picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;}
@@ -269,50 +264,20 @@
   .badge{font-size:11px;opacity:.55;text-align:center;margin-top:7px;}
   #loupe{position:absolute;width:64px;height:64px;border-radius:50%;border:3px solid #fff;z-index:22;box-shadow:0 4px 16px rgba(0,0,0,.6);display:none;pointer-events:none;transform:translate(-50%,-140%);}
   /* Done/Edit nav */
-  /* LIQUID GLASS, and raised to sit level with Retake and the KAMO wordmark.
-     Done was solid white with black text — the only opaque chip on the screen. It is now
-     the BRIGHTEST glass rather than the only solid, so it still reads as the primary
-     action while matching the rest of the top bar. Text stays white: dark text on a
-     translucent surface over a live camera feed is unreadable on a light scene. */
-  .navbtn{position:absolute;top:calc(8px + var(--safe-t));right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;
-    border:1px solid rgba(255,255,255,.42);color:#fff;font-size:15px;font-weight:800;cursor:pointer;display:none;
-    background:linear-gradient(165deg,rgba(255,255,255,.34),rgba(255,255,255,.14));
-    -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.65), inset 0 -1px 1px rgba(0,0,0,.18), 0 8px 24px rgba(0,0,0,.42);
-    text-shadow:0 1px 3px rgba(0,0,0,.5);transition:transform .18s cubic-bezier(.2,.9,.3,1);}
+  .navbtn{position:absolute;top:calc(4px + var(--safe-t));right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
   .navbtn:active{transform:scale(.94);}
   .brand.mid{left:50%;transform:translateX(-50%);}   /* centered on the captured (paint/finished) screen */
   /* Retake as a top-left nav button, aligned with Done */
-  /* Same glass as Done and the same top, so Retake · KAMO · Done sit on one line.
-     Darker tint than Done — this is the secondary action and the hierarchy has to survive
-     both of them being translucent. */
-  #btnBack{position:absolute;top:calc(8px + var(--safe-t));left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;
-    border:1px solid rgba(255,255,255,.26);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;
-    background:linear-gradient(165deg,rgba(255,255,255,.16),rgba(10,11,14,.42));
-    -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.34), inset 0 -1px 1px rgba(0,0,0,.24), 0 8px 22px rgba(0,0,0,.4);
-    text-shadow:0 1px 3px rgba(0,0,0,.5);transition:transform .18s cubic-bezier(.2,.9,.3,1);}
+  #btnBack{position:absolute;top:calc(4px + var(--safe-t));left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   #btnBack svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
   #btnBack:active{transform:scale(.94);}
   /* clean padlock icon for locked (Pro) brushes — replaces the emoji */
   .lkico{width:12px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.72;vertical-align:-2px;margin-left:2px;}
   /* vertical brush-size slider — just the bar (no panel, no lock) */
   #sizeBar{position:absolute;right:16px;top:32%;z-index:16;width:34px;height:212px;display:none;touch-action:none;}
-  /* Size bar in the same liquid glass as the top bar: a wider blurred track with a
-     specular edge, and a glass bead for the thumb. Widened 12px → 15px because the
-     stronger blur needs a little more surface to actually read as a material. */
-  #sizeBar::before{content:"";position:absolute;left:50%;top:16px;bottom:16px;transform:translateX(-50%);width:15px;border-radius:8px;
-    background:linear-gradient(165deg,rgba(255,255,255,.16),rgba(10,12,16,.46));
-    -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
-    border:1px solid rgba(255,255,255,.26);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.34), inset 0 -1px 1px rgba(0,0,0,.22), 0 6px 20px rgba(0,0,0,.45);}
-  #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:6px;border-radius:3px;
-    background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.72));box-shadow:0 0 8px rgba(255,255,255,.35);}
-  #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;
-    background:linear-gradient(165deg,rgba(255,255,255,.98),rgba(255,255,255,.78));
-    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
-    border:1px solid rgba(255,255,255,.7);
-    box-shadow:inset 0 1.5px 2px rgba(255,255,255,.9), inset 0 -2px 4px rgba(0,0,0,.16), 0 3px 12px rgba(0,0,0,.55);pointer-events:none;}
+  #sizeBar::before{content:"";position:absolute;left:50%;top:16px;bottom:16px;transform:translateX(-50%);width:8px;border-radius:4px;background:rgba(10,12,16,.42);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.16);box-shadow:0 2px 12px rgba(0,0,0,.45);}
+  #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:4px;border-radius:2px;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);}
+  #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.6);border:1.5px solid rgba(0,0,0,.06);pointer-events:none;}
   #sizeStar{position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:12px;line-height:1;color:var(--mint);opacity:.9;pointer-events:none;display:none;text-shadow:0 1px 6px rgba(0,0,0,.6),0 0 10px rgba(95,230,164,.5);}  /* subtle Pro marker (shown to free users) */
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
@@ -1310,16 +1275,9 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      and _stamp() — those two are the hot paint path and a bad edit there breaks painting
      outright. It is inert and this is a one-line revert if it's ever wanted back. */
 
-  /* ALL COLOURS. The palette is ten presets; this is the escape hatch to any colour that
-     exists, via the OS picker. The `.sw.picker` CSS — rainbow conic gradient with a
-     transparent <input type=color> stretched over it — was already in the stylesheet and
-     had never once been built. This is it, wired up. */
-  const pickerSw=document.createElement("div"); pickerSw.id="pickSw"; pickerSw.className="sw picker"; pickerSw.title="All colours";
-  const pickerInput=document.createElement("input"); pickerInput.type="color";
-  pickerInput.value=/^#[0-9a-f]{6}$/i.test(paintColor)?paintColor:"#8a7f6a";
-  pickerInput.oninput=()=>{ paintColor=pickerInput.value; eyedrop=false;
-    document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); pickerSw.classList.add("active"); };
-  pickerSw.appendChild(pickerInput); w.appendChild(pickerSw);
+  /* No all-colours picker here — there is already one at the END of this row (the
+     `<label class="sw picker">` below). One was added in this slot by mistake and the row
+     shipped with two identical rainbow buttons. */
   const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
   eye.onclick=()=>{ eyedrop=true; autoCamo=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
   PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; });
@@ -1888,7 +1846,9 @@ let sizing=false;
    with nothing asked for. The tool stays locked (giving it away would change what KAMO+
    is), but the lock is now a one-line hint instead of a wall. */
 sizeBar.addEventListener("pointerdown",e=>{ if(!isPro){ showHint("Fine brush size is a KAMO+ tool"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
-sizeBar.addEventListener("pointermove",e=>{ if(sizing) sizeFromEvent(e); });
+/* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
+   70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
+sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
 /* 3 quick size presets (bottom-left, by the Retake button) — also drive the slider */
 document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz; document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); b.classList.add("active"); renderSizeBar(); haptic(6); });
