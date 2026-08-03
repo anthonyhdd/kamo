@@ -253,10 +253,6 @@
      where .ssSave sets its own spacing — an unscoped `#btnSave{margin-top}` is an id
      selector and would outrank that class rule wherever the button ended up. */
   #actionRow #btnSave{margin-top:2px;}
-  #btnAgain{flex-basis:auto;margin-top:2px;background:none;border:none;cursor:pointer;
-    color:rgba(255,255,255,.62);font-family:var(--font);font-size:13.5px;font-weight:600;
-    padding:8px 0 2px;text-shadow:0 1px 4px rgba(0,0,0,.6);}
-  #btnAgain:active{color:#fff;}
   #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
   /* Swatches read as glass beads, not flat discs: a specular highlight up top, a soft
@@ -509,12 +505,11 @@
              the same line as the home screen ("dare your friends to spot it"). -->
         <button class="b primary" id="btnShare"><canvas id="shareFx" aria-hidden="true"></canvas><span class="shareIn"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3.2"/></svg>Share now</span></button>
         <button class="b icon" id="btnSave" title="Save photo"><svg class="dl" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg><svg class="chk" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>
-        <!-- Going again is the strongest satisfaction signal KAMO gets (it is what the
-             rating prompt and the paywall both hang off) and it was only reachable from
-             the chevron in the top-left corner. flex-basis:100% drops it onto its own line
-             under Share, and living inside #actionRow means it inherits that row's
-             show/hide with no extra wiring. -->
-        <button id="btnAgain">Hide another one</button>
+        <!-- No "Hide another one" here any more. Going again is still one tap — the
+             "← Retake" chevron top-left is visible on this screen (capture() shows it and
+             enterFinished() never hides it) and opens the same confirm sheet this button
+             did. Nothing downstream moves: the rating moment and maybeOfferPlus() both
+             hang off #cfYes, not off whichever control opened the sheet. -->
       </div>
       <!-- The instruction line that used to sit here ("Grab a color · paint the figure ·
            make it vanish") is gone. Both JS references to #paintBadge — the hide in
@@ -2036,8 +2031,8 @@ window.addEventListener("resize",()=>{ if(finished) drawReveal(); });
 /* ===== Retake confirmation ===== */
 const confirmSheet=$("#confirmSheet");
 function closeConfirm(){ confirmSheet.classList.remove("show"); }
+// Sole entry to the discard confirm now that "Hide another one" is gone from #actionRow.
 $("#btnBack").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
-$("#btnAgain").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classList.add("show"); haptic(10); };
 
 /* ===== SMOKY SHARE BUTTON =====
    Fractal-noise smoke behind the Share CTA. Adapted from Tim Wilson's "Smoky Button"
