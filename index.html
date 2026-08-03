@@ -665,6 +665,56 @@ const PAINT_MAX_W=1080;      // = the width every share path exports at
 let paintDpr=dpr;
 let mode="compose", bgKind=null, facing="environment", stream=null;
 
+/* ===== KAMO+ FREE TRIAL — rollout / A-B switch =====
+ *
+ * WHY THIS EXISTS. Over the 60 days to 2026-08-03 the paywall was seen 432 times, a plan
+ * was tapped 51 times, the StoreKit sheet was opened 19 times (12 lifetime, 7 weekly) and
+ * it closed on `purchase_cancelled` all 19 times. Zero purchases, zero trials, ever —
+ * and zero `purchase_failed` / `offerings_failed`, so the store works fine and the
+ * products are sellable. Users reach the real Apple sheet, read "$2.99/week starting
+ * now", and walk. The weekly carries no introductory offer, and that is the one thing on
+ * that sheet we can change.
+ *
+ * WHAT THE KNOBS DO. `rollout` is the share of users in the trial arm:
+ *   - 100 → full rollout. `productId` stays the EXISTING weekly, with a 3-day
+ *           introductory offer added to it in App Store Connect. Apple then applies that
+ *           offer to every eligible buyer automatically; there is no control group,
+ *           because an intro offer cannot be withheld from half of a product's buyers.
+ *   -  50 → true 50/50 A/B. `productId` MUST then be a SECOND, distinct product
+ *           (e.g. com.blisscoach.kamo.weekly.t3 — same $2.99 price, 3-day intro offer,
+ *           same subscription group) that ALSO exists as a package in the RevenueCat
+ *           `default` offering, because the native layer resolves whatever id we post
+ *           against `offerings.current`.
+ *           ⚠️ If that product is missing from the offering, native answers "That plan
+ *           isn't available yet" and the trial arm cannot buy at all. Verify the RC
+ *           offering BEFORE moving this off 100.
+ *
+ * READING THE RESULT. The outcome events (`trial_started`, `purchase_completed`,
+ * `purchase_cancelled`) are emitted natively and know nothing about this file — but they
+ * carry `product_id`, and in the 50/50 setup the two arms buy two different product ids,
+ * so `product_id` IS the arm label on every outcome. The web funnel steps
+ * (`paywall_viewed`, `plan_selected`) are stamped with `trial_arm` by track() below.
+ * Segment an Amplitude funnel on the FIRST step's `trial_arm` to join the two halves.
+ *
+ * The arm is persisted: a user who flips arms between sessions sees two different offers
+ * for the same thing and poisons their own data point. */
+const TRIAL={
+  rollout:100,                              // % of users in the trial arm — 100 = full rollout, 50 = A/B
+  days:3,                                   // must match the introductory offer configured in App Store Connect
+  productId:"com.blisscoach.kamo.weekly",   // product carrying the intro offer (see the rollout note above)
+};
+const trialArm=(()=>{
+  if(!(TRIAL.rollout>0)) return "control";
+  /* A full rollout is not an experiment: honour it even for users already bucketed into
+     control by an earlier 50/50, otherwise ramping 50 → 100 strands them forever. */
+  if(TRIAL.rollout>=100) return "trial";
+  try{ const s=localStorage.getItem("kamo_trial_arm"); if(s==="trial"||s==="control") return s; }catch(e){}
+  const a=(Math.random()*100<TRIAL.rollout)?"trial":"control";
+  try{ localStorage.setItem("kamo_trial_arm",a); }catch(e){}
+  return a;
+})();
+const trialOn=()=>trialArm==="trial";
+
 function showHint(t,ms=2600){ hintEl.textContent=t; hintEl.style.opacity=t?1:0; clearTimeout(showHint._t); if(t&&ms) showHint._t=setTimeout(()=>hintEl.style.opacity=0,ms); }
 function haptic(ms=8){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify({type:"haptic",style:"impact"})); }catch(e){} } if(navigator.vibrate) navigator.vibrate(ms); }
 /* throttled tactile tick while painting (native = expo-haptics selection; web = vibrate) */
@@ -1541,9 +1591,28 @@ function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
     if(t) t.textContent=storeAnswered?"Purchases aren't available right now.":""; return; }
   b.disabled=false; b.classList.remove("pwBuyOff");
   if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; b.textContent=p?("Unlock forever — "+p):"Unlock forever"; if(t) t.textContent="One-time purchase. Yours forever."; }
-  else { const p=($("#pwWeeklyPrice")||{}).textContent||""; b.textContent="Get KAMO+"; if(t) t.textContent=p?(p+"/week. Cancel anytime."):"Cancel anytime."; } }
+  else { const p=($("#pwWeeklyPrice")||{}).textContent||"";
+    /* An unadvertised free trial converts barely better than no trial at all: the user
+       decides whether to tap Buy from THIS button, long before Apple's sheet shows them
+       the offer. So the trial arm says so on the button, and the terms line carries the
+       full price + billing terms Apple requires next to it (guideline 3.1.2). */
+    if(trialOn()){ b.textContent="Try free for "+trialLabel;
+      if(t) t.textContent=p?("Free for "+trialLabel+", then "+p+"/week. Cancel anytime."):("Free for "+trialLabel+", then billed weekly. Cancel anytime."); }
+    else { b.textContent="Get KAMO+"; if(t) t.textContent=p?(p+"/week. Cancel anytime."):"Cancel anytime."; } } }
+/* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
+   able to re-render it on its own once the store reports a real trial length, and because
+   updatePwBuy() bails early while the store is still loading — the plan row is on screen
+   before then, so its subtitle must not wait for a price to be right. */
+let trialLabel=TRIAL.days+" days";
+function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
+  const m=$("#pwWeeklyMeta"); if(!m) return;
+  m.textContent=trialOn()?(trialLabel+" free, then billed weekly"):"Billed weekly · cancel anytime"; }
+applyTrialCopy();
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
-$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:WEEKLY_ID; haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
+/* The native wrapper buys whatever product id we post — it resolves `msg.product` against
+   the RevenueCat offering (App.js: `const wanted = msg.product || PRODUCT_ID`). That is
+   what lets the trial arm sell a different weekly SKU with no new App Store build. */
+$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID); haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ track("restore_tapped"); if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
 function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",url:u}); } else { window.open(u,"_blank","noopener"); } }
@@ -1573,7 +1642,13 @@ function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
 window.KAMO.buyDone=()=>{ setPwBuyLoading(false); };
 /* `setPrice` (singular) was defined here and never injected by ANY native build — the
    wrapper only ever calls setPrices. Removed rather than left as a decoy. */
-window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } if(p.trial){ const e=$("#pwWeeklyMeta"); if(e) e.textContent=p.trial+" free trial"; } applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
+/* `p.trial` is the trial length as StoreKit actually reports it. No shipped wrapper sends
+   it today (App.js only ever fills weekly + lifetime), so TRIAL.days is the working value
+   — but when a build does send it, the store is right and the constant is a guess, so it
+   wins. Either way applyTrialCopy() runs LAST: it owns #pwWeeklyMeta, and letting the old
+   `p.trial` branch write that node directly would have shown the trial line to the
+   control arm too. */
+window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
 /* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
    sets prices.weekly / prices.lifetime when RevenueCat resolved that product).
    A plan we can't sell must never be shown: tapping it opens a purchase that
@@ -1650,7 +1725,12 @@ function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWe
    web, so without this the native app can only ever see shares and purchases —
    i.e. the bottom of the funnel with no denominator. Native forwards these to
    Amplitude; event names are allow-listed there. Silent no-op in plain Safari. */
-function track(event,props){ postNative({type:"track",event:event,props:props||undefined}); }
+/* `trial_arm` is stamped on EVERY web event, not just the paywall ones. The events that
+   decide the free-trial experiment (purchase/trial/cancel) are native and carry
+   `product_id` instead, so the join has to happen on a web step — and the honest
+   denominator for "did the trial move anything" is the whole funnel, not just the users
+   who already got as far as opening the paywall. */
+function track(event,props){ postNative({type:"track",event:event,props:{...(props||{}),trial_arm:trialArm}}); }
 function blobToDataURL(b){ return new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b); }); }
 async function deliver(blob,ext){
   const file=new File([blob],"kamo."+ext,{type:blob.type});
