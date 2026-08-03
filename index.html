@@ -117,7 +117,14 @@
   #flip:active svg{transform:rotate(180deg);}
   .topbtn:active{transform:scale(.9);}
 
-  .hint{position:absolute;top:calc(50px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
+  /* BELOW THE COUNTDOWN PILL, not on top of it. #timerTag used to be a bare 10.5px label;
+     turning it into a padded pill grew it to ~26px tall, so at 40px it now runs to ~66px
+     and the hint at 50px was landing on its lower half — "Tap the figure to pose" printed
+     through "FIND A SPOT · 15S" on the first screen a new user ever sees.
+     The three now stack cleanly: wordmark to ~36, pill 44-72, hint from 80. Safe as a
+     constant offset — both clocks arm on every hide now, so the pill is present whenever a
+     hint is, and there is no state where the hint would float alone with a gap above it. */
+  .hint{position:absolute;top:calc(80px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);
     padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
     box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:none;opacity:0;transition:opacity .3s;}
@@ -166,7 +173,7 @@
      only clock was a hairline at the top edge, hidden under the notch. A round you cannot
      see the end of is not a round, it just interrupts you. A pill so it survives a bright
      photo; tabular digits so the width doesn't jitter as it counts down. */
-  #timerTag{position:absolute;top:calc(40px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
+  #timerTag{position:absolute;top:calc(44px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
     font-family:var(--display);font-size:12px;font-weight:850;letter-spacing:1.2px;text-transform:uppercase;
     font-variant-numeric:tabular-nums;padding:5px 11px;border-radius:999px;white-space:nowrap;
     background:rgba(8,10,14,.52);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
