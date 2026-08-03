@@ -100,7 +100,10 @@
   .mini{background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;}
 
   .brand{position:absolute;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;}
-  .brand b{color:#fff;}
+  /* One solid white word. Both halves were already #fff, but only "MO" is inside a <b>:
+     the display face ships a single weight, so the browser synthesised a bold for it and
+     "MO" rendered visibly thicker and brighter than "KA". Same weight = uniformly white. */
+  .brand b{color:#fff;font-weight:inherit;-webkit-text-fill-color:#fff;}
 
   .topbtn{position:absolute;top:calc(10px + var(--safe-t));z-index:12;height:44px;border-radius:22px;
     border:1px solid var(--stroke);background:var(--panel);backdrop-filter:blur(12px);color:#fff;display:none;
@@ -1191,14 +1194,21 @@ function composeInto(x,y,w,h){
   figctx.beginPath(); figctx.rect(x,y,w,h); figctx.clip();
   figctx.clearRect(x,y,w,h);
   figctx.drawImage(maskCanvas,0,0);                                  // the lit render
-  if(paintLayer){
-    figctx.globalCompositeOperation="source-atop";                   // paint keeps the mask's alpha
-    figctx.drawImage(paintLayer,0,0);
-  }
+  /* SHADE FIRST, PAINT SECOND — the order is the whole point.
+     The shading pass used to run AFTER the paint, so the figure's own body shadows were
+     soft-lit back over every stroke. The result: you painted the figure out and its
+     shadows still traced its shape straight through the camouflage, which is exactly what
+     the player is trying to erase. Shading now lands on the bare figure and paint covers
+     it, so a painted area carries no body shadow at all while unpainted areas keep the
+     lighting that makes the figure sit in the scene. */
   if(shadeSrc&&SHADE_STRENGTH){
     figctx.globalCompositeOperation="soft-light"; figctx.globalAlpha=SHADE_STRENGTH;
     figctx.drawImage(shadeSrc,0,0,shadeSrc.width,shadeSrc.height,0,0,board.width,board.height);
     figctx.globalAlpha=1;
+  }
+  if(paintLayer){
+    figctx.globalCompositeOperation="source-atop";                   // paint keeps the mask's alpha
+    figctx.drawImage(paintLayer,0,0);
   }
   figctx.restore(); figctx.globalCompositeOperation="source-over";
   ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h);
