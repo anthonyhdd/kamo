@@ -130,7 +130,10 @@
      compositor-only, so the whole timer costs zero per-frame JS and zero allocation.
      That matters here — a per-frame timer is exactly the shape of bug that was making
      this app take the phone down. */
-  #timerBar{position:fixed;top:0;left:0;height:3px;width:100%;z-index:30;display:none;
+  /* BELOW THE SAFE AREA, AND THICKER. At top:0 this sat behind the status bar — on any
+     notched iPhone the clock was drawn underneath the system clock, which is why the round
+     felt untimed. 3px was also too thin to notice in peripheral vision on a photo. */
+  #timerBar{position:fixed;top:var(--safe-t);left:0;height:5px;width:100%;z-index:30;display:none;
     transform-origin:left center;transform:scaleX(1);
     background:linear-gradient(90deg,var(--accent),#8ef0bd);
     box-shadow:0 0 12px rgba(95,230,164,.55);will-change:transform;}
@@ -154,9 +157,19 @@
     #timerBar.run,#timerBar{transition:none;}
   }
   /* Phase label — tiny, sits under the wordmark, tells you WHICH clock is running. */
-  #timerTag{position:absolute;top:calc(38px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
-    font-family:var(--display);font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
-    color:rgba(255,255,255,.72);text-shadow:0 2px 8px rgba(0,0,0,.7);pointer-events:none;}
+  /* NOW A COUNTDOWN, not just a label. It used to read "FIND A SPOT" and nothing else, so
+     for all but the last 5 seconds of a round there was no number anywhere on screen — the
+     only clock was a hairline at the top edge, hidden under the notch. A round you cannot
+     see the end of is not a round, it just interrupts you. A pill so it survives a bright
+     photo; tabular digits so the width doesn't jitter as it counts down. */
+  #timerTag{position:absolute;top:calc(40px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
+    font-family:var(--display);font-size:12px;font-weight:850;letter-spacing:1.2px;text-transform:uppercase;
+    font-variant-numeric:tabular-nums;padding:5px 11px;border-radius:999px;white-space:nowrap;
+    background:rgba(8,10,14,.52);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    color:rgba(255,255,255,.92);text-shadow:0 2px 8px rgba(0,0,0,.7);pointer-events:none;
+    transition:color .2s,border-color .2s,background .2s;}
+  #timerTag.warn{color:#ffd08a;border-color:rgba(255,182,72,.55);background:rgba(38,26,8,.55);}
+  #timerTag.crit{color:#ff9a94;border-color:rgba(255,95,87,.6);background:rgba(44,12,10,.6);}
 
   /* ---------- SHUTTER ---------- */
   #shutterWrap{position:absolute;left:50%;bottom:calc(30px + var(--safe-b));transform:translateX(-50%);z-index:15;display:none;}
@@ -2143,14 +2156,15 @@ function recordAim(seconds,took,auto){
   }catch(e){}
 }
 const timerBar=$("#timerBar"), timerTag=$("#timerTag"), timerNum=$("#timerNum");
-let timerEnd=0, timerPhase=null, _timerDone=null, _timerTick=null;
+let timerEnd=0, timerPhase=null, _timerDone=null, _timerTick=null, _timerSec=null;
 function timerArmed(){ return !firstRun(); }
 function stopTimer(){
   if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
   if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
+  if(_timerSec){ clearInterval(_timerSec); _timerSec=null; }
   timerPhase=null; timerEnd=0; _timerPaused=0; _timerResume=null; _timerOnExpire=null; _pauseReasons.clear(); pendingExpire=null;
   timerBar.style.display="none"; timerBar.className=""; timerBar.style.transition="none"; timerBar.style.transform="scaleX(1)";
-  timerTag.style.display="none"; timerNum.style.display="none"; timerNum.className="";
+  timerTag.style.display="none"; timerTag.className=""; timerNum.style.display="none"; timerNum.className="";
 }
 /* Pause/resume, so the clock never drains behind something the user cannot act on — the
    paywall being the one that matters. A timer running behind a paywall is unfair, and it
@@ -2166,6 +2180,10 @@ function pauseTimer(reason){
   _timerResume={phase:timerPhase,onExpire:_timerOnExpire};
   if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
   if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
+  /* Freeze the seconds too. Left running it would keep counting down to 0 behind the
+     paywall while the round itself was correctly frozen — the clock would say the round
+     was over and it would not be. */
+  if(_timerSec){ clearInterval(_timerSec); _timerSec=null; }
   const w=timerBar.getBoundingClientRect().width, full=window.innerWidth||1;
   timerBar.style.transition="none"; timerBar.style.transform="scaleX("+(w/full)+")";
 }
@@ -2238,7 +2256,22 @@ function startTimer(phase,seconds,onExpire){
   _timerOnExpire=onExpire;
   timerPhase=phase; timerEnd=Date.now()+seconds*1000;
   if(phase==="aim"){ aimStartedAt=Date.now(); aimGiven=seconds; }
-  timerTag.textContent = phase==="aim" ? "Find a spot" : "Make it vanish";
+  /* THE SECONDS TICK FOR THE WHOLE PHASE. Only the last 5s ever showed a number before,
+     via _timerTick — everything up to that point was a hairline bar and a static label.
+     Not a per-frame loop: one interval writing one string. It runs at 250ms rather than
+     1000ms so the displayed second changes when it actually changes, instead of lagging
+     by up to a full second — which on a 22s round is 5% of the clock. Four text writes a
+     second is nothing next to the WebGL camera feed this sits on top of, and it stops the
+     moment the phase does (stopTimer and pauseTimer both clear it). */
+  const label = phase==="aim" ? "Find a spot" : "Make it vanish";
+  const paintTag=()=>{
+    if(timerPhase!==phase){ clearInterval(_timerSec); _timerSec=null; return; }
+    const left=Math.max(0,Math.ceil((timerEnd-Date.now())/1000));
+    timerTag.textContent=label+" · "+left+"s";
+    timerTag.className = left<=3 ? "crit" : (left<=5 ? "warn" : "");
+    if(left<=0){ clearInterval(_timerSec); _timerSec=null; }
+  };
+  clearInterval(_timerSec); _timerSec=setInterval(paintTag,250); paintTag();
   timerTag.style.display="block";
   timerBar.style.display="block";
   timerBar.className=""; timerBar.style.transition="none"; timerBar.style.transform="scaleX(1)";
