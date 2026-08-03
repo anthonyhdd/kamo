@@ -267,10 +267,10 @@
   .sw.active{border-color:#fff;transform:scale(1.06);
       box-shadow:0 0 0 2px rgba(0,0,0,.55), 0 0 0 4px #fff, inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
       box-shadow:0 0 0 2px var(--accent), inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
+  /* The all-colours button. A conic rainbow says "every colour" instantly; the mosaic tiles
+     that used to sit here said "a paint style", which is what this button no longer is. */
   .sw.picker{overflow:hidden;background:conic-gradient(red,#ff0,#0f0,#0ff,#00f,#f0f,red);}
-  .sw.mosaic{overflow:hidden;padding:0;}
-  .mosaicTiles{width:100%;height:100%;display:block;border-radius:50%;}
-  .mosaicLk{position:absolute;right:-1px;bottom:-2px;font-size:10px;color:var(--mint);
+  .swLk{position:absolute;right:-1px;bottom:-2px;font-size:10px;color:var(--mint);
     text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 8px rgba(95,230,164,.6);pointer-events:none;}
   .sw.picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;}
   /* The eyedropper is the strongest tool in the row — on a textured surface, matching the
@@ -513,11 +513,14 @@
       <div id="swatches"></div>
       <div id="brushes"></div>
       <div class="row" id="editRow" style="margin-top:2px;gap:12px;justify-content:flex-start">
-        <div class="row" id="sizeDots" style="gap:8px">
-          <button class="bsz" data-sz="4"><i style="width:5px;height:5px"></i></button>
-          <button class="bsz active" data-sz="20"><i style="width:12px;height:12px"></i></button>
-          <button class="bsz" data-sz="48"><i style="width:21px;height:21px"></i></button>
-        </div>
+        <!-- THE THREE PRESET SIZES ARE GONE. They were the free substitute for the size
+             slider: the slider was already KAMO+, but anyone who wanted a bigger or smaller
+             brush just tapped a dot instead, so the lock never blocked anything and never
+             sold anything. Brush size is now one fixed default free, and continuous on
+             KAMO+. Deliberate trade — free users lose size control entirely, which is the
+             point of a wall. #sizeDots is kept as an empty row so editRow's layout and the
+             show/hide in enterFinished() do not have to change. -->
+        <div class="row" id="sizeDots" style="gap:8px"></div>
         <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
         <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
       </div>
@@ -1250,12 +1253,18 @@ function showScore(){
    Picking a swatch or eyedropping switches to flat colour — a deliberate, stylised choice
    the user opts into, with the Auto chip to come back. */
 let autoCamo=false, scenePat=null;
-/* MOSAIC — a KAMO+ paint mode, and the one that answers the physics of this game.
-   A single flat colour cannot hide a figure on a textured surface: a rug, a carpet, a page
-   of text all carry variation that one tone can never match. Mosaic lays small tiles drawn
-   from the scene's OWN extracted palette, so the fill breaks up the way the surface does.
-   It is a colour source, not a brush shape — it overrides the stroke for any brush. */
-let mosaic=false;   /* retired — see buildSwatches(). Kept inert, never set true again. */
+/* MOSAIC — the paint mode, now genuinely retired. It laid small tiles drawn from the
+   scene's own extracted palette, on the theory that a single flat colour cannot hide a
+   figure on a textured surface. True, but it was still a paint STYLE, and every paint style
+   in this app has a free approximation — which is the reason nothing has ever sold here.
+   The mosaic BUTTON survives and keeps its tiled face; it now opens the full colour picker
+   instead. See buildSwatches().
+   The flag stays declared and permanently false rather than being ripped out of paintStyle()
+   and _stamp(): those two are the hot paint path, exactly as with autoCamo above, and a bad
+   edit there breaks painting outright. Nothing sets it true any more — that is now
+   accurate, where the previous version of this comment claimed it while buildSwatches() was
+   still flipping it on. */
+let mosaic=false;
 function paintStyle(){
   if(!autoCamo) return paintColor;
   if(!scenePat&&sceneCanvas&&pctx){ try{ scenePat=pctx.createPattern(sceneCanvas,"no-repeat"); }catch(e){ scenePat=null; } }
@@ -1472,9 +1481,10 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      and _stamp() — those two are the hot paint path and a bad edit there breaks painting
      outright. It is inert and this is a one-line revert if it's ever wanted back. */
 
-  /* No all-colours picker here — there is already one at the END of this row (the
-     `<label class="sw picker">` below). One was added in this slot by mistake and the row
-     shipped with two identical rainbow buttons. */
+  /* No all-colours picker here — it is the KAMO+ button at the END of this row now. One was
+     added in this slot by mistake once and the row shipped with two identical rainbow
+     buttons; putting a free one back here would be worse than a duplicate, it would be the
+     free substitute that makes the paid one unsellable. */
   const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
   eye.onclick=()=>{ eyedrop=true; autoCamo=false; mosaic=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
   PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; });
@@ -1482,25 +1492,36 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      it gone nothing is, while paintColor still holds a colour — the player would paint in
      a shade no swatch shows as chosen. Select the first palette entry and paint with it. */
   if(firstColorSw && !w.querySelector(".sw.active")){ paintColor=PALETTE[0]; firstColorSw.classList.add("active"); }
-  const pk=document.createElement("label"); pk.className="sw picker"; const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
-  inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; mosaic=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); pk.classList.add("active"); }; pk.appendChild(inp); w.appendChild(pk);
+  /* THE FREE RAINBOW PICKER IS GONE, and removing it is the whole point of this change.
+     All-colours is now what the KAMO+ button sells. Leaving a free `<input type="color">`
+     sitting one swatch to its left would have made it the exact thing that has kept this
+     paywall at zero all along — a locked tool with a free substitute under your thumb. */
 
-  /* MOSAIC, last in the row and KAMO+ only. Unlike the size slider — where a full-screen
-     paywall on a drag was pure irritation — this is a deliberate tap on a thing the user
-     cannot have yet, which is exactly when the offer is worth making. */
-  const mo=document.createElement("div"); mo.id="mosaicSw"; mo.className="sw mosaic"+(mosaic?" active":"");
-  mo.title="Mosaic — KAMO+";
-  const mtiles=document.createElement("canvas"); mtiles.width=68; mtiles.height=68; mtiles.className="mosaicTiles";
-  (function(){ const g=mtiles.getContext("2d"); if(!g) return; g.scale(2,2);
-    const pal=(PALETTE&&PALETTE.length)?PALETTE:["#7c6f57","#4a5d3a","#6b6b6b","#c9b48a"];
-    for(let y=0;y<34;y+=8) for(let x=0;x<34;x+=8){
-      g.fillStyle=pal[((x*7+y*13)/8|0)%pal.length]; g.fillRect(x,y,8,8); } })();
-  mo.appendChild(mtiles);
-  if(!canPro()){ const lk=document.createElement("span"); lk.className="lk mosaicLk"; lk.textContent="✦"; mo.appendChild(lk); }
+  /* ALL COLOURS — last in the row, KAMO+ only.
+     WHAT IT DOES CHANGED. This slot used to be Mosaic, which switched painting into a tile
+     mode. That was a paint STYLE, and every paint style in this app has a free
+     approximation — which is exactly why nothing has ever sold here. It now opens the full
+     colour picker, which the free row genuinely cannot give you: ten fixed swatches and an
+     eyedropper that can only ever sample what is already in the scene. Wanting a colour
+     that ISN'T there is a real wall, and the free tier cannot climb it.
+     The face is the conic rainbow, not the old mosaic tiles: the button has to look like
+     what it does. Tiles read as "a pattern brush", which is the thing it stopped being. */
+  const mo=document.createElement("div"); mo.id="allColSw"; mo.className="sw picker";
+  mo.title="All colours — KAMO+";
+  /* The real <input type="color"> lives INSIDE the button, sized to nothing and
+     pointer-events:none, so it can never be tapped directly — the swatch stays the only hit
+     target and the lock cannot be bypassed by aiming at a stray input. Inline styles because
+     they have to beat the `.sw.picker input` rule, which stretches it to fill the button.
+     iOS only opens the colour sheet from a genuine user gesture, so .click() is called
+     synchronously inside the tap handler; deferring it silently does nothing. */
+  const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
+  inp.style.cssText="position:absolute;width:0;height:0;opacity:0;pointer-events:none;border:none;";
+  inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; autoCamo=false;
+    document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); mo.classList.add("active"); };
+  mo.appendChild(inp);
+  if(!canPro()){ const lk=document.createElement("span"); lk.className="lk swLk"; lk.textContent="✦"; mo.appendChild(lk); }
   mo.onclick=()=>{ if(!canPro()){ openPaywall(); return; }
-    mosaic=true; eyedrop=false;
-    document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); mo.classList.add("active");
-    showHint("Mosaic — tiles from the scene's own colours"); haptic(8); };
+    haptic(8); inp.click(); };
   w.appendChild(mo);
 }
 /* buildSwatches() is NOT called here any more. It now reads canPro() for the mosaic
@@ -2252,12 +2273,21 @@ let sizing=false;
    one of only three paywall entry points and by far the most irritating: pure interruption
    with nothing asked for. The tool stays locked (giving it away would change what KAMO+
    is), but the lock is now a one-line hint instead of a wall. */
-sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ showHint("Fine brush size is a KAMO+ tool"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+/* Now opens the paywall rather than just muttering a hint. The old note here warned that a
+   full-screen paywall on a DRAG was pure irritation — that was true while the three preset
+   dots existed, because a free user brushing the slider had a perfectly good alternative and
+   the interruption bought nothing. With the dots gone this is the only size control in the
+   app, so touching it is unambiguous intent, and the hint was a dead end: it named a thing
+   you could not go and get. */
+sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ openPaywall(); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
 sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
-/* 3 quick size presets (bottom-left, by the Retake button) — also drive the slider */
+/* The 3 preset dots are gone from the markup (see #sizeDots) — they were the free way
+   around the KAMO+ slider. This binder stays because it costs nothing and querySelectorAll
+   simply matches nothing now; ripping it out would only invite someone re-adding the dots
+   later and wondering why they are inert. */
 document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz; document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); b.classList.add("active"); renderSizeBar(); haptic(6); });
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
