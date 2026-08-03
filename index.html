@@ -932,7 +932,12 @@
          The old "Share your hide" was a dimmed grey label that described the sheet instead
          of selling the action. This asks the question the post is going to ask. No subtitle
          — the sheet has to stay short, and the headline already carries the idea. -->
-    <div class="pwKick">Share</div>
+    <!-- The kicker is the ROUND, not the word "Share". "SHARE" sat above a card whose every
+         button is a share destination and whose headline is already about sharing — it
+         labelled the furniture. The paywall's kicker says KAMO+ because that means
+         something; this one now reports what the user just did, so the sheet opens by
+         acknowledging the hide instead of announcing itself. Filled at open time. -->
+    <div class="pwKick" id="ssKick"></div>
     <div class="pwTitle" style="margin-bottom:14px">Bet they can't spot it</div>
     <!-- BEFORE/AFTER IS THE DEFAULT — it is the only mode that produces the reveal MP4,
          and the MP4 is the format this app exists to make. Challenge was the default for
@@ -2431,6 +2436,12 @@ function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10);
      restore, or a revoked entitlement) and a stale pitch shown to someone who just paid is
      the fastest way to look broken. */
   { const p=$("#ssPlus"); if(p) p.style.display = isPro ? "none" : "block"; }
+  /* Same number the reveal screen is already showing behind this sheet, so the two agree.
+     Hidden rather than filled with a placeholder if there is no round time — an empty
+     kicker collapses to nothing and the headline simply moves up. */
+  { const k=$("#ssKick"); if(k){ const sec=roundSeconds();
+      if(sec>0){ k.textContent="Vanished in "+sec+"s"; k.style.display=""; }
+      else k.style.display="none"; } }
   track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
