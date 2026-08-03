@@ -264,11 +264,15 @@
   .badge{font-size:11px;opacity:.55;text-align:center;margin-top:7px;}
   #loupe{position:absolute;width:64px;height:64px;border-radius:50%;border:3px solid #fff;z-index:22;box-shadow:0 4px 16px rgba(0,0,0,.6);display:none;pointer-events:none;transform:translate(-50%,-140%);}
   /* Done/Edit nav */
-  .navbtn{position:absolute;top:calc(4px + var(--safe-t));right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
+  /* Raised INTO the safe inset: the native shell hides the status bar
+     (<StatusBar hidden/> in App.js), so nothing is drawn up there, and both buttons
+     sit at the left/right edges — clear of the centred Dynamic Island. KAMO stays at
+     14px, deliberately unmoved. */
+  .navbtn{position:absolute;top:calc(var(--safe-t) - 12px);right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
   .navbtn:active{transform:scale(.94);}
   .brand.mid{left:50%;transform:translateX(-50%);}   /* centered on the captured (paint/finished) screen */
   /* Retake as a top-left nav button, aligned with Done */
-  #btnBack{position:absolute;top:calc(4px + var(--safe-t));left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
+  #btnBack{position:absolute;top:calc(var(--safe-t) - 12px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   #btnBack svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
   #btnBack:active{transform:scale(.94);}
   /* clean padlock icon for locked (Pro) brushes — replaces the emoji */
