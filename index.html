@@ -242,7 +242,17 @@
   #btnShare.smoky{background:#050908;color:#fff;box-shadow:0 8px 26px rgba(0,0,0,.5);animation:none;}
   #btnShare.smoky::after{content:none;}   /* the sheen sweep would fight the smoke */
   #btnShare.smoky .shareIn{text-shadow:0 1px 6px rgba(0,0,0,.75);}
-  #btnSave{margin-top:2px;}
+  /* No squash on press. Every other button shrinks when tapped (button.b:active scales to
+     .9), but this one is a full-width slab with live smoke rendering inside it: scaling it
+     resamples the WebGL canvas for the length of the transition, so the smoke visibly
+     stutters and re-crops just as the eye goes to it. The press feedback is a light bloom
+     in the smoke instead — see iPress in the shader — which reads better and is free,
+     because that canvas is already drawing every frame. */
+  #btnShare:active{transform:none;}
+  /* Scoped to the row on purpose. In the native app JS moves #btnSave into the share sheet,
+     where .ssSave sets its own spacing — an unscoped `#btnSave{margin-top}` is an id
+     selector and would outrank that class rule wherever the button ended up. */
+  #actionRow #btnSave{margin-top:2px;}
   #btnAgain{flex-basis:auto;margin-top:2px;background:none;border:none;cursor:pointer;
     color:rgba(255,255,255,.62);font-family:var(--font);font-size:13.5px;font-weight:600;
     padding:8px 0 2px;text-shadow:0 1px 4px rgba(0,0,0,.6);}
@@ -416,6 +426,15 @@
   .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
   .ssBtn.snap{background:#fffc00;color:#111;border:none;}
   .ssBtn.ssInvite{background:rgba(72,214,139,.14);border-color:rgba(72,214,139,.45);}
+  /* Save, once JS has moved it in here (native only — see the move in the share block).
+     The other rows carry an emoji in .ic; this one keeps the download/check SVG pair it
+     already had, because that swap is the truthful "actually written to the camera roll"
+     ack that native drives via window.__kamoSaved. */
+  .ssBtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;}
+  /* Keeping is not sharing — a gap stops it reading as a fourth destination in the list
+     above it. Air rather than a rule: every row here is already a bordered pill, and a
+     separator line between pills just adds a fifth edge to look at. */
+  .ssBtn.ssSave{margin-top:14px;}
   .ssBtn:active{transform:scale(.98);}
   .ssMore{background:rgba(255,255,255,.06);}
   .ssClose{display:block;width:100%;margin-top:4px;background:none;border:none;color:rgba(255,255,255,.55);font-size:15px;font-weight:600;cursor:pointer;padding:10px;}
@@ -1533,7 +1552,12 @@ async function deliver(blob,ext){
 }
 function showSaved(){ const btn=$("#btnSave"); if(!btn) return; haptic(12); btn.classList.add("saved"); clearTimeout(showSaved._t); showSaved._t=setTimeout(()=>btn.classList.remove("saved"),1100); }
 window.__kamoSaved=showSaved;   // native can inject this on a CONFIRMED camera-roll save (truthful ack)
-async function saveStatic(){ const b=await staticBlob();
+/* shareBlob(), not staticBlob(): Save now lives inside the share sheet, directly under the
+   Challenge / Before-After tabs, so it has to respect the tab that is selected. Saving the
+   challenge image while "Before / After" is lit would be the button ignoring the control
+   sitting right above it. (staticBlob() is still the challenge-only path used by the web
+   share route, which has no tabs.) */
+async function saveStatic(){ const b=await shareBlob();
   if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d,score:Math.round(currentScore||0)}); return; }   // native calls window.__kamoSaved() ONLY on a confirmed camera-roll write
   const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); showSaved(); }
 
@@ -1627,6 +1651,27 @@ async function nativeShare(target){ closeShareSheet();
   }
   const b=await shareBlob(); const d=await blobToDataURL(b);
   postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message,score:Math.round(currentScore||0)}); }
+/* SAVE LIVES IN THE SHEET — but only in the native app.
+   The reveal screen was a full-width Share slab with a lone dark circle orbiting under it;
+   Save belongs with the other things you can do with the finished hide, not competing with
+   the CTA. So the button MOVES into the sheet rather than being duplicated there: one node,
+   one id, so showSaved() and the native window.__kamoSaved ack keep working untouched.
+
+   Native only, because shareReveal() opens this sheet only when the wrapper is present —
+   on the web it goes straight to navigator.share and the sheet never appears. Moving Save
+   in there unconditionally would make it unreachable in Safari, so the web build keeps it
+   on the action row exactly as it was. */
+if(window.ReactNativeWebView){
+  const saveBtn=$("#btnSave"), invite=$("#ssInvite");
+  if(saveBtn&&invite&&invite.parentNode){
+    saveBtn.classList.remove("b","icon"); saveBtn.classList.add("ssBtn","ssSave");
+    saveBtn.removeAttribute("title");
+    // .dl / .chk are the existing saved-state swap (#btnSave.saved flips them), so the
+    // label rides along with the icon for free — no second state to keep in sync.
+    saveBtn.insertAdjacentHTML("beforeend",'<span class="dl">Save to Photos</span><span class="chk">Saved to Photos</span>');
+    invite.parentNode.insertBefore(saveBtn,invite);
+  }
+}
 $("#ssClose").onclick=closeShareSheet;
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) closeShareSheet(); };
 /* [data-target] only — the invite button below is not an image share and must not
@@ -2010,11 +2055,12 @@ $("#btnAgain").onclick=()=>{ confirmSheet.style.display=""; confirmSheet.classLi
 (function(){
   const cv=document.getElementById("shareFx"), btn=document.getElementById("btnShare");
   if(!cv||!btn) return;
-  let gl=null,prog=null,uRes=null,uT=null,raf=0,t0=0,visible=false;
+  let gl=null,prog=null,uRes=null,uT=null,uP=null,raf=0,t0=0,visible=false;
+  let press=0, pressTo=0;   // 0..1, eased in frame() — see the pointer handlers below
   try{ gl=cv.getContext("webgl",{alpha:false,antialias:false,depth:false,stencil:false,powerPreference:"low-power"}); }catch(_){ gl=null; }
   if(!gl) return;   // no context → the plain white button stays
   const VERT="attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
-  const FRAG=`precision mediump float;uniform vec2 iResolution;uniform float iTime;
+  const FRAG=`precision mediump float;uniform vec2 iResolution;uniform float iTime;uniform float iPress;
 float random(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);float a=random(i),b=random(i+vec2(1,0)),c=random(i+vec2(0,1)),d=random(i+vec2(1,1));
 vec2 u=f*f*(3.-2.*f);return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;}
@@ -2026,13 +2072,19 @@ vec2 r=vec2(fbm(uv+3.*q+vec2(1.2,3.2)+.2*iTime),fbm(uv+3.*q+vec2(8.8,2.8)+.2*iTi
 float f=fbm(uv+r);
 vec3 color=mix(vec3(0.),vec3(0.0,0.55,0.32),clamp((f*f)*6.,0.,5.));
 color=mix(color,vec3(0.37,0.90,0.64),clamp(length(q)*length(q),0.,1.));
-color=mix(color,vec3(0.88,1.0,0.94),clamp(length(r.x),0.,.1));
+/* The white-hot band widens under the finger, so the press reads as light coming THROUGH
+   the smoke rather than a flat brightness lift on the whole slab. */
+color=mix(color,vec3(0.88,1.0,0.94),clamp(length(r.x),0.,.1+.22*iPress));
 color=vec3(0.02,0.12,0.08)+(f*f*f+.6*f*f+.6*f)*color;
 /* Darkened to 0.58. At full brightness the mint highlights washed out the white
    label — the original CodePen keeps its text legible with a bg-black/50 panel
    behind it, which would mean a pill inside a pill here. Dimming the smoke does
-   the same job with nothing extra on screen. */
-gl_FragColor=vec4(color*0.58,1.);}`;
+   the same job with nothing extra on screen.
+   iPress lifts it while held. It stops at 1.06 rather than going further because the
+   label has to stay readable at the peak — that legibility is the whole reason for the
+   0.58 in the first place, and a press that blows out the word "Share" trades the thing
+   the button is for against a flourish. */
+gl_FragColor=vec4(color*(0.58+0.48*iPress),1.);}`;
   function shader(type,src){ const sh=gl.createShader(type); gl.shaderSource(sh,src); gl.compileShader(sh);
     return gl.getShaderParameter(sh,gl.COMPILE_STATUS)?sh:null; }
   try{
@@ -2046,6 +2098,7 @@ gl_FragColor=vec4(color*0.58,1.);}`;
     const loc=gl.getAttribLocation(prog,"p"); gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
     uRes=gl.getUniformLocation(prog,"iResolution"); uT=gl.getUniformLocation(prog,"iTime");
+    uP=gl.getUniformLocation(prog,"iPress");
   }catch(_){ return; }
   /* DPR capped at 2: the button is ~350x56 CSS px, so even at 2 this is a small surface,
      and an uncapped DPR3 would be 2.25x the fragment work for no visible gain. */
@@ -2056,11 +2109,20 @@ gl_FragColor=vec4(color*0.58,1.);}`;
   }
   function frame(now){ raf=0; if(!visible) return;
     if(!t0) t0=now;
-    try{ size(); gl.uniform1f(uT,(now-t0)/1000); gl.drawArrays(gl.TRIANGLES,0,3); }catch(_){ visible=false; return; }
+    // Fast attack, slow release: the light should arrive with the finger and linger a beat
+    // after it lifts, the way a real glow decays. Equal rates read as a mechanical toggle.
+    press += (pressTo-press) * (pressTo>press ? 0.42 : 0.10);
+    if(press<0.001&&pressTo===0) press=0;
+    try{ size(); gl.uniform1f(uT,(now-t0)/1000); gl.uniform1f(uP,press); gl.drawArrays(gl.TRIANGLES,0,3); }catch(_){ visible=false; return; }
     raf=requestAnimationFrame(frame); }
   function start(){ if(visible||document.hidden) return; visible=true; if(!raf) raf=requestAnimationFrame(frame); }
   function stop(){ visible=false; if(raf){ cancelAnimationFrame(raf); raf=0; } }
   btn.classList.add("smoky");
+  /* The press feedback, replacing the scale-down that #btnShare:active used to inherit.
+     pointercancel and pointerleave matter as much as pointerup: a drag off the button
+     never fires pointerup, and without them the smoke would stay lit with nothing held. */
+  btn.addEventListener("pointerdown",()=>{ pressTo=1; start(); });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>btn.addEventListener(ev,()=>{ pressTo=0; }));
   try{
     new IntersectionObserver(es=>{ es.forEach(e=>e.isIntersecting?start():stop()); },{threshold:0}).observe(cv);
   }catch(_){ start(); }
