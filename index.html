@@ -282,6 +282,9 @@
   #autoSw svg{stroke:var(--accent);}
   #autoSw.active{background:rgba(95,230,164,.30);}
   .sw svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .bsample{width:22px;height:22px;border-radius:7px;vertical-align:middle;   /* no margin: .brush is inline-flex with gap:6px */
+    border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.05);flex:0 0 auto;}
+  .brush.locked .bsample{opacity:.72;}
   .bsz{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--stroke);background:rgba(255,255,255,.06);cursor:pointer;}
   .bsz.active{border-color:var(--accent);background:rgba(255,255,255,.15);}
   .bsz i{display:block;border-radius:50%;background:#fff;}
@@ -1082,7 +1085,8 @@ function capture(){
   maskCanvas=document.createElement("canvas"); maskCanvas.width=W; maskCanvas.height=H; maskCanvas.getContext("2d").drawImage(glCanvas,0,0,W,H);
   blurCanvas=makeBlur(sceneCanvas,W,H);
   paintLayer=document.createElement("canvas"); paintLayer.width=W; paintLayer.height=H; pctx=paintLayer.getContext("2d",{willReadFrequently:true});
-  try{ buildSwatches(extractPalette(sceneCanvas,5)); }catch(e){}   // 5 palette colours from the photo (the eyedropper is the star)
+  try{ buildSwatches(extractPalette(sceneCanvas,5)); }catch(e){}
+  try{ maybeGrantTaste(); }catch(e){}   // the free Pro round, if this is the one   // 5 palette colours from the photo (the eyedropper is the star)
   suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
@@ -1393,13 +1397,68 @@ const PRODUCT_ID="com.blisscoach.kamo.pro";
 // default to the plan we can actually sell today (the weekly sub isn't approved yet)
 const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="weekly"; /* must stay in sync with the .active plan in the markup */ let pwBuyIntent=false;
 let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+/* ONE FREE ROUND WITH THE PRO BRUSHES.
+   Describing Dapple sells nothing when a free brush is sitting right next to it — every
+   locked tool here has a substitute, which is why nobody was blocked and nobody bought.
+   So the second hide runs with everything unlocked, once per install. After that the
+   substitute stops feeling equivalent, which is the entire pitch.
+   `proTaste` is round-scoped and never persisted: the GRANT is remembered so it can't
+   repeat, the unlock itself dies with the round. */
+let proTaste=false;
+const canPro=()=>isPro||proTaste;
+function tasteGranted(){ try{ return localStorage.getItem("kamo_taste")==="1"; }catch(e){ return true; } }
+function bumpHides(){ try{ const n=(+localStorage.getItem("kamo_hides")||0)+1; localStorage.setItem("kamo_hides",String(n)); return n; }catch(e){ return 0; } }
+function maybeGrantTaste(){
+  const was=proTaste;
+  proTaste=false;
+  if(!isPro && !tasteGranted() && bumpHides()===2){
+    proTaste=true;
+    try{ localStorage.setItem("kamo_taste","1"); }catch(e){}
+    showHint("KAMO+ brushes unlocked for this hide",3400);
+  }
+  /* Refresh on the way OUT too, not just in: without this the row kept showing the
+     brushes unlocked for the rest of the session after the free round ended. */
+  if(was!==proTaste) refreshProUI();
+}
 const BRUSHES=[{id:"solid",name:"Solid",pro:false},{id:"dapple",name:"Dapple",pro:true},{id:"leaf",name:"Leaf",pro:true},{id:"disrupt",name:"Camo",pro:true}];
 function setBrush(id){ brushMode=id; document.querySelectorAll("#brushes .brush").forEach(el=>el.classList.toggle("active",el.dataset.id===id)); }
+/* A 22x22 sample of what each Pro brush actually lays down. Deliberately drawn with the
+   same shapes _stamp() uses — scattered discs for Dapple, rotated blades for Leaf,
+   angular patches for Camo — so the chip is an honest preview and not decoration.
+   Drawn once per row build; no animation loop, nothing to pause. */
+function brushSample(id){
+  try{
+    const S=22, c=document.createElement("canvas");
+    c.width=S*2; c.height=S*2; c.className="bsample";
+    const g=c.getContext("2d"); if(!g) return null;
+    g.scale(2,2);
+    const base=[122,116,96];
+    const sh=a=>{const f=a<0?0:255,t=Math.abs(a);
+      return `rgb(${Math.round(base[0]+(f-base[0])*t)},${Math.round(base[1]+(f-base[1])*t)},${Math.round(base[2]+(f-base[2])*t)})`;};
+    const rnd=(n=>()=>((n=(n*1103515245+12345)&0x7fffffff)/0x7fffffff))(id.length*7919);
+    if(id==="dapple"){ for(let i=0;i<7;i++){ g.globalAlpha=.55+rnd()*.4; g.fillStyle=sh((rnd()-.5)*.55);
+        g.beginPath(); g.arc(rnd()*S,rnd()*S,1.6+rnd()*3.1,0,7); g.fill(); } }
+    else if(id==="leaf"){ for(let i=0;i<6;i++){ g.globalAlpha=.6+rnd()*.35;
+        g.fillStyle=`rgb(${Math.round(base[0]*.55+rnd()*30)},${Math.round(base[1]*.6+60+rnd()*20)},${Math.round(base[2]*.5+25)})`;
+        g.save(); g.translate(rnd()*S,rnd()*S); g.rotate(rnd()*Math.PI);
+        g.beginPath(); g.ellipse(0,0,3.4+rnd()*1.6,1.2+rnd()*.8,0,0,7); g.fill(); g.restore(); } }
+    else { for(let i=0;i<5;i++){ g.globalAlpha=.85; g.fillStyle=sh((rnd()-.5)*.6);
+        const cx=rnd()*S, cy=rnd()*S, k=5+((rnd()*3)|0), rad=2.6+rnd()*2.6;
+        g.beginPath(); for(let j=0;j<=k;j++){ const a=j/k*Math.PI*2, rr=rad*(.5+rnd()*.6);
+          const px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr; j?g.lineTo(px,py):g.moveTo(px,py); }
+        g.closePath(); g.fill(); } }
+    return c;
+  }catch(e){ return null; }
+}
 function buildBrushes(){ const w=$("#brushes"); if(!w) return; w.innerHTML="";
-  BRUSHES.forEach(b=>{ const el=document.createElement("button"); const locked=b.pro&&!isPro;
+  BRUSHES.forEach(b=>{ const el=document.createElement("button"); const locked=b.pro&&!canPro();
     el.className="brush"+(b.id===brushMode?" active":"")+(locked?" locked":""); el.dataset.id=b.id;
-    el.innerHTML=b.name+(locked?' <svg class="lkico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>':(b.pro?' <span class="lk">✦</span>':""));
-    el.onclick=()=>{ if(b.pro&&!isPro){ openPaywall(); return; } setBrush(b.id); haptic(); }; w.appendChild(el); }); }
+    /* A padlock tells you that you cannot have it. A sample tells you what it is — which
+       is the only thing that could make a locked brush worth paying for, since the free
+       Solid brush is a working substitute for all three. */
+    el.innerHTML=b.name+(b.pro?' <span class="lk">✦</span>':"");
+    if(b.pro){ const pv=brushSample(b.id); if(pv) el.insertBefore(pv,el.firstChild); }
+    el.onclick=()=>{ if(b.pro&&!canPro()){ openPaywall(); return; } setBrush(b.id); haptic(); }; w.appendChild(el); }); }
 function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar();
   // nothing left to sell once they're KAMO+ → drop the top-left entry point
   const p=$("#btnPlus"); if(p && isPro) p.style.display="none"; }
@@ -1966,7 +2025,7 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
   sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
-  if(sizeStar) sizeStar.style.display=isPro?"none":"block"; }  /* ✦ Pro hint for free users */
+  if(sizeStar) sizeStar.style.display=canPro()?"none":"block"; }  /* ✦ Pro hint for free users */
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
@@ -1974,7 +2033,7 @@ let sizing=false;
    one of only three paywall entry points and by far the most irritating: pure interruption
    with nothing asked for. The tool stays locked (giving it away would change what KAMO+
    is), but the lock is now a one-line hint instead of a wall. */
-sizeBar.addEventListener("pointerdown",e=>{ if(!isPro){ showHint("Fine brush size is a KAMO+ tool"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ showHint("Fine brush size is a KAMO+ tool"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
 sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
@@ -2169,10 +2228,14 @@ $("#cfNo").onclick=closeConfirm;
 const PLUS_MIN_SCORE=60, PLUS_COOLDOWN_MS=3*24*60*60*1000;
 function maybeOfferPlus(score){
   try{
-    if(isPro || !(score>=PLUS_MIN_SCORE)) return;
-    const last=+(localStorage.getItem("kamo_plus_ask")||0);
-    if(last && Date.now()-last<PLUS_COOLDOWN_MS) return;
-    localStorage.setItem("kamo_plus_ask",String(Date.now()));
+    /* NO SCORE GATE, NO COOLDOWN — founder's call: show it on every retake unless they
+       already own it. The original version only offered after a hide scoring 60+, on the
+       theory that satisfaction sells. The opposite is at least as likely here: the player
+       who could NOT hide the figure is the one who wants a better tool, and on a textured
+       surface a single flat colour genuinely cannot win. PLUS_MIN_SCORE and
+       PLUS_COOLDOWN_MS are left defined right above so either guard is one line to
+       restore if this proves too heavy. */
+    if(isPro) return;
     /* let backToCompose() finish tearing the reveal down first */
     setTimeout(()=>{ if(!isPro) openPaywall(); },900);
   }catch(_){}
