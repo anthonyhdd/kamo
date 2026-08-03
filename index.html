@@ -268,6 +268,10 @@
       box-shadow:0 0 0 2px rgba(0,0,0,.55), 0 0 0 4px #fff, inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
       box-shadow:0 0 0 2px var(--accent), inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
   .sw.picker{overflow:hidden;background:conic-gradient(red,#ff0,#0f0,#0ff,#00f,#f0f,red);}
+  .sw.mosaic{overflow:hidden;padding:0;}
+  .mosaicTiles{width:100%;height:100%;display:block;border-radius:50%;}
+  .mosaicLk{position:absolute;right:-1px;bottom:-2px;font-size:10px;color:var(--mint);
+    text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 8px rgba(95,230,164,.6);pointer-events:none;}
   .sw.picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;}
   /* The eyedropper is the strongest tool in the row — on a textured surface, matching the
      scene's actual colour is the only way to hide anything — and it was styled exactly
@@ -1172,7 +1176,13 @@ function showScore(){
    with the background that is actually behind it. The figure takes on the real surface.
    Picking a swatch or eyedropping switches to flat colour — a deliberate, stylised choice
    the user opts into, with the Auto chip to come back. */
-let autoCamo=false, scenePat=null;   /* retired — see buildSwatches(). Kept inert, never set true again. */
+let autoCamo=false, scenePat=null;
+/* MOSAIC — a KAMO+ paint mode, and the one that answers the physics of this game.
+   A single flat colour cannot hide a figure on a textured surface: a rug, a carpet, a page
+   of text all carry variation that one tone can never match. Mosaic lays small tiles drawn
+   from the scene's OWN extracted palette, so the fill breaks up the way the surface does.
+   It is a colour source, not a brush shape — it overrides the stroke for any brush. */
+let mosaic=false;   /* retired — see buildSwatches(). Kept inert, never set true again. */
 function paintStyle(){
   if(!autoCamo) return paintColor;
   if(!scenePat&&sceneCanvas&&pctx){ try{ scenePat=pctx.createPattern(sceneCanvas,"no-repeat"); }catch(e){ scenePat=null; } }
@@ -1322,17 +1332,29 @@ function _toRGB(col){ if(col[0]==="#"){ let h=col.slice(1); if(h.length===3) h=h
 function _shade(rgb,amt){ const f=amt<0?0:255,t=Math.abs(amt); return `rgb(${Math.round(rgb[0]+(f-rgb[0])*t)},${Math.round(rgb[1]+(f-rgb[1])*t)},${Math.round(rgb[2]+(f-rgb[2])*t)})`; }
 // Pro pattern brushes — all derive their tones from the picked scene color so they still camouflage.
 function _stamp(x,y){ const base=_toRGB(paintColor), R=brush*paintDpr, AS=autoCamo?paintStyle():null;
+  /* Mosaic wins over the brush shape: square tiles, each a different entry from the scene
+     palette, jittered so they do not read as a grid. Tiles scale with the brush, so the
+     2px pencil lays a fine grain and a wide brush lays coarse blocks. */
+  if(mosaic){ const pal=(PALETTE&&PALETTE.length)?PALETTE:[paintColor];
+    const t=Math.max(2,R*0.42);
+    for(let i=0;i<3;i++){
+      pctx.globalAlpha=0.72+Math.random()*0.28;
+      pctx.fillStyle=pal[(Math.random()*pal.length)|0];
+      const ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R, w=t*(0.7+Math.random()*0.7), h=t*(0.7+Math.random()*0.7);
+      pctx.fillRect(x+ox-w/2, y+oy-h/2, w, h);
+    }
+    pctx.globalAlpha=1; return; }
   if(brushMode==="dapple"){ for(let i=0;i<4;i++){ const rr=R*(0.28+Math.random()*0.5), ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; pctx.globalAlpha=0.5+Math.random()*0.4; pctx.fillStyle=AS||_shade(base,(Math.random()-0.5)*0.5); pctx.beginPath(); pctx.arc(x+ox,y+oy,rr/2,0,7); pctx.fill(); } pctx.globalAlpha=1; return; }
   if(brushMode==="leaf"){ for(let i=0;i<3;i++){ const a=Math.random()*Math.PI, ox=(Math.random()-.5)*R, oy=(Math.random()-.5)*R; const g=[Math.min(255,Math.round(base[0]*0.55+Math.random()*30)),Math.min(255,Math.round(base[1]*0.6+60+Math.random()*20)),Math.min(255,Math.round(base[2]*0.5+25))]; pctx.globalAlpha=0.7; pctx.fillStyle=AS||`rgb(${g[0]},${g[1]},${g[2]})`; pctx.save(); pctx.translate(x+ox,y+oy); pctx.rotate(a); pctx.beginPath(); pctx.ellipse(0,0,R*0.5,R*0.22,0,0,7); pctx.fill(); pctx.restore(); } pctx.globalAlpha=1; return; }
   if(brushMode==="disrupt"){ pctx.globalAlpha=0.85; pctx.fillStyle=AS||_shade(base,(Math.random()-0.5)*0.55); const k=5+((Math.random()*3)|0), rad=R*0.72; pctx.beginPath(); for(let i=0;i<=k;i++){ const a=i/k*Math.PI*2, rr=rad*(0.5+Math.random()*0.6), px=x+Math.cos(a)*rr, py=y+Math.sin(a)*rr; i?pctx.lineTo(px,py):pctx.moveTo(px,py); } pctx.closePath(); pctx.fill(); pctx.globalAlpha=1; return; } }
 function _stampAlong(a,b){ const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy), step=Math.max(2,brush*paintDpr*0.35), n=Math.max(1,Math.floor(dist/step)); for(let i=0;i<=n;i++) _stamp(a.x+dx*i/n,a.y+dy*i/n); }
 function paintAt(p){
   const from=paintAt._l||p;
-  if(brushMode!=="solid"){ _stampAlong(from,p); paintAt._l=p; clipPaintToFigure(from.x,from.y,p.x,p.y); return; }
+  if(mosaic||brushMode!=="solid"){ _stampAlong(from,p); paintAt._l=p; clipPaintToFigure(from.x,from.y,p.x,p.y); return; }
   const st=paintStyle(); pctx.fillStyle=st; pctx.strokeStyle=st; pctx.lineWidth=brush*paintDpr; pctx.lineCap="round"; pctx.lineJoin="round";
   if(paintAt._l){ pctx.beginPath();pctx.moveTo(paintAt._l.x,paintAt._l.y);pctx.lineTo(p.x,p.y);pctx.stroke(); } pctx.beginPath();pctx.arc(p.x,p.y,(brush*paintDpr)/2,0,7);pctx.fill(); paintAt._l=p;
   clipPaintToFigure(from.x,from.y,p.x,p.y); }
-function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; autoCamo=false; setAutoChip(); document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
+function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
 board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDefault(); board.setPointerCapture(e.pointerId); const p=pt(e);
   if(eyedrop){ const c=pick(p); const l=$("#loupe"); l.style.display="block"; l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   pushUndo(); painting=true; paintAt._l=null; paintAt(p); haptic(12); });
@@ -1381,16 +1403,37 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      `<label class="sw picker">` below). One was added in this slot by mistake and the row
      shipped with two identical rainbow buttons. */
   const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
-  eye.onclick=()=>{ eyedrop=true; autoCamo=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
-  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; });
+  eye.onclick=()=>{ eyedrop=true; autoCamo=false; mosaic=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
+  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; });
   /* Auto used to be the selected swatch on every round, so something was always lit. With
      it gone nothing is, while paintColor still holds a colour — the player would paint in
      a shade no swatch shows as chosen. Select the first palette entry and paint with it. */
   if(firstColorSw && !w.querySelector(".sw.active")){ paintColor=PALETTE[0]; firstColorSw.classList.add("active"); }
   const pk=document.createElement("label"); pk.className="sw picker"; const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
-  inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); pk.classList.add("active"); }; pk.appendChild(inp); w.appendChild(pk);
+  inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; mosaic=false; document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); pk.classList.add("active"); }; pk.appendChild(inp); w.appendChild(pk);
+
+  /* MOSAIC, last in the row and KAMO+ only. Unlike the size slider — where a full-screen
+     paywall on a drag was pure irritation — this is a deliberate tap on a thing the user
+     cannot have yet, which is exactly when the offer is worth making. */
+  const mo=document.createElement("div"); mo.id="mosaicSw"; mo.className="sw mosaic"+(mosaic?" active":"");
+  mo.title="Mosaic — KAMO+";
+  const mtiles=document.createElement("canvas"); mtiles.width=68; mtiles.height=68; mtiles.className="mosaicTiles";
+  (function(){ const g=mtiles.getContext("2d"); if(!g) return; g.scale(2,2);
+    const pal=(PALETTE&&PALETTE.length)?PALETTE:["#7c6f57","#4a5d3a","#6b6b6b","#c9b48a"];
+    for(let y=0;y<34;y+=8) for(let x=0;x<34;x+=8){
+      g.fillStyle=pal[((x*7+y*13)/8|0)%pal.length]; g.fillRect(x,y,8,8); } })();
+  mo.appendChild(mtiles);
+  if(!canPro()){ const lk=document.createElement("span"); lk.className="lk mosaicLk"; lk.textContent="✦"; mo.appendChild(lk); }
+  mo.onclick=()=>{ if(!canPro()){ openPaywall(); return; }
+    mosaic=true; eyedrop=false;
+    document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); mo.classList.add("active");
+    showHint("Mosaic — tiles from the scene's own colours"); haptic(8); };
+  w.appendChild(mo);
 }
-buildSwatches();
+/* buildSwatches() is NOT called here any more. It now reads canPro() for the mosaic
+   lock, and canPro/proTaste are declared below — calling it here hit the temporal
+   dead zone and threw before the module finished loading, which kills everything.
+   The initial build now sits next to buildBrushes() past those declarations. */
 
 /* ===== Pro brushes + paywall ===== */
 const PRODUCT_ID="com.blisscoach.kamo.pro";
@@ -1462,6 +1505,7 @@ function buildBrushes(){ const w=$("#brushes"); if(!w) return; w.innerHTML="";
 function refreshProUI(){ buildBrushes(); if(typeof renderSizeBar==="function") renderSizeBar();
   // nothing left to sell once they're KAMO+ → drop the top-left entry point
   const p=$("#btnPlus"); if(p && isPro) p.style.display="none"; }
+buildSwatches();   // safe here: past the isPro/proTaste declarations canPro() reads
 buildBrushes();
 
 const paywallEl=$("#paywall");
