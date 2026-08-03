@@ -253,7 +253,15 @@
      where .ssSave sets its own spacing — an unscoped `#btnSave{margin-top}` is an id
      selector and would outrank that class rule wherever the button ended up. */
   #actionRow #btnSave{margin-top:2px;}
-  #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
+  /* Colours scroll; Undo/Clear do not. `min-width:0` on the scroller is what makes that
+     work — without it a flex item refuses to shrink below its content width, so the tools
+     would be shoved off the right edge instead of the colours scrolling underneath them. */
+  #swatchRow{display:flex;align-items:center;gap:10px;}
+  #swatchTools{flex:0 0 auto;display:flex;gap:8px;padding-left:8px;position:relative;}
+  /* Short fade so a colour scrolling past doesn't appear to collide with the tools. */
+  #swatchTools::before{content:"";position:absolute;left:-18px;top:0;bottom:0;width:18px;pointer-events:none;
+    background:linear-gradient(90deg,rgba(8,10,14,0),rgba(8,10,14,.75));}
+  #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;flex:1 1 auto;min-width:0;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
   /* Swatches read as glass beads, not flat discs: a specular highlight up top, a soft
      occlusion at the bottom, and a drop shadow to lift them off the scene. Without the
@@ -299,9 +307,6 @@
   .bsample{width:22px;height:22px;border-radius:7px;vertical-align:middle;   /* no margin: .brush is inline-flex with gap:6px */
     border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.05);flex:0 0 auto;}
   .brush.locked .bsample{opacity:.72;}
-  .bsz{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--stroke);background:rgba(255,255,255,.06);cursor:pointer;}
-  .bsz.active{border-color:var(--accent);background:rgba(255,255,255,.15);}
-  .bsz i{display:block;border-radius:50%;background:#fff;}
   button.b{position:relative;overflow:hidden;border:1px solid var(--stroke);background:rgba(255,255,255,.07);color:var(--text);border-radius:16px;height:48px;padding:0 16px;font-size:14px;font-weight:650;letter-spacing:.2px;
     display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;backdrop-filter:blur(10px);transition:transform .12s cubic-bezier(.3,1.5,.5,1),background .2s,border-color .2s,color .2s;}
   button.b:active{transform:scale(.9);}
@@ -520,20 +525,23 @@
 
     <!-- PAINT UI -->
     <div id="paintUI">
-      <div id="swatches"></div>
-      <div id="brushes"></div>
-      <div class="row" id="editRow" style="margin-top:2px;gap:12px;justify-content:flex-start">
-        <!-- THE THREE PRESET SIZES ARE GONE. They were the free substitute for the size
-             slider: the slider was already KAMO+, but anyone who wanted a bigger or smaller
-             brush just tapped a dot instead, so the lock never blocked anything and never
-             sold anything. Brush size is now one fixed default free, and continuous on
-             KAMO+. Deliberate trade — free users lose size control entirely, which is the
-             point of a wall. #sizeDots is kept as an empty row so editRow's layout and the
-             show/hide in enterFinished() do not have to change. -->
-        <div class="row" id="sizeDots" style="gap:8px"></div>
-        <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
-        <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
+      <!-- Undo and Clear sit at the RIGHT END OF THE COLOUR ROW, not inside it. #swatches
+           scrolls horizontally, so putting them in it would let them slide off screen — and
+           these two are the only escape from a bad stroke, which must never require
+           scrolling to reach. This wrapper keeps them pinned while the colours scroll
+           underneath. They moved up from #editRow, which is deleted below. -->
+      <div id="swatchRow">
+        <div id="swatches"></div>
+        <div id="swatchTools">
+          <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
+          <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
+        </div>
       </div>
+      <div id="brushes"></div>
+      <!-- #editRow is gone. It held the three preset brush sizes — deleted when size became
+           a KAMO+ tool, because they were its free substitute — and Undo/Clear, which moved
+           up beside the colours. An empty row left behind is just margin nobody can see. -->
+
       <div class="row" id="actionRow" style="margin-top:8px;flex-wrap:wrap">
         <!-- The generic export glyph said "a file is leaving your phone". The eye says what
              the share is FOR: someone on the other end has to find the figure. Copy follows
@@ -2280,7 +2288,7 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
   sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
   if(sizeStar) sizeStar.style.display=canPro()?"none":"block"; }  /* ✦ Pro hint for free users */
-function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); renderSizeBar(); }
+function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
    intent — it is someone adjusting their brush who gets a full screen in the face. It was
@@ -2298,11 +2306,6 @@ sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ openPaywall(); return
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
 sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
-/* The 3 preset dots are gone from the markup (see #sizeDots) — they were the free way
-   around the KAMO+ slider. This binder stays because it costs nothing and querySelectorAll
-   simply matches nothing now; ripping it out would only invite someone re-adding the dots
-   later and wondering why they are inert. */
-document.querySelectorAll(".bsz").forEach(b=>b.onclick=()=>{ brush=+b.dataset.sz; document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); b.classList.add("active"); renderSizeBar(); haptic(6); });
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
 let finished=false, revealX=0.5;
@@ -2355,14 +2358,14 @@ function enterFinished(auto){ if(finished) return; finished=true;
      deliberately does NOT prompt for a rating here, because the Share/Save CTA appears
      on this very screen and we don't compete with it. */
   postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
-  ["swatches","brushes","editRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
+  ["swatchRow","brushes","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
   showScore();   // "vanished in Xs" — the number the round was played for
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
   revealX=1; drawReveal(); let rv=1; const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal(); if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim); else { revealX=0.5; drawReveal(); } }; requestAnimationFrame(anim); }
 function exitFinished(){ finished=false; revealC.style.display="none"; revealHandle.style.display="none"; revealHint.style.display="none";
-  ["swatches","brushes","editRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
+  ["swatchRow","brushes"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
   scoreChip.style.display="none"; }   // the time belongs to the reveal, not the editor
