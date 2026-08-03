@@ -220,7 +220,13 @@
 
   /* ---------- PAINT MODE ---------- */
   #paintUI{position:absolute;left:0;right:0;bottom:0;z-index:15;display:none;padding:10px 12px calc(12px + var(--safe-b));
-    background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.86) 32%,var(--bg));}
+    /* Scrim, not a curtain. It hit .86 opacity by 32% of its own height and then went to
+       the solid page background, which blacked out the bottom of the photo — worst on the
+       reveal screen, where the panel holds nothing but Share and the picture is the point.
+       Now it ramps later, peaks lower, and stops at .78 instead of opaque, so the scene
+       still shows through behind the buttons. The swatches keep their legibility from
+       their own specular highlight and drop shadow rather than from a black wall. */
+    background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.38) 42%,rgba(5,6,10,.78));}
   .row{display:flex;gap:8px;align-items:center;justify-content:center;}
   #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
