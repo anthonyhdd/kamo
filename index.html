@@ -257,10 +257,10 @@
      work — without it a flex item refuses to shrink below its content width, so the tools
      would be shoved off the right edge instead of the colours scrolling underneath them. */
   #swatchRow{display:flex;align-items:center;gap:10px;}
+  /* No fade on the left edge any more. It existed to hide a colour scrolling underneath the
+     tools — but the row no longer overflows (the palette is 4 colours, see extractPalette),
+     so there was nothing to hide and it read as a black smear sitting on the photo. */
   #swatchTools{flex:0 0 auto;display:flex;gap:8px;padding-left:8px;position:relative;}
-  /* Short fade so a colour scrolling past doesn't appear to collide with the tools. */
-  #swatchTools::before{content:"";position:absolute;left:-18px;top:0;bottom:0;width:18px;pointer-events:none;
-    background:linear-gradient(90deg,rgba(8,10,14,0),rgba(8,10,14,.75));}
   #swatches{display:flex;gap:9px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;flex:1 1 auto;min-width:0;}   /* 7px top: the selected swatch scales up and was being clipped by the 2px it had */
   #swatches::-webkit-scrollbar{display:none;}
   /* ONE outline for every round control in the bottom row. Three treatments used to share
@@ -317,8 +317,13 @@
      one row of round controls instead of two mismatched groups. Scoped to #swatchTools on
      purpose: #btnSave is also a .b.icon but it sits beside the 48px Share slab in
      #actionRow, where shrinking it would break that pairing instead of fixing anything. */
-  #swatchTools button.b.icon{width:34px;height:34px;}
-  #swatchTools button.b.icon svg{width:17px;height:17px;}
+  /* They already WERE 34px — the box matched the swatches exactly. What didn't match was the
+     fill: button.b's background is rgba(255,255,255,.07), so against a photo the disc was
+     invisible and all you read was the ring and a 17px icon floating in it. Next to a row of
+     opaque colour beads that looks like a smaller button. A solid dark fill gives the disc
+     its actual size back, and the icon goes to 19px to match `.sw svg`. */
+  #swatchTools button.b.icon{width:34px;height:34px;background:rgba(10,12,16,.62);}
+  #swatchTools button.b.icon svg{width:19px;height:19px;}
   button.b.icon:active{background:rgba(255,255,255,.16);border-color:var(--accent);color:var(--accent);}
   #btnSave{position:relative;}
   #btnSave .chk{display:none;}
@@ -356,12 +361,13 @@
   #sizeBar::before{content:"";position:absolute;left:50%;top:16px;bottom:16px;transform:translateX(-50%);width:8px;border-radius:4px;background:rgba(10,12,16,.42);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.16);box-shadow:0 2px 12px rgba(0,0,0,.45);}
   #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:4px;border-radius:2px;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);}
   #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.6);border:1.5px solid rgba(0,0,0,.06);pointer-events:none;}
-  /* Was a mint ✦ — a Pro badge where a SCALE belongs. The bar's job is to say "small at the
-     bottom, big at the top", and it could only say it once you already dragged. This is the
-     biggest brush, drawn at the top as a plain white dot, so the range is legible at rest.
-     White to match the thumb and the fill: one material, not a second colour language. */
-  #sizeStar{position:absolute;top:0;left:50%;transform:translateX(-50%);width:26px;height:26px;border-radius:50%;
-    background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.55);opacity:.55;pointer-events:none;display:none;}
+  /* ✦ = KAMO+, and it labels the WHOLE bar, not the top end. Every ✦ in this app means the
+     same thing (the all-colours swatch carries it too), so a second meaning here would cost
+     more than the scale hint it was briefly used for. It sits at the top because that is
+     where there is room — the thumb lives high on the bar for free users.
+     Bigger than the old 12px and white, not mint: it reads against a photo. */
+  #sizeStar{position:absolute;top:-2px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
+    color:#fff;opacity:.9;pointer-events:none;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
   #revealHandle{position:absolute;top:0;bottom:0;width:46px;z-index:15;transform:translateX(-50%);display:none;touch-action:none;align-items:center;justify-content:center;}
@@ -505,7 +511,7 @@
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
 
     <!-- vertical brush-size slider (free) -->
-    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div><div id="sizeStar"></div></div>
+    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div><div id="sizeStar">✦</div></div>
     <!-- before/after reveal (finished view) -->
     <canvas id="revealC"></canvas>
     <div id="revealHandle"><div class="rhKnob">‹ ›</div></div>
@@ -585,20 +591,23 @@
 <div id="paywall">
   <div class="pwCard">
     <div class="pwKick">KAMO+</div>
-    <!-- Sell the OUTCOME, not the toolbox. The old copy ("Unlock every camo brush /
-         Every Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size
-         slider") was a feature list, and every feature on it is substitutable: any brush
-         hides the figure, the preset sizes work. Nobody is blocked, so nobody buys.
-         `score` is paint coverage, so "cover the whole figure in fewer strokes" is what
-         these tools literally do — outcome-led and still true. -->
-    <div class="pwTitle">Disappear faster, better, stronger</div>
-    <!-- LEADS WITH THE THINGS THAT HAVE NO FREE SUBSTITUTE. The old line sold brushes and
-         the size slider, and this file's own notes admit why that never converted: the free
-         Solid brush does the job, so nobody was ever blocked. A clean export and a clock
-         that stops taking the round away are both things you cannot get by using the app
-         differently. Brushes moved to the end, where they belong — as a bonus, not the
-         pitch. Keep this in sync with the share-sheet line (#ssPlus). -->
-    <div class="pwSub">Export with no KAMO mark, and double the clock — 90s to paint instead of 45. Plus every Pro pattern brush and fine size control.</div>
+    <!-- Sell the OUTCOME, not the toolbox. The old copy ("Unlock every camo brush / Every
+         Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider") was a
+         feature list, and every item on it had a free substitute: any brush hid the figure,
+         the preset sizes worked. Nobody was blocked, so nobody bought. -->
+    <!-- Both of these are REWRITTEN AT OPEN TIME by openPaywall(source) — see PW_PITCH. The
+         markup keeps the generic pitch as the fallback for entry points that aren't a
+         specific locked tool (the ✦ button, the post-round prompt). -->
+    <div class="pwTitle" id="pwTitle">Disappear faster, better, stronger</div>
+    <!-- EVERY CLAIM ON THIS LINE IS NOW UNSUBSTITUTABLE, which is new. The old version sold
+         "every Pro pattern brush and fine size control" — the brushes no longer exist (all
+         three only varied one colour's value) and the numbers were stale. What is left is
+         four things a free user cannot reach by using the app differently: a clean export,
+         a clock that stops taking the round away, colours that are not in the photo, and a
+         brush fine enough to work an edge.
+         ⚠️ Numbers appear here AND in PAINT_SECONDS/PRO_PAINT_SECONDS. Change them together.
+         Keep in sync with the share-sheet line (#ssPlus). -->
+    <div class="pwSub" id="pwSub">Export with no KAMO mark. 75 seconds to paint instead of 22, any color instead of four, and a brush fine enough for edges and faces.</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -1187,8 +1196,12 @@ function capture(){
   maskCanvas=document.createElement("canvas"); maskCanvas.width=W; maskCanvas.height=H; maskCanvas.getContext("2d").drawImage(glCanvas,0,0,W,H);
   blurCanvas=makeBlur(sceneCanvas,W,H);
   paintLayer=document.createElement("canvas"); paintLayer.width=W; paintLayer.height=H; pctx=paintLayer.getContext("2d",{willReadFrequently:true});
-  try{ buildSwatches(extractPalette(sceneCanvas,5)); }catch(e){}
-  try{ maybeGrantTaste(); }catch(e){}   // the free Pro round, if this is the one   // 5 palette colours from the photo (the eyedropper is the star)
+  /* FOUR colours, not five. At five the row was wider than the screen and the last swatch
+     was permanently sliced by the tools pinned to the right — a colour you could see but
+     never fully tap. Nothing scrolls into view any more, which is the point: everything in
+     this row is reachable without discovering that it scrolls. */
+  try{ buildSwatches(extractPalette(sceneCanvas,4)); }catch(e){}
+  try{ maybeGrantTaste(); }catch(e){}   // the free Pro round, if this is the one
   suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
@@ -1197,6 +1210,11 @@ function capture(){
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
+  /* Reset to the roller every free round. Not just at launch: the taste grant hands over the
+     full slider for one hide, and without this the size you dragged to during that hide
+     would still be there afterwards — the free round would permanently unlock the fine
+     brush, which is the substitute problem all over again. Pro keeps its last size. */
+  if(!canPro()) brush=FREE_BRUSH;
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; KAMO+ only — tapping it opens the paywall, and the free preset dots that used to sit under it are gone
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
@@ -1308,6 +1326,18 @@ let paintColor="#8a7f6a", brush=20, brushMode="solid", painting=false, eyedrop=f
    which spends roughly half the slider on the bottom quarter of the sizes and leaves the
    broad fill sizes, where precision does not matter, compressed at the top. */
 const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
+/* THE FINE BRUSH IS THE PAID ONE. Free rounds start — and stay — on a roller, and the whole
+   bottom of the scale is KAMO+.
+   This is the same test every other lock in this app failed: is there a free substitute?
+   A mid-size brush was one. At 20px on a phone you can still pick your way around an edge,
+   just slowly, so the locked slider was selling convenience and convenience is exactly what
+   nobody has ever paid us for. At 44px you cannot do detail at all — you can cover a torso
+   in three strokes and you cannot touch a face, a hand or the gap between an arm and a
+   body. That is a wall, not an inconvenience, and it is visible in the OUTPUT: the thing
+   you share is visibly coarser than a KAMO+ hide.
+   Deliberately not BRUSH_MAX. A slider pinned to its own end reads as broken; 44 sits high
+   on the bar with obvious travel underneath it, which is the pitch. */
+const FREE_BRUSH=44;
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
@@ -1476,7 +1506,10 @@ board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e
 function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed()}); } } }
 board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
 
-let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b","#9aa0a6","#2b2b2b","#c9b48a","#3a4a5a","#e8e0d0","#5a4632"];
+/* FOUR, to match what extractPalette() is asked for. This list is only ever the fallback
+   (extractPalette throws), and at ten entries that fallback overflowed the row — the one
+   path where the swatches are widest is the one nobody would ever test. */
+let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a","#6b6b6b"];
 // pull ~n representative colors from the captured scene so the palette matches the photo
 function extractPalette(canvas,n){
   // Same full-res-read problem as computeScore, and it fires from capture() — the one
@@ -1560,7 +1593,7 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
     mo.onclick=()=>haptic(8);   // the input handles opening; this is just the tick
   } else {
     const lk=document.createElement("span"); lk.className="lk swLk"; lk.textContent="✦"; mo.appendChild(lk);
-    mo.onclick=()=>{ openPaywall(); };
+    mo.onclick=()=>{ openPaywall("color"); };
   }
   /* PINNED, NOT SCROLLED. This button used to be the last child of #swatches — and #swatches
      scrolls horizontally, so it sat past the right edge and you had to scroll the colour row
@@ -1623,7 +1656,37 @@ function refreshProUI(){ buildSwatches(); if(typeof renderSizeBar==="function") 
 buildSwatches();   // safe here: past the isPro/proTaste declarations canPro() reads
 
 const paywallEl=$("#paywall");
-function openPaywall(){ paywallEl.classList.add("show"); haptic(12); track("paywall_viewed");
+/* ANSWER THE TAP. Four different locks opened the same generic sheet, so someone who
+   reached for the fine brush was told about the watermark and the clock and had to go find
+   their own reason in the list. The sheet now leads with the thing they just tried to use
+   and keeps the rest as the supporting line — same offer, same price, ordered by what they
+   already told us they want.
+   The other half of this is FREE: `source` now rides on paywall_viewed, so for the first
+   time we can see WHICH lock drives the sheet. 673 paywall views a day and 0 purchases is
+   uninterpretable without that split — a wall nobody hits and a wall everyone hits look
+   identical in the current funnel.
+   Falls back to the generic pitch for entry points that aren't a specific tool. */
+const PW_PITCH={
+  size:  { t:"Paint the details, not just the shape",
+           s:"The fine brush is KAMO+. Free rounds paint with a 44px roller — big enough for a torso, useless on a face, a hand or the gap under an arm. Plus a clean export, any color, and 75 seconds instead of 22." },
+  color: { t:"Every color, not just the four",
+           s:"KAMO+ opens the full color picker. Free rounds get four shades pulled out of the photo and an eyedropper that can only ever copy what is already there. Plus a clean export, the fine brush, and 75 seconds instead of 22." },
+  mark:  { t:"Your hide, without our name on it",
+           s:"KAMO+ exports clean — no watermark on the image or the reveal clip. Plus every color, the fine brush, and 75 seconds to paint instead of 22." },
+  time:  { t:"Stop losing hides to the clock",
+           s:"KAMO+ gives you 75 seconds to paint instead of 22, and longer to line up the shot. Plus a clean export, every color, and the fine brush." },
+};
+/* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
+   the first tool-specific open would become the new "default". */
+{ const t=$("#pwTitle"), s=$("#pwSub"); if(t) t.dataset.def=t.textContent; if(s) s.dataset.def=s.textContent; }
+function openPaywall(source){
+  const pitch=PW_PITCH[source];
+  const t=$("#pwTitle"), s=$("#pwSub");
+  /* Restore the generic copy when there is no pitch — without this the sheet would keep
+     whichever tool-specific line was shown last, and answer a question nobody asked. */
+  if(t) t.textContent = pitch ? pitch.t : (t.dataset.def || t.textContent);
+  if(s) s.textContent = pitch ? pitch.s : (s.dataset.def || s.textContent);
+  paywallEl.classList.add("show"); haptic(12); track("paywall_viewed",{source:source||"generic"});
   /* Safety net for the same split-deploy problem: an older wrapper only calls setPrices()
      when it actually resolved a price, so a StoreKit failure there would leave this button
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
@@ -1979,7 +2042,7 @@ if(window.ReactNativeWebView){
 }
 /* Closes the sheet rather than stacking the paywall on top of it — two sheets deep is how
    you lose both. Not counted as a dismissal: they didn't walk away, they went to buy. */
-$("#ssPlus").onclick=()=>{ closeShareSheet(); haptic(10); track("plan_selected",{plan:"watermark_pitch"}); openPaywall(); };
+$("#ssPlus").onclick=()=>{ closeShareSheet(); haptic(10); track("plan_selected",{plan:"watermark_pitch"}); openPaywall("mark"); };
 $("#ssClose").onclick=()=>dismissShareSheet("cancel");
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdrop"); };
 /* [data-target] only — the invite button below is not an image share and must not
@@ -2015,11 +2078,11 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    It creates the tension the format is built on, and it GUARANTEES every round lands
    on the reveal, which is the share surface.
 
-   AIM (10s)   -> auto-capture. PAINT (30s) -> auto-Done -> reveal.
-   ~40s a round, down from 60. The old numbers were set when the colour row still had a free
-   all-colours picker and three pattern brushes to work through; with that gone there is less
-   to do and 45s of paint was dead air at the end. Shorter also sharpens the KAMO+ clock:
-   30 -> 75 is a difference you feel, where 45 -> 90 was two long rounds.
+   AIM (8s)   -> auto-capture. PAINT (22s) -> auto-Done -> reveal.
+   ~30s a round, down from 60. The old numbers were set when the colour row still had a free
+   all-colours picker and three pattern brushes to work through; with that gone there is far
+   less to do. Shorter also sharpens the KAMO+ clock: 22 -> 75 is a difference you feel,
+   where 45 -> 90 was just two long rounds.
 
    NOT armed on the very first hide. First run is for teaching — maybeOnboard() is
    still showing "Tap the figure to pose" at that moment, and a countdown on top of
@@ -2028,16 +2091,23 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    Driven by ONE CSS transition on a transform. No rAF, no per-frame JS, no
    allocation; the only timers are two setTimeouts. */
 /* AIM is adaptive; PAINT is fixed. That split is deliberate.
-   PAINT stays at 45s for everyone because the round time is the score — it is only worth
-   comparing or beating if the challenge is identical every round.
-   AIM is just "get ready", and 15s was my guess, not a measurement. Guessing it wrong is
-   costly in both directions: too tight and the clock snatches a badly-framed shot, too
-   loose and the round opens with dead air. So it fits itself to the person instead:
+   PAINT is the same for every free round because the round time is the score — it is only
+   worth comparing or beating if the challenge is identical every round.
+   AIM is just "get ready", and the original 15s was a guess, not a measurement. Guessing it
+   wrong is costly in both directions: too tight and the clock snatches a badly-framed shot,
+   too loose and the round opens with dead air. So it fits itself to the person instead:
    remember how long their recent captures actually took and give them that plus headroom,
-   clamped to a sane band. Someone who lines up a shot in 4s gets a taut 10s; someone the
-   clock keeps beating gets pushed out toward 25s until it stops beating them.
+   clamped to a sane band. Someone who lines up a shot in 4s gets a taut 8s; someone the
+   clock keeps beating gets pushed out toward 14s until it stops beating them.
    Adjusts only BETWEEN rounds, so the clock never changes under you mid-aim. */
-const AIM_DEFAULT=10, AIM_MIN=7, AIM_MAX=18, PAINT_SECONDS=30;
+/* Cut again: aim 10 -> 8 (band 7-18 -> 6-14), paint 30 -> 22. Free rounds are now ~30s.
+   The floor under this is the FREE_BRUSH change in the same pass — a 44px roller covers a
+   figure in a handful of strokes, so 30s of paint had become slack at the end rather than
+   pressure. Two levers moving together: less time AND a coarser brush, which is what makes
+   the free output visibly rougher than a KAMO+ one instead of merely slower to produce.
+   ⚠️ If share_opened per session drops, this is the change to look at first — a round that
+   ends before the hide is recognisable kills the only thing worth sharing. */
+const AIM_DEFAULT=8, AIM_MIN=6, AIM_MAX=14, PAINT_SECONDS=22;
 /* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
    what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
    round, unlike a brush that has a free substitute sitting next to it.
@@ -2046,8 +2116,9 @@ const AIM_DEFAULT=10, AIM_MIN=7, AIM_MAX=18, PAINT_SECONDS=30;
    ⚠️ The comment above argues PAINT must stay identical for everyone "because the round
    time is the score". That still holds for the DISPLAYED time — a Pro user who takes 50s
    still shows "vanished in 50s", the limit only decides when the clock takes the round
-   away. What does change is coverage: 45s auto-Done can end a hide mid-paint, so Pro hides
-   will trend better-covered. Accepted deliberately — that IS the perk. */
+   away. What does change is coverage: a 22s auto-Done can end a hide mid-paint, so Pro
+   hides will trend better-covered. Accepted deliberately — that IS the perk, and at 22 vs
+   75 it is now a 3.4x gap rather than the 2x it started as. */
 const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
 function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
@@ -2211,7 +2282,9 @@ $("#heroStart").onclick=async e=>{
 // the camera is denied/unavailable (App Review devices hit exactly that).
 $("#heroPick").onclick=e=>{ e.stopPropagation(); $("#fileInput").click(); };
 $("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); $("#fileInput").click(); };
-$("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall(); };
+/* No pitch key for "plus": the ✦ button is not a refusal, so there is no tool to answer —
+   it keeps the generic copy. The source still rides on paywall_viewed. */
+$("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall("plus"); };
 
 /* ---- torch ----
    Web torch = track.applyConstraints({advanced:[{torch}]}), supported on Android
@@ -2287,9 +2360,8 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
   sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
-  /* Always shown now — it is the top of the SCALE, not a Pro badge, so it reads the same
-     whether or not you can drag the bar. */
-  if(sizeStar) sizeStar.style.display="block"; }
+  /* Hidden once you own it — a ✦ on a control you already paid for is just noise. */
+  if(sizeStar) sizeStar.style.display=canPro()?"none":"block"; }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
@@ -2303,14 +2375,14 @@ let sizing=false;
    the interruption bought nothing. With the dots gone this is the only size control in the
    app, so touching it is unambiguous intent, and the hint was a dead end: it named a thing
    you could not go and get. */
-sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ openPaywall(); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ openPaywall("size"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
 sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
-let finished=false, revealX=0.5;
+let finished=false, revealX=0.5, lastRoundAuto=false;
 const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
 /* Assigning canvas width/height ALWAYS reallocates the backing store — even when the
    value is unchanged. This runs on every rAF of the Done animation AND on every
@@ -2343,6 +2415,9 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*paintDpr,0,4*paintDpr,H);
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(auto){ if(finished) return; finished=true;
+  /* Remembered for the retake paywall: a round the CLOCK ended is the one case where we
+     know which lock to lead with, because the app just took the hide away mid-paint. */
+  lastRoundAuto=!!auto;
   roundMs=roundStartedAt?Date.now()-roundStartedAt:0; stopTimer();
   /* Allow-listed in kamo-app's source, but NOT in the build users are running: as of
      2026-08-03 `round_finished` does not exist in the Amplitude project at all, while the
@@ -2509,8 +2584,13 @@ function maybeOfferPlus(score){
        PLUS_COOLDOWN_MS are left defined right above so either guard is one line to
        restore if this proves too heavy. */
     if(isPro) return;
+    /* Lead with the clock only when the clock is what ended the round — they watched a hide
+       get taken off them 900ms ago, so "stop losing hides to the clock" is a description of
+       what just happened rather than a claim. A round they finished by tapping Done gets
+       the generic pitch: nothing in it refused them, so there is no specific lock to answer. */
+    const src=lastRoundAuto?"time":"round_end";
     /* let backToCompose() finish tearing the reveal down first */
-    setTimeout(()=>{ if(!isPro) openPaywall(); },900);
+    setTimeout(()=>{ if(!isPro) openPaywall(src); },900);
   }catch(_){}
 }
 $("#cfYes").onclick=()=>{ const wasFinished=finished, sc=Math.round(currentScore||0); closeConfirm(); if(finished) exitFinished(); backToCompose();
