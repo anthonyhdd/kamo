@@ -1544,7 +1544,19 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
     const lk=document.createElement("span"); lk.className="lk swLk"; lk.textContent="✦"; mo.appendChild(lk);
     mo.onclick=()=>{ openPaywall(); };
   }
-  w.appendChild(mo);
+  /* PINNED, NOT SCROLLED. This button used to be the last child of #swatches — and #swatches
+     scrolls horizontally, so it sat past the right edge and you had to scroll the colour row
+     to find it. Moving Undo/Clear into #swatchTools made that worse by narrowing the
+     scroller further, and the button vanished from view entirely.
+     It belongs with the tools anyway: it is a CONTROL, not a colour. And it is the one thing
+     in this row we are selling, so "requires a scroll to discover" is the worst possible
+     place for it.
+     buildSwatches() only clears #swatches, so the old node has to be removed by hand or
+     every refreshProUI() — which runs on purchase and on the taste grant — would stack
+     another rainbow button next to the last one. */
+  const tools=$("#swatchTools");
+  const prev=$("#allColSw"); if(prev) prev.remove();
+  if(tools) tools.insertBefore(mo, tools.firstChild); else w.appendChild(mo);
 }
 /* buildSwatches() is NOT called here any more. It now reads canPro() for the mosaic
    lock, and canPro/proTaste are declared below — calling it here hit the temporal
