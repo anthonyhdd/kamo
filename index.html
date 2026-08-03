@@ -269,7 +269,17 @@
       box-shadow:0 0 0 2px var(--accent), inset 0 1.5px 2px rgba(255,255,255,.5), 0 4px 12px rgba(0,0,0,.5);}
   /* The all-colours button. A conic rainbow says "every colour" instantly; the mosaic tiles
      that used to sit here said "a paint style", which is what this button no longer is. */
-  .sw.picker{overflow:hidden;background:conic-gradient(red,#ff0,#0f0,#0ff,#00f,#f0f,red);}
+  /* ALL-COLOURS BUTTON. A colour RING, not a beach ball: the old
+     conic-gradient(red,#ff0,#0f0,...) was six blown-out primaries next to a row of muted
+     camo browns and greens, and it looked like a placeholder. This uses hues already in the
+     product (--mint, and the timer bar's amber and red) and punches a dark core through the
+     middle, so it reads as "pick a colour" instead of "rainbow sticker".
+     Bigger than a plain swatch on purpose — it is a control, not a colour, and it is the
+     one thing in this row we are actually selling. */
+  .sw.picker{overflow:hidden;width:42px;height:42px;
+    background:
+      radial-gradient(circle at 50% 50%, #0a0c10 0 34%, rgba(10,12,16,0) 35%),
+      conic-gradient(from 210deg,#ff5f57,#ffb648,#ffe98a,#5fe6a4,#67d1d5,#7aa2ff,#b98cff,#ff5f57);}
   .swLk{position:absolute;right:-1px;bottom:-2px;font-size:10px;color:var(--mint);
     text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 8px rgba(95,230,164,.6);pointer-events:none;}
   .sw.picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;}
@@ -1508,20 +1518,24 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      what it does. Tiles read as "a pattern brush", which is the thing it stopped being. */
   const mo=document.createElement("div"); mo.id="allColSw"; mo.className="sw picker";
   mo.title="All colours — KAMO+";
-  /* The real <input type="color"> lives INSIDE the button, sized to nothing and
-     pointer-events:none, so it can never be tapped directly — the swatch stays the only hit
-     target and the lock cannot be bypassed by aiming at a stray input. Inline styles because
-     they have to beat the `.sw.picker input` rule, which stretches it to fill the button.
-     iOS only opens the colour sheet from a genuine user gesture, so .click() is called
-     synchronously inside the tap handler; deferring it silently does nothing. */
-  const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
-  inp.style.cssText="position:absolute;width:0;height:0;opacity:0;pointer-events:none;border:none;";
-  inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; autoCamo=false;
-    document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); mo.classList.add("active"); };
-  mo.appendChild(inp);
-  if(!canPro()){ const lk=document.createElement("span"); lk.className="lk swLk"; lk.textContent="✦"; mo.appendChild(lk); }
-  mo.onclick=()=>{ if(!canPro()){ openPaywall(); return; }
-    haptic(8); inp.click(); };
+  /* THE INPUT IS ONLY CREATED FOR PRO, AND IT FILLS THE BUTTON.
+     ⚠️ Do not "tidy" this into a hidden input driven by inp.click(). I shipped exactly that
+     and it broke the control: iOS/WKWebView opens the native colour sheet only when the tap
+     lands on the input ITSELF, and a synthetic .click() on an offscreen 0x0 input is
+     silently ignored — the button looked fine and did nothing. Stretching the input across
+     the swatch (the `.sw.picker input` rule) is what makes the tap real.
+     That also makes the gate simpler and stronger than any pointer-events trick: for a free
+     user the input does not exist at all, so there is nothing to tap through to. */
+  if(canPro()){
+    const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
+    inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; autoCamo=false;
+      document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); mo.classList.add("active"); };
+    mo.appendChild(inp);
+    mo.onclick=()=>haptic(8);   // the input handles opening; this is just the tick
+  } else {
+    const lk=document.createElement("span"); lk.className="lk swLk"; lk.textContent="✦"; mo.appendChild(lk);
+    mo.onclick=()=>{ openPaywall(); };
+  }
   w.appendChild(mo);
 }
 /* buildSwatches() is NOT called here any more. It now reads canPro() for the mosaic
