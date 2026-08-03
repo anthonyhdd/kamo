@@ -1480,6 +1480,7 @@ function capture(){
   if(!canPro()) brush=FREE_BRUSH;
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; KAMO+ only — tapping it opens the paywall, and the free preset dots that used to sit under it are gone
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
+  tlReset();   // the timelapse belongs to THIS hide — see tlCapture()
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
@@ -1766,7 +1767,39 @@ board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDef
 board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e);
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   if(painting){ paintAt(p); paintHaptic(); } });
-function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } } }
+/* ===== PAINT TIMELAPSE =========================================================
+   The shared MP4 was two frames: camouflaged, then wiped to reveal the figure. It showed
+   the RESULT and hid the thing that is actually interesting to watch — someone picking a
+   colour off a wall and painting a person out of a photo against a clock. That is the whole
+   format, and we were exporting the punchline without the joke.
+
+   Captured on STROKE BOUNDARIES, not on a timer. A timer would fire while the finger is
+   still moving and snapshot a half-drawn stroke, and it would keep firing while the user
+   sits still deciding, producing runs of identical frames. Stroke ends are where the
+   picture actually changed.
+
+   Cost is the constraint, because every frame is a base64 string crossing the WebView
+   bridge into a native encoder on a device that has jetsammed this content process before.
+   So: TL_MAX frames, 720px wide, JPEG q0.55 — roughly 60-90 KB each, ~1 MB for a full
+   round. When the cap is hit we drop every OTHER frame and halve the sampling rate, which
+   keeps the whole round represented instead of only its first half. */
+const TL_W=720, TL_MAX=14;
+let tlFrames=[], tlEvery=1, tlCount=0;
+function tlReset(){ tlFrames=[]; tlEvery=1; tlCount=0; }
+function tlCapture(){
+  if(!sceneCanvas||!board) return;
+  if((tlCount++ % tlEvery)!==0) return;
+  try{
+    const H=Math.round(TL_W*board.height/board.width);
+    const o=document.createElement("canvas"); o.width=TL_W; o.height=H;
+    o.getContext("2d").drawImage(board,0,0,TL_W,H);
+    tlFrames.push(o.toDataURL("image/jpeg",0.55));
+    /* Halve the resolution of TIME, not of the picture: keep frames 0,2,4… and from here
+       on take every other stroke. The round stays evenly covered as it gets longer. */
+    if(tlFrames.length>TL_MAX){ tlFrames=tlFrames.filter((_,i)=>i%2===0); tlEvery*=2; }
+  }catch(e){}   // a tainted or oversized canvas must never break painting
+}
+function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
 board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
 
 /* FOUR, to match what extractPalette() is asked for. This list is only ever the fallback
@@ -2381,7 +2414,11 @@ async function nativeShare(target){ closeShareSheet();
     const hidden=composeShare(1080, board).toDataURL("image/jpeg",0.85);      // camouflaged (shown first)
     const revealed=composeShare(1080, beforeBoard).toDataURL("image/jpeg",0.85); // figure visible (wiped in)
     showBusy(true);  // "Creating your reveal…" while native encodes the MP4 (self-clears after 25s)
-    postNative({type:"reveal-video",target,hidden,revealed,message,score:Math.round(currentScore||0)}); return;
+    /* `frames` is the paint timelapse and is OPTIONAL on purpose: a wrapper that predates it
+       ignores the key and renders exactly the video it renders today. Two frames minimum
+       before it is worth sending — one stroke is not a timelapse, it is a still. */
+    const frames = tlFrames.length>=2 ? tlFrames : null;
+    postNative({type:"reveal-video",target,hidden,revealed,message,frames,score:Math.round(currentScore||0)}); return;
   }
   const b=await shareBlob(); const d=await blobToDataURL(b);
   postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message,score:Math.round(currentScore||0)}); }
@@ -2488,6 +2525,9 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    clock keeps beating gets pushed out toward 14s until it stops beating them.
    Adjusts only BETWEEN rounds, so the clock never changes under you mid-aim. */
 /* Cut again: aim 10 -> 8 (band 7-18 -> 6-14), paint 30 -> 22. Free rounds are now ~30s.
+   ⚠️ A "the paint clock feels far too long" report was once acted on and had to be reverted:
+   it came from a KAMO+ account, which is on PRO_PAINT_SECONDS=75, not this number. Before
+   touching PAINT_SECONDS again, confirm the report is from a FREE round.
    The floor under this is the FREE_BRUSH change in the same pass — a 44px roller covers a
    figure in a handful of strokes, so 30s of paint had become slack at the end rather than
    pressure. Two levers moving together: less time AND a coarser brush, which is what makes
@@ -2788,8 +2828,12 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
   sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
-  /* Hidden once you own it — a ✦ on a control you already paid for is just noise. */
-  if(sizeStar) sizeStar.style.display=canPro()?"none":"block"; }
+  /* ALWAYS SHOWN, including for members. Hiding it once you own KAMO+ was my call and it
+     was wrong: the ✦ is what identifies the bar as the premium tool, and a member who has
+     just paid for it is precisely the person who should still see it marked. It also made
+     the star silently vanish the moment someone subscribed, which reads as a feature being
+     taken away rather than unlocked. */
+  if(sizeStar) sizeStar.style.display="block"; }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
