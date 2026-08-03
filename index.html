@@ -441,9 +441,9 @@
       <div id="brushes"></div>
       <div class="row" id="editRow" style="margin-top:2px;gap:12px;justify-content:flex-start">
         <div class="row" id="sizeDots" style="gap:8px">
-          <button class="bsz" data-sz="12"><i style="width:7px;height:7px"></i></button>
-          <button class="bsz active" data-sz="24"><i style="width:13px;height:13px"></i></button>
-          <button class="bsz" data-sz="40"><i style="width:20px;height:20px"></i></button>
+          <button class="bsz" data-sz="4"><i style="width:5px;height:5px"></i></button>
+          <button class="bsz active" data-sz="20"><i style="width:12px;height:12px"></i></button>
+          <button class="bsz" data-sz="48"><i style="width:21px;height:21px"></i></button>
         </div>
         <button class="b icon" id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
         <button class="b icon" id="btnClear" title="Clear"><svg viewBox="0 0 24 24"><path d="M4 15.5l6-6 8 8-4.5 4.5H8z"/><path d="M12.5 21H21"/><path d="M9 9l3-3"/></svg></button>
@@ -1102,8 +1102,16 @@ function paintStyle(){
   if(!scenePat&&sceneCanvas&&pctx){ try{ scenePat=pctx.createPattern(sceneCanvas,"no-repeat"); }catch(e){ scenePat=null; } }
   return scenePat||paintColor;
 }
-let paintColor="#8a7f6a", brush=24, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
-const BRUSH_MIN=8, BRUSH_MAX=46;
+let paintColor="#8a7f6a", brush=20, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
+/* PENCIL AT ONE END, ROLLER AT THE OTHER. Was 8-46 and linear.
+   Linear over a wide range is unusable: at 2-64 the whole pencil zone (2-10) would sit in
+   the bottom 13% of the slider, so the fine sizes people actually want for detail work
+   would be a few pixels of travel. BRUSH_CURVE bends the response — t is raised to 2.2 —
+   which spends roughly half the slider on the bottom quarter of the sizes and leaves the
+   broad fill sizes, where precision does not matter, compressed at the top. */
+const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
+const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
+const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
    (maskCanvas = the three.js render captured at shutter time), so paint can NEVER
    spill outside the silhouette — a sloppy finger still produces a clean camo.
@@ -1851,12 +1859,12 @@ $("#btnSave").onclick=saveStatic;
 /* ===== brush-size slider (free) + 3 quick-size presets ===== */
 const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill"), sizeStar=$("#sizeStar");
 const SB_PAD=24;
-function renderSizeBar(){ if(!sizeBar) return; const t=(brush-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN);
+function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
   sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
   if(sizeStar) sizeStar.style.display=isPro?"none":"block"; }  /* ✦ Pro hint for free users */
-function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=Math.round(BRUSH_MIN+t*(BRUSH_MAX-BRUSH_MIN)); document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); renderSizeBar(); }
+function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
    intent — it is someone adjusting their brush who gets a full screen in the face. It was
