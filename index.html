@@ -458,29 +458,28 @@
 <div id="paywall">
   <div class="pwCard">
     <div class="pwKick">KAMO+</div>
-    <div class="pwTitle">Unlock every camo brush</div>
-    <div class="pwSub">Every Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider. Blend your figure in seconds.</div>
+    <!-- Sell the OUTCOME, not the toolbox. The old copy ("Unlock every camo brush /
+         Every Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size
+         slider") was a feature list, and every feature on it is substitutable: any brush
+         hides the figure, the preset sizes work. Nobody is blocked, so nobody buys.
+         `score` is paint coverage, so "cover the whole figure in fewer strokes" is what
+         these tools literally do — outcome-led and still true. -->
+    <div class="pwTitle">Disappear faster</div>
+    <div class="pwSub">Pro pattern brushes and fine size control — cover the whole figure in fewer strokes, and score higher on every hide.</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
          arrive, we never show a plan whose purchase would fail. -->
     <div id="pwPlans" style="display:none">
-      <!-- The default is the LIFETIME, deliberately — see the note on that button.
-           Weekly still starts hidden until a real price arrives; applyPlanAvailability()
-           reveals it and falls back to whatever IS sellable, so neither default can ever
-           strand the user on a plan the store won't sell. -->
-      <button class="pwPlan" data-plan="weekly" style="display:none">
+      <!-- WEEKLY IS THE DEFAULT — founder's call, and it is the plan the subscription
+           business runs on. It still starts hidden until a real weekly price arrives:
+           applyPlanAvailability() reveals it and falls back to whatever IS sellable, so
+           this default can never strand the user on a plan the store won't sell. -->
+      <button class="pwPlan active" data-plan="weekly" style="display:none">
         <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">Billed weekly · cancel anytime</span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
-      <!-- LIFETIME IS THE DEFAULT. Briefly flipped to weekly on the theory that a
-           subscription business should preselect the subscription; reverted the same day.
-           KAMO is a novelty camera toy — a recurring weekly charge is the wrong shape for
-           something most people open twice, and a one-time unlock is not. The 12-vs-6 split
-           in purchase attempts favouring lifetime was measured WHILE lifetime was the
-           default, so it does not prove preference on its own — but nothing in the data
-           argues for weekly either, and 0 of 18 attempts converted under both. -->
-      <button class="pwPlan active" data-plan="lifetime">
+      <button class="pwPlan" data-plan="lifetime">
         <div class="pwPlanTxt"><span class="pwPlanName">Lifetime</span><span class="pwPlanMeta">One-time · yours forever</span></div>
         <div class="pwPlanPrice"><b id="pwLifetimePrice">$14.99</b></div>
       </button>
@@ -1273,7 +1272,7 @@ buildSwatches();
 /* ===== Pro brushes + paywall ===== */
 const PRODUCT_ID="com.blisscoach.kamo.pro";
 // default to the plan we can actually sell today (the weekly sub isn't approved yet)
-const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="lifetime"; /* must stay in sync with the .active plan in the markup */ let pwBuyIntent=false;
+const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="weekly"; /* must stay in sync with the .active plan in the markup */ let pwBuyIntent=false;
 let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
 const BRUSHES=[{id:"solid",name:"Solid",pro:false},{id:"dapple",name:"Dapple",pro:true},{id:"leaf",name:"Leaf",pro:true},{id:"disrupt",name:"Camo",pro:true}];
 function setBrush(id){ brushMode=id; document.querySelectorAll("#brushes .brush").forEach(el=>el.classList.toggle("active",el.dataset.id===id)); }
@@ -1820,7 +1819,12 @@ function renderSizeBar(){ if(!sizeBar) return; const t=(brush-BRUSH_MIN)/(BRUSH_
   if(sizeStar) sizeStar.style.display=isPro?"none":"block"; }  /* ✦ Pro hint for free users */
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=Math.round(BRUSH_MIN+t*(BRUSH_MAX-BRUSH_MIN)); document.querySelectorAll(".bsz").forEach(x=>x.classList.remove("active")); renderSizeBar(); }
 let sizing=false;
-sizeBar.addEventListener("pointerdown",e=>{ if(!isPro){ openPaywall(); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+/* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
+   intent — it is someone adjusting their brush who gets a full screen in the face. It was
+   one of only three paywall entry points and by far the most irritating: pure interruption
+   with nothing asked for. The tool stays locked (giving it away would change what KAMO+
+   is), but the lock is now a one-line hint instead of a wall. */
+sizeBar.addEventListener("pointerdown",e=>{ if(!isPro){ showHint("Fine brush size is a KAMO+ tool"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 sizeBar.addEventListener("pointermove",e=>{ if(sizing) sizeFromEvent(e); });
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
 /* 3 quick size presets (bottom-left, by the Retake button) — also drive the slider */
@@ -1890,8 +1894,36 @@ $("#cfNo").onclick=closeConfirm;
 /* Going back for another hide after finishing one is the strongest satisfaction signal
    KAMO gets that isn't a share — and unlike the reveal screen there's no CTA here to
    compete with, so this is where the rating soft-ask fires. */
+/* THE ONLY PAYWALL TRIGGER THAT ISN'T A LOCK-BUMP.
+   The other two fire when you tap something you can't have — the offer arrives as a
+   refusal. This one arrives right after a hide the user was happy enough with to go make
+   another one, which is the moment the tools are worth something to them.
+
+   Deliberately NOT on the reveal screen: the Share/Save CTA lives there and shares are
+   the acquisition loop, so nothing gets to compete with them (same reasoning that keeps
+   the rating prompt off that screen — see storeReview.js).
+
+   Gated hard, because a paywall on a satisfaction moment turns into nagging fast:
+   only above MIN_SCORE (a hide they actually finished covering), and at most once every
+   PLUS_COOLDOWN days per install.
+
+   ⚠️ KNOWN OVERLAP: the native rating soft-ask fires on this same retake. Its own gates
+   (2+ finishes, 30-day cooldown, 3 asks max, never on TestFlight) make a collision rare
+   rather than impossible. If both ever land together the native Alert sits on top of the
+   web paywall — ugly, not broken. Worth watching once daily_reminder-era volume arrives. */
+const PLUS_MIN_SCORE=60, PLUS_COOLDOWN_MS=3*24*60*60*1000;
+function maybeOfferPlus(score){
+  try{
+    if(isPro || !(score>=PLUS_MIN_SCORE)) return;
+    const last=+(localStorage.getItem("kamo_plus_ask")||0);
+    if(last && Date.now()-last<PLUS_COOLDOWN_MS) return;
+    localStorage.setItem("kamo_plus_ask",String(Date.now()));
+    /* let backToCompose() finish tearing the reveal down first */
+    setTimeout(()=>{ if(!isPro) openPaywall(); },900);
+  }catch(_){}
+}
 $("#cfYes").onclick=()=>{ const wasFinished=finished, sc=Math.round(currentScore||0); closeConfirm(); if(finished) exitFinished(); backToCompose();
-  if(wasFinished) postNative({type:"review-moment",reason:"retake",score:sc}); };
+  if(wasFinished){ postNative({type:"review-moment",reason:"retake",score:sc}); maybeOfferPlus(sc); } };
 confirmSheet.onclick=e=>{ if(e.target===confirmSheet) closeConfirm(); };
 
 window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1)); if(renderer) resize3(); });
