@@ -101,9 +101,15 @@
 
   /* TAPPABLE. It was pointer-events:none decoration; it now opens the member home for a
      KAMO+ user and the paywall for everyone else, so it needs to take a tap — with padding,
-     because an 18px wordmark is under the 44px touch minimum on its own. */
+     because an 18px wordmark is under the 44px touch minimum on its own.
+     ⚠️ NO NEGATIVE SIDE MARGINS. This shipped as `margin:-6px -14px` to cancel the new
+     padding, and it visibly knocked KAMO off centre. On an absolutely positioned box
+     margin-left moves the BOX: left:50% effectively became left:50% - 14px, and the
+     translateX(-50%) then centred it about the wrong point. The vertical -6px is fine —
+     it keeps the glyphs at their original y — but horizontal must stay 0 and let the
+     padded box centre itself. */
   .brand{position:absolute;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;font-family:var(--display);font-weight:700;letter-spacing:-.4px;font-size:18px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);
-    cursor:pointer;padding:6px 14px;margin:-6px -14px;-webkit-tap-highlight-color:transparent;}
+    cursor:pointer;padding:6px 14px;margin:-6px 0;-webkit-tap-highlight-color:transparent;}
   /* One solid white word. Both halves were already #fff, but only "MO" is inside a <b>:
      the display face ships a single weight, so the browser synthesised a bold for it and
      "MO" rendered visibly thicker and brighter than "KA". Same weight = uniformly white. */
@@ -506,11 +512,25 @@
   .pwPlan{transition:border-color .18s,background .18s,box-shadow .18s;}
   .pwPlanName{display:block;font-size:17px;font-weight:800;}
   .pwPlanMeta{display:block;font-size:12.5px;opacity:.62;margin-top:2px;}
-  /* subtle shimmer on the free-trial line — a light band (mint-tinted) sweeping the text */
-  #pwWeeklyMeta{opacity:1;font-weight:700;
-    background:linear-gradient(100deg,rgba(190,196,204,.72) 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,rgba(190,196,204,.72) 78%);
-    background-size:260% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
-    animation:pwShimmer 3.4s linear infinite;}
+  /* THE TRIAL IS A BADGE ON THE TITLE LINE, NOT A SENTENCE UNDERNEATH.
+     "3 days free" was buried mid-way through the plan's grey subtitle — the single most
+     persuasive word on the paywall, set in the least prominent style on it. It now sits
+     beside "Weekly" at full contrast, and the meta line below goes back to plain grey.
+     The shimmer moved with it. Animating the whole subtitle drew the eye to "then billed
+     weekly" just as hard as to the free part, which is the opposite of the intent; on a
+     short mint pill the same sweep reads as a highlight instead of as decoration. */
+  .pwPlanTop{display:flex;align-items:center;gap:8px;}
+  /* Sheen, not background-clip:text. The clipped-gradient trick the title uses clips the
+     WHOLE background to the glyphs — pill fill and border included — so it cannot coexist
+     with a pill. A sweep on a pseudo-element does, and it is the same pwBuySheen the buy
+     button already runs. */
+  .pwFree{position:relative;overflow:hidden;flex:0 0 auto;font-size:11.5px;font-weight:900;letter-spacing:.3px;text-transform:uppercase;
+    padding:3px 8px;border-radius:999px;border:1px solid rgba(95,230,164,.55);background:rgba(95,230,164,.16);
+    color:var(--mint);box-shadow:0 0 14px rgba(95,230,164,.18);white-space:nowrap;}
+  .pwFree::after{content:"";position:absolute;top:0;left:-60%;width:45%;height:100%;
+    background:linear-gradient(100deg,transparent,rgba(200,255,230,.6),transparent);transform:skewX(-18deg);
+    animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
+  #pwWeeklyMeta{opacity:.62;font-weight:600;}
   @keyframes pwShimmer{0%{background-position:135% 0}100%{background-position:-35% 0}}
   .pwPlanPrice{font-size:13px;opacity:.75;white-space:nowrap;}
   .pwPlanPrice b{font-size:19px;font-weight:900;color:#fff;}
@@ -550,6 +570,16 @@
   .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
   .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
   .ssBtn.snap{background:#fffc00;color:#111;border:none;}
+  /* REAL MARKS, NOT EMOJI. 📸 is a generic camera and 👻 is a generic ghost — neither is
+     Instagram or Snapchat, they were just the nearest emoji to hand, and next to the real
+     brand colours they read as placeholders. These are the actual glyphs: Instagram's
+     rounded-square outline with lens and flash dot, Snapchat's ghost.
+     The ghost is a filled silhouette (the mark has no outline form), so it sets fill and
+     clears the stroke inherited from `.ssBtn svg`; Instagram's is a stroked outline and
+     inherits it as-is. Sized up slightly — an outline mark reads lighter than an emoji at
+     the same box, and these sit on saturated backgrounds. */
+  .ssBtn.ig svg{width:23px;height:23px;stroke-width:1.9;}
+  .ssBtn.snap .snapIc{width:24px;height:24px;}
   .ssBtn.ssInvite{background:rgba(72,214,139,.14);border-color:rgba(72,214,139,.45);}
   /* Save, once JS has moved it in here (native only — see the move in the share block).
      The other rows carry an emoji in .ic; this one keeps the download/check SVG pair it
@@ -693,7 +723,7 @@
          brush fine enough to work an edge.
          ⚠️ Numbers appear here AND in PAINT_SECONDS/PRO_PAINT_SECONDS. Change them together.
          Keep in sync with the share-sheet line (#ssPlus). -->
-    <div class="pwSub" id="pwSub">Export with no KAMO mark. 75 seconds to paint instead of 22, any color instead of four, and a brush fine enough for edges and faces.</div>
+    <div class="pwSub" id="pwSub">No mark, every color, the fine brush, 75s rounds.</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -704,7 +734,7 @@
            applyPlanAvailability() reveals it and falls back to whatever IS sellable, so
            this default can never strand the user on a plan the store won't sell. -->
       <button class="pwPlan active" data-plan="weekly" style="display:none">
-        <div class="pwPlanTxt"><span class="pwPlanName">Weekly</span><span class="pwPlanMeta" id="pwWeeklyMeta">Billed weekly · cancel anytime</span></div>
+        <div class="pwPlanTxt"><span class="pwPlanTop"><span class="pwPlanName">Weekly</span><span class="pwFree" id="pwFree" style="display:none">3 days free</span></span><span class="pwPlanMeta" id="pwWeeklyMeta">Billed weekly · cancel anytime</span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
       <button class="pwPlan" data-plan="lifetime">
@@ -785,8 +815,8 @@
       <button class="ssTab" data-mode="challenge">Challenge</button>
       <button class="ssTab active" data-mode="ba">Before / After</button>
     </div>
-    <button class="ssBtn ig" data-target="instagram"><span class="ic">📸</span>Instagram Story</button>
-    <button class="ssBtn snap" data-target="snapchat"><span class="ic">👻</span>Snapchat</button>
+    <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram Story</button>
+    <button class="ssBtn snap" data-target="snapchat"><svg class="snapIc" viewBox="0 0 24 24"><path d="M12 2.3c2.95 0 4.92 2.2 4.92 5.05 0 .9-.05 1.68-.1 2.28.48.19.97.1 1.45-.08.6-.22 1.07.48.68.96-.4.5-1.16.87-1.84 1.07-.28.09-.38.29-.29.56.5 1.56 1.75 2.82 3.1 3.23.4.12.48.6.16.86-.58.48-1.53.79-2.4.87-.2.02-.31.17-.36.37-.1.4-.2.77-.4.96-.2.2-.58.2-.97.12-.58-.11-1.26-.2-2.03 0-.78.2-1.36.88-2.32.88s-1.54-.68-2.32-.88c-.77-.2-1.45-.11-2.03 0-.39.08-.77.08-.97-.12-.2-.19-.3-.56-.4-.96-.05-.2-.16-.35-.36-.37-.87-.08-1.82-.39-2.4-.87-.32-.26-.24-.74.16-.86 1.35-.41 2.6-1.67 3.1-3.23.09-.27-.01-.47-.29-.56-.68-.2-1.44-.57-1.84-1.07-.39-.48.08-1.18.68-.96.48.18.97.27 1.45.08-.05-.6-.1-1.38-.1-2.28C7.08 4.5 9.05 2.3 12 2.3z" fill="currentColor" stroke="none"/></svg>Snapchat</button>
     <!-- More and Save share this line — see .ssRow2. On native, JS moves #btnSave in here;
          on the web it stays on the action row and More spans the width alone. -->
     <div class="ssRow2" id="ssRow2">
@@ -1790,13 +1820,13 @@ const paywallEl=$("#paywall");
    Falls back to the generic pitch for entry points that aren't a specific tool. */
 const PW_PITCH={
   size:  { t:"Paint the details, not just the shape",
-           s:"The fine brush is KAMO+. Free rounds paint with a 44px roller — big enough for a torso, useless on a face, a hand or the gap under an arm. Plus a clean export, any color, and 75 seconds instead of 22." },
-  color: { t:"Every color, not just the four",
-           s:"KAMO+ opens the full color picker. Free rounds get four shades pulled out of the photo and an eyedropper that can only ever copy what is already there. Plus a clean export, the fine brush, and 75 seconds instead of 22." },
+           s:"Free paints with a 44px roller. KAMO+ unlocks the fine brush." },
+  color: { t:"Every color, not just the three",
+           s:"Free gets three shades off the photo. KAMO+ opens them all." },
   mark:  { t:"Your hide, without our name on it",
-           s:"KAMO+ exports clean — no watermark on the image or the reveal clip. Plus every color, the fine brush, and 75 seconds to paint instead of 22." },
+           s:"No mark on the image or the reveal clip." },
   time:  { t:"Stop losing hides to the clock",
-           s:"KAMO+ gives you 75 seconds to paint instead of 22, and longer to line up the shot. Plus a clean export, every color, and the fine brush." },
+           s:"75 seconds to paint instead of 22." },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
@@ -1854,8 +1884,12 @@ function updatePwBuy(){ const b=$("#pwBuy"), t=$("#pwTerms"); if(!b) return;
    before then, so its subtitle must not wait for a price to be right. */
 let trialLabel=TRIAL.days+" days";
 function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
-  const m=$("#pwWeeklyMeta"); if(!m) return;
-  m.textContent=trialOn()?(trialLabel+" free, then billed weekly"):"Billed weekly · cancel anytime"; }
+  const m=$("#pwWeeklyMeta"), f=$("#pwFree"), on=trialOn();
+  /* The badge carries the offer; the meta line is demoted to the boring half of it. Both
+     are driven from the same trialLabel, so a store-reported trial length (setPrices) still
+     rewrites the badge, not just a sentence nobody was reading. */
+  if(f){ f.textContent=trialLabel+" free"; f.style.display=on?"":"none"; }
+  if(m) m.textContent=on?"then billed weekly · cancel anytime":"Billed weekly · cancel anytime"; }
 applyTrialCopy();
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
 /* The native wrapper buys whatever product id we post — it resolves `msg.product` against
