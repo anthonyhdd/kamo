@@ -1211,6 +1211,20 @@ const trialArm=(()=>{
 })();
 const trialOn=()=>trialArm==="trial";
 
+/* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
+   "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
+   on every single use, forever. Users run ~8 hides a day, so by the third round these are not
+   instructions any more — they are a bubble that covers the scene to say something you learned
+   twenty minutes ago. Once learned, a repeated instruction is just noise sitting over the
+   thing you are trying to look at.
+   Gated on the hide counter rather than a one-shot flag, so the whole FIRST round keeps them:
+   bumpHides() lands on 1 at the first capture, so 0 (composing, pre-capture) and 1 (the first
+   round) both teach, and 2+ is silent.
+   Status and error hints are NOT routed through this — "KAMO+ unlocked", "Restoring…",
+   "Stats copied", "Couldn't turn the light on" and friends still call showHint() directly,
+   because those answer an action rather than teach a control. */
+function hidesDone(){ try{ return +localStorage.getItem("kamo_hides")||0; }catch(e){ return 0; } }
+function teachHint(t,ms){ if(hidesDone()>1) return; showHint(t,ms); }
 function showHint(t,ms=2600){ hintEl.textContent=t; hintEl.style.opacity=t?1:0; clearTimeout(showHint._t); if(t&&ms) showHint._t=setTimeout(()=>hintEl.style.opacity=0,ms); }
 function haptic(ms=8){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify({type:"haptic",style:"impact"})); }catch(e){} } if(navigator.vibrate) navigator.vibrate(ms); }
 /* throttled tactile tick while painting (native = expo-haptics selection; web = vibrate) */
@@ -1498,7 +1512,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   resumeCamera();   // paused for the whole hide by capture()
   startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
-  showHint("Reposition, then recapture");
+  teachHint("Reposition, then recapture");
 }
 
 /* ===== GESTURES ===== */
@@ -1568,7 +1582,7 @@ function openWheel(cx,cy){
   for(let i=0;i<n;i++){ const ang=-Math.PI/2+i*(2*Math.PI/n); const sx=lx+Math.cos(ang)*R, sy=ly+Math.sin(ang)*R;
     const el=document.createElement("div"); el.className="slice"; el.style.left=sx+"px"; el.style.top=sy+"px";
     el.innerHTML=miniSVG(i)+`<small>${POSES[i].label}</small>`; wheelEl.appendChild(el); wheelSlices.push(el); }
-  wheelEl.style.display="block"; showHint("Slide to a pose and release");
+  wheelEl.style.display="block"; teachHint("Slide to a pose and release");
 }
 function updateWheel(px,py){
   const r=stage.getBoundingClientRect(), cx=wheelCx-r.left, cy=wheelCy-r.top, lx=px-r.left, ly=py-r.top;
@@ -1576,7 +1590,7 @@ function updateWheel(px,py){
   if(dist>36){ const ang=Math.atan2(ly-cy,lx-cx), n=POSES.length; let idx=Math.round((ang+Math.PI/2)/(2*Math.PI/n)); hot=((idx%n)+n)%n; }
   if(hot!==wheelHot){ wheelHot=hot; wheelSlices.forEach((el,i)=>el.classList.toggle("hot",i===hot)); if(hot>=0) haptic(6); }
 }
-function closeWheel(commit){ wheelOpen=false; wheelEl.style.display="none"; if(commit&&wheelHot>=0&&sel()) setPose(sel(),wheelHot); else showHint("Tap to pose · hold for more"); }
+function closeWheel(commit){ wheelOpen=false; wheelEl.style.display="none"; if(commit&&wheelHot>=0&&sel()) setPose(sel(),wheelHot); else teachHint("Tap to pose · hold for more"); }
 
 /* ===== FX: poof particles ===== */
 function poof(sx,sy){
@@ -1975,7 +1989,7 @@ function tlCapture(){
     if(tlFrames.length>TL_MAX){ tlFrames=tlFrames.filter((_,i)=>i%2===0); tlEvery*=2; }
   }catch(e){}   // a tainted or oversized canvas must never break painting
 }
-function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; showHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
+function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
 board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
 
 /* FOUR, to match what extractPalette() is asked for. This list is only ever the fallback
@@ -2021,7 +2035,7 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      buttons; putting a free one back here would be worse than a duplicate, it would be the
      free substitute that makes the paid one unsellable. */
   const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
-  eye.onclick=()=>{ eyedrop=true; autoCamo=false; mosaic=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); showHint("Tap the scene to grab its color"); }; w.appendChild(eye);
+  eye.onclick=()=>{ eyedrop=true; autoCamo=false; mosaic=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); teachHint("Tap the scene to grab its color"); }; w.appendChild(eye);
   PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; if(c===paintColor) keepSw=s; });
   /* Auto used to be the selected swatch on every round, so something was always lit. With
      it gone nothing is, while paintColor still holds a colour — the player would paint in
