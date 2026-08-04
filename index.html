@@ -713,7 +713,20 @@
      where the effect goes if it is ever wanted back. */
   .pwFine{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;}
   .pwFine a,.pwFine button{background:none;border:none;color:rgba(255,255,255,.5);font-size:12px;text-decoration:underline;cursor:pointer;padding:4px;}
-  .pwClose{display:block;margin:12px auto 0;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;cursor:pointer;padding:6px;}
+  /* WAS "Maybe later" under the buy button. That copy is a negotiation the sheet does not
+     need to open — it offers the refusal in words, at the bottom of the pitch, in the last
+     position the eye lands.
+     It is NOT simply deleted. #pwClose was the only VISIBLE way out (the other is a tap on
+     the backdrop, which nothing tells you about), and this sheet opens by itself on a round
+     ending, on the clock, and on a locked tool. KAMO has a free tier, so a paywall a reviewer
+     cannot close is an App Review problem, and they would meet it without tapping anything.
+     A corner X keeps the exit discoverable and drops the sentence. 44px box for the tap
+     target, glyph much lighter, so it reads as chrome rather than as an option. */
+  .pwClose{position:absolute;top:10px;right:10px;z-index:3;display:flex;align-items:center;justify-content:center;
+    width:44px;height:44px;margin:0;padding:0;background:none;border:none;color:rgba(255,255,255,.42);
+    font-size:0;line-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color .18s,transform .12s;}
+  .pwClose svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;}
+  .pwClose:active{transform:scale(.9);color:rgba(255,255,255,.75);}
   /* share target chooser */
   #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.55);backdrop-filter:blur(5px);}
   #shareSheet.show{display:flex;}
@@ -931,6 +944,11 @@
 <!-- PAYWALL -->
 <div id="paywall">
   <div class="pwCard">
+    <!-- Same id as the old "Maybe later" button, so closePaywall() and every other binding
+         keep working untouched. aria-label carries the meaning the glyph drops. -->
+    <button id="pwClose" class="pwClose" aria-label="Close" title="Close">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
     <div class="pwKick">KAMO<span class="kPlus">+</span></div>
     <!-- Sell the OUTCOME, not the toolbox. The old copy ("Unlock every camo brush / Every
          Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider") was a
@@ -974,7 +992,7 @@
       <button class="pwlink" data-url="https://anthonyhdd.github.io/kamo/terms.html">Terms</button>
       <button class="pwlink" data-url="https://anthonyhdd.github.io/kamo/privacy.html">Privacy</button>
     </div>
-    <button id="pwClose" class="pwClose">Maybe later</button>
+
   </div>
 </div>
 
