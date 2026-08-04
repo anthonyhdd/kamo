@@ -506,7 +506,15 @@
   .cfSub{font-size:14px;opacity:.7;margin:8px 0 18px;line-height:1.4;}
   .cfCard .b{width:100%;margin-bottom:10px;height:52px;}
   #cfNo{border:1.5px solid var(--mint) !important;background:rgba(95,230,164,.12) !important;color:#fff !important;box-shadow:0 0 0 1px rgba(95,230,164,.2),0 6px 18px rgba(95,230,164,.12);}
-  .cfDanger{background:rgba(220,60,50,.14) !important;border:1px solid rgba(220,60,50,.5) !important;color:#ff7a70 !important;}
+  /* NEUTRAL, NOT TINTED. Discard is dark glass like every other secondary control in the
+     app — deliberately not mint (nothing destructive should wear the brand colour) and no
+     longer red either.
+     ⚠️ That does drop the conventional destructive-red cue, which is a real signal. It is
+     acceptable here because the sheet already carries the warning in words ("Discard this
+     hide?" / "You'll lose this drawing"), the safe option next to it is the one wearing the
+     accent, and the worst case is losing one unfinished round. */
+  .cfDanger{background:rgba(255,255,255,.06) !important;border:1px solid var(--stroke) !important;color:rgba(255,255,255,.82) !important;}
+  .cfDanger:active{background:rgba(255,255,255,.12) !important;}
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
