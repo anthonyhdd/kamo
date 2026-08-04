@@ -982,7 +982,7 @@
       </button>
     </div>
     <button id="pwBuy" class="pwBuy">Get KAMO+</button>
-    <div id="pwTerms">$2.99/week. Cancel anytime.</div>
+    <div id="pwTerms">Renews automatically until cancelled.</div>
     <div class="pwFine">
       <button id="pwRestore">Restore</button>
       <button class="pwlink" data-url="https://anthonyhdd.github.io/kamo/terms.html">Terms</button>
@@ -2271,25 +2271,32 @@ let storeAnswered=false; // native has told us SOMETHING, even if it was "nothin
    overridden.
    Apple disclosure is unaffected by the removal: price, billing period and trial length are
    all still on screen in the plan rows above (Weekly / "3 days free" / 2,99 EUR per week). */
-const PW_REASSURE=["Cancel anytime","No charge today"];
-let _termsTimer=null,_termsIdx=0;
-function stopTermsRotate(){ if(_termsTimer){ clearInterval(_termsTimer); _termsTimer=null; } }
-function setTerms(txt){ stopTermsRotate(); const t=$("#pwTerms"); if(t){ t.classList.remove("fade"); t.textContent=txt; } }
-function startTermsRotate(){
-  const t=$("#pwTerms"); if(!t) return;
-  stopTermsRotate(); _termsIdx=0; t.classList.remove("fade"); t.textContent=PW_REASSURE[0];
-  /* Cross-fade rather than a hard swap: at 12px and 60% opacity a hard cut reads as a
-     glitch. Cleared in closePaywall() so it is not still ticking behind a shut sheet. */
-  _termsTimer=setInterval(()=>{
-    t.classList.add("fade");
-    setTimeout(()=>{ _termsIdx=(_termsIdx+1)%PW_REASSURE.length; t.textContent=PW_REASSURE[_termsIdx]; t.classList.remove("fade"); },270);
-  },3400);
+/* THE SUBSCRIPTION DISCLOSURE. This was a two-string carousel — "Cancel anytime" and "No
+   charge today" — cross-fading every few seconds. Both are reassurance; neither is
+   disclosure, and nothing on the sheet connected the free trial to what happens when it
+   ends. Apple wants the length, the price, the billing period and the auto-renewal stated
+   before purchase (Schedule 2 §3.8(b) / guideline 3.1.2), and it is the single most cited
+   paywall omission.
+   It is also STATIC now. Required terms on a rotation means only half of them are on screen
+   at any instant, which is bad for a user and worse for a reviewer taking one screenshot.
+   Built from the price the store actually returned, like the per-day figure, so it can never
+   disagree with the plan row above it. */
+function trialTermsLine(){
+  const price=(($("#pwWeeklyPrice")||{}).textContent||"").trim();
+  if(!price) return "";
+  return trialOn()
+    ? (trialLabel+" free, then "+price+"/week. Renews automatically until cancelled.")
+    : (price+"/week. Renews automatically until cancelled.");
 }
-/* The label needs its own element so the shimmer can clip to the glyphs without taking the
-   button's white background with it. Built as a node, not innerHTML — the string carries a
-   store-localized price. */
+/* stopTermsRotate() is kept as a no-op shim: closePaywall() calls it, and there is nothing
+   left to stop now that the terms line is static. */
+function stopTermsRotate(){}
+function setTerms(txt){ const t=$("#pwTerms"); if(t){ t.classList.remove("fade"); t.textContent=txt; } }
+/* Restored: this sat between the old rotation code and updatePwBuy(), and removing the
+   rotation block took it with it. Every buy-label write goes through it — the span exists so
+   .pwBuy::after's sheen can sit under the text instead of over it. */
 function setBuyLabel(b,txt){ b.textContent=""; const sp=document.createElement("span"); sp.className="pwBuyTxt"; sp.textContent=txt; b.appendChild(sp); }
-function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is written only through setTerms/startTermsRotate now */
+function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is written only through setTerms() now */
   /* Buy stays disabled until a real localized price arrives. It used to be live from the
      first frame while the markup showed hardcoded $14.99/$2.99: on any non-USD storefront
      that price was simply wrong, and if offerings failed to load the tap could only ever
@@ -2304,9 +2311,10 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
     /* An unadvertised free trial converts barely better than no trial at all: the user
        decides whether to tap Buy from THIS button, long before Apple's sheet shows them
        the offer. So the trial arm says so on the button. The price and billing period that
-       used to be repeated underneath are in the plan rows above — see PW_REASSURE. */
-    if(trialOn()){ setBuyLabel(b,"Try free for "+trialLabel); startTermsRotate(); }
-    else { setBuyLabel(b,"Get KAMO+"); startTermsRotate(); } } }
+       are ALSO stated underneath now, by trialTermsLine() — the plan row alone did not
+       connect the trial to what it renews into. */
+    if(trialOn()) setBuyLabel(b,"Try free for "+trialLabel); else setBuyLabel(b,"Get KAMO+");
+    setTerms(trialTermsLine()); } }
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
    able to re-render it on its own once the store reports a real trial length, and because
    updatePwBuy() bails early while the store is still loading — the plan row is on screen
