@@ -466,11 +466,14 @@
      the press state above .mid and the wordmark stops reacting to taps on the paint screen,
      which is precisely where a member is most likely to reach for it. */
   .brand:active{transform:translateX(-50%) scale(.94);}
-  /* The + a member has actually paid for. Mint against the white wordmark and set slightly
-     smaller and raised, so it reads as a suffix on the logo rather than a fourth letter.
+  /* The + a member has actually paid for. WHITE, not mint: the + belongs to the wordmark,
+     and colouring it made it read as a separate badge stuck onto the logo rather than part
+     of it. Kept slightly smaller and raised so it is still a suffix, not a fourth letter.
+     The glow stays mint — that is what marks it as the paid mark without breaking the
+     wordmark into two colours.
      Hidden by default. Revealed at load from the stored entitlement, and again by
      refreshProUI() on purchase and on restore. */
-  .brandPlus{display:none;color:var(--mint);font-size:.72em;font-weight:700;vertical-align:super;
+  .brandPlus{display:none;color:#fff;font-size:.72em;font-weight:700;vertical-align:super;
     margin-left:1px;text-shadow:0 0 12px rgba(95,230,164,.55);}
   /* Retake as a top-left nav button, aligned with Done */
   #btnBack{position:absolute;top:calc(var(--safe-t) + 10px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
