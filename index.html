@@ -42,6 +42,9 @@
 
   /* ---------- STAGE ---------- */
   #stage{position:absolute;inset:0;overflow:hidden;background:#111;}
+  /* `cover` is only the DEFAULT here: syncPreviewFit() flips #cam/#photo to `contain` for
+     any source coverInto() letterboxes, so the live preview always frames the scene the
+     way the shutter will. Without that the field of view visibly jumped at capture. */
   #cam,#photo,#board{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;}
   /* THE ▶/⏸ OVERLAY. WebKit decides on its own to paint a native transport control over
      <video id="cam">, and page CSS cannot take it away. These pseudo-element rules were
@@ -1372,6 +1375,7 @@ function sizeCamView(){
 function camTick(){
   camRaf=requestAnimationFrame(camTick);
   if(bgKind!=="cam"||!cam.videoWidth) return;   // no frame yet → the <video> stays visible
+  syncPreviewFit();   // the track's dimensions only exist once frames do — and Flip can change them
   try{
     sizeCamView();
     const g=camView.getContext("2d");
@@ -1417,12 +1421,14 @@ function gumSafe(c, ms=3500){
 }
 /* ASK FOR A REAL RESOLUTION. Without width/height constraints WebKit hands back its
    default 640x480 — the single biggest reason the capture screen looked soft.
-   The board is `stage` sized at up to PAINT_MAX_W (1080) wide, and coverInto() crops the
-   frame to the screen's tall aspect before scaling: from a 480x640 portrait frame only
-   ~295x640 survives the crop, then gets blown up to 1080 wide. That is a ~3.7x upscale on
-   the preview, on the frozen board, and on every share/reveal export downstream — all of
-   it from a source that never had the pixels. At 1080x1920 the same crop keeps ~886x1920,
-   so it lands at ~1.2x and the softness is gone.
+   The board is `stage` sized at up to PAINT_MAX_W (1080) wide, and coverInto() scales the
+   frame to that width: a 480-wide frame is blown up ~2.3x on the preview, on the frozen
+   board and on every share/reveal export downstream — all of it from a source that never
+   had the pixels. At 1080 wide it lands at ~1:1 and the softness is gone.
+   (This used to also carry the cost of coverInto()'s centre-crop, which threw ~18% of the
+   width away before scaling. coverInto() now fits to width instead — see the comment
+   there — so the whole requested width reaches the board, and this constraint is the only
+   thing standing between the export and a 640x480 upscale.)
 
    Orientation matters: iOS reports the track already rotated to the interface, so in
    portrait the track IS 1080x1920 and asking for width:1920 would score the 4K preset as
@@ -1471,7 +1477,7 @@ async function startCamera(auto){
   else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera found — tap “or pick a photo” below to hide your figure in a picture instead.");
   else camFail("Couldn't reach the camera — tap “or pick a photo” below instead.");
 }
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>URL.revokeObjectURL(url); photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
+function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
@@ -1499,6 +1505,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
+  syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
   resumeCamera();   // paused for the whole hide by capture()
   startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   teachHint("Reposition, then recapture");
@@ -1598,8 +1605,59 @@ function captureBurst(char){ if(!char) return; const p=charScreen(char), fx=$("#
 /* ===== CAPTURE ===== */
 let sceneCanvas=null, maskCanvas=null, blurCanvas=null, hiderPoints=[], currentScore=0, seenPaint=false;
 let roundStartedAt=0, roundMs=0, captureWasAuto=false, aimStartedAt=0, aimGiven=0;   // capture -> Done. The number the user is actually playing against.
+/* FRAMING — fit the camera to the board's WIDTH, don't crop to its aspect.
+   The board is the whole screen: 9:19.5 on a modern iPhone (dr ~0.46). The camera hands
+   back 16:9 (sr ~0.56). A cover-crop keeps the full height and throws away ~18% of the
+   WIDTH, so KAMO's viewfinder was permanently narrower than the stock iOS Camera app
+   pointed at the same scene. That is what read as "zoomed in" — it was not a lens or a
+   zoom factor, it was this crop, and it applied to the preview, the frozen board and every
+   export downstream. Fitting to width restores the full sensor width: the same field of
+   view the phone's normal camera shows, which is what was asked for.
+   The leftover top/bottom carries a blurred, dimmed continuation of the same frame — the
+   Instagram/Shorts treatment — so the board still fills the screen and nothing downstream
+   changes shape. On a 390x844 board the bars are ~9% each, and both sit behind existing
+   chrome (the brand row above, #actionRow below) while you play.
+   Two sources keep the old cover path.
+   1. NARROWER than the board: the crop takes height, no horizontal field of view is lost,
+      and bars would be pure loss. Portrait picked photos are unchanged.
+   2. So wide that the fitted frame would be under MIN_FIT_H of the board — a landscape
+      photo, or a 4:3 webcam in a portrait viewport. There the bars are not a trim, they
+      are most of the screen: the figure spawns around 0.28-0.58 of board height and would
+      stand half in blur, which is a worse game than a crop is. 0.60 clears every framing
+      the phone can actually hand back in portrait (16:9 -> 0.82, full-sensor 4:3 -> 0.62)
+      and rejects the landscape ones (16:9 -> 0.26, 4:3 -> 0.35). */
+const MIN_FIT_H=0.60;
+const fitPad=document.createElement("canvas");   // reused scratch for the letterbox fill — allocated per frame this would be 60 canvases/second
+let sceneBand={y:0,h:1};   // where the real frame sits inside the board, as fractions — read by extractPalette()
+/* dr/sr IS the fitted height as a fraction of the board: (cw/ch)*(sh/sw). One rule, two
+   readers — coverInto() below and syncPreviewFit(), which keeps the <video>/<img> preview
+   framed exactly like the canvas that replaces it at the shutter. */
+function usesFitFrame(sw,sh){ if(!(sw>0&&sh>0)) return false;
+  const dr=stage.clientWidth/Math.max(1,stage.clientHeight), sr=sw/sh;
+  return sr>dr && dr/sr>=MIN_FIT_H; }
+function syncPreviewFit(){
+  try{
+    if(bgKind==="cam") cam.style.objectFit=usesFitFrame(cam.videoWidth,cam.videoHeight)?"contain":"cover";
+    else if(bgKind==="photo") photo.style.objectFit=usesFitFrame(photo.naturalWidth,photo.naturalHeight)?"contain":"cover";
+  }catch(_){}
+}
 function coverInto(g,cw,ch){ let src,sw,sh; if(bgKind==="cam"&&cam.videoWidth){src=cam;sw=cam.videoWidth;sh=cam.videoHeight;} else if(bgKind==="photo"&&photo.naturalWidth){src=photo;sw=photo.naturalWidth;sh=photo.naturalHeight;} else { g.fillStyle="#223"; g.fillRect(0,0,cw,ch); return; }
-  const sr=sw/sh,dr=cw/ch; let rw,rh,rx,ry; if(sr>dr){rh=sh;rw=sh*dr;rx=(sw-rw)/2;ry=0;}else{rw=sw;rh=sw/dr;rx=0;ry=(sh-rh)/2;} g.drawImage(src,rx,ry,rw,rh,0,0,cw,ch); }
+  const sr=sw/sh,dr=cw/ch;
+  if(sr<=dr||dr/sr<MIN_FIT_H){ sceneBand={y:0,h:1};
+    let rw,rh,rx,ry; if(sr>dr){rh=sh;rw=sh*dr;rx=(sw-rw)/2;ry=0;}else{rw=sw;rh=sw/dr;rx=0;ry=(sh-rh)/2;}
+    g.drawImage(src,rx,ry,rw,rh,0,0,cw,ch); return; }
+  const h=Math.max(1,Math.round(cw*sh/sw)), y=Math.round((ch-h)/2);
+  sceneBand={y:y/ch,h:h/ch};
+  /* The fill is the frame cover-cropped through a 1/16-scale canvas and blown back up —
+     the same two-drawImage blur makeBlur() uses, cheap enough to run every preview frame. */
+  const f=16, tw=Math.max(1,Math.round(cw/f)), th=Math.max(1,Math.round(ch/f));
+  if(fitPad.width!==tw||fitPad.height!==th){ fitPad.width=tw; fitPad.height=th; }
+  const fg=fitPad.getContext("2d"); if(!fg){ g.drawImage(src,0,0,sw,sh,0,y,cw,h); return; }
+  { const rh2=sh,rw2=sh*dr,rx2=(sw-rw2)/2; fg.drawImage(src,rx2,0,rw2,rh2,0,0,tw,th); }
+  g.imageSmoothingEnabled=true;
+  g.drawImage(fitPad,0,0,tw,th,0,0,cw,ch);
+  g.fillStyle="rgba(0,0,0,0.45)"; g.fillRect(0,0,cw,ch);   // push the bars back so the frame reads as the subject
+  g.drawImage(src,0,0,sw,sh,0,y,cw,h); }
 function makeBlur(src,W,H){ const f=16, s=document.createElement("canvas"); s.width=Math.max(1,Math.round(W/f)); s.height=Math.max(1,Math.round(H/f)); s.getContext("2d").drawImage(src,0,0,s.width,s.height);
   const o=document.createElement("canvas"); o.width=W; o.height=H; const oc=o.getContext("2d"); oc.imageSmoothingEnabled=true; oc.drawImage(s,0,0,W,H); return o; }
 function projectChar(char){ const v=new THREE.Vector3(); char.parts.spine.getWorldPosition(v); v.project(camera3); if(v.z>1||v.z<-1) return null; return {x:(v.x*0.5+0.5)*board.width, y:(-v.y*0.5+0.5)*board.height}; }
@@ -1642,7 +1700,7 @@ function capture(){
      was permanently sliced by the tools pinned to the right — a colour you could see but
      never fully tap. Nothing scrolls into view any more, which is the point: everything in
      this row is reachable without discovering that it scrolls. */
-  try{ buildSwatches(extractPalette(sceneCanvas,3)); }catch(e){}
+  try{ buildSwatches(extractPalette(sceneCanvas,3,sceneBand)); }catch(e){}
   try{ bumpHides(); }catch(e){}   // hide counter only — feeds the teaching hints + aim clock
   suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
@@ -1681,7 +1739,7 @@ function capture(){
    Reading `board` (the canvas) rather than `ctx` also avoids a GPU->CPU readback of the
    visible, compositor-backed canvas on every single stroke. */
 let scoreScratch=null, sscx=null;
-function _sampleData(src,sw,sh,W,H){
+function _sampleData(src,sw,sh,W,H,sx,sy){
   if(!scoreScratch||scoreScratch.width!==sw||scoreScratch.height!==sh){
     scoreScratch=document.createElement("canvas"); scoreScratch.width=sw; scoreScratch.height=sh;
     sscx=scoreScratch.getContext("2d",{willReadFrequently:true});
@@ -1689,7 +1747,7 @@ function _sampleData(src,sw,sh,W,H){
   if(!sscx) return null;
   sscx.imageSmoothingEnabled=false;
   sscx.clearRect(0,0,sw,sh);                 // maskCanvas carries alpha — must not accumulate
-  sscx.drawImage(src,0,0,W,H,0,0,sw,sh);
+  sscx.drawImage(src,sx||0,sy||0,W,H,0,0,sw,sh);   // sx/sy let a caller sample a sub-band without allocating a crop
   return sscx.getImageData(0,0,sw,sh).data;  // fresh buffer each call, so the three don't alias
 }
 /* WHAT `currentScore` MEANS NOW — read this before changing it.
@@ -1969,14 +2027,46 @@ function tlCapture(){
   if(!sceneCanvas||!board) return;
   if((tlCount++ % tlEvery)!==0) return;
   try{
-    const H=Math.round(TL_W*board.height/board.width);
-    const o=document.createElement("canvas"); o.width=TL_W; o.height=H;
-    o.getContext("2d").drawImage(board,0,0,TL_W,H);
-    tlFrames.push(o.toDataURL("image/jpeg",0.55));
+    /* composeShare, NOT a raw board blit. These frames are the body of the reveal MP4 and
+       the final frame native wipes to is composeShare(1080, beforeBoard) — so anything
+       composeShare does to that frame has to happen here too or the clip changes shape
+       mid-play. It blits the board at its own 9:19.5 aspect, which was already a silent
+       mismatch against a 9:16 closing frame; once coverInto() started letterboxing the
+       board it became visible, because the timelapse carried dark bands the closing frame
+       had cropped away. One composer for every frame of the video, opening to closing. */
+    tlFrames.push(composeShare(TL_W,board).toDataURL("image/jpeg",0.55));
     /* Halve the resolution of TIME, not of the picture: keep frames 0,2,4… and from here
        on take every other stroke. The round stays evenly covered as it gets longer. */
     if(tlFrames.length>TL_MAX){ tlFrames=tlFrames.filter((_,i)=>i%2===0); tlEvery*=2; }
   }catch(e){}   // a tainted or oversized canvas must never break painting
+}
+/* THE LAST FRAME IS NOT A TIMELAPSE FRAME — IT IS THE ANSWER.
+   renderTimelapse() takes three arguments and `hidden` is not one of them; the native
+   module reads the camouflaged image straight off the end of this array:
+       renderReveal(hiddenBase64: frames[frames.count - 1], ...)
+   and holds it for 2.2s as the "can you spot them?" beat. So whatever sits last here is
+   the picture the whole clip is asking a question about — and once `tlEvery` reaches 2,
+   tlCapture() keeps only every other stroke, so the FINAL one lands or is dropped on
+   parity alone. Measured on main by painting N strokes and diffing frames[last] against
+   the `hidden` the JS computes and this path never passes on: N=16/18/20 differ, N=17/19/21
+   are identical. Half of all hides ended the clip on a figure missing its last stroke.
+   (The TL_MAX filter is NOT part of this — it fires at exactly length 15 and keeps
+   0,2,…,14, so the newest frame always survives it. Verified, not assumed.)
+   tlCapture() also only fires from endPaint(), so any board change that is not a finished
+   stroke — undo, clear — never lands here at all.
+   So capture the finished board once more at Done, unconditionally. Dedupes on the frame
+   itself, because an identical trailing frame would just add 0.30s of stall to the paint
+   segment. */
+function tlCaptureFinal(){
+  if(!sceneCanvas||!board) return;
+  try{
+    const f=composeShare(TL_W,board).toDataURL("image/jpeg",0.55);
+    if(tlFrames.length && tlFrames[tlFrames.length-1]===f) return;
+    tlFrames.push(f);
+    /* Trim from the FRONT if this pushes past the cap: the opening frames are the most
+       redundant part of a timelapse, and the closing one is the one thing that cannot go. */
+    while(tlFrames.length>TL_MAX) tlFrames.shift();
+  }catch(e){}
 }
 function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
 board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
@@ -1986,14 +2076,21 @@ board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.ad
    path where the swatches are widest is the one nobody would ever test. */
 let PALETTE=["#7c6f57","#4a5d3a","#2f3b2a"];
 // pull ~n representative colors from the captured scene so the palette matches the photo
-function extractPalette(canvas,n){
+/* `band` ({y,h} as fractions of the canvas height) restricts sampling to the live camera
+   frame and excludes coverInto()'s letterbox bars. Those bars are a DIMMED copy of the same
+   frame, so every colour in them sits ~45% darker than its original — far enough past the
+   44-distance dedupe below to win a slot outright. With only four swatches on the row,
+   handing one to "the same green but darker" costs a real camouflage colour. */
+function extractPalette(canvas,n,band){
   // Same full-res-read problem as computeScore, and it fires from capture() — the one
   // moment every capture canvas is being allocated at once, so the transient 14 MB lands
   // exactly on the peak. It samples 1 pixel in ~4900, so read the sample grid instead.
-  try{ const W=canvas.width,H=canvas.height;
+  try{ const W=canvas.width;
+    const sy=Math.round(canvas.height*(band&&band.h>0?band.y:0));
+    const H=Math.max(1,Math.round(canvas.height*(band&&band.h>0?band.h:1)));
     const bk={},step=Math.max(4,Math.round(Math.min(W,H)/70));
     const sw=Math.max(1,Math.ceil(W/step)), sh=Math.max(1,Math.ceil(H/step));
-    const data=_sampleData(canvas,sw,sh,W,H); if(!data) return PALETTE;
+    const data=_sampleData(canvas,sw,sh,W,H,0,sy); if(!data) return PALETTE;
     for(let i=0;i<data.length;i+=4){ const r=data[i],g=data[i+1],b=data[i+2];
       const key=((r>>5)<<10)|((g>>5)<<5)|(b>>5); const o=bk[key]||(bk[key]={r:0,g:0,b:0,n:0}); o.r+=r;o.g+=g;o.b+=b;o.n++; }
     let arr=Object.values(bk).map(o=>({r:Math.round(o.r/o.n),g:Math.round(o.g/o.n),b:Math.round(o.b/o.n),n:o.n})).sort((a,b)=>b.n-a.n);
@@ -3364,6 +3461,7 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   drawWatermark(rctx,W,Math.max(H*0.5,H-hidden));
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(auto){ if(finished) return; finished=true;
+  tlCaptureFinal();   // the reveal's camouflaged beat is frames.last — see tlCaptureFinal()
   /* Remembered for the retake paywall: a round the CLOCK ended is the one case where we
      know which lock to lead with, because the app just took the hide away mid-paint. */
   lastRoundAuto=!!auto;
@@ -3501,7 +3599,7 @@ if(location.search.includes("debug")){
   window.HIDEY={ charPos:()=>{ const c=sel(); return c?{x:+c.group.position.x.toFixed(2),y:+c.group.position.y.toFixed(2),tx:c._tx,ty:c._ty,svx:c._svx,sx:+c.charG.scale.x.toFixed(2),sy:+c.charG.scale.y.toFixed(2)}:null; },
     step:(n)=>{ for(let i=0;i<(n||1);i++){ characters.forEach(lerpChar); } renderer.render(scene,camera3); },
     setTarget:(x,y)=>{ const c=sel(); if(c){ c._tx=x; c._ty=y; } },
-    setBg:(url)=>{ photo.onload=()=>{}; photo.src=url; photo.style.display="block"; cam.style.display="none"; bgKind="photo"; enterCompose(); },
+    setBg:(url)=>{ photo.onload=()=>syncPreviewFit(); photo.src=url; photo.style.display="block"; cam.style.display="none"; bgKind="photo"; enterCompose(); },
     pose:(i)=>{ if(sel()) setPoseInstant(sel(),i); }, capture, score:()=>currentScore,
     reveal:buildReveal, chars:()=>characters.length, poses:POSES.map(p=>p.label),
     wheel:(x,y)=>openWheel(x,y), wheelHi:(x,y)=>updateWheel(x,y) };
