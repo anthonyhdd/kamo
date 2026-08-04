@@ -2058,7 +2058,20 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
 const PRODUCT_ID="com.blisscoach.kamo.pro";
 // default to the plan we can actually sell today (the weekly sub isn't approved yet)
 const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="weekly"; /* must stay in sync with the .active plan in the markup */ let pwBuyIntent=false;
-let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+/* PREVIEW AS A FREE USER. Native re-injects setPro() from RevenueCat on every launch and on
+   every entitlement sync, so setting kamo_pro=0 by hand is overwritten within a second — there
+   was no way to look at the paywall once you owned the app. That also bites for a real reason,
+   not just testing: CANCELLING a trial does not revoke it. Apple keeps the entitlement alive
+   until the period ends, so the app correctly still says KAMO+ for days after the cancel.
+   This flag is the override. It can only ever REMOVE Pro, never grant it, so it is not a
+   revenue hole and it does not touch the store, the entitlement, or `kamo_pro` — the real
+   value keeps being recorded underneath, so turning the preview off restores the truth
+   immediately with no round-trip to RevenueCat.
+   Toggled by a 1.5s long-press on the wordmark (see the .brand handler). */
+const FORCE_FREE_KEY="kamo_force_free";
+let forceFree=false; try{ forceFree=localStorage.getItem(FORCE_FREE_KEY)==="1"; }catch(e){}
+let brandLongPressed=false;   // swallows the click that follows a long-press
+let isPro=false; try{ isPro=!forceFree && localStorage.getItem("kamo_pro")==="1"; }catch(e){}
 /* ONE FREE ROUND WITH THE KAMO+ TOOLS.
    The second hide runs with everything unlocked, once per install, so the difference is
    felt rather than described. What it now demonstrates is all-colours, the continuous size
@@ -2346,10 +2359,16 @@ function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",
 document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.url));
 /* native bridge — RevenueCat (native) calls these on purchase/restore success + to inject the localized price */
 window.KAMO=window.KAMO||{};
-window.KAMO.setPro=(v)=>{ isPro=!!v; try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){} refreshProUI(); setPwBuyLoading(false); if(v) closePaywall();
+window.KAMO.setPro=(v)=>{
+  /* kamo_pro always records what native actually said — the preview only bends `isPro`. Store
+     the truth and derive the view from it, never the other way round, or leaving preview mode
+     would need a RevenueCat round-trip that may not come until the next cold start. */
+  try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){}
+  isPro = forceFree ? false : !!v;
+  refreshProUI(); setPwBuyLoading(false); if(isPro) closePaywall();
   /* Celebrate ONLY a fresh purchase — not a restore, not the cold-start pro-sync (both call
      setPro(true) too). pwBuyIntent is set only when the user taps Buy, so this fires once. */
-  if(v && pwBuyIntent){ pwBuyIntent=false; try{ showKamoPlus(); }catch(e){} } };
+  if(isPro && pwBuyIntent){ pwBuyIntent=false; try{ showKamoPlus(); }catch(e){} } };
 /* Post-purchase moment: no avatar (it's a photo toy) — a burst, a plan-aware line, and a push
    straight back into the toy to USE a Pro brush while the dopamine is high. */
 function kpConfetti(){ const host=$("#kpBurst"); if(!host) return; host.innerHTML=""; const cols=["#5fe6a4","#ffffff","#9affce","#5fe6a4","#c9fff0"];
@@ -2484,7 +2503,25 @@ function shareStats(){
    this entry point is separable in the funnel from the ✦ button next to it. No pitch key:
    tapping the logo is curiosity, not a refusal, so it keeps the generic copy. */
 { const b=document.querySelector(".brand");
-  if(b) b.onclick=()=>{ if(isPro) openKamoHome(); else openPaywall("brand"); }; }
+  if(b) b.onclick=()=>{ if(brandLongPressed){ brandLongPressed=false; return; }   // the long-press already acted
+    if(isPro) openKamoHome(); else openPaywall("brand"); };
+  /* 1.5s LONG-PRESS = toggle the free-user preview. Deliberately long: a normal tap is under
+     300ms, so this is hard to hit by accident, and the confirmation names the way back in the
+     same breath. It never touches the entitlement — a member who trips it has lost a view,
+     not a subscription, and the + returning is the proof. */
+  let t=null;
+  const start=()=>{ clearTimeout(t); t=setTimeout(()=>{
+    brandLongPressed=true;
+    forceFree=!forceFree;
+    try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
+    let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+    isPro = forceFree ? false : real;
+    refreshProUI(); haptic(18);
+    showHint(forceFree ? "Preview: free user \u2014 long-press to restore"
+                       : "KAMO+ restored", 3600);
+  }, 1500); };
+  const cancel=()=>clearTimeout(t);
+  if(b){ b.addEventListener("pointerdown",start); ["pointerup","pointercancel","pointerleave"].forEach(e=>b.addEventListener(e,cancel)); } }
 /* Clear the Buy spinner without showing a toast — used when a native purchase ends with
    no callback of its own (StoreKit cancel). Without it the button sat spinning, and
    pointer-events:none, for the full 6s of its own safety timer. */
