@@ -539,6 +539,15 @@
      headline were both set in --font (Avenir) while the paywall's kicker and title next
      door are in --display — so the two sheets said the same things in two different voices.
      The title also picks up the paywall's exact shimmer: same stops, same 3.4s clock. */
+  /* NO DECORATIVE MARK IN THIS BADGE. It read "★ KAMO+" and the star was rendering in the
+     system fallback while KAMO+ rendered in the Kamo face — so the first glyph the eye lands
+     on was the wrong typeface, which is what made the whole badge look like it was not using
+     the brand font. It was: the star simply is not in the file.
+     vendor/SpaceGrotesk-700.woff2 is a 230-glyph Latin subset. Verified against its cmap:
+     ★ ✦ ✧ are all absent; + · • * and every letter and digit are present. So any decorative
+     mark added to text set in --display will silently fall back and break the line.
+     Dropped rather than swapped for a glyph that does exist — the paywall's own kicker is
+     plain "KAMO+" and reads correctly, and these two are meant to be the same voice. */
   .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:var(--mint);
     font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;
     animation:pwGlow 2.8s ease-in-out infinite;}
@@ -910,7 +919,7 @@
 <div id="kamoPlus">
   <div class="kpCard pwCard">
     <div id="kpBurst"></div>
-    <div class="kpBadge">★ KAMO+</div>
+    <div class="kpBadge">KAMO+</div>
     <div class="kpTitle">You're KAMO+ ✨</div>
     <div class="kpSub" id="kpSub"></div>
     <!-- Chips describe what KAMO+ actually is now. "All Pro brushes" outlived the brushes. -->
@@ -930,7 +939,7 @@
      because after the purchase the interesting thing is no longer the offer. -->
 <div id="kamoHome" data-blocks-timer>
   <div class="kpCard pwCard">
-    <div class="kpBadge">★ KAMO+</div>
+    <div class="kpBadge">KAMO+</div>
     <div class="kpTitle" id="khTitle">Your hides</div>
     <div class="kpSub" id="khSub"></div>
     <div class="kpStats">
