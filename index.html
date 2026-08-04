@@ -971,10 +971,13 @@
     <div class="kpTitle">You're KAMO+ ✨</div>
     <div class="kpSub" id="kpSub"></div>
     <!-- Chips describe what KAMO+ actually is now. "All Pro brushes" outlived the brushes. -->
+    <!-- THREE chips, not four. Four wrapped to a second row on narrow screens, and
+         "75s rounds" was the one to go: the member home now tiles Time hidden right
+         above it, and Clean export has to stay because it is the only perk here with
+         no free substitute. Both sheets keep the same row - see TWO SHEETS, ONE LOOK. -->
     <div class="kpChips">
       <span class="kpChip">Every color</span>
       <span class="kpChip">Fine brush</span>
-      <span class="kpChip">75s rounds</span>
       <span class="kpChip">Clean export</span>
     </div>
     <button class="kpGo" id="kpGo">Start blending in →</button>
@@ -991,14 +994,22 @@
     <div class="kpTitle" id="khTitle">Your hides</div>
     <div class="kpSub" id="khSub"></div>
     <div class="kpStats">
-      <div class="kpStat"><b id="khHides">0</b><span>Hides</span></div>
-      <div class="kpStat"><b id="khBest">—</b><span>Fastest</span></div>
-      <div class="kpStat"><b id="khCov">—</b><span>Best cover</span></div>
+      <div class="kpStat"><b id="khHides">0</b><span id="khHidesLbl">Hides</span></div>
+      <!-- Fastest moved out of the tiles and into the subtext, which already says "Your
+           best vanish took Xs". It was the one number whose zero LIES: a fastest of 0s is
+           not a fresh scoreboard, it is nonsense. Hides and Time hidden are cumulative and
+           Best cover is a percentage, so all three have a truthful 0 and never show a dash
+           on a paying user's own home. -->
+      <div class="kpStat"><b id="khTime">0</b><span>Time hidden</span></div>
+      <div class="kpStat"><b id="khCov">0</b><span>Best cover</span></div>
     </div>
+    <!-- THREE chips, not four. Four wrapped to a second row on narrow screens, and
+         "75s rounds" was the one to go: the member home now tiles Time hidden right
+         above it, and Clean export has to stay because it is the only perk here with
+         no free substitute. Both sheets keep the same row - see TWO SHEETS, ONE LOOK. -->
     <div class="kpChips">
       <span class="kpChip">Every color</span>
       <span class="kpChip">Fine brush</span>
-      <span class="kpChip">75s rounds</span>
       <span class="kpChip">Clean export</span>
     </div>
     <!-- THE CTA POINTS OUTWARD. "Back to hiding" was a dismiss button wearing the primary
@@ -1007,7 +1018,7 @@
          them nothing — so the primary action is now sharing them, and going back to the
          camera is the quiet one under it. -->
     <button class="kpGo" id="khShare">Share my stats</button>
-    <button class="kpClose" id="khClose">Back to hiding</button>
+    <button class="kpClose" id="khClose">Back</button>
   </div>
 </div>
 
@@ -2367,6 +2378,10 @@ function recordHide(sec,cov){
        the player is actually chasing. Guarded against the 1s floor roundSeconds() returns. */
     if(sec>0 && (!s.bestSec || sec<s.bestSec)) s.bestSec=sec;
     if(cov>(s.bestCov||0)) s.bestCov=cov;
+    /* Cumulative, so the member home always has a number that only ever goes up. bestSec
+       and bestCov can both sit empty after a subscribe-before-first-hide, which is what
+       put a "—" on a paying user's own scoreboard. A total cannot do that. */
+    s.totalSec=(s.totalSec||0)+(sec>0?sec:0);
     localStorage.setItem(STATS_KEY,JSON.stringify(s));
   }catch(e){}   // storage full or blocked → the scoreboard is stale, the round still counts
 }
@@ -2391,7 +2406,12 @@ function openKamoHome(){
   const t=$("#khTitle"), sub=$("#khSub");
   /* The headline is the achievement, not the screen's name. "Ready when you are" was a
      label on an empty state; a member with 12 hides should be met with the 12. */
-  if(t) t.textContent = n ? (n===1 ? "First one down" : n+" people hidden") : "Nothing hidden yet";
+  /* The zero state is not an empty state here. This sheet only opens for someone who has
+     PAID, so leading with what they have not done ("Nothing hidden yet") greets a new
+     member with their own inactivity. It is their home, so the headline is the standing
+     fact - the subscription is live and everything is open - until they have hides to
+     lead with instead. */
+  if(t) t.textContent = n ? (n===1 ? "First one down" : n+" people hidden") : "Everything's unlocked";
   /* TWO LINES, by explicit break rather than by luck of the wrap. The stat and the dare
      are different sentences doing different jobs, and letting them reflow into one
      another at whatever width the phone happens to be buries the dare — which is the
@@ -2407,9 +2427,13 @@ function openKamoHome(){
     lines.forEach((line,i)=>{ if(i) sub.appendChild(document.createElement("br")); sub.appendChild(document.createTextNode(line)); });
   }
   el.classList.add("show"); haptic(12);
+  /* `|| 0`, never null: countUp() renders "—" for a nullish value, and a dash on the
+     scoreboard of someone who is paying for this reads as broken, not as empty. */
+  const hl=$("#khHidesLbl"); if(hl) hl.textContent = n===1 ? "Hide" : "Hides";   // "1 Hides" reads as a bug
+  const tot=s.totalSec||0, big=tot>=60;
   countUp($("#khHides"),n);
-  countUp($("#khBest"),s.bestSec||null,"s");
-  countUp($("#khCov"),s.bestCov||null,"%");
+  countUp($("#khTime"),big?Math.round(tot/60):tot,big?"m":"s");
+  countUp($("#khCov"),s.bestCov||0,"%");
   track("member_home_opened",{hides:n});
 }
 function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show"); }
