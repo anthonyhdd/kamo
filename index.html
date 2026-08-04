@@ -248,6 +248,22 @@
   @keyframes breathe{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 18px rgba(255,255,255,.20);}50%{box-shadow:0 4px 14px rgba(0,0,0,.4),0 0 30px rgba(255,255,255,.42);}}
   .capLabel{position:absolute;top:92px;left:50%;transform:translateX(-50%);font-family:var(--display);font-size:11px;letter-spacing:2px;opacity:.55;text-transform:uppercase;white-space:nowrap;}
   /* visible pose picker (compose mode) — tap a pose directly, no blind cycling */
+  /* Above the pose row, clear of the shutter. Three states, and they must look different at
+     a glance or the mechanic teaches nothing: OFFER (mint outline, the thing to tap), ARMED
+     (filled — this round is the good one), SPENT (grey, and still tappable so the only way
+     to get another is one tap away rather than a dead end). */
+  .passChip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(206px + var(--safe-b));z-index:15;
+    display:none;align-items:center;gap:7px;height:38px;padding:0 15px;border-radius:999px;
+    border:1px solid rgba(95,230,164,.5);background:rgba(10,14,12,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    color:var(--mint);font-size:13px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap;
+    box-shadow:0 6px 22px rgba(0,0,0,.45);transition:transform .12s cubic-bezier(.3,1.5,.5,1),background .2s,border-color .2s,color .2s;}
+  .passChip:active{transform:translateX(-50%) scale(.95);}
+  .passChip .pcStar{font-size:13px;line-height:1;}
+  /* Armed: the one state that has to survive a glance mid-capture, so it goes solid. */
+  .passChip.armed{background:var(--mint);border-color:var(--mint);color:#08120d;
+    box-shadow:0 6px 24px rgba(95,230,164,.42);animation:passPulse 2.4s ease-in-out infinite;}
+  @keyframes passPulse{0%,100%{box-shadow:0 6px 24px rgba(95,230,164,.42);}50%{box-shadow:0 6px 24px rgba(95,230,164,.42),0 0 20px rgba(95,230,164,.5);}}
+  .passChip.spent{border-color:rgba(255,255,255,.22);color:rgba(255,255,255,.62);background:rgba(10,12,16,.5);}
   #poseBar{position:absolute;left:0;right:0;bottom:calc(150px + var(--safe-b));z-index:14;display:none;justify-content:center;gap:7px;padding:0 14px;}
   #poseBar .poseBtn{flex:0 0 auto;width:48px;height:48px;border-radius:13px;border:1px solid rgba(255,255,255,.16);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s cubic-bezier(.3,1.4,.5,1),border-color .2s,background .2s;}
   #poseBar .poseBtn svg{width:22px;height:34px;opacity:.72;}
@@ -814,6 +830,18 @@
     <div id="wheel"><div id="wheelCenter"></div></div>
     <div id="loupe"></div>
 
+    <!-- THE DAILY PASS. Sits above the pose row, on the camera screen, because the round it
+         changes has to be armed BEFORE the shutter — paintSeconds() is read as the clock
+         starts, so there is no arming it mid-round.
+         It replaces a silent auto-grant on hide #2. That grant handed a brand-new user the
+         entire paid product announced by a 3.4s toast, while their eyes were on the canvas
+         and their finger was moving; and a first-time user has no baseline anyway — they do
+         not know 22s is the normal clock, so 75s reads as "the clock". The gift was
+         invisible, which made the pitch on the next round ("that one had every tool") an
+         appeal to a memory they never formed.
+         Owning and SPENDING a pass fixes all three at once, with no copy: they know they
+         have it, they know when they used it, they know when it is gone. -->
+    <button id="passChip" class="passChip"><span class="pcStar">✦</span><span id="passTxt"></span></button>
     <div id="poseBar"></div>
     <div id="shutterWrap">
       <button id="shutter" class="shutter" aria-label="Capture"><div class="spin"></div><div class="ring"></div><div class="core"></div></button>
@@ -1393,7 +1421,7 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>U
 
 function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
+  shutterWrap.style.display="block"; renderPassChip(); $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
@@ -1414,7 +1442,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
-  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
+  glCanvas.style.display="block"; shutterWrap.style.display="block"; renderPassChip(); $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   resumeCamera();   // paused for the whole hide by capture()
@@ -1561,14 +1589,14 @@ function capture(){
      never fully tap. Nothing scrolls into view any more, which is the point: everything in
      this row is reachable without discovering that it scrolls. */
   try{ buildSwatches(extractPalette(sceneCanvas,3)); }catch(e){}
-  try{ maybeGrantTaste(); }catch(e){}   // the free Pro round, if this is the one
+  try{ maybeSpendPass(); }catch(e){}   // spends the daily pass if they armed it
   suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
   compositeBoard();
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; renderPassChip(false); $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
   /* Reset to the roller every free round. Not just at launch: the taste grant hands over the
      full slider for one hide, and without this the size you dragged to during that hide
@@ -2023,16 +2051,57 @@ let isPro=false; try{ isPro=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
    repeat, the unlock itself dies with the round. */
 let proTaste=false;
 const canPro=()=>isPro||proTaste;
-function tasteGranted(){ try{ return localStorage.getItem("kamo_taste")==="1"; }catch(e){ return true; } }
+/* tasteGranted() went with the silent grant. The old "kamo_taste" key survives in
+   localStorage on existing installs and is no longer read by anything. */
 function bumpHides(){ try{ const n=(+localStorage.getItem("kamo_hides")||0)+1; localStorage.setItem("kamo_hides",String(n)); return n; }catch(e){ return 0; } }
-function maybeGrantTaste(){
+/* ONE FREE KAMO+ HIDE PER DAY, SPENT ON PURPOSE.
+   Users run ~8 hides a day (8.5 on Aug 2, 7.9 on Aug 3), so one great round is not
+   generosity — it is what makes the other seven feel like a wall. Before this they were
+   silently given a fully-unlocked round on hide #2 and, having no baseline after a single
+   previous hide, almost certainly never noticed: 75s just reads as "the clock" when you
+   never knew 22s was normal.
+   Refill is DAILY, chosen deliberately over once-per-install. It gives a reason to come
+   back tomorrow, and at 8 hides a day it cannot satisfy demand on its own.
+   THE LINE THAT MUST NOT MOVE: the watermark stays gated on isPro, not canPro() — see
+   drawWatermark(). A pass round still exports branded. The clean file is the one thing that
+   is never free, which is what keeps a daily giveaway from becoming the product. */
+function passDay(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+/* Local calendar day, deliberately not UTC: "today" has to mean the user's today, and a
+   refill that lands mid-evening for half the world reads as a bug. Clock-rolling can farm
+   an extra pass; that costs one watermarked round and is not worth server state. */
+function passAvailable(){ if(isPro) return false; try{ return localStorage.getItem("kamo_pass")!==passDay(); }catch(e){ return false; } }
+let passArmed=false;
+const passChip=$("#passChip"), passTxt=$("#passTxt");
+function renderPassChip(show){
+  if(!passChip) return;
+  if(isPro || show===false){ passChip.style.display="none"; return; }
+  passChip.style.display="flex";
+  passChip.classList.toggle("armed",passArmed);
+  passChip.classList.toggle("spent",!passArmed && !passAvailable());
+  passTxt.textContent = passArmed ? "KAMO+ on for this hide"
+                      : passAvailable() ? "Use your free KAMO+ hide"
+                      : "Free hide used — new one tomorrow";
+}
+if(passChip) passChip.onclick=()=>{
+  if(passArmed){ passArmed=false; haptic(8); renderPassChip(); return; }   // let them take it back
+  /* No toast here. The chip itself flips to solid mint reading "KAMO+ on for this hide" —
+     that IS the confirmation, and it stays on screen until the shutter instead of for
+     2.4 seconds. A pill would also ellipsize at .hint's 60vw/nowrap, which is the exact
+     failure this whole change exists to stop repeating. */
+  if(passAvailable()){ passArmed=true; haptic(14); renderPassChip(); return; }
+  // Spent. A dead chip would be the same dead end the lock hints used to be, so it sells.
+  haptic(10); openPaywall("pass");
+};
+function maybeSpendPass(){
   const was=proTaste;
   proTaste=false;
-  if(!isPro && !tasteGranted() && bumpHides()===2){
-    proTaste=true; lastRoundTaste=true;
-    try{ localStorage.setItem("kamo_taste","1"); }catch(e){}
-    showHint("KAMO+ unlocked for this hide — all colors, any size, more time",3400);
+  bumpHides();
+  if(!isPro && passArmed && passAvailable()){
+    proTaste=true; lastRoundTaste=true; passArmed=false;
+    try{ localStorage.setItem("kamo_pass",passDay()); }catch(e){}
+    showHint("Your free KAMO+ hide ✦",2600);   // short enough to survive .hint's 60vw nowrap
   }
+  passArmed=false;
   /* Refresh on the way OUT too, not just in: without this the row kept showing the
      KAMO+ tools unlocked for the rest of the session after the free round ended. */
   if(was!==proTaste) refreshProUI();
@@ -2120,10 +2189,16 @@ const PW_PITCH={
            s:"No mark on the image or the reveal clip." },
   time:  { t:"Stop losing hides to the clock",
            s:"75 seconds to paint instead of 22." },
-  /* The only pitch that can refer to something the user actually did. Past tense on purpose:
-     it is a description of the hide they just made, not a claim about one they might. */
-  taste_ended: { t:"That one had every tool",
-                 s:"Every color, the fine brush and 75 seconds — that was KAMO+. Keep it?" },
+  /* The only pitch that can refer to something the user actually did — and now the only one
+     referring to something they CHOSE to do, since the round it follows is a pass they armed
+     themselves rather than a grant they were handed without noticing. Past tense on purpose:
+     it describes the hide they just made, not a claim about one they might. */
+  taste_ended: { t:"That was your free KAMO+ hide",
+                 s:"Every color, the fine brush, 75 seconds. You get one a day — or all of them now." },
+  /* Tapping a spent chip. They know exactly what they are asking for, so the sheet should not
+     re-explain the product — it should answer "can I have another one". */
+  pass:  { t:"Out of free hides today",
+           s:"One a day is the free plan. KAMO+ is every hide, every tool." },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
