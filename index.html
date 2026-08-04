@@ -676,7 +676,16 @@
      paywall in the display face on green, this one in flat grey with a dimmed 14px label.
      Only the padding is overridden, tighter than the paywall's: this sheet has to stay
      short. It is the growth loop, and a sheet that runs past the fold costs shares. */
-  .ssCard{width:100%;max-width:460px;padding:20px 20px calc(16px + var(--safe-b));}
+  /* ITS OWN GRADIENT, LIGHTER THAN THE PAYWALL'S. .pwCard ramps to #070d0b — effectively
+     black — by 60% of its height. On the paywall that is fine: the card is tall, so the
+     dark end is a long way from the eye and it reads as depth. This card is barely half
+     that height, so the same ramp hit near-black almost immediately and the sheet went
+     from green to a black slab in the space of two buttons.
+     Same hue, shallower fall, and it never reaches black — the bottom stop is still
+     visibly green, which is what keeps it looking like the paywall's sibling rather than
+     a different component. Declared after .pwCard, so this simply wins. */
+  .ssCard{width:100%;max-width:460px;padding:20px 20px calc(16px + var(--safe-b));
+    background:linear-gradient(180deg,#14382d,#0f2a22 55%,#0c1f19);}
   .ssCard .pwTitle{font-size:22px;}
   .ssCard .pwSub{margin-bottom:14px;}
   #ssMode{display:flex;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);border-radius:14px;padding:4px;margin-bottom:12px;}
