@@ -158,6 +158,13 @@
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);
     padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
     box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:none;opacity:0;transition:opacity .3s;}
+  /* The one hint that can be tapped: the degraded form of a capped paywall trigger. Mint and
+     clickable so it reads as a way in rather than a notice, which is what made the previous
+     lock hint a dead end. pointer-events is re-enabled ONLY in this state — the plain hint
+     must stay transparent to touches or it would eat taps meant for the canvas under it. */
+  .hint.tap{pointer-events:auto;cursor:pointer;color:var(--mint);border-color:rgba(95,230,164,.45);
+    background:rgba(95,230,164,.10);}
+  .hint.tap:active{transform:translateX(-50%) scale(.96);}
 
   #scoreChip{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
@@ -2066,6 +2073,44 @@ const paywallEl=$("#paywall");
    uninterpretable without that split — a wall nobody hits and a wall everyone hits look
    identical in the current funnel.
    Falls back to the generic pitch for entry points that aren't a specific tool. */
+/* PAYWALL SATURATION — the actual bottleneck, measured 2026-08-04.
+   777 opens across 149 users yesterday = 5.2 full-screen paywalls per user per day, and
+   ~0.9% of those views reached Apple's sheet. The properties added alongside this proved the
+   sheet is not broken: every reading was store_ready, plans_shown, buy_state="buy". So it is
+   not a dead button, and at 5 interruptions a day it is not a copy problem either — the
+   dismiss becomes a reflex and nothing inside the modal is being read by the third one.
+   HALF of the volume came from touching a LOCKED CONTROL: size 260 and color 131 of 772.
+   Reaching for the brush slider is not purchase intent, and since it fires on pointerdown of
+   a DRAG BAR it is frequently not even a deliberate tap — it interrupts the one activity the
+   user opened the app to do. (The comment at that listener argued the opposite, that with
+   the preset dots gone a touch there is "unambiguous intent". The volume says otherwise.)
+   Each source now declares how often per session it may take the screen. Past that it
+   degrades to a TAPPABLE hint: the lock is still named and still one tap from the paywall,
+   which answers the dead-end objection that killed the previous hint version.
+   Absent from this map = never capped. Those are the sources the user reached for on
+   purpose — the ✦ button, the watermark row, the wordmark — where the tap IS the request,
+   plus taste_ended, which fires once per install at the only moment in the product where
+   someone has held the paid tools and had them taken away.
+   THIS IS A BET WITH A DOWNSIDE: fewer paywalls could mean fewer trials rather than more.
+   `nth` below is what settles it — conversion by nth open tells us whether exposure 4 and 5
+   were ever worth anything. If it turns out flat, raise these numbers back up. */
+const PW_CAP={ size:1, color:1, round_end:2, time:2 };
+let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
+const pwSourceOpens={};
+const PW_LOCK_HINT={
+  size:  "Fine brush is KAMO+ — tap to unlock",
+  color: "Every colour is KAMO+ — tap to unlock",
+  round_end:"More time, every tool — tap for KAMO+",
+  time:  "75 seconds to paint — tap for KAMO+",
+};
+function showLockHint(src){
+  showHint(PW_LOCK_HINT[src]||"KAMO+ — tap to unlock",3600);
+  hintEl.classList.add("tap");
+  const clear=()=>{ hintEl.classList.remove("tap"); hintEl.onclick=null; };
+  // force=true: they just asked for it, so the cap that produced this hint must not eat it.
+  hintEl.onclick=()=>{ clear(); showHint(""); openPaywall(src,true); };
+  clearTimeout(showLockHint._t); showLockHint._t=setTimeout(clear,3600);
+}
 const PW_PITCH={
   size:  { t:"Paint the details, not just the shape",
            s:"Free paints with a 44px roller. KAMO+ unlocks the fine brush." },
@@ -2083,7 +2128,10 @@ const PW_PITCH={
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
 { const t=$("#pwTitle"), s=$("#pwSub"); if(t) t.dataset.def=t.textContent; if(s) s.dataset.def=s.textContent; }
-function openPaywall(source){
+function openPaywall(source,force){
+  const src=source||"generic", cap=PW_CAP[src], used=pwSourceOpens[src]||0;
+  if(!force && cap!==undefined && used>=cap){ showLockHint(src); return; }
+  pwSourceOpens[src]=used+1; pwOpens++;
   const pitch=PW_PITCH[source];
   const t=$("#pwTitle"), s=$("#pwSub");
   /* Restore the generic copy when there is no pitch — without this the sheet would keep
@@ -2101,7 +2149,13 @@ function openPaywall(source){
   const plansEl=$("#pwPlans");
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
-    source:source||"generic",
+    source:src,
+    /* Which number interruption this is for the user, this launch. The whole saturation
+       argument above is a prior, not a measurement — nothing in the data could show whether
+       the 5th paywall of the day ever converted, because every view looked alike. Split
+       trial_started by nth and the question answers itself. Also the check that the cap is
+       actually working: after this ships, nth>2 should only appear on uncapped sources. */
+    nth:pwOpens,
     store_ready:!!storeReady,          // a real price arrived for at least one plan
     store_answered:!!storeAnswered,    // native said SOMETHING, even "nothing for sale"
     plans_shown:!!(plansEl && getComputedStyle(plansEl).display!=="none"),
@@ -2996,12 +3050,14 @@ let sizing=false;
    one of only three paywall entry points and by far the most irritating: pure interruption
    with nothing asked for. The tool stays locked (giving it away would change what KAMO+
    is), but the lock is now a one-line hint instead of a wall. */
-/* Now opens the paywall rather than just muttering a hint. The old note here warned that a
-   full-screen paywall on a DRAG was pure irritation — that was true while the three preset
-   dots existed, because a free user brushing the slider had a perfectly good alternative and
-   the interruption bought nothing. With the dots gone this is the only size control in the
-   app, so touching it is unambiguous intent, and the hint was a dead end: it named a thing
-   you could not go and get. */
+/* SETTLED BY DATA, after arguing both sides above. This became a full paywall on the theory
+   that with the preset dots gone, touching the only size control is "unambiguous intent". It
+   then produced 260 opens in a day — the single largest source, a third of all of them — and
+   the day's view-to-sheet rate was 0.9%. Whatever those touches are, they are not 260 people
+   asking to buy something.
+   It stays wired to openPaywall(), but PW_CAP caps it at one per launch; after that it
+   degrades to the tappable lock hint. That keeps what was genuinely right in the note above
+   — the hint must not be a dead end — while dropping the part that was wrong. */
 sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ openPaywall("size"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
