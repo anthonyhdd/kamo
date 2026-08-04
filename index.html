@@ -1438,10 +1438,29 @@ function gumSafe(c, ms=3500){
    These are `ideal`, never `exact`: a device that can't do 1080 degrades to its best
    instead of throwing OverconstrainedError, so the fallback chain below is untouched in
    practice. The two constraint-free entries stay after them anyway, for any engine that
-   chokes on the hints outright. */
+   chokes on the hints outright.
+
+   ASK FOR 4:3 — THE SENSOR'S SHAPE — NOT 16:9. This is the rest of the "still zoomed"
+   complaint, and coverInto() could never have fixed it: 16:9 in portrait is 0.5625 against
+   the sensor's 0.75, so iOS crops the horizontal field of view before a single pixel
+   reaches this code. Nothing downstream can put back what the track never carried, which
+   is why KAMO stayed narrower than the stock Camera app even after the board stopped
+   cropping. Asking 1440x1920 hits the 4:3 preset and the full sensor width arrives.
+
+   It also SHARPENS the picture, which is the counter-intuitive half. 1080 wide into a
+   1080-wide board is 1:1 — every sensor artefact maps straight through with no margin.
+   1440 downscaled into 1080 is supersampled, so it reads cleaner despite being "more
+   scaling", not less.
+
+   Costs, both real: ~33% more pixels to decode per frame in a WebView content process that
+   has been jetsammed before, and the frame now fills ~62% of the screen height instead of
+   ~82%, the rest being coverInto()'s blurred bars. That second one is not a bug and not
+   tunable — a 4:3 image in a 9:19.5 screen is either letterboxed or cropped, and cropping
+   is the zoom we are removing. MIN_FIT_H is already set at 0.60 to admit exactly this case
+   (4:3 lands at ~0.62); if this ever needs reverting, it is this function alone. */
 function hdHint(){
   const portrait=(window.innerHeight||0)>=(window.innerWidth||0);
-  return portrait ? {width:{ideal:1080},height:{ideal:1920}} : {width:{ideal:1920},height:{ideal:1080}};
+  return portrait ? {width:{ideal:1440},height:{ideal:1920}} : {width:{ideal:1920},height:{ideal:1440}};
 }
 // What the camera actually gave us. Constraints are a request, not a contract, and the
 // answer varies by device and facing — worth knowing before blaming the renderer again.
