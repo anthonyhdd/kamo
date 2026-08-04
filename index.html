@@ -2027,10 +2027,14 @@ function tlCapture(){
   if(!sceneCanvas||!board) return;
   if((tlCount++ % tlEvery)!==0) return;
   try{
-    const H=Math.round(TL_W*board.height/board.width);
-    const o=document.createElement("canvas"); o.width=TL_W; o.height=H;
-    o.getContext("2d").drawImage(board,0,0,TL_W,H);
-    tlFrames.push(o.toDataURL("image/jpeg",0.55));
+    /* composeShare, NOT a raw board blit. These frames are the body of the reveal MP4 and
+       the final frame native wipes to is composeShare(1080, beforeBoard) — so anything
+       composeShare does to that frame has to happen here too or the clip changes shape
+       mid-play. It blits the board at its own 9:19.5 aspect, which was already a silent
+       mismatch against a 9:16 closing frame; once coverInto() started letterboxing the
+       board it became visible, because the timelapse carried dark bands the closing frame
+       had cropped away. One composer for every frame of the video, opening to closing. */
+    tlFrames.push(composeShare(TL_W,board).toDataURL("image/jpeg",0.55));
     /* Halve the resolution of TIME, not of the picture: keep frames 0,2,4… and from here
        on take every other stroke. The round stays evenly covered as it gets longer. */
     if(tlFrames.length>TL_MAX){ tlFrames=tlFrames.filter((_,i)=>i%2===0); tlEvery*=2; }
