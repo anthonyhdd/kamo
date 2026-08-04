@@ -577,9 +577,18 @@
      mark added to text set in --display will silently fall back and break the line.
      Dropped rather than swapped for a glyph that does exist — the paywall's own kicker is
      plain "KAMO+" and reads correctly, and these two are meant to be the same voice. */
-  .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:#fff;
-    font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;
+  /* SET LIKE THE WORDMARK, not like a label. This was letter-spacing:2px with the + sitting
+     inline on the baseline, so it read as tracked-out UI chrome that happened to say KAMO —
+     while the capture screen shows a tight word with a raised +. Same mark, two typographies.
+     Now -.4px and gap:0 to match .brand, with .kpBadge .kPlus raised and shrunk exactly like
+     .brandPlus. font-size stays 12px: this is a badge inside a card, not the app's logo, and
+     matching the LETTERFORMS is what makes it the same mark — matching the size would just
+     make it a second wordmark competing with the title under it. */
+  .kpBadge{display:inline-flex;align-items:baseline;gap:0;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:#fff;
+    font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:-.4px;text-transform:uppercase;margin-bottom:16px;
     animation:pwGlow 2.8s ease-in-out infinite;}
+  /* The + rides top-right of the word, same ratio and lift as .brandPlus on the capture screen. */
+  .kpBadge .kPlus{font-size:.72em;vertical-align:super;line-height:0;position:relative;top:-.34em;margin-left:1px;}
   .kpTitle{font-family:var(--display);font-size:28px;font-weight:700;letter-spacing:-.3px;line-height:1.14;margin-bottom:10px;
     background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
     background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
@@ -2429,7 +2438,10 @@ function openKamoHome(){
     const lines = n
       ? (s.bestSec ? ["Your best vanish took "+s.bestSec+"s.","Think anyone can beat it?"]
                    : ["Every tool is yours.","Now go beat your own time."])
-      : ["Every tool is yours.","Go make someone disappear."];
+      /* One line for the zero state. "Go make someone disappear." was a nudge to go and use
+         the app, on the one screen that exists to confirm what you already own. The lines
+         array is kept so the two-line cases below still work unchanged. */
+      : ["Every tool is yours."];
     lines.forEach((line,i)=>{ if(i) sub.appendChild(document.createElement("br")); sub.appendChild(document.createTextNode(line)); });
   }
   el.classList.add("show"); haptic(12);
