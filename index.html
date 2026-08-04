@@ -2019,7 +2019,7 @@ function maybeGrantTaste(){
   const was=proTaste;
   proTaste=false;
   if(!isPro && !tasteGranted() && bumpHides()===2){
-    proTaste=true;
+    proTaste=true; lastRoundTaste=true;
     try{ localStorage.setItem("kamo_taste","1"); }catch(e){}
     showHint("KAMO+ unlocked for this hide — all colors, any size, more time",3400);
   }
@@ -2072,6 +2072,10 @@ const PW_PITCH={
            s:"No mark on the image or the reveal clip." },
   time:  { t:"Stop losing hides to the clock",
            s:"75 seconds to paint instead of 22." },
+  /* The only pitch that can refer to something the user actually did. Past tense on purpose:
+     it is a description of the hide they just made, not a claim about one they might. */
+  taste_ended: { t:"That one had every tool",
+                 s:"Every color, the fine brush and 75 seconds — that was KAMO+. Keep it?" },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
@@ -2083,7 +2087,23 @@ function openPaywall(source){
      whichever tool-specific line was shown last, and answer a question nobody asked. */
   if(t) t.textContent = pitch ? pitch.t : (t.dataset.def || t.textContent);
   if(s) s.textContent = pitch ? pitch.s : (s.dataset.def || s.textContent);
-  paywallEl.classList.add("show"); haptic(12); track("paywall_viewed",{source:source||"generic"});
+  /* IS THIS PAYWALL EVEN SELLABLE? 144 people saw it yesterday and 7 reached Apple's sheet.
+     That is either a weak offer or a dead button, and nothing in the funnel could tell them
+     apart: the plan rows stay hidden until setPrices() delivers a real localized price, and
+     the buy button sits on "Loading…" or "Currently unavailable" until then. A paywall in
+     that state counts as a view exactly like a working one.
+     These ride on paywall_viewed — an event the LIVE wrapper already passes — because new
+     event NAMES are dropped by the WEB_EVENTS allow-list but properties on an allowed event
+     are not. So this answers the question today rather than after the next release. */
+  const plansEl=$("#pwPlans");
+  paywallEl.classList.add("show"); haptic(12);
+  track("paywall_viewed",{
+    source:source||"generic",
+    store_ready:!!storeReady,          // a real price arrived for at least one plan
+    store_answered:!!storeAnswered,    // native said SOMETHING, even "nothing for sale"
+    plans_shown:!!(plansEl && getComputedStyle(plansEl).display!=="none"),
+    buy_state: !storeReady ? (storeAnswered?"unavailable":"loading") : "buy",
+  });
   /* Safety net for the same split-deploy problem: an older wrapper only calls setPrices()
      when it actually resolved a price, so a StoreKit failure there would leave this button
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
@@ -2982,7 +3002,10 @@ sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintH
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
-let finished=false, revealX=0.5, lastRoundAuto=false;
+/* `lastRoundTaste` marks the ONE round per install that ran with everything unlocked. It is
+   read on the retake straight after, which is the only moment in the product where the user
+   has actually HELD the paid tools and is about to lose them. */
+let finished=false, revealX=0.5, lastRoundAuto=false, lastRoundTaste=false;
 const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
 /* Assigning canvas width/height ALWAYS reallocates the backing store — even when the
    value is unchanged. This runs on every rAF of the Done animation AND on every
@@ -3103,7 +3126,14 @@ function maybeOfferPlus(score){
        get taken off them 900ms ago, so "stop losing hides to the clock" is a description of
        what just happened rather than a claim. A round they finished by tapping Done gets
        the generic pitch: nothing in it refused them, so there is no specific lock to answer. */
-    const src=lastRoundAuto?"time":"round_end";
+    /* THE TASTE ROUND ENDING IS THE STRONGEST SELL IN THE PRODUCT, and until now it produced
+       nothing special. One hide per install runs with every tool unlocked; the round after
+       it is the only time anyone has used the fine brush, the full picker and the 75-second
+       clock and then had them taken away. Every other trigger asks them to imagine the
+       difference. This one is the only one where they remember it.
+       Fires once per install by construction — the grant itself is once per install. */
+    const src = lastRoundTaste ? "taste_ended" : (lastRoundAuto ? "time" : "round_end");
+    lastRoundTaste=false;
     /* let backToCompose() finish tearing the reveal down first */
     setTimeout(()=>{ if(!isPro) openPaywall(src); },900);
   }catch(_){}
