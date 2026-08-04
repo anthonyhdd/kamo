@@ -695,7 +695,14 @@
      which is why this badge previously used a pseudo-element sheen instead. Dropping the
      pill is the trade that buys the title's animation, and white on the dark card carries
      more contrast than the mint pill did anyway. */
-  .pwFree{flex:0 0 auto;font-size:12px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;
+  /* THE BADGE IS A WRAPPER, and it has to be. .pwFree below clips its gradient to the glyphs
+     (-webkit-background-clip:text), and that clips the ELEMENT'S WHOLE background — fill and
+     border included — so a pill and the shimmer are mutually exclusive on one element. This
+     is the second time that has come up; putting the pill on a parent is the way to have both.
+     The text inside is untouched: same size, weight, tracking, uppercase, same pwShimmer. */
+  .pwFreeBadge{flex:0 0 auto;display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;
+    border:1px solid rgba(95,230,164,.45);background:rgba(95,230,164,.13);line-height:1;}
+  .pwFree{font-size:12px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;
     background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
     background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;
@@ -977,7 +984,7 @@
            applyPlanAvailability() reveals it and falls back to whatever IS sellable, so
            this default can never strand the user on a plan the store won't sell. -->
       <button class="pwPlan active" data-plan="weekly" style="display:none">
-        <div class="pwPlanTxt"><span class="pwPlanTop"><span class="pwPlanName">Weekly</span><span class="pwFree" id="pwFree" style="display:none">3 days free</span></span></div>
+        <div class="pwPlanTxt"><span class="pwPlanTop"><span class="pwPlanName">Weekly</span><span class="pwFreeBadge" id="pwFreeBadge" style="display:none"><span class="pwFree" id="pwFree">3 days free</span></span></span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
       <button class="pwPlan" data-plan="lifetime">
@@ -2372,8 +2379,12 @@ function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
      row whose right-hand column already reads "2,99 EUR/week" and whose footer already
      rotates "Cancel anytime" — it was the third statement of a fact stated twice.
      Still driven by trialLabel, so a store-reported trial length (setPrices) rewrites it. */
-  const f=$("#pwFree");
-  if(f){ f.textContent=trialLabel+" free"; f.style.display=trialOn()?"":"none"; } }
+  /* Text on the inner span, visibility on the badge — hiding only the text would leave an
+     empty pill sitting next to "Weekly" whenever the trial is off. */
+  const f=$("#pwFree"), fb=$("#pwFreeBadge");
+  if(f) f.textContent=trialLabel+" free";
+  const holder=fb||f;
+  if(holder) holder.style.display=trialOn()?(fb?"inline-flex":""):"none"; }
 applyTrialCopy();
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
 /* The native wrapper buys whatever product id we post — it resolves `msg.product` against
