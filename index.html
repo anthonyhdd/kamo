@@ -2040,6 +2040,34 @@ function tlCapture(){
     if(tlFrames.length>TL_MAX){ tlFrames=tlFrames.filter((_,i)=>i%2===0); tlEvery*=2; }
   }catch(e){}   // a tainted or oversized canvas must never break painting
 }
+/* THE LAST FRAME IS NOT A TIMELAPSE FRAME — IT IS THE ANSWER.
+   renderTimelapse() takes three arguments and `hidden` is not one of them; the native
+   module reads the camouflaged image straight off the end of this array:
+       renderReveal(hiddenBase64: frames[frames.count - 1], ...)
+   and holds it for 2.2s as the "can you spot them?" beat. So whatever sits last here is
+   the picture the whole clip is asking a question about — and once `tlEvery` reaches 2,
+   tlCapture() keeps only every other stroke, so the FINAL one lands or is dropped on
+   parity alone. Measured on main by painting N strokes and diffing frames[last] against
+   the `hidden` the JS computes and this path never passes on: N=16/18/20 differ, N=17/19/21
+   are identical. Half of all hides ended the clip on a figure missing its last stroke.
+   (The TL_MAX filter is NOT part of this — it fires at exactly length 15 and keeps
+   0,2,…,14, so the newest frame always survives it. Verified, not assumed.)
+   tlCapture() also only fires from endPaint(), so any board change that is not a finished
+   stroke — undo, clear — never lands here at all.
+   So capture the finished board once more at Done, unconditionally. Dedupes on the frame
+   itself, because an identical trailing frame would just add 0.30s of stall to the paint
+   segment. */
+function tlCaptureFinal(){
+  if(!sceneCanvas||!board) return;
+  try{
+    const f=composeShare(TL_W,board).toDataURL("image/jpeg",0.55);
+    if(tlFrames.length && tlFrames[tlFrames.length-1]===f) return;
+    tlFrames.push(f);
+    /* Trim from the FRONT if this pushes past the cap: the opening frames are the most
+       redundant part of a timelapse, and the closing one is the one thing that cannot go. */
+    while(tlFrames.length>TL_MAX) tlFrames.shift();
+  }catch(e){}
+}
 function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
 board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
 
@@ -3433,6 +3461,7 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   drawWatermark(rctx,W,Math.max(H*0.5,H-hidden));
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(auto){ if(finished) return; finished=true;
+  tlCaptureFinal();   // the reveal's camouflaged beat is frames.last — see tlCaptureFinal()
   /* Remembered for the retake paywall: a round the CLOCK ended is the one case where we
      know which lock to lead with, because the app just took the hide away mid-paint. */
   lastRoundAuto=!!auto;
