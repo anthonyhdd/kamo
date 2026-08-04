@@ -751,11 +751,23 @@
   .ssMore{background:rgba(255,255,255,.06);}
   /* Same quiet dismiss as the paywall's "Maybe later". */
   .ssClose{display:block;width:100%;margin-top:2px;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;font-weight:700;cursor:pointer;padding:8px;}
-  /* Quiet on purpose — mint text on nothing, no slab, no border. It sits between the share
-     buttons and Cancel so it is read on the way past rather than stepped over. Loud here
-     would cost shares, and shares are the growth loop. */
-  .ssPlus{display:block;width:100%;margin-top:2px;background:none;border:none;color:var(--mint);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px 10px;-webkit-tap-highlight-color:transparent;}
-  .ssPlus:active{opacity:.6;}
+  /* QUIET WAS TOO QUIET. This was mint text on nothing — no slab, no border — sitting last
+     before Cancel, on the reasoning that anything louder would cost shares. The reasoning
+     was sound and the result was that nobody saw it: 2 taps against 772 paywall views in a
+     day, from 82 people who opened this sheet. The strongest argument in the product had
+     effectively no exposure, so it has never actually been tested.
+     Now a real row — tinted and bordered like ssInvite, so it reads as an option rather than
+     a footnote — but deliberately NOT a slab in a brand colour like Instagram or Snapchat.
+     It has weight without competing with the destinations, which are still the growth loop.
+     ⚠️ The thing being sold is INVISIBLE until after you share. drawWatermark() runs only in
+     composeShare()/composeBeforeAfter(), never in drawReveal(), so nobody has ever seen the
+     mark on their own hide at the moment they are asked to pay to remove it. That is the
+     deeper problem here; this change tests the pitch, not that. */
+  .ssPlus{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:46px;margin-bottom:9px;
+    border-radius:16px;border:1px solid rgba(95,230,164,.42);background:rgba(95,230,164,.11);
+    color:var(--mint);font-size:14.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;
+    transition:transform .12s cubic-bezier(.3,1.5,.5,1),background .18s;}
+  .ssPlus:active{transform:scale(.96);background:rgba(95,230,164,.18);}
 </style>
 </head>
 <body><div id="app">
@@ -1002,17 +1014,20 @@
     </div>
     <!-- More and Save share this line — see .ssRow2. On native, JS moves #btnSave in here;
          on the web it stays on the action row and More spans the width alone. -->
+    <!-- THE PITCH, AT THE MOMENT IT LANDS — and now where it can actually be seen. It used
+         to sit last, under More/Save and above Cancel, which is the position you scroll past
+         on the way to dismissing. Here it is directly under the destinations, in the path of
+         someone deciding where to post: still after the share buttons (they lead), but read
+         before the secondary actions rather than after them.
+         The user has a finished hide and is about to post it, which remains the only moment
+         the watermark is a real problem. Copy unchanged on purpose — this change is a test
+         of VISIBILITY, and changing the words at the same time would confound it. -->
+    <button class="ssPlus" id="ssPlus" style="display:none">✦ Export without the KAMO mark</button>
     <div class="ssRow2" id="ssRow2">
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
     </div>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
-    <!-- THE PITCH, AT THE MOMENT IT LANDS. The paywall used to fire mid-round, on tapping a
-         locked brush — precisely when the free brush sitting next to it makes the case for
-         you. Here the user has a finished hide and is about to post it, which is the only
-         moment the watermark is a real problem. Deliberately a quiet line and not another
-         slab: it must not compete with the share buttons, which are the growth loop. -->
-    <button class="ssPlus" id="ssPlus" style="display:none">✦ Export without the KAMO mark</button>
     <button class="ssClose" id="ssClose">Not now</button>
   </div>
 </div>
@@ -2485,7 +2500,10 @@ function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10);
   /* Re-evaluated every open, not once at load: setPro() can flip mid-session (purchase,
      restore, or a revoked entitlement) and a stale pitch shown to someone who just paid is
      the fastest way to look broken. */
-  { const p=$("#ssPlus"); if(p) p.style.display = isPro ? "none" : "block"; }
+  /* "" not "block" — .ssPlus is display:flex now (it centres an icon beside its label), and
+     forcing block would kill that centring the first time the sheet opens. Empty string
+     hands the element back to the stylesheet. */
+  { const p=$("#ssPlus"); if(p) p.style.display = isPro ? "none" : ""; }
   /* Same number the reveal screen is already showing behind this sheet, so the two agree.
      Hidden rather than filled with a placeholder if there is no round time — an empty
      kicker collapses to nothing and the headline simply moves up. */
