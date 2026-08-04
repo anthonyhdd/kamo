@@ -759,10 +759,11 @@
      Now a real row — tinted and bordered like ssInvite, so it reads as an option rather than
      a footnote — but deliberately NOT a slab in a brand colour like Instagram or Snapchat.
      It has weight without competing with the destinations, which are still the growth loop.
-     ⚠️ The thing being sold is INVISIBLE until after you share. drawWatermark() runs only in
-     composeShare()/composeBeforeAfter(), never in drawReveal(), so nobody has ever seen the
-     mark on their own hide at the moment they are asked to pay to remove it. That is the
-     deeper problem here; this change tests the pitch, not that. */
+     The thing being sold used to be INVISIBLE until after the share — drawWatermark() ran in
+     composeShare()/composeBeforeAfter() only, never in drawReveal(). FIXED: drawReveal() now
+     draws it too, so by the time this row appears the user has been looking at the mark on
+     their own hide. The row and the mark ship together on purpose; neither is worth much
+     alone, and `paywall_viewed.source="mark"` measures the pair. */
   .ssPlus{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:46px;margin-bottom:9px;
     border-radius:16px;border:1px solid rgba(95,230,164,.42);background:rgba(95,230,164,.11);
     color:var(--mint);font-size:14.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;
@@ -1022,7 +1023,9 @@
          The user has a finished hide and is about to post it, which remains the only moment
          the watermark is a real problem. Copy unchanged on purpose — this change is a test
          of VISIBILITY, and changing the words at the same time would confound it. -->
-    <button class="ssPlus" id="ssPlus" style="display:none">✦ Export without the KAMO mark</button>
+    <!-- "Remove", not "Export without": the mark is on screen behind this sheet now, so the
+         row can point at a thing the user is looking at instead of describing a file format. -->
+    <button class="ssPlus" id="ssPlus" style="display:none">✦ Remove the KAMO mark</button>
     <div class="ssRow2" id="ssRow2">
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
     </div>
@@ -2373,7 +2376,11 @@ function drawWatermark(c,W,H){
      The trade is understood: paying users stop carrying the wordmark into Instagram, so
      the viral loop keeps running on the free tier — which is the overwhelming majority.
      Gating the reveal VIDEO instead would have cost every free user the format that
-     actually travels, which is the opposite of what this app needs. */
+     actually travels, which is the opposite of what this app needs.
+     Called from drawReveal() as well as the two composers, so the Done screen previews the
+     exact file that leaves the phone. Keep this cheap — the reveal path runs it on every rAF
+     of the Done animation and every pointermove of the slider drag. One gradient fill and one
+     fillText, no allocations, no measureText. */
   if(isPro) return;
   const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
   // bottom scrim
@@ -3007,6 +3014,9 @@ sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener
    has actually HELD the paid tools and is about to lose them. */
 let finished=false, revealX=0.5, lastRoundAuto=false, lastRoundTaste=false;
 const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
+// Cached beside the others: drawReveal() needs its rect every frame of the Done animation
+// and every pointermove, and re-resolving the selector 60x/second buys nothing.
+const actionRow=$("#actionRow");
 /* Assigning canvas width/height ALWAYS reallocates the backing store — even when the
    value is unchanged. This runs on every rAF of the Done animation AND on every
    pointermove of the reveal drag, so at 1290x2796 it was discarding and re-allocating
@@ -3036,6 +3046,30 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   rctx.clearRect(0,0,W,H); rctx.drawImage(board,0,0,W,H);
   rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
   rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*paintDpr,0,4*paintDpr,H);
+  /* THE MARK IS NOW VISIBLE BEFORE THE SHARE, NOT ONLY AFTER IT.
+     drawWatermark() ran in composeShare()/composeBeforeAfter() only — i.e. inside the export.
+     So the wordmark existed on every free user's file and NONE of them had ever seen it on
+     their own hide. We were charging to remove something nobody knew was there, and the
+     numbers say exactly that: the watermark pitch took 2 taps against 772 paywall views.
+     That is not a rejected offer, it is an unread one.
+     Drawn last so it sits above both boards and the divider, which is the layer order the
+     export uses. Same function, same isPro gate, same geometry — the preview now shows the
+     file that will actually leave the phone instead of a cleaner one. Paying users keep the
+     clean preview, which is the perk demonstrating itself.
+     COST, accepted knowingly: the scrim covers a band of the preview, and this is the screen
+     people share from. Watch share_opened/active — it has sat at 47-48% — and revert this
+     block alone if it drops.
+     The mark is drawn against a SHORTENED height, not the canvas bottom. At the true bottom
+     it lands underneath #actionRow ("Share now" + Save), which is opaque and covers it — the
+     first version of this shipped invisible for exactly that reason. Positional fidelity to
+     the export was never on the table anyway: composeShare() letterboxes this board into a
+     9:16 frame, so the export's bottom edge is not the board's. What has to be faithful is
+     the mark existing, its size and its wordmark — and those are the same function. */
+  const br=actionRow?actionRow.getBoundingClientRect():null;
+  // How much of the canvas the button row hides, in canvas pixels, floored at 0 for the
+  // case where the row sits fully below the board.
+  const hidden=br?Math.max(0,(r.bottom-br.top)*paintDpr+8*paintDpr):0;
+  drawWatermark(rctx,W,Math.max(H*0.5,H-hidden));
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(auto){ if(finished) return; finished=true;
   /* Remembered for the retake paywall: a round the CLOCK ended is the one case where we
