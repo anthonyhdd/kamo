@@ -646,6 +646,14 @@
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
+  /* The value stack. It sits BELOW .pwSub and does not replace it: .pwSub is rewritten per
+     trigger by PW_PITCH (the fine brush, the colours, the clock, the mark), so it answers
+     "why now" for the lock the user just hit. These rows answer "what do I get", which is
+     the same on every open. One line of commas was doing both jobs and getting skimmed as a
+     single grey blob; four rows are read as four separate reasons. */
+  .pwWhy{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:9px;}
+  .pwWhy li{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:rgba(255,255,255,.92);}
+  .pwWhy svg{flex:0 0 auto;width:15px;height:15px;stroke:var(--mint);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
   .pwBuy.pwBuyOff{background:rgba(255,255,255,.28);color:rgba(10,11,14,.55);box-shadow:none;animation:none;cursor:default;}
   .pwBuy{position:relative;overflow:hidden;width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;animation:pwBuyGlow 3s ease-in-out infinite;}
   /* soft mint halo breathing + a slow glossy sweep — subtle, on-brand */
@@ -973,7 +981,16 @@
          brush fine enough to work an edge.
          ⚠️ Numbers appear here AND in PAINT_SECONDS/PRO_PAINT_SECONDS. Change them together.
          Keep in sync with the share-sheet line (#ssPlus). -->
-    <div class="pwSub" id="pwSub">No mark, every color, the fine brush, 75s rounds.</div>
+    <!-- Generic copy is no longer the feature list: the rows below are, and printing both
+         would say the same four things twice. The per-lock pitches in PW_PITCH still
+         overwrite this line, which is the point of it. -->
+    <div class="pwSub" id="pwSub">Everything unlocked, on every hide.</div>
+    <ul class="pwWhy">
+      <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>No KAMO mark on anything you export</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>Every colour, not just the three</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>The fine brush for edges and detail</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>75 seconds to paint instead of 22</span></li>
+    </ul>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -984,7 +1001,11 @@
            applyPlanAvailability() reveals it and falls back to whatever IS sellable, so
            this default can never strand the user on a plan the store won't sell. -->
       <button class="pwPlan active" data-plan="weekly" style="display:none">
-        <div class="pwPlanTxt"><span class="pwPlanTop"><span class="pwPlanName">Weekly</span><span class="pwFreeBadge" id="pwFreeBadge" style="display:none"><span class="pwFree" id="pwFree">3 days free</span></span></span></div>
+        <div class="pwPlanTxt"><span class="pwPlanTop"><span class="pwPlanName">Weekly</span><span class="pwFreeBadge" id="pwFreeBadge" style="display:none"><span class="pwFree" id="pwFree">3 days free</span></span></span>
+          <!-- Derived from the REAL localized price in setPrices(), never hardcoded — a wrong
+               per-day figure next to a right per-week one is a pricing misstatement. Hidden
+               until that price arrives. -->
+          <span class="pwPlanMeta" id="pwPerDay" style="display:none"></span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
       <button class="pwPlan" data-plan="lifetime">
@@ -2589,7 +2610,42 @@ window.KAMO.buyDone=()=>{ setPwBuyLoading(false); };
    wins. Either way applyTrialCopy() runs LAST: it owns the "3 days free" badge, and letting
    the old `p.trial` branch write that node directly would have shown the trial to the
    control arm too. */
-window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
+/* "less than X a day", DERIVED from the localized weekly price the store actually returned.
+   Never hardcoded and never computed from a guess: a per-day figure that disagrees with the
+   per-week one next to it is a pricing misstatement, not a rounding slip.
+   The weekly price stays exactly where it is — Apple requires the real price and billing
+   period on the sheet, and this is an extra framing beside it, not a replacement for it.
+   Locale-proof by construction: the numeric run is lifted out of the string, divided, then
+   put BACK into the same string, so the currency symbol, its position and the spacing all
+   survive untouched ("2,99 €" -> "0,43 €", "$2.99" -> "$0.43", "¥299" -> "¥43").
+   Decimal places are copied from the input, so zero-decimal currencies stay whole.
+   ROUNDED UP, always: the claim is "less than", so understating it would make the sentence
+   false. 2.99/7 = 0.427 -> 0.43, and 0.427 really is less than 0.43. */
+function perDayFrom(str){
+  if(!str) return "";
+  const src=String(str);
+  const m=src.match(/\d[\d.,\u00a0\s]*\d|\d/);
+  if(!m) return "";
+  const raw=m[0], digits=raw.replace(/[\u00a0\s]/g,"");
+  const cand=Math.max(digits.lastIndexOf("."),digits.lastIndexOf(","));
+  // A separator is DECIMAL only if 1-2 digits follow it; otherwise it groups thousands.
+  const dec=(cand>-1 && /^\d{1,2}$/.test(digits.slice(cand+1))) ? digits[cand] : null;
+  const places=dec ? digits.length-1-cand : 0;
+  const n=parseFloat(dec ? digits.slice(0,cand).replace(/[^\d]/g,"")+"."+digits.slice(cand+1)
+                         : digits.replace(/[^\d]/g,""));
+  if(!isFinite(n)||n<=0) return "";
+  const f=Math.pow(10,places);
+  let out=(Math.ceil((n/7)*f)/f).toFixed(places);
+  if(dec&&dec!==".") out=out.replace(".",dec);
+  return src.replace(raw,out);
+}
+function applyPerDay(weeklyPrice){
+  const el=$("#pwPerDay"); if(!el) return;
+  const per=perDayFrom(weeklyPrice);
+  el.textContent = per ? ("less than "+per+" a day") : "";
+  el.style.display = per ? "block" : "none";
+}
+window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; applyPerDay(p.weekly); } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
 /* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
    sets prices.weekly / prices.lifetime when RevenueCat resolved that product).
    A plan we can't sell must never be shown: tapping it opens a purchase that
