@@ -636,14 +636,6 @@
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
-  /* The value stack. It sits BELOW .pwSub and does not replace it: .pwSub is rewritten per
-     trigger by PW_PITCH (the fine brush, the colours, the clock, the mark), so it answers
-     "why now" for the lock the user just hit. These rows answer "what do I get", which is
-     the same on every open. One line of commas was doing both jobs and getting skimmed as a
-     single grey blob; four rows are read as four separate reasons. */
-  .pwWhy{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:9px;}
-  .pwWhy li{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:rgba(255,255,255,.92);}
-  .pwWhy svg{flex:0 0 auto;width:15px;height:15px;stroke:var(--mint);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
   .pwBuy.pwBuyOff{background:rgba(255,255,255,.28);color:rgba(10,11,14,.55);box-shadow:none;animation:none;cursor:default;}
   .pwBuy{position:relative;overflow:hidden;width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;animation:pwBuyGlow 3s ease-in-out infinite;}
   /* soft mint halo breathing + a slow glossy sweep — subtle, on-brand */
@@ -962,12 +954,7 @@
     <!-- Generic copy is no longer the feature list: the rows below are, and printing both
          would say the same four things twice. The per-lock pitches in PW_PITCH still
          overwrite this line, which is the point of it. -->
-    <div class="pwSub" id="pwSub">Everything unlocked, on every hide.</div>
-    <ul class="pwWhy">
-      <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>Every colour, not just the three</span></li>
-      <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>The fine brush for edges and detail</span></li>
-      <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>75 seconds to paint instead of 22</span></li>
-    </ul>
+    <div class="pwSub" id="pwSub">Every colour, the fine brush, 75s rounds.</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
