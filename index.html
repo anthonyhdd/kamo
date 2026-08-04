@@ -2392,10 +2392,20 @@ function openKamoHome(){
   /* The headline is the achievement, not the screen's name. "Ready when you are" was a
      label on an empty state; a member with 12 hides should be met with the 12. */
   if(t) t.textContent = n ? (n===1 ? "First one down" : n+" people hidden") : "Nothing hidden yet";
-  if(sub) sub.textContent = n
-    ? (s.bestSec ? ("Your best vanish took "+s.bestSec+"s. Think anyone can beat it?")
-                 : "Every tool is yours. Now go beat your own time.")
-    : "Every tool is yours. Go make someone disappear.";
+  /* TWO LINES, by explicit break rather than by luck of the wrap. The stat and the dare
+     are different sentences doing different jobs, and letting them reflow into one
+     another at whatever width the phone happens to be buries the dare — which is the
+     only half of it that asks for anything. Built from text nodes, not innerHTML: the
+     numbers are our own but this string is rebuilt on every open and one <br> is not
+     worth an HTML sink. */
+  if(sub){
+    sub.textContent="";
+    const lines = n
+      ? (s.bestSec ? ["Your best vanish took "+s.bestSec+"s.","Think anyone can beat it?"]
+                   : ["Every tool is yours.","Now go beat your own time."])
+      : ["Every tool is yours.","Go make someone disappear."];
+    lines.forEach((line,i)=>{ if(i) sub.appendChild(document.createElement("br")); sub.appendChild(document.createTextNode(line)); });
+  }
   el.classList.add("show"); haptic(12);
   countUp($("#khHides"),n);
   countUp($("#khBest"),s.bestSec||null,"s");
@@ -2413,11 +2423,29 @@ function shareStats(){
   if(s.bestCov) bits.push(s.bestCov+"% covered");
   const text="KAMO+ · "+bits.join(" · ")+"\n\nI hide people in plain sight. Beat me → "+shareUrl();
   track("stats_shared",{hides:n});
-  if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:Math.round(s.bestCov||0)}); return; }
-  if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(()=>{}); return; }
-  try{ navigator.clipboard.writeText(text); showHint("Stats copied — paste them anywhere"); }catch(e){ showHint("Couldn't copy that"); }
+  /* NO BLIND RETURN INTO THE BRIDGE. This posted `invite` and returned, so if the native
+     side ignored the message the button was simply dead — no sheet, no error, no hint.
+     That is what it does today: `invite` IS handled in build 29, yet neither invite_opened
+     nor invite_cancelled (both INSIDE that handler) has fired since Jul 28, so on the
+     binaries people are actually running the message goes nowhere. The web ships in
+     minutes and the wrapper ships in App Review weeks; anything the web hands to native
+     and cannot see the result of needs a floor under it.
+     Copying is that floor, and the hint stays TRUE either way: we really did copy. If the
+     native sheet does open it covers the hint and nothing is lost — the cost of the
+     belt is one clipboard write, the cost of no belt is a button that does nothing. */
+  /* The write is SYNCHRONOUS, inside the tap. WKWebView only honours a clipboard write
+     while the user gesture is still live, so deferring it by even a few hundred ms is
+     how you get a fallback that silently fails too. Only the HINT is delayed, so that a
+     working native sheet gets to be the thing the user sees first. */
+  let copied=false; try{ navigator.clipboard.writeText(text); copied=true; }catch(e){}
+  const sayCopied=()=>{ if(copied) showHint("Stats copied — paste them anywhere",3000); };
+  if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:Math.round(s.bestCov||0)}); setTimeout(sayCopied,700); return; }
+  if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(sayCopied); return; }
+  sayCopied();
 }
 { const g=$("#khShare"), c=$("#khClose");
+  /* closeKamoHome() AFTER shareStats(), and shareStats() does its clipboard write
+     synchronously — so the modal teardown can never land between the tap and the write. */
   if(g) g.onclick=()=>{ haptic(12); shareStats(); closeKamoHome(); };
   if(c) c.onclick=()=>{ closeKamoHome(); haptic(8); };
   /* Tapping the backdrop closes too — the card is the sheet, everything outside it is not. */
