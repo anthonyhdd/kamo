@@ -466,15 +466,18 @@
      the press state above .mid and the wordmark stops reacting to taps on the paint screen,
      which is precisely where a member is most likely to reach for it. */
   .brand:active{transform:translateX(-50%) scale(.94);}
-  /* The + a member has actually paid for. WHITE, not mint: the + belongs to the wordmark,
-     and colouring it made it read as a separate badge stuck onto the logo rather than part
-     of it. Kept slightly smaller and raised so it is still a suffix, not a fourth letter.
-     The glow stays mint — that is what marks it as the paid mark without breaking the
-     wordmark into two colours.
-     Hidden by default. Revealed at load from the stored entitlement, and again by
-     refreshProUI() on purchase and on restore. */
-  .brandPlus{display:none;color:#fff;font-size:.72em;font-weight:700;vertical-align:super;
+  /* ONE RULE FOR EVERY KAMO+ MARK IN THE APP: the word is white, only the + is green.
+     Not the whole mark mint (that made KAMO+ read as a badge rather than the logo), and not
+     the whole mark white (that lost the one bit of colour identifying what was paid for).
+     The + is the thing you bought, so the + is the thing that is coloured — here, on .pwKick
+     and on .kpBadge. Change one and change all three.
+     Kept slightly smaller and raised so it is still a suffix, not a fourth letter. Hidden by
+     default; revealed at load from the stored entitlement and again by refreshProUI() on
+     purchase and on restore. */
+  .brandPlus{display:none;color:var(--mint);font-size:.72em;font-weight:700;vertical-align:super;
     margin-left:1px;text-shadow:0 0 12px rgba(95,230,164,.55);}
+  /* The + inside the two card marks. Same rule, so it gets the mint the word gives up. */
+  .kPlus{color:var(--mint);}
   /* Retake as a top-left nav button, aligned with Done */
   #btnBack{position:absolute;top:calc(var(--safe-t) + 10px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   #btnBack svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
@@ -574,7 +577,7 @@
      mark added to text set in --display will silently fall back and break the line.
      Dropped rather than swapped for a glyph that does exist — the paywall's own kicker is
      plain "KAMO+" and reads correctly, and these two are meant to be the same voice. */
-  .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:var(--mint);
+  .kpBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid rgba(95,230,164,.5);background:rgba(95,230,164,.12);color:#fff;
     font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;
     animation:pwGlow 2.8s ease-in-out infinite;}
   .kpTitle{font-family:var(--display);font-size:28px;font-weight:700;letter-spacing:-.3px;line-height:1.14;margin-bottom:10px;
@@ -619,7 +622,7 @@
     background:radial-gradient(72% 130px at 50% -6%, rgba(95,230,164,.22), transparent 70%);animation:pwGlow 3.8s ease-in-out infinite;}
   @keyframes pwGlow{0%,100%{opacity:.6}50%{opacity:1}}
   .pwCard>*{position:relative;z-index:1;}  /* content above the glow */
-  .pwKick{position:relative;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--mint);text-transform:uppercase;text-shadow:0 0 14px rgba(95,230,164,.5);}
+  .pwKick{position:relative;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(95,230,164,.5);}
   /* A gradient clipped to the glyphs with the fill made transparent, on the shared 3.4s
      pwShimmer clock. The stops are WHITE — the title has to read as a solid white headline
      with a band moving through it, not as dimmed secondary text.
@@ -919,7 +922,7 @@
 <!-- PAYWALL -->
 <div id="paywall">
   <div class="pwCard">
-    <div class="pwKick">KAMO+</div>
+    <div class="pwKick">KAMO<span class="kPlus">+</span></div>
     <!-- Sell the OUTCOME, not the toolbox. The old copy ("Unlock every camo brush / Every
          Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider") was a
          feature list, and every item on it had a free substitute: any brush hid the figure,
@@ -970,7 +973,7 @@
 <div id="kamoPlus">
   <div class="kpCard pwCard">
     <div id="kpBurst"></div>
-    <div class="kpBadge">KAMO+</div>
+    <div class="kpBadge">KAMO<span class="kPlus">+</span></div>
     <div class="kpTitle">You're KAMO+ ✨</div>
     <div class="kpSub" id="kpSub"></div>
     <!-- Chips describe what KAMO+ actually is now. "All Pro brushes" outlived the brushes. -->
@@ -993,7 +996,7 @@
      because after the purchase the interesting thing is no longer the offer. -->
 <div id="kamoHome" data-blocks-timer>
   <div class="kpCard pwCard">
-    <div class="kpBadge">KAMO+</div>
+    <div class="kpBadge">KAMO<span class="kPlus">+</span></div>
     <div class="kpTitle" id="khTitle">Your hides</div>
     <div class="kpSub" id="khSub"></div>
     <div class="kpStats">
