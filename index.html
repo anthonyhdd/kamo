@@ -2507,7 +2507,10 @@ async function nativeShare(target){ closeShareSheet();
        ignores the key and renders exactly the video it renders today. Two frames minimum
        before it is worth sending — one stroke is not a timelapse, it is a still. */
     const frames = tlFrames.length>=2 ? tlFrames : null;
-    postNative({type:"reveal-video",target,hidden,revealed,message,frames,score:Math.round(currentScore||0)}); return;
+    /* `seconds` is the round time, burned into the reveal as "VANISHED IN 14S". Sent
+       separately from `score` because score is COVERAGE — the two have always been different
+       numbers and the caption wants the one the player was racing. */
+    postNative({type:"reveal-video",target,hidden,revealed,message,frames,seconds:roundSeconds(),score:Math.round(currentScore||0)}); return;
   }
   const b=await shareBlob(); const d=await blobToDataURL(b);
   postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message,score:Math.round(currentScore||0)}); }
