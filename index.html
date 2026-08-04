@@ -252,18 +252,8 @@
      a glance or the mechanic teaches nothing: OFFER (mint outline, the thing to tap), ARMED
      (filled — this round is the good one), SPENT (grey, and still tappable so the only way
      to get another is one tap away rather than a dead end). */
-  .passChip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(206px + var(--safe-b));z-index:15;
-    display:none;align-items:center;gap:7px;height:38px;padding:0 15px;border-radius:999px;
-    border:1px solid rgba(95,230,164,.5);background:rgba(10,14,12,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-    color:var(--mint);font-size:13px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap;
-    box-shadow:0 6px 22px rgba(0,0,0,.45);transition:transform .12s cubic-bezier(.3,1.5,.5,1),background .2s,border-color .2s,color .2s;}
-  .passChip:active{transform:translateX(-50%) scale(.95);}
-  .passChip .pcStar{font-size:13px;line-height:1;}
-  /* Armed: the one state that has to survive a glance mid-capture, so it goes solid. */
-  .passChip.armed{background:var(--mint);border-color:var(--mint);color:#08120d;
-    box-shadow:0 6px 24px rgba(95,230,164,.42);animation:passPulse 2.4s ease-in-out infinite;}
-  @keyframes passPulse{0%,100%{box-shadow:0 6px 24px rgba(95,230,164,.42);}50%{box-shadow:0 6px 24px rgba(95,230,164,.42),0 0 20px rgba(95,230,164,.5);}}
-  .passChip.spent{border-color:rgba(255,255,255,.22);color:rgba(255,255,255,.62);background:rgba(10,12,16,.5);}
+  /* .passChip removed with the free KAMO+ round. Paid tools now require a real
+     entitlement — a subscription or Apple's own trial — and nothing in the app grants them. */
   #poseBar{position:absolute;left:0;right:0;bottom:calc(150px + var(--safe-b));z-index:14;display:none;justify-content:center;gap:7px;padding:0 14px;}
   #poseBar .poseBtn{flex:0 0 auto;width:48px;height:48px;border-radius:13px;border:1px solid rgba(255,255,255,.16);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s cubic-bezier(.3,1.4,.5,1),border-color .2s,background .2s;}
   #poseBar .poseBtn svg{width:22px;height:34px;opacity:.72;}
@@ -873,18 +863,6 @@
     <div id="wheel"><div id="wheelCenter"></div></div>
     <div id="loupe"></div>
 
-    <!-- THE DAILY PASS. Sits above the pose row, on the camera screen, because the round it
-         changes has to be armed BEFORE the shutter — paintSeconds() is read as the clock
-         starts, so there is no arming it mid-round.
-         It replaces a silent auto-grant on hide #2. That grant handed a brand-new user the
-         entire paid product announced by a 3.4s toast, while their eyes were on the canvas
-         and their finger was moving; and a first-time user has no baseline anyway — they do
-         not know 22s is the normal clock, so 75s reads as "the clock". The gift was
-         invisible, which made the pitch on the next round ("that one had every tool") an
-         appeal to a memory they never formed.
-         Owning and SPENDING a pass fixes all three at once, with no copy: they know they
-         have it, they know when they used it, they know when it is gone. -->
-    <button id="passChip" class="passChip"><span class="pcStar">✦</span><span id="passTxt"></span></button>
     <div id="poseBar"></div>
     <div id="shutterWrap">
       <button id="shutter" class="shutter" aria-label="Capture"><div class="spin"></div><div class="ring"></div><div class="core"></div></button>
@@ -1507,7 +1485,7 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>U
 
 function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  shutterWrap.style.display="block"; renderPassChip(); $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
+  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
@@ -1528,7 +1506,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
-  glCanvas.style.display="block"; shutterWrap.style.display="block"; renderPassChip(); $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
+  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   resumeCamera();   // paused for the whole hide by capture()
@@ -1675,19 +1653,19 @@ function capture(){
      never fully tap. Nothing scrolls into view any more, which is the point: everything in
      this row is reachable without discovering that it scrolls. */
   try{ buildSwatches(extractPalette(sceneCanvas,3)); }catch(e){}
-  try{ maybeSpendPass(); }catch(e){}   // spends the daily pass if they armed it
+  try{ bumpHides(); }catch(e){}   // hide counter only — feeds the teaching hints + aim clock
   suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
   compositeBoard();
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; renderPassChip(false); $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
-  /* Reset to the roller every free round. Not just at launch: the taste grant hands over the
-     full slider for one hide, and without this the size you dragged to during that hide
-     would still be there afterwards — the free round would permanently unlock the fine
-     brush, which is the substitute problem all over again. Pro keeps its last size. */
+  /* Reset to the roller on every capture for a non-member. Nothing hands the slider over any
+     more now that the free round is gone, but this stays as belt and braces: a small brush
+     size surviving into a later round would be the fine brush unlocked by accident, which is
+     the substitute problem all over again. Pro keeps its last size. */
   if(!canPro()) brush=FREE_BRUSH;
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; KAMO+ only — tapping it opens the paywall, and the free preset dots that used to sit under it are gone
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
@@ -2119,7 +2097,7 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
   if(tools) tools.insertBefore(mo, tools.firstChild); else w.appendChild(mo);
 }
 /* buildSwatches() is NOT called here any more. It reads canPro() for the all-colours lock,
-   and canPro/proTaste are declared below — calling it here hit the temporal dead zone and
+   and canPro() is declared below — calling it here hit the temporal dead zone and
    threw before the module finished loading, which kills everything. The initial build sits
    past those declarations. */
 
@@ -2141,70 +2119,18 @@ const FORCE_FREE_KEY="kamo_force_free";
 let forceFree=false; try{ forceFree=localStorage.getItem(FORCE_FREE_KEY)==="1"; }catch(e){}
 let brandLongPressed=false;   // swallows the click that follows a long-press
 let isPro=false; try{ isPro=!forceFree && localStorage.getItem("kamo_pro")==="1"; }catch(e){}
-/* ONE FREE ROUND WITH THE KAMO+ TOOLS.
-   The second hide runs with everything unlocked, once per install, so the difference is
-   felt rather than described. What it now demonstrates is all-colours, the continuous size
-   slider and the doubled clock — the brushes it was originally written for are gone, and
-   the free substitutes that made every one of those locks pointless are gone with them.
-   `proTaste` is round-scoped and never persisted: the GRANT is remembered so it can't
-   repeat, the unlock itself dies with the round. */
-let proTaste=false;
-const canPro=()=>isPro||proTaste;
-/* tasteGranted() went with the silent grant. The old "kamo_taste" key survives in
-   localStorage on existing installs and is no longer read by anything. */
-function bumpHides(){ try{ const n=(+localStorage.getItem("kamo_hides")||0)+1; localStorage.setItem("kamo_hides",String(n)); return n; }catch(e){ return 0; } }
-/* ONE FREE KAMO+ HIDE PER DAY, SPENT ON PURPOSE.
-   Users run ~8 hides a day (8.5 on Aug 2, 7.9 on Aug 3), so one great round is not
-   generosity — it is what makes the other seven feel like a wall. Before this they were
-   silently given a fully-unlocked round on hide #2 and, having no baseline after a single
-   previous hide, almost certainly never noticed: 75s just reads as "the clock" when you
-   never knew 22s was normal.
-   Refill is DAILY, chosen deliberately over once-per-install. It gives a reason to come
-   back tomorrow, and at 8 hides a day it cannot satisfy demand on its own.
-   THE LINE THAT MUST NOT MOVE: the watermark stays gated on isPro, not canPro() — see
-   drawWatermark(). A pass round still exports branded. The clean file is the one thing that
-   is never free, which is what keeps a daily giveaway from becoming the product. */
-function passDay(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-/* Local calendar day, deliberately not UTC: "today" has to mean the user's today, and a
-   refill that lands mid-evening for half the world reads as a bug. Clock-rolling can farm
-   an extra pass; that costs one watermarked round and is not worth server state. */
-function passAvailable(){ if(isPro) return false; try{ return localStorage.getItem("kamo_pass")!==passDay(); }catch(e){ return false; } }
-let passArmed=false;
-const passChip=$("#passChip"), passTxt=$("#passTxt");
-function renderPassChip(show){
-  if(!passChip) return;
-  if(isPro || show===false){ passChip.style.display="none"; return; }
-  passChip.style.display="flex";
-  passChip.classList.toggle("armed",passArmed);
-  passChip.classList.toggle("spent",!passArmed && !passAvailable());
-  passTxt.textContent = passArmed ? "KAMO+ on for this hide"
-                      : passAvailable() ? "Use your free KAMO+ hide"
-                      : "Free hide used — new one tomorrow";
-}
-if(passChip) passChip.onclick=()=>{
-  if(passArmed){ passArmed=false; haptic(8); renderPassChip(); return; }   // let them take it back
-  /* No toast here. The chip itself flips to solid mint reading "KAMO+ on for this hide" —
-     that IS the confirmation, and it stays on screen until the shutter instead of for
-     2.4 seconds. A pill would also ellipsize at .hint's 60vw/nowrap, which is the exact
-     failure this whole change exists to stop repeating. */
-  if(passAvailable()){ passArmed=true; haptic(14); renderPassChip(); return; }
-  // Spent. A dead chip would be the same dead end the lock hints used to be, so it sells.
-  haptic(10); openPaywall("pass");
-};
-function maybeSpendPass(){
-  const was=proTaste;
-  proTaste=false;
-  bumpHides();
-  if(!isPro && passArmed && passAvailable()){
-    proTaste=true; lastRoundTaste=true; passArmed=false;
-    try{ localStorage.setItem("kamo_pass",passDay()); }catch(e){}
-    showHint("Your free KAMO+ hide ✦",2600);   // short enough to survive .hint's 60vw nowrap
-  }
-  passArmed=false;
-  /* Refresh on the way OUT too, not just in: without this the row kept showing the
-     KAMO+ tools unlocked for the rest of the session after the free round ended. */
-  if(was!==proTaste) refreshProUI();
-}
+/* NO FREE ROUND. Paid tools require a real entitlement — a subscription or Apple's own
+   3-day trial — and nothing in the app hands them out.
+   What used to be here: first a silent fully-unlocked hide #2, then a daily pass the user
+   armed by tapping a chip. Both are gone by decision, not by accident. The case for them was
+   that someone who has never held the paid tools cannot miss them; the case against is that a
+   toy people open ~8 times a day should not give its product away on day one. The second won.
+   Consequences, so nobody re-derives them: canPro() is now exactly isPro, `proTaste` is gone,
+   the `taste_ended` and `pass` paywall pitches are unreachable and deleted, and the
+   `kamo_pass` / `kamo_taste` keys are dead on existing installs — harmless, left rather than
+   migrated. bumpHides() still runs on every capture: the hide counter feeds the first-run
+   teaching hints and the aim clock, and was never part of this. */
+const canPro=()=>isPro;
 /* buildSwatches() BELONGS HERE. The all-colours button decides at BUILD time whether it
    gets an <input type="color"> or a padlock (`if(canPro())`), so without a rebuild the
    thing you just paid for stayed locked: tapping it re-opened the paywall you had just
@@ -2216,12 +2142,11 @@ function maybeSpendPass(){
 function refreshProUI(){ buildSwatches(); if(typeof renderSizeBar==="function") renderSizeBar();
   // nothing left to sell once they're KAMO+ → drop the top-left entry point
   const p=$("#btnPlus"); if(p && isPro) p.style.display="none";
-  /* The wordmark becomes KAMO+ for a member. Gated on isPro, NOT canPro(): the free taste
-     round hands over the tools for one hide, and stamping the logo for it would tell someone
-     they own a subscription they have not bought — and then take it back when the round
-     ends. The + is a statement of membership, so only a real one earns it. */
+  /* The wordmark becomes KAMO+ for a member. isPro and canPro() are identical now that the
+     free round is gone, but this stays on isPro deliberately: the + is a statement of
+     membership, and any temporary unlock reintroduced later must not stamp the logo. */
   const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
-buildSwatches();   // safe here: past the isPro/proTaste declarations canPro() reads
+buildSwatches();   // safe here: past the isPro declaration canPro() reads
 /* The + set directly, NOT via refreshProUI(). refreshProUI() calls renderSizeBar(), which
    reads the `sizeBar` const declared much further down — calling it here would hit exactly
    the temporal dead zone that already forced buildSwatches() to move to this line. This is
@@ -2256,9 +2181,7 @@ const paywallEl=$("#paywall");
    degrades to a TAPPABLE hint: the lock is still named and still one tap from the paywall,
    which answers the dead-end objection that killed the previous hint version.
    Absent from this map = never capped. Those are the sources the user reached for on
-   purpose — the ✦ button, the watermark row, the wordmark — where the tap IS the request,
-   plus taste_ended, which fires once per install at the only moment in the product where
-   someone has held the paid tools and had them taken away.
+   purpose — the ✦ button, the watermark row, the wordmark — where the tap IS the request.
    THIS IS A BET WITH A DOWNSIDE: fewer paywalls could mean fewer trials rather than more.
    `nth` below is what settles it — conversion by nth open tells us whether exposure 4 and 5
    were ever worth anything. If it turns out flat, raise these numbers back up. */
@@ -2288,16 +2211,6 @@ const PW_PITCH={
            s:"No mark on the image or the reveal clip." },
   time:  { t:"Stop losing hides to the clock",
            s:"75 seconds to paint instead of 22." },
-  /* The only pitch that can refer to something the user actually did — and now the only one
-     referring to something they CHOSE to do, since the round it follows is a pass they armed
-     themselves rather than a grant they were handed without noticing. Past tense on purpose:
-     it describes the hide they just made, not a claim about one they might. */
-  taste_ended: { t:"That was your free KAMO+ hide",
-                 s:"Every color, the fine brush, 75 seconds. You get one a day — or all of them now." },
-  /* Tapping a spent chip. They know exactly what they are asking for, so the sheet should not
-     re-explain the product — it should answer "can I have another one". */
-  pass:  { t:"Out of free hides today",
-           s:"One a day is the free plan. KAMO+ is every hide, every tool." },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
@@ -2704,10 +2617,9 @@ const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else syst
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
 function drawWatermark(c,W,H){
   /* KAMO+ EXPORTS CLEAN. This is the thing being sold now, and it is deliberately the one
-     perk gated on `isPro` rather than canPro(): the free taste round unlocks brushes and
-     the longer clock, but it must NOT hand out a watermark-free export. Everything else
-     the taste grants dies with the round; an exported file leaves the app and never comes
-     back, so giving one away free would be giving away the product itself.
+     perk gated on `isPro` rather than canPro(). Identical now that the free round is gone,
+     and it stays on isPro on purpose: an exported file leaves the app and never comes back,
+     so no temporary unlock may ever produce a clean one.
      The trade is understood: paying users stop carrying the wordmark into Instagram, so
      the viral loop keeps running on the free tier — which is the overwhelming majority.
      Gating the reveal VIDEO instead would have cost every free user the format that
@@ -3028,8 +2940,7 @@ const AIM_DEFAULT=8, AIM_MIN=6, AIM_MAX=14, PAINT_SECONDS=22;
 /* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
    what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
    round, unlike a brush that has a free substitute sitting next to it.
-   Gated on canPro(), NOT isPro: the free taste round should demonstrate this, the same way
-   it demonstrates the brushes. The watermark is the one perk held back to real payers.
+   Gated on canPro(), which is exactly isPro now that the free round is gone.
    ⚠️ The comment above argues PAINT must stay identical for everyone "because the round
    time is the score". That still holds for the DISPLAYED time — a Pro user who takes 50s
    still shows "vanished in 50s", the limit only decides when the clock takes the round
@@ -3346,10 +3257,7 @@ sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintH
 sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
-/* `lastRoundTaste` marks the ONE round per install that ran with everything unlocked. It is
-   read on the retake straight after, which is the only moment in the product where the user
-   has actually HELD the paid tools and is about to lose them. */
-let finished=false, revealX=0.5, lastRoundAuto=false, lastRoundTaste=false;
+let finished=false, revealX=0.5, lastRoundAuto=false;
 const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
 // Cached beside the others: drawReveal() needs its rect every frame of the Done animation
 // and every pointermove, and re-resolving the selector 60x/second buys nothing.
@@ -3503,8 +3411,7 @@ function maybeOfferPlus(score){
        clock and then had them taken away. Every other trigger asks them to imagine the
        difference. This one is the only one where they remember it.
        Fires once per install by construction — the grant itself is once per install. */
-    const src = lastRoundTaste ? "taste_ended" : (lastRoundAuto ? "time" : "round_end");
-    lastRoundTaste=false;
+    const src = lastRoundAuto ? "time" : "round_end";
     /* let backToCompose() finish tearing the reveal down first */
     setTimeout(()=>{ if(!isPro) openPaywall(src); },900);
   }catch(_){}
