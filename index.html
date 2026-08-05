@@ -1519,10 +1519,32 @@ function resumeCamera(){
   try{ const q=cam.play(); if(q&&q.catch) q.catch(()=>{}); }catch(_){}
   startCamView();
 }
-function gumSafe(c, ms=3500){
+/* 3.5s is the right bound for a HANG. It is the wrong bound for a QUESTION.
+   getUserMedia does not settle until the OS permission sheet is answered, so on the very
+   first attempt this stopwatch is timing how fast the user reads a dialog. Anyone who took
+   four seconds to tap Allow got TimeoutError -> blocked -> "Camera access is off. Turn it
+   on in Settings › KAMO › Camera" — told to switch on a permission they had just granted.
+   Priming made this the default new-user path: the sheet used to go up during the splash,
+   now it goes up on the "Start playing" tap, which is exactly when the clock starts.
+   Worse, the losing promise was abandoned mid-flight. It resolves a moment later with a
+   live MediaStream nobody holds and nobody stops, iOS keeps the capture session open, and
+   every later getUserMedia hangs behind it — so the button stops working *permanently*
+   rather than once. Hence stopOrphan(): whoever wins the race, the camera gets released. */
+const GUM_MS_PROMPT=30000;   // the user is deciding — do not interrupt them
+const GUM_MS_DECIDED=3500;   // permission already resolved: this can only be the iOS hang
+function gumSafe(c, ms=GUM_MS_DECIDED){
+  const p=navigator.mediaDevices.getUserMedia(c);
+  let timedOut=false;
+  /* Registered up front, and it asks the only question that matters at RESOLUTION time:
+     had the race already been lost when this stream arrived? If yes, nobody is holding it,
+     so release it here or iOS keeps the capture session open and every later attempt hangs
+     behind it. (Guarding on a "did the stream win" flag does not work: the race's own then()
+     would have set it by the time this ran, and the orphan would leak.) */
+  p.then(s=>{ if(timedOut){ try{ s.getTracks().forEach(t=>t.stop()); }catch(_){} } }).catch(()=>{});
   return Promise.race([
-    navigator.mediaDevices.getUserMedia(c),
-    new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error("camera timed out"),{name:"TimeoutError"})), ms))
+    p,
+    new Promise((_,rej)=>setTimeout(()=>{ timedOut=true;
+      rej(Object.assign(new Error("camera timed out"),{name:"TimeoutError"})); }, ms))
   ]);
 }
 /* ASK FOR A REAL RESOLUTION. Without width/height constraints WebKit hands back its
@@ -1579,17 +1601,22 @@ function camSize(){
 /* Have we ever reached the OS permission sheet? Read at boot to decide whether to open the
    camera on launch or prime first — see the call site at the bottom of this file. */
 const CAM_ASKED_KEY="kamo_cam_asked";
+function camEverAsked(){ try{ return localStorage.getItem(CAM_ASKED_KEY)==="1"; }catch(_){ return false; } }
 async function startCamera(auto){
   if(!window.isSecureContext){ if(auto) revealHero("insecure_context"); else camFail("Open KAMO in Safari to use the camera, or use a photo."); return; }
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero("no_getusermedia"); else camFail("This browser can’t open the camera. Try Safari, or use a photo."); return; }
   /* Set BEFORE the attempt, not after a success: what this records is "the sheet has been
      put in front of this user", and that is true whether they allowed or denied. Recording
      it only on success would prime the same person on every launch forever. */
+  /* Read BEFORE the write below: it is the only signal we have for "is a sheet about to go
+     up", and it decides how long gumSafe is allowed to wait. WebKit does not implement
+     navigator.permissions.query({name:'camera'}), so there is nothing better to ask. */
+  const gumMs = camEverAsked() ? GUM_MS_DECIDED : GUM_MS_PROMPT;
   try{ localStorage.setItem(CAM_ASKED_KEY,"1"); }catch(_){}
   const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
+    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
     catch(e){ lastErr=e;
       // Permission-level refusals (and the iOS hang) won't be fixed by loosening
       // constraints — retrying just costs another timeout before we can say anything.
@@ -3453,8 +3480,11 @@ $("#heroStart").onclick=async e=>{
   const b=b0; if(b.dataset.busy==="1") return;
   b.dataset.busy="1"; const label=b.textContent; b.textContent="Opening camera…"; b.classList.add("busy");
   const restore=()=>{ b.dataset.busy=""; b.textContent=label; b.classList.remove("busy"); };
-  // gumSafe already bounds the wait, but never let the label stick if anything else stalls
-  const failsafe=setTimeout(restore, 5000);
+  /* gumSafe already bounds the wait; this only catches a stall somewhere else. It has to
+     outlast the bound it is backing up, though — at a flat 5s it used to put "Start playing"
+     back under a permission sheet that was still open, so the button looked like it had
+     given up while the OS was still waiting on the user. */
+  const failsafe=setTimeout(restore, (camEverAsked()?GUM_MS_DECIDED:GUM_MS_PROMPT)+2000);
   try{ await startCamera(); } finally { clearTimeout(failsafe); restore(); }
 };
 // photo path never touches the camera — this is what keeps the app usable when
