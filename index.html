@@ -1394,6 +1394,9 @@ function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!render
    priming effect is still readable from camera_granted/camera_denied, which carry `auto`:
    auto=true is the old straight-to-camera launch, auto=false is a tap on the primed hero. */
 let heroShown=false;
+/* The OS has refused the camera for this session. iOS never re-prompts, so this is a
+   one-way latch: nothing after it should send the user back down the camera path. */
+let camBlocked=false;
 function revealHero(reason){
   startEl.classList.remove("booting");
   if(heroShown) return;
@@ -1435,14 +1438,36 @@ function camFail(msg, blocked){
          joins it. Absent or false (old wrapper, plain web, caps not injected yet) we simply
          do not make the offer, and the demoted button plus the promoted photo path still
          leave the user somewhere that works. */
+      /* NEVER LEAVE A CONTROL THAT CANNOT SUCCEED.
+         Demoting it was not enough. iOS answers a blocked getUserMedia with NotAllowedError
+         instantly and forever, so every tap runs the identical path and repaints the identical
+         message — from the user's side the button does nothing, twice, ten times. That is the
+         "Start playing mène à rien" report, and camera_denied confirms the shape: on the live
+         build the blocked taps come back NotAllowedError (19/11/16/12 an hour), essentially
+         never TimeoutError.
+         With the bridge we can offer the real fix. Without it (1.0.2 in 96% of hands, 1.0.7 in
+         review, plain web) there is NOTHING this button can do — so it goes away, and the photo
+         path takes the primary slot instead of sitting underneath a decoy. */
       if(nativeCaps.settings){ s.textContent="Open Settings"; s.dataset.settings="1"; }
+      else { s.style.display="none"; }
     }
+    /* It is the only way in now, so it stops being phrased as the fallback. */
+    const pk = $("#heroPick");
+    if(pk && !nativeCaps.settings) pk.textContent="Start with a photo";
     /* The headline was written to SELL the app to someone who has not seen it. This person
        has: they installed it, they were asked, they said no. Their problem is not "what is
        KAMO", it is "how do I undo this" — so the title becomes the instruction. */
     const t = $("#heroTitle");
-    if(t) t.textContent = window.ReactNativeWebView ? "Turn the camera back on" : "KAMO needs your camera";
+    /* Only promise the action the screen can actually carry out. With no way to reach
+       Settings from here, "Turn the camera back on" is an instruction with no button under
+       it; the where-to-do-it still gets said, once, in #heroMsg below. */
+    if(t) t.textContent = nativeCaps.settings ? "Turn the camera back on"
+        : (window.ReactNativeWebView ? "Camera's off — play with a photo" : "KAMO needs your camera");
   }
+  /* The whole #start overlay is also a tap target (startEl.onclick). Once the camera is
+     blocked that backdrop is one more surface that silently re-runs the failing path, so
+     point it at the thing that works instead. */
+  if(blocked) camBlocked=true;
   console.warn("[cam]",msg);
 }
 /* getUserMedia that CANNOT hang.
@@ -3462,7 +3487,10 @@ function startTimer(phase,seconds,onExpire){
 }
 
 /* ---- wire ---- */
-startEl.onclick=()=>startCamera();
+/* Backdrop tap. Once camBlocked is latched, retrying getUserMedia is guaranteed to fail
+   the same way, so the backdrop hands over to the path that works rather than being a
+   third control that appears to do nothing. */
+startEl.onclick=()=>{ if(camBlocked){ $("#fileInput").click(); return; } startCamera(); };
 // The tap must ALWAYS visibly do something — App Review called this button
 // "unresponsive" when getUserMedia hung silently behind it.
 $("#heroStart").onclick=async e=>{
@@ -3476,10 +3504,17 @@ $("#heroStart").onclick=async e=>{
     postNative({type:"open-settings"});
     return;
   }
+  /* Belt and braces: camFail hides this button when it has nothing to offer, but the handler
+     must not depend on that CSS staying true. A blocked camera never un-blocks. */
+  if(camBlocked){ track("hero_tap",{action:"photo_fallback"}); $("#fileInput").click(); return; }
   track("hero_tap",{action:"camera"});
   const b=b0; if(b.dataset.busy==="1") return;
-  b.dataset.busy="1"; const label=b.textContent; b.textContent="Opening camera…"; b.classList.add("busy");
-  const restore=()=>{ b.dataset.busy=""; b.textContent=label; b.classList.remove("busy"); };
+  const BUSY="Opening camera…";
+  b.dataset.busy="1"; const label=b.textContent; b.textContent=BUSY; b.classList.add("busy");
+  /* Only take back the label if it is still OURS. startCamera() can fail into camFail(),
+     which relabels this button to "Open Settings" — restoring unconditionally overwrote
+     that and left a button reading "Start playing" that jumps to Settings. */
+  const restore=()=>{ b.dataset.busy=""; if(b.textContent===BUSY) b.textContent=label; b.classList.remove("busy"); };
   /* gumSafe already bounds the wait; this only catches a stall somewhere else. It has to
      outlast the bound it is backing up, though — at a flat 5s it used to put "Start playing"
      back under a permission sheet that was still open, so the button looked like it had
