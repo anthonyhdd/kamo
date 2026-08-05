@@ -3831,36 +3831,39 @@ window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePi
 
 initThree();
 
-/* PRIME ON THE FIRST LAUNCH, CAMERA-FIRST ON EVERY ONE AFTER.
-   This used to call startCamera(true) unconditionally, which meant iOS put the permission
-   sheet in front of a user who was still looking at the splash disguise — an icon on black.
-   They were asked for the camera before they had seen a single thing the app does, and iOS
-   asks exactly once: a denial there is permanent, and getUserMedia never re-prompts. Over
-   7 days, 198 of 647 users hit camera_denied.
-   So on the very first launch we show the hero instead — one sentence and "Start playing" —
-   and let the tap raise the sheet in context. Every launch after that goes straight to the
-   camera as before, because CAM_ASKED_KEY is set the moment the sheet is first raised.
-   The cost is one extra tap, once per install, for the people who would have allowed
-   anyway. The gain is the users who currently deny and can never be asked again. */
-/* CAM_ASKED_KEY only started being written when priming shipped, so on its own it reports
-   "never asked" for the ENTIRE existing install base — people who answered iOS's sheet days
-   ago. They got primed too: a screen they had never seen, and an extra tap in front of the
-   camera that used to just open. Any other key the app has written is proof this install has
-   been used before, and therefore proof the sheet has already been and gone. */
-let camAsked=false;
-try{
-  camAsked = localStorage.getItem(CAM_ASKED_KEY)==="1"
-    || localStorage.getItem("kamo_onb")==="1"        // finished the paint onboarding
-    || !!localStorage.getItem("kamo_hides")          // completed at least one hide
-    || !!localStorage.getItem("kamo_stats")
-    || !!localStorage.getItem("kamo_pro");
-}catch(_){}
-if(camAsked) startCamera(true);
-else revealHero("primed");
-/* Safety net: never strand the user on the splash disguise. If the camera hasn't
-   taken us to compose in 2.5s (permission sheet left open, getUserMedia hanging,
-   an unexpected throw), show the hero CTAs anyway. */
-setTimeout(()=>{ if(mode!=="compose" && startEl.style.display!=="none") revealHero("timeout"); },2500);
+/* ASK THE CAMERA, DON'T ASK STORAGE.
+   Priming gated the boot on localStorage: "have we raised the sheet before?". On the live
+   binary that question can never be answered. 1.0.2 — 96.5% of installs — runs the WebView
+   with `incognito`, i.e. WebKit's NON-PERSISTENT data store, so every kamo_* key is wiped
+   when the app closes. CAM_ASKED_KEY, kamo_onb, kamo_pro, kamo_hides: all gone at each
+   launch. So `camAsked` was false for EVERYONE, EVERY TIME, and the hero — meant to be a
+   once-per-install screen — became a toll gate in front of the camera on every single open.
+   (Fixed natively on 2026-07-27 in kamo-app 5aca567 / 1.0.4, which has never been released.)
+
+   getUserMedia answers the same question without storage, and answers it truthfully:
+     - permission already granted -> resolves in ~200ms, NO system sheet, straight to
+       compose. The hero is never revealed. This is the case that was broken.
+     - permission denied          -> rejects instantly, hero shows its denied state.
+     - permission undetermined    -> the sheet goes up and nothing settles until it is
+       answered; the timer below reveals the hero behind it, so a first-time user reads
+       what the app does instead of staring at an icon on black.
+   That last case is the bit of priming we give up until a build can tell the web whether
+   this is a genuine first launch. It is worth it: its benefit lands once per install, and
+   its cost was being paid by everyone on every launch. */
+startCamera(true);
+/* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone
+   wrong"; at 600ms this also covers the ordinary first-launch case — the permission sheet
+   is up, nothing will settle until it is answered, and the user should be reading the hero
+   behind it rather than an icon on black. A camera that is already granted resolves in
+   ~200ms and reaches compose first, so this never fires for a returning user: that is what
+   keeps the hero off their screen. revealHero() is idempotent. */
+/* The guard here used to also test `mode!=="compose"` — and `mode` is initialised to
+   "compose" (see its declaration), so that clause was false at boot and this timer has
+   NEVER fired. The 2.5s "never strand the user" backstop it was written to be has been
+   dead the whole time: with the permission sheet open and nothing settling, the user sat
+   on the icon-on-black splash disguise indefinitely. `startEl.style.display` is the honest
+   test — enterCompose() sets it to "none" — and it is sufficient on its own. */
+setTimeout(()=>{ if(startEl.style.display!=="none") revealHero("boot_pending"); },600);
 
 /* The denominator for every other KAMO funnel step. Fired last so the bridge and
    all handlers exist; native ignores it when running as plain web (no bridge). */
