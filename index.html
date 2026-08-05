@@ -115,15 +115,21 @@
     background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
     background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;animation:pwShimmer 3.4s linear infinite;}
+  /* Space Grotesk 700, not Avenir 900. --display is the only real typeface the app loads
+     and it is already carrying the headline directly above these buttons; setting them in
+     the body font at weight 900 made the CTA look like a different product from the line
+     it sits under. 900 was also synthetic — the @font-face above ships a single 700 weight,
+     so the browser was faking the rest. 700 in the display face is heavier ON SCREEN than
+     a faked 900 in Avenir, which is why the size goes up rather than the weight. */
   .heroCta{position:relative;overflow:hidden;width:100%;height:56px;margin-top:22px;border:none;border-radius:16px;cursor:pointer;
-    font-family:var(--font);font-size:16px;font-weight:900;color:#0a0b0e;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);
+    font-family:var(--display);font-size:17.5px;font-weight:700;letter-spacing:-.3px;color:#0a0b0e;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);
     display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;}
   .heroCta::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
   .heroCta:active{transform:scale(.98);}
   .heroCta.busy{opacity:.92;animation:none;}
   .heroCta.busy::after{display:none;}
   .heroPick{width:100%;margin-top:10px;padding:15px 16px;border-radius:16px;cursor:pointer;border:1.5px solid var(--stroke);
-    background:rgba(255,255,255,.05);color:#fff;font-family:var(--font);font-weight:700;font-size:15px;-webkit-tap-highlight-color:transparent;}
+    background:rgba(255,255,255,.05);color:#fff;font-family:var(--display);font-weight:700;font-size:15.5px;letter-spacing:-.2px;-webkit-tap-highlight-color:transparent;}
   .heroPick:active{transform:scale(.98);}
   /* camera refused → this is now the way in, so it stops looking secondary */
   .heroPick.promote{background:#fff;border-color:#fff;color:#0a0b0e;font-weight:900;}
