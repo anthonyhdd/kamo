@@ -128,6 +128,14 @@
   .heroCta:active{transform:scale(.98);}
   .heroCta.busy{opacity:.92;animation:none;}
   .heroCta.busy::after{display:none;}
+  /* Camera blocked by the OS. The white pill has to stop being the loudest thing on the
+     screen, because for this user it is the one action that cannot succeed — .promote
+     hands the white treatment to the photo button at the same moment. Order stays: the
+     camera is still what they came for, and inside the app this is now "Open Settings",
+     which is the real fix rather than a second-best. */
+  .heroCta.demote{background:rgba(255,255,255,.05);color:#fff;border:1.5px solid var(--stroke);
+    box-shadow:none;animation:none;height:52px;font-size:15.5px;letter-spacing:-.2px;}
+  .heroCta.demote::after{display:none;}
   .heroPick{width:100%;margin-top:10px;padding:15px 16px;border-radius:16px;cursor:pointer;border:1.5px solid var(--stroke);
     background:rgba(255,255,255,.05);color:#fff;font-family:var(--display);font-weight:700;font-size:15.5px;letter-spacing:-.2px;-webkit-tap-highlight-color:transparent;}
   .heroPick:active{transform:scale(.98);}
@@ -1367,13 +1375,29 @@ function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!render
 function revealHero(){ startEl.classList.remove("booting"); }
 // #hint lives under the opaque #start overlay (z-index 30) → invisible on the
 // hero. Surface camera errors in #heroMsg while the start screen is up.
-function camFail(msg){
+/* `blocked` = the OS refused, not a transient failure. iOS asks for a permission exactly
+   once; after a denial getUserMedia rejects instantly, forever. Promoting the photo button
+   was not enough on its own, because "Start hiding" stayed the big white primary above it:
+   two white buttons, and the top one could never work. Over 7 days 198 of 647 users hit
+   camera_denied and 166 tapped that button.
+   So when blocked: demote the camera CTA to the outlined style, and — inside the native
+   app, where there is a bridge — turn it into the one control that CAN fix this, a jump
+   straight to KAMO's page in Settings. On the plain web there is no such API, so it just
+   stops competing with the path that works. */
+function camFail(msg, blocked){
   const onHero = startEl && startEl.style.display !== "none";
   const m = $("#heroMsg");
   if(onHero && m){ m.textContent = msg; m.style.display = "block"; }
   else showHint(msg,0);
   // the camera path just failed → make the path that DOES work the obvious one
   const p = $("#heroPick"); if(onHero && p) p.classList.add("promote");
+  if(onHero && blocked){
+    const s = $("#heroStart");
+    if(s){
+      s.classList.add("demote");
+      if(window.ReactNativeWebView){ s.textContent="Open Settings"; s.dataset.settings="1"; }
+    }
+  }
   console.warn("[cam]",msg);
 }
 /* getUserMedia that CANNOT hang.
@@ -1507,9 +1531,16 @@ function camSize(){
 }
 // auto=true => launch attempt on boot: on any failure just stay on the branded
 // start screen silently (no scary hint); the user taps "Tap to start" to retry with a gesture.
+/* Have we ever reached the OS permission sheet? Read at boot to decide whether to open the
+   camera on launch or prime first — see the call site at the bottom of this file. */
+const CAM_ASKED_KEY="kamo_cam_asked";
 async function startCamera(auto){
   if(!window.isSecureContext){ if(auto) revealHero(); else camFail("Open KAMO in Safari to use the camera, or use a photo."); return; }
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero(); else camFail("This browser can’t open the camera. Try Safari, or use a photo."); return; }
+  /* Set BEFORE the attempt, not after a success: what this records is "the sheet has been
+     put in front of this user", and that is true whether they allowed or denied. Recording
+     it only on success would prime the same person on every launch forever. */
+  try{ localStorage.setItem(CAM_ASKED_KEY,"1"); }catch(_){}
   const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
@@ -1524,15 +1555,21 @@ async function startCamera(auto){
   // Camera refusal is THE make-or-break step for an AR toy — if this spikes, the
   // whole funnel dies here and nothing downstream will explain why.
   track("camera_denied",{auto:!!auto,reason:n0||"unknown"});
-  if(auto){ revealHero(); return; } // camera didn't open → give the user the CTAs
   const n=lastErr&&lastErr.name;
   // inside the native app the camera setting lives under Settings › KAMO, not Safari
   const where = window.ReactNativeWebView ? "Settings › KAMO › Camera" : "Settings › Safari › Camera";
   // a hang (TimeoutError) on iOS almost always means the permission was denied
+  const blocked = (n==="NotAllowedError"||n==="TimeoutError");
   /* One line each. These sit under two buttons that already say what to do, so the old
      copy spent most of its words repeating the button label back at the user — and it
      quoted “or pick a photo”, a label that no longer exists. Name the fix, name where. */
-  if(n==="NotAllowedError"||n==="TimeoutError") camFail("Camera access is off. Turn it on in "+where+", or use a photo.");
+  const denied = "Camera access is off. Turn it on in "+where+", or use a photo.";
+  /* The auto attempt used to reveal the hero and say NOTHING. Someone who denied once and
+     relaunches lands on a screen whose primary button is the camera — the single thing
+     that cannot work for them — with no explanation until they tap it. Report the blocked
+     state on the auto path too, so the hierarchy is already correct when they arrive. */
+  if(auto){ revealHero(); if(blocked) camFail(denied, true); return; }
+  if(blocked) camFail(denied, true);
   else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera on this device — use a photo instead.");
   else camFail("Couldn’t reach the camera — use a photo instead.");
 }
@@ -3358,8 +3395,17 @@ startEl.onclick=()=>startCamera();
 // "unresponsive" when getUserMedia hung silently behind it.
 $("#heroStart").onclick=async e=>{
   e.stopPropagation();
-  track("hero_tap");
-  const b=e.currentTarget; if(b.dataset.busy==="1") return;
+  const b0=e.currentTarget;
+  /* camFail(blocked) turned this into the Settings jump. Retrying getUserMedia here would
+     be pointless — iOS never re-prompts — so the button stops pretending and does the one
+     thing that can actually restore the camera. */
+  if(b0.dataset.settings==="1"){
+    track("hero_tap",{action:"open_settings"});
+    postNative({type:"open-settings"});
+    return;
+  }
+  track("hero_tap",{action:"camera"});
+  const b=b0; if(b.dataset.busy==="1") return;
   b.dataset.busy="1"; const label=b.textContent; b.textContent="Opening camera…"; b.classList.add("busy");
   const restore=()=>{ b.dataset.busy=""; b.textContent=label; b.classList.remove("busy"); };
   // gumSafe already bounds the wait, but never let the label stick if anything else stalls
@@ -3675,11 +3721,20 @@ window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePi
 
 initThree();
 
-/* camera-first: try to open the live camera immediately on launch (native app has
-   permission pre-granted). #start stays disguised as the native splash during the
-   attempt; if the camera doesn't open we revealHero() so the user always has
-   "Start hiding" + "Use a photo instead" rather than a dead black screen. */
-startCamera(true);
+/* PRIME ON THE FIRST LAUNCH, CAMERA-FIRST ON EVERY ONE AFTER.
+   This used to call startCamera(true) unconditionally, which meant iOS put the permission
+   sheet in front of a user who was still looking at the splash disguise — an icon on black.
+   They were asked for the camera before they had seen a single thing the app does, and iOS
+   asks exactly once: a denial there is permanent, and getUserMedia never re-prompts. Over
+   7 days, 198 of 647 users hit camera_denied.
+   So on the very first launch we show the hero instead — one sentence and "Start hiding" —
+   and let the tap raise the sheet in context. Every launch after that goes straight to the
+   camera as before, because CAM_ASKED_KEY is set the moment the sheet is first raised.
+   The cost is one extra tap, once per install, for the people who would have allowed
+   anyway. The gain is the users who currently deny and can never be asked again. */
+let camAsked=false; try{ camAsked=localStorage.getItem(CAM_ASKED_KEY)==="1"; }catch(_){}
+if(camAsked) startCamera(true);
+else revealHero();
 /* Safety net: never strand the user on the splash disguise. If the camera hasn't
    taken us to compose in 2.5s (permission sheet left open, getUserMedia hanging,
    an unexpected throw), show the hero CTAs anyway. */
