@@ -92,7 +92,8 @@
   #start.booting .heroTitle,
   #start.booting .heroCta,
   #start.booting .heroPick,
-  #start.booting #heroMsg{display:none !important;}
+  #start.booting #heroMsg,
+  #start.booting #heroNote{display:none !important;}
   /* THE HERO IS THE PAYWALL'S DESIGN, NOT ITS OWN.
      Same card gradient, same mint glow, same shimmer headline, same white CTA. These are
      the only two screens KAMO sells on and they used to look like two different apps: the
@@ -142,6 +143,9 @@
   /* camera refused → this is now the way in, so it stops looking secondary */
   .heroPick.promote{background:#fff;border-color:#fff;color:#0a0b0e;font-weight:900;}
   #heroMsg{display:none;margin-top:14px;font-family:var(--font);font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.6);}
+  /* Quieter than #heroMsg: that one reports a failure the user has to act on, this one
+     is reassurance nobody asked for out loud. Same size, less contrast. */
+  #heroNote{margin-top:14px;max-width:32ch;font-family:var(--font);font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.45);}
   @media (prefers-reduced-motion:reduce){ .heroCta,.heroCta::after,.heroCard::before,.heroTitle{animation:none;} }
   @media (max-height:680px){ #heroIcon{width:96px;height:96px;} .heroTitle{font-size:21px;margin-top:14px;} .heroCta{margin-top:18px;} }
   .heroFoot{position:absolute;bottom:calc(48px + var(--safe-b));left:0;right:0;text-align:center;z-index:3;font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.3px;color:#fff;opacity:.9;}
@@ -964,9 +968,16 @@
            and this is just the icon on black, matching the native splash. -->
       <div class="heroCard">
         <img id="heroIcon" src="icon.png" alt="KAMO"/>
-        <h1 class="heroTitle">Hide a tiny figure so well your friends can’t spot it</h1>
+        <h1 class="heroTitle" id="heroTitle">Hide a tiny figure so well your friends can’t spot it</h1>
         <button id="heroStart" class="heroCta" type="button">Start playing</button>
         <button id="heroPick" class="heroPick" type="button">Use a photo instead</button>
+        <!-- Priming note. Two jobs, both worth the line: warn that a system sheet is about
+             to appear (an unexpected permission prompt is a denied one), and say where the
+             photos go. "Never leave your phone" is literally true — KAMO has no backend,
+             nothing is uploaded, shares hand a local file to the iOS share sheet.
+             camFail() hides this: once the camera has already failed, neither sentence is
+             answering the question the user now has. -->
+        <div id="heroNote">iOS will ask for camera access. Your photos never leave your phone.</div>
         <div id="heroMsg"></div>
       </div>
       <div class="heroFoot">kamo app</div>
@@ -1372,7 +1383,23 @@ function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!render
 // Drop the splash disguise and show the real hero (title + CTAs). Called only
 // when the camera didn't open, so a normal launch stays splash→camera with no
 // flash of hero copy in between.
-function revealHero(){ startEl.classList.remove("booting"); }
+/* `reason` says WHY this screen is on the user's phone, and it is the whole point of the
+   event. Since priming, every new install sees the hero on first launch, so "shown" no
+   longer implies "something failed" — primed, denied and no_camera are three different
+   populations that need reading apart.
+   Fires ONCE: revealHero() is called from the auto-failure path and again from the 2.5s
+   failsafe, and a screen counted twice makes every rate computed against it wrong.
+   ⚠️ hero_shown is a NEW event name, so the wrapper's WEB_EVENTS allow-list drops it until
+   a build carrying it ships — 1.0.7 is already in review without it. Until then the
+   priming effect is still readable from camera_granted/camera_denied, which carry `auto`:
+   auto=true is the old straight-to-camera launch, auto=false is a tap on the primed hero. */
+let heroShown=false;
+function revealHero(reason){
+  startEl.classList.remove("booting");
+  if(heroShown) return;
+  heroShown=true;
+  track("hero_shown",{reason:reason||"unknown"});
+}
 // #hint lives under the opaque #start overlay (z-index 30) → invisible on the
 // hero. Surface camera errors in #heroMsg while the start screen is up.
 /* `blocked` = the OS refused, not a transient failure. iOS asks for a permission exactly
@@ -1391,12 +1418,21 @@ function camFail(msg, blocked){
   else showHint(msg,0);
   // the camera path just failed → make the path that DOES work the obvious one
   const p = $("#heroPick"); if(onHero && p) p.classList.add("promote");
+  /* The priming note is answering a question this user no longer has: the sheet has already
+     been and gone, and "your photos never leave your phone" is not what someone staring at
+     a broken camera wants read to them. */
+  const note = $("#heroNote"); if(onHero && note) note.style.display="none";
   if(onHero && blocked){
     const s = $("#heroStart");
     if(s){
       s.classList.add("demote");
       if(window.ReactNativeWebView){ s.textContent="Open Settings"; s.dataset.settings="1"; }
     }
+    /* The headline was written to SELL the app to someone who has not seen it. This person
+       has: they installed it, they were asked, they said no. Their problem is not "what is
+       KAMO", it is "how do I undo this" — so the title becomes the instruction. */
+    const t = $("#heroTitle");
+    if(t) t.textContent = window.ReactNativeWebView ? "Turn the camera back on" : "KAMO needs your camera";
   }
   console.warn("[cam]",msg);
 }
@@ -1535,8 +1571,8 @@ function camSize(){
    camera on launch or prime first — see the call site at the bottom of this file. */
 const CAM_ASKED_KEY="kamo_cam_asked";
 async function startCamera(auto){
-  if(!window.isSecureContext){ if(auto) revealHero(); else camFail("Open KAMO in Safari to use the camera, or use a photo."); return; }
-  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero(); else camFail("This browser can’t open the camera. Try Safari, or use a photo."); return; }
+  if(!window.isSecureContext){ if(auto) revealHero("insecure_context"); else camFail("Open KAMO in Safari to use the camera, or use a photo."); return; }
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero("no_getusermedia"); else camFail("This browser can’t open the camera. Try Safari, or use a photo."); return; }
   /* Set BEFORE the attempt, not after a success: what this records is "the sheet has been
      put in front of this user", and that is true whether they allowed or denied. Recording
      it only on success would prime the same person on every launch forever. */
@@ -1568,7 +1604,7 @@ async function startCamera(auto){
      relaunches lands on a screen whose primary button is the camera — the single thing
      that cannot work for them — with no explanation until they tap it. Report the blocked
      state on the auto path too, so the hierarchy is already correct when they arrive. */
-  if(auto){ revealHero(); if(blocked) camFail(denied, true); return; }
+  if(auto){ revealHero(blocked?"denied":"no_camera"); if(blocked) camFail(denied, true); return; }
   if(blocked) camFail(denied, true);
   else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera on this device — use a photo instead.");
   else camFail("Couldn’t reach the camera — use a photo instead.");
@@ -3734,11 +3770,11 @@ initThree();
    anyway. The gain is the users who currently deny and can never be asked again. */
 let camAsked=false; try{ camAsked=localStorage.getItem(CAM_ASKED_KEY)==="1"; }catch(_){}
 if(camAsked) startCamera(true);
-else revealHero();
+else revealHero("primed");
 /* Safety net: never strand the user on the splash disguise. If the camera hasn't
    taken us to compose in 2.5s (permission sheet left open, getUserMedia hanging,
    an unexpected throw), show the hero CTAs anyway. */
-setTimeout(()=>{ if(mode!=="compose" && startEl.style.display!=="none") revealHero(); },2500);
+setTimeout(()=>{ if(mode!=="compose" && startEl.style.display!=="none") revealHero("timeout"); },2500);
 
 /* The denominator for every other KAMO funnel step. Fired last so the bridge and
    all handlers exist; native ignores it when running as plain web (no bridge). */
