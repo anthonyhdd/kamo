@@ -3147,7 +3147,12 @@ let appLink="https://apps.apple.com/app/id6789639784";
    injects the fully-built URL (campaign params included, see kamo-app/links.js). The web
    never assembles them itself — an App Store `ct` without a `pt` is discarded by Apple,
    so guessing here would only produce dead params. Plain Safari gets the clean listing. */
-function shareUrl(){ return appLink; }
+/* ONE TOUCH POINT FOR THE WHOLE LOOP. Every share text in the app goes through here, so
+   handing back the playable link when a hide was published turns the image share, the
+   before/after share and the invite into challenges at once — with no edit to any of
+   their copy. chLink() is "" unless CH_MAKE published this round, so production keeps
+   sending the App Store URL exactly as before. */
+function shareUrl(){ return chLink()||appLink; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
 function drawWatermark(c,W,H){
@@ -3193,7 +3198,39 @@ function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWe
    `product_id` instead, so the join has to happen on a web step — and the honest
    denominator for "did the trial move anything" is the whole funnel, not just the users
    who already got as far as opening the paywall. */
-function track(event,props){ postNative({type:"track",event:event,props:{...(props||{}),trial_arm:trialArm}}); }
+/* OUTSIDE THE APP THIS USED TO SEND NOTHING AT ALL. postNative() is a no-op in a plain
+   browser, so every web visitor has always been invisible — and the seeker screen lives
+   entirely in a browser, so the whole challenge funnel would have shipped unmeasurable.
+   That is the exact mistake this file has been unpicking all day (round_finished dropped
+   by the wrapper's allow-list, invite_sent dark because the button was hidden), so it does
+   not get made again on purpose.
+   Direct HTTP to Amplitude, no SDK: one fetch, the same client key kamo-app already
+   embeds. Native still wins when the bridge is there — one event, one path, never both. */
+function track(event,props){
+  const p={...(props||{}),trial_arm:trialArm};
+  if(postNative({type:"track",event:event,props:p})) return;
+  chWebTrack(event,p);
+}
+/* Survives a reload so a seeker's miss and their eventual find are one user, not two.
+   localStorage is wiped on every launch inside 1.0.2 — irrelevant here, because this path
+   only ever runs where there is no wrapper. */
+function chDeviceId(){
+  try{ let d=localStorage.getItem("kamo_did");
+    if(!d){ d="w"+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem("kamo_did",d); }
+    return d; }catch(e){ return "w-nostore"; }
+}
+function chWebTrack(event,props){
+  try{
+    fetch("https://api2.amplitude.com/2/httpapi",{method:"POST",keepalive:true,
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({api_key:CH_AMP,events:[{
+        event_type:event, device_id:chDeviceId(), time:Date.now(), platform:"Web",
+        /* app_variant matches the user property the native SDK sets, so KAMO's web traffic
+           lands in the same segment as its app traffic instead of a nameless bucket. */
+        event_properties:Object.assign({app_variant:"kamo",surface:CH_SEEK?"seek":"web"},props||{})
+      }]})}).catch(()=>{});
+  }catch(e){}   // includes the TDZ case if this ever fires before the CH block evaluates
+}
 function blobToDataURL(b){ return new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b); }); }
 async function deliver(blob,ext){
   const file=new File([blob],"kamo."+ext,{type:blob.type});
@@ -3342,6 +3379,21 @@ async function nativeShare(target){ closeShareSheet();
   const message=(shareMode==="ba")
     ? ("Now you see him. Now you don't! Painted with Kamo — your turn → "+link)
     : ("I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+link);
+  /* THE MEDIA SHARE CARRIES NO LINK, AND NEVER HAS. The web posts {ig-stories, data, score}
+     with no message field, and the native handler shares the media alone — backgroundVideo
+     for Instagram Stories, Share.open({url}) for the fallback. So every completed share
+     since launch has gone out with nothing to click. That is not a mis-attributed link,
+     it is the absence of one, and it is the likeliest reason ~40 shares a day return
+     nobody. (`reveal-video` below does pass `message`, but it only runs when the wrapper
+     advertises revealVideo — which no released build does.)
+     Instagram Stories cannot render a caption at all, so this is not fixable by sending
+     better text: the link has to travel beside the post, not inside it. The clipboard is
+     the only channel that works on a binary frozen since July.
+     Synchronous and BEFORE any await — a clipboard write outside the user gesture is
+     refused. The hint waits 700ms so the share sheet is what they see first. */
+  let linkCopied=false;
+  try{ navigator.clipboard.writeText(message); linkCopied=true; }catch(e){}
+  if(linkCopied) setTimeout(()=>showHint("Link copied — paste it with your post",3200),700);
   // Before/After mode → animated reveal MP4 (native module). Falls back to the static image
   // when the wrapper doesn't advertise the capability (older build) or has no before frame.
   if(shareMode==="ba" && nativeCaps.revealVideo && beforeBoard){
@@ -3976,6 +4028,12 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
      deliberately does NOT prompt for a rating here, because the Share/Save CTA appears
      on this very screen and we don't compete with it. */
   postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
+  /* Publish the hide so the share can carry a playable link. Deliberately NOT awaited and
+     deliberately here, after the reveal is on screen: a network round trip must never sit
+     between finishing a round and seeing it. If it fails or is still in flight when they
+     tap Share, chLink() is "" and every share falls back to the App Store URL — today's
+     behaviour exactly. No-op unless ?ch=1. */
+  chUpload();
   ["swatchRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
   showScore();   // "vanished in Xs" — the number the round was played for
@@ -4079,7 +4137,291 @@ initThree();
    That last case is the bit of priming we give up until a build can tell the web whether
    this is a genuine first launch. It is worth it: its benefit lands once per install, and
    its cost was being paid by everyone on every launch. */
-startCamera(true);
+/* ===== CHALLENGE LOOP =================================================================
+ * A shared hide stops being a picture and becomes a game the receiver can play WITHOUT
+ * installing anything. Hiding needs the app; seeking does not. That asymmetry is the whole
+ * point: the seeker is the acquisition, and the hider's score finally comes from humans
+ * failing to find them rather than from a coverage number nobody can act on.
+ *
+ * WHY THE WHOLE THING IS WEB. The App Store binary has been frozen at 1.0.2 since 27 July
+ * and everything native is stuck behind a review we do not control. The web ships in
+ * minutes. So the loop is built where it can actually reach people.
+ *
+ * THE ANSWER NEVER REACHES THE CLIENT. get_hide returns the photo and the counters and
+ * nothing else; the tap goes to submit_attempt and the server replies hit or miss. Reading
+ * cx/cy off the wire is not possible because they are never on it, and the anon key has no
+ * SELECT on the tables at all — verified against the live project, listing hides returns
+ * 401, not an empty array.
+ *
+ * TWO SWITCHES, ON PURPOSE:
+ *   CH_MAKE (?ch=1) gates PUBLISHING. Off in production, so no links exist in the wild.
+ *   CH_SEEK (?h=<id>) activates seeking for anyone holding a link, ungated — because a
+ *   link that needs a flag to open is not a link. It is safe precisely because CH_MAKE is
+ *   off: the only links that exist are the ones we made while testing.
+ * Turning the loop on later is deleting the CH_MAKE condition, not wiring anything up. */
+const CH_AMP="c3970f8e3ccf035f1f3a001831dc3414";   // same client key kamo-app/analytics.js embeds
+const CH_URL="https://qpztlobbnjyjbxqyuzgg.supabase.co";
+const CH_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwenRsb2Jibmp5amJ4cXl1emdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTI1NDUsImV4cCI6MjEwMTUyODU0NX0.xvF9S2NA37F2Ug8nKfm6Th-4t05htsFi95EvNZEhGnk";
+const CH_MAKE=/[?&]ch=1(&|$)/.test(location.search);
+const CH_SEEK=(()=>{ try{ return (new URLSearchParams(location.search).get("h")||"").replace(/[^a-f0-9]/gi,"").slice(0,16); }catch(e){ return ""; } })();
+let chId="";   // the hide this round produced; "" until the upload lands
+
+async function chRpc(fn,body){
+  const r=await fetch(CH_URL+"/rest/v1/rpc/"+fn,{method:"POST",
+    headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(fn+" "+r.status);
+  const j=await r.json(); return Array.isArray(j)?j[0]:j;
+}
+
+/* THE ANSWER KEY IS READ OFF maskCanvas, not recomputed. That canvas is the three.js
+   render captured at shutter time, so its opaque pixels ARE the figure as drawn — no
+   projection maths to drift out of sync with the renderer, and it already exists.
+   Sampled every 2px: this runs once per round on a retina canvas and the bbox does not
+   need pixel precision. */
+function chGeom(){
+  try{
+    if(!maskCanvas) return null;
+    const w=maskCanvas.width,h=maskCanvas.height;
+    const d=maskCanvas.getContext("2d").getImageData(0,0,w,h).data;
+    let x0=w,y0=h,x1=-1,y1=-1;
+    for(let y=0;y<h;y+=2) for(let x=0;x<w;x+=2){ if(d[(y*w+x)*4+3]>24){
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+    if(x1<0) return null;                       // nothing opaque = nothing to find
+    const m=Math.min(w,h);
+    /* Radius on the shorter side, floored at 4%. A pixel-exact hit test on a camouflaged
+       40px figure is not a game, it is a lottery — and a fingertip is ~44px wide. */
+    const r=Math.min(0.34,Math.max(0.04,Math.max(x1-x0,y1-y0)/2/m));
+    return {cx:(x0+x1)/2/w, cy:(y0+y1)/2/h, r};
+  }catch(e){ return null; }
+}
+
+/* The board is full retina — up to ~1290x2796, which is megabytes of JPEG for something
+   that will be looked at on a phone. 1080 on the long side at q0.72 lands ~150-250 KB,
+   inside the bucket's 400 KB ceiling with room to spare. */
+function chBlob(){
+  return new Promise(res=>{
+    const S=Math.min(1,1080/Math.max(board.width,board.height));
+    const c=document.createElement("canvas");
+    c.width=Math.round(board.width*S); c.height=Math.round(board.height*S);
+    c.getContext("2d").drawImage(board,0,0,c.width,c.height);
+    c.toBlob(b=>res(b),"image/jpeg",0.72);
+  });
+}
+
+/* Fire-and-forget: the reveal must never wait on a network round trip. If this fails the
+   share silently falls back to the App Store link, which is exactly today's behaviour. */
+async function chUpload(){
+  if(!CH_MAKE||chId) return;
+  try{
+    const g=chGeom(); if(!g) return;
+    const blob=await chBlob(); if(!blob) return;
+    const name=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).replace(/[^a-z0-9]/g,"")+".jpg";
+    const up=await fetch(CH_URL+"/storage/v1/object/hides/"+name,{method:"POST",
+      headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
+    if(!up.ok) throw new Error("upload "+up.status);
+    chId=await chRpc("create_hide",{p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,
+      p_secs:roundSeconds(),p_coverage:Math.round(currentScore||0)});
+    track("hide_published",{});
+  }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
+}
+function chLink(){ return chId?(location.origin+location.pathname+"?h="+chId):""; }
+
+/* THE SEEKER SCREEN =====================================================================
+ * The only screen in KAMO a stranger ever sees, so it is the one that has to sell. Built in
+ * JS rather than markup because it must not exist for the 99% of loads that are not a
+ * challenge, and it borrows the app's own tokens rather than inventing a look: --display
+ * (Space Grotesk) for headlines, the hero card's green gradient for the result panel, and
+ * the existing pwBuyGlow/pwBuySheen clocks on the CTA so it breathes like every other
+ * primary button in the product.
+ *
+ * FIVE TAPS, NOT INFINITE. Unlimited tapping is brute force: no stakes, no tension, and no
+ * moment where the player has clearly lost. The losing moment is the whole point — it is
+ * the only screen where someone has just FELT how hard this is, which is the argument for
+ * the app. Success converts on reciprocity ("hide one back"), failure converts on respect.
+ *
+ * THE TIMER RUNS FROM THE FIRST TAP, not from load. Starting on load punishes reading the
+ * instructions, and the number has to be comparable to the hider's own round time — which
+ * is also measured from when they started, not from when the app opened. */
+const CH_TAPS=5;
+function chSeek(){
+  const st=document.createElement("style");
+  st.textContent=
+    /* MOBILE FIRST, and phone-shaped rather than desktop-shrunk. 100dvh not 100vh: on iOS
+       Safari the URL bar makes 100vh taller than the visible viewport, which would push
+       the CTA under the chrome on exactly the screens that matter. The photo takes the
+       space that is left (flex:1 + min-height:0) instead of a fixed vh, so a tall phone
+       gets a big target and a short one still shows the button without scrolling — and
+       nothing here scrolls, body is overflow:hidden. */
+    ".chS{position:fixed;inset:0;height:100dvh;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;"
+      +"justify-content:center;gap:clamp(8px,2.2vh,16px);padding:calc(12px + var(--safe-t)) 16px calc(14px + var(--safe-b));font-family:var(--font);color:var(--text);}"
+    +".chBrand{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.4px;color:#fff;opacity:.9;}"
+    +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(21px,6.2vw,27px);letter-spacing:-.4px;line-height:1.18;text-align:center;margin:0;max-width:18ch;}"
+    +".chSub{font-size:13.5px;opacity:.62;text-align:center;margin:0;}"
+    +".chFrame{position:relative;flex:1 1 auto;min-height:0;display:flex;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;}"
+    /* object-fit:contain inside a flexed frame: the box never exceeds the space left,
+       and the tap coordinates stay honest because the frame shrink-wraps the pixels. */
+    +".chFrame img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;touch-action:manipulation;}"
+    /* Taps left, as pips rather than a number: readable at a glance mid-game, and an empty
+       row reads as "you are out" without anyone having to parse a zero. */
+    +".chPips{display:flex;gap:6px;justify-content:center;}"
+    +".chPip{width:7px;height:7px;border-radius:50%;background:var(--mint);transition:background .2s,transform .2s;}"
+    +".chPip.off{background:rgba(255,255,255,.16);transform:scale(.8);}"
+    /* THE APP'S OWN CLOCK, not a new one. A bar that drains left to right, the same mint
+       -> amber -> red escalation as the paint timer, so a player who installs meets a
+       clock they have already read once. The number stays silent until the last five
+       seconds, same rule as #timerNum: a permanent countdown is noise, a late one is
+       pressure. */
+    +".chBar{width:min(92vw,420px);height:5px;border-radius:3px;background:rgba(255,255,255,.10);overflow:hidden;}"
+    +".chBar i{display:block;height:100%;width:100%;transform-origin:left center;background:linear-gradient(90deg,#fff,#8ef0bd);"
+      +"box-shadow:0 0 12px rgba(95,230,164,.55);transition:transform .1s linear;}"
+    +".chBar.warn i{background:linear-gradient(90deg,#ffb648,#ffd08a);box-shadow:0 0 12px rgba(255,182,72,.6);}"
+    +".chBar.crit i{background:linear-gradient(90deg,#ff5f57,#ff9a94);box-shadow:0 0 14px rgba(255,95,87,.65);}"
+    +".chClock{font-family:var(--display);font-weight:700;font-size:15px;color:var(--mint);min-height:19px;letter-spacing:-.2px;}"
+    +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
+    +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
+    +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
+    +"@keyframes chShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}"
+    +".chShake{animation:chShake .3s}"
+    /* The result panel is the hero card: same gradient, same radius, same border. A stranger
+       meeting KAMO here should be meeting the same object a new installer meets. */
+    +".chCard{width:min(92vw,420px);background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border:1px solid rgba(255,255,255,.22);"
+      +"border-radius:26px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:22px 20px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}"
+    +".chCta{position:relative;overflow:hidden;width:100%;max-width:340px;height:56px;margin-top:14px;border:none;border-radius:16px;cursor:pointer;"
+      +"font-family:var(--display);font-size:17.5px;font-weight:700;letter-spacing:-.3px;color:#0a0b0e;background:#fff;"
+      +"box-shadow:0 10px 28px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;}"
+    +".chCta::after{content:\"\";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}"
+    +".chCta:active{transform:scale(.98);}"
+    +".chR{background:none;border:none;color:rgba(255,255,255,.3);font-size:11px;text-decoration:underline;margin-top:2px;font-family:var(--font);}";
+  document.head.appendChild(st);
+
+  const w=document.createElement("div"); w.className="chS";
+  w.innerHTML='<div class="chBrand">KA<b>MO</b></div>'
+    +'<h1 class="chHead" id="chHead">Loading…</h1>'
+    +'<p class="chSub" id="chSub"></p>'
+    +'<div class="chFrame" id="chFrame"></div>'
+    +'<div class="chBar" id="chBar"><i id="chFill"></i></div>'
+    +'<div class="chPips" id="chPips"></div>'
+    +'<div class="chClock" id="chClock"></div>'
+    +'<div id="chFoot"></div>';
+  document.body.appendChild(w);
+  const $$=(id)=>document.getElementById(id);
+
+  /* One ending, two readings. Both land on the same card and the same button shape, because
+     the ask is identical either way — the only thing that changes is why they should want
+     to. Won: reciprocity. Lost: respect for the tool that beat them. */
+  function ending(head,sub,label){
+    $$("chHead").textContent=head;
+    $$("chSub").textContent=sub||"";
+    $$("chPips").innerHTML=""; $$("chClock").textContent="";
+    const bar=$$("chBar"); if(bar) bar.style.display="none";
+    /* The frame stops growing once the game is over, or on a short phone the card would
+       be pushed off the bottom by a photo nobody is playing any more. */
+    const fr=$$("chFrame"); if(fr) fr.style.flex="0 1 auto";
+    $$("chFoot").innerHTML='<div class="chCard"><button class="chCta" id="chGo">'+label+'</button>'
+      +'<button class="chR" id="chRep">Report this photo</button></div>';
+    $$("chGo").onclick=()=>{ track("seek_cta_tapped",{}); location.href=appLink; };
+    $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{}); track("seek_reported",{});
+      $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
+  }
+
+  (async()=>{
+    let h; try{ h=await chRpc("get_hide",{p_id:CH_SEEK}); }catch(e){}
+    if(!h||!h.img_path){ track("seek_missing",{}); ending("This hide is gone.","Expired, or taken down.","Play KAMO"); return; }
+    track("seek_opened",{});
+
+    const img=document.createElement("img");
+    img.src=CH_URL+"/storage/v1/object/public/hides/"+h.img_path;
+    img.alt="Find the hidden figure";
+    $$("chFrame").appendChild(img);
+
+    $$("chHead").textContent=h.secs?("Someone vanished in "+h.secs+"s"):"Someone is hiding in here";
+    /* The social proof goes ABOVE the game, not under the result. It is the dare — "nine
+       people looked and six walked away" is what makes the first tap feel like something. */
+    const missed=(h.n_attempts||0)-(h.n_found||0);
+    /* THE CLOCK IS DERIVED FROM THE HIDER'S OWN ROUND, which is what finally makes their
+       time mean something beyond a brag: a hide that took 14 seconds buys the seeker 28.
+       Bounded 20-45 so a one-second test hide still gives a playable round and a slow one
+       does not hand out a minute. */
+    const LIMIT=Math.max(20,Math.min(45,(h.secs||10)*2));
+    $$("chSub").textContent = (h.n_attempts && missed)
+      ? (missed+" of "+h.n_attempts+" never found them. You get "+LIMIT+"s.")
+      : ("You get "+LIMIT+"s. Tap when you see them.");
+    const pips=$$("chPips");
+    const drawPips=(left)=>{ pips.innerHTML=""; for(let i=0;i<CH_TAPS;i++){ const d=document.createElement("div");
+      d.className="chPip"+(i<left?"":" off"); pips.appendChild(d); } };
+    drawPips(CH_TAPS);
+
+    let t0=0, tries=0, done=false, clock=null;
+    img.onclick=async(e)=>{
+      if(done) return;
+      const r=img.getBoundingClientRect();
+      const x=(e.clientX-r.left)/r.width, y=(e.clientY-r.top)/r.height;
+      /* STARTS ON THE FIRST TAP, not on load: starting on load punishes reading the dare,
+         and the elapsed number has to compare to the hider's own round time, which is
+         measured the same way. */
+      if(!t0){ t0=Date.now();
+        clock=setInterval(()=>{
+          if(done) return;
+          const left=LIMIT-(Date.now()-t0)/1000;
+          const bar=$$("chBar"), fill=$$("chFill");
+          if(fill) fill.style.transform="scaleX("+Math.max(0,left/LIMIT)+")";
+          if(bar){ bar.classList.toggle("warn",left<=LIMIT*0.4&&left>5); bar.classList.toggle("crit",left<=5); }
+          $$("chClock").textContent = left<=5 ? Math.max(0,left).toFixed(1)+"s" : "";
+          if(left<=0) timeUp();
+        },100); }
+      tries++; drawPips(CH_TAPS-tries);
+      const mk=document.createElement("div"); mk.className="chMark";
+      mk.style.left=(e.clientX-r.left)+"px"; mk.style.top=(e.clientY-r.top)+"px";
+      $$("chFrame").appendChild(mk); setTimeout(()=>mk.remove(),500);
+
+      let res; try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:Date.now()-t0}); }catch(e){ return; }
+      if(res&&res.hit){
+        done=true; clearInterval(clock);
+        const secs=((Date.now()-t0)/1000).toFixed(1);
+        mk.className="chMark hit";
+        track("seek_found",{tries:tries,ms:Date.now()-t0});
+        ending("Found in "+secs+"s",
+          (res.missed?(res.missed+" people missed them. You didn't."):"First to find them."),
+          "Now hide one back");
+        return;
+      }
+      img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
+      track("seek_miss",{tries:tries});
+      if(tries>=CH_TAPS) timeUp("taps");
+    };
+
+    /* ONE LOSS, TWO WAYS IN. Out of taps and out of time end identically — the reveal, then
+       the ask — because the feeling is the same and a second ending screen would be a second
+       thing to maintain and diverge. */
+    async function timeUp(why){
+      if(done) return;
+      done=true; clearInterval(clock);
+      /* THE REVEAL IS THE PITCH. Ending on "you lost" with the figure still invisible is a
+         shrug; showing them what they stared past is the moment the tool becomes worth
+         having. Asked for only now — never served with the puzzle. */
+      try{
+        const g=await chRpc("reveal_hide",{p_id:CH_SEEK});
+        const ir=img.getBoundingClientRect();
+        if(g){ const mk2=document.createElement("div"); mk2.className="chMark hit";
+          mk2.style.left=(g.cx*ir.width)+"px"; mk2.style.top=(g.cy*ir.height)+"px";
+          mk2.style.animation="none"; mk2.style.opacity="1"; mk2.style.transform="scale(1.2)";
+          $$("chFrame").appendChild(mk2); }
+      }catch(e){}
+      track("seek_failed",{reason:why||"time",tries:tries,ms:t0?Date.now()-t0:0});
+      ending("They were right there.",
+        why==="taps"?"Five taps, and you walked past them every time.":"Time ran out. They never moved.",
+        "Hide one this good");
+    }
+  })();
+}
+
+/* THE SEEKER NEVER MEETS THE CAMERA. Arriving on ?h= means someone sent you a hide to
+   find: no permission sheet, no hero, no three.js scene — just the photo and a tap. The
+   branch is here rather than inside startCamera() so nothing downstream of the camera can
+   fire at all, which is also what keeps a broken seek from taking the normal boot with it. */
+if(CH_SEEK){ chSeek(); }
+else startCamera(true);
 /* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone
    wrong"; at 600ms this also covers the ordinary first-launch case — the permission sheet
    is up, nothing will settle until it is answered, and the user should be reading the hero
