@@ -3519,7 +3519,12 @@ $("#ssInvite").onclick=async()=>{
         showHint("Couldn't copy — long-press the link in the app instead",3600); };
       return;
     }
-    setTimeout(()=>{ if(b) b.innerHTML=original; closeShareSheet(); },1500);
+    /* THE SHEET STAYS OPEN. Closing it treated one invite as the end of the interaction,
+       when a challenge is the one share people send to more than one person — and the
+       other destinations live on this same sheet, so closing it also ends the chance of
+       posting the hide after inviting someone. The label reverts so a second tap is
+       immediately available; only the user closes this. */
+    setTimeout(()=>{ if(b) b.innerHTML=original; },1500);
   }
 };
 updateInviteBtn();   // plain browser → visible immediately; native → waits for setNativeCaps
