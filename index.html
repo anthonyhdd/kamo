@@ -3831,7 +3831,23 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
      goes for `share_dismissed` and `share_mode_selected` added below. None of it measures
      anything until a build ships. Until then the aim-clock signal rides on
      photo_captured.auto, which flows today. */
-  track("round_finished",{seconds:roundSeconds(),auto:!!auto,coverage:Math.round(computeScore()||0),timed:timerArmed("paint"),aim_timed:timerArmed("aim")});
+  const roundProps={seconds:roundSeconds(),auto:!!auto,coverage:Math.round(computeScore()||0),timed:timerArmed("paint"),aim_timed:timerArmed("aim")};
+  track("round_finished",roundProps);
+  /* CARRIER, because the name above cannot reach Amplitude from the shipped app.
+     kamo-app filters web events through WEB_EVENTS, and 1.0.2 — the only build on the
+     App Store since 27 July — ships a 15-name list that predates `round_finished`. The
+     measurement proves it: 34-47 users complete a SHARE every day while round_finished
+     reports one event a day, and a share is downstream of a finished round.
+     `reveal_previewed` IS on that list and the web stopped firing it long ago, so it is a
+     dead channel that the shipped wrapper still passes. Emitting the identical payload
+     under that name makes the round funnel measurable today instead of after a release we
+     do not control. It is also close to honest: this fires in enterFinished(), which is
+     exactly where the reveal is built.
+     ⚠️ DELETE THIS LINE the day a build ships with round_finished allow-listed, or the
+     same round will be counted under two names. `carrier_for` is what makes the duplicate
+     detectable in the meantime — segment on it, and never treat reveal_previewed as a
+     reveal without checking it. */
+  track("reveal_previewed",Object.assign({carrier_for:"round_finished"},roundProps));
   currentScore=computeScore();
   /* Feed the member home. Every finished hide counts, including one the clock ended — the
      scoreboard reports what happened, it is not a reward for playing a certain way. */
