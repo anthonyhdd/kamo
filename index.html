@@ -965,7 +965,7 @@
       <div class="heroCard">
         <img id="heroIcon" src="icon.png" alt="KAMO"/>
         <h1 class="heroTitle">Hide a tiny figure so well your friends can’t spot it</h1>
-        <button id="heroStart" class="heroCta" type="button">Start hiding</button>
+        <button id="heroStart" class="heroCta" type="button">Start playing</button>
         <button id="heroPick" class="heroPick" type="button">Use a photo instead</button>
         <div id="heroMsg"></div>
       </div>
@@ -1377,7 +1377,7 @@ function revealHero(){ startEl.classList.remove("booting"); }
 // hero. Surface camera errors in #heroMsg while the start screen is up.
 /* `blocked` = the OS refused, not a transient failure. iOS asks for a permission exactly
    once; after a denial getUserMedia rejects instantly, forever. Promoting the photo button
-   was not enough on its own, because "Start hiding" stayed the big white primary above it:
+   was not enough on its own, because "Start playing" stayed the big white primary above it:
    two white buttons, and the top one could never work. Over 7 days 198 of 647 users hit
    camera_denied and 166 tapped that button.
    So when blocked: demote the camera CTA to the outlined style, and — inside the native
@@ -3727,7 +3727,7 @@ initThree();
    They were asked for the camera before they had seen a single thing the app does, and iOS
    asks exactly once: a denial there is permanent, and getUserMedia never re-prompts. Over
    7 days, 198 of 647 users hit camera_denied.
-   So on the very first launch we show the hero instead — one sentence and "Start hiding" —
+   So on the very first launch we show the hero instead — one sentence and "Start playing" —
    and let the tap raise the sheet in context. Every launch after that goes straight to the
    camera as before, because CAM_ASKED_KEY is set the moment the sheet is first raised.
    The cost is one extra tap, once per install, for the people who would have allowed
