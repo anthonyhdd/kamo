@@ -845,7 +845,16 @@
      the same box, and these sit on saturated backgrounds. */
   .ssBtn.ig svg{width:23px;height:23px;stroke-width:1.9;}
   .ssBtn.snap .snapIc{width:24px;height:24px;}
-  .ssBtn.ssInvite{background:rgba(72,214,139,.14);border-color:rgba(72,214,139,.45);}
+  /* THE SELECTED-PLAN TREATMENT, ON PURPOSE. Same --ring gradient, same 3.4s pwShimmer
+     clock and the same mask-composite trick as .pwPlan.active — the sheet already teaches
+     that a shimmering mint edge means "this is the one", so reusing it costs no new
+     vocabulary. border-color goes transparent because the ::before IS the edge now. */
+  .ssBtn.ssInvite{position:relative;z-index:0;background:rgba(72,214,139,.14);border-color:transparent;background-clip:padding-box;}
+  .ssBtn.ssInvite::before{content:"";position:absolute;inset:-1px;border-radius:17px;z-index:-1;pointer-events:none;
+    padding:1px;background:var(--ring);background-size:260% 100%;
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;
+    animation:pwShimmer 3.4s linear infinite;}
   /* Save, once JS has moved it in here (native only — see the move in the share block).
      The other rows carry an emoji in .ic; this one keeps the download/check SVG pair it
      already had, because that swap is the truthful "actually written to the camera roll"
@@ -1145,6 +1154,13 @@
       <button class="ssTab" data-mode="challenge">Challenge</button>
       <button class="ssTab active" data-mode="ba">Before / After</button>
     </div>
+    <!-- FIRST, AND THE LOUDEST THING IN THE SHEET. This is the loop: a challenge sent to
+         one person is the only share that asks for something back, and it was sitting last,
+         under More/Save, in the position people scroll past on the way to Cancel. The
+         destinations below it are reach; this is recruitment, so it leads.
+         Kept hidden until updateInviteBtn() runs, so a JS failure cannot leave a button
+         that no handler is listening to. -->
+    <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
     <!-- Two on a line, because a third full-width slab would have pushed the KAMO+ line and
          the dismiss past the fold. Instagram keeps the full width above: it is the longest
@@ -1175,7 +1191,6 @@
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
     </div>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
-    <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
     <button class="ssClose" id="ssClose">Not now</button>
   </div>
 </div>
