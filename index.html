@@ -1426,7 +1426,16 @@ function camFail(msg, blocked){
     const s = $("#heroStart");
     if(s){
       s.classList.add("demote");
-      if(window.ReactNativeWebView){ s.textContent="Open Settings"; s.dataset.settings="1"; }
+      /* nativeCaps.settings, NOT window.ReactNativeWebView. Gating on "am I in the app"
+         was wrong and shipped a dead button: the open-settings handler only exists from
+         the build after 1.0.7, so on every binary currently in users' hands this relabelled
+         itself "Open Settings" and posted a message the wrapper silently dropped. Nothing
+         happened, forever — the exact failure this whole change set out to remove.
+         The capability handshake already exists for revealVideo/torch/invite; settings
+         joins it. Absent or false (old wrapper, plain web, caps not injected yet) we simply
+         do not make the offer, and the demoted button plus the promoted photo path still
+         leave the user somewhere that works. */
+      if(nativeCaps.settings){ s.textContent="Open Settings"; s.dataset.settings="1"; }
     }
     /* The headline was written to SELL the app to someone who has not seen it. This person
        has: they installed it, they were asked, they said no. Their problem is not "what is
