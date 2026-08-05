@@ -90,25 +90,46 @@
      native side holds splash.png until onLoadEnd for the same reason. The
      hero copy/CTAs appear only if the camera never opens (see revealHero). */
   #start.booting .heroTitle,
-  #start.booting .heroSub,
   #start.booting .heroCta,
   #start.booting .heroPick,
   #start.booting #heroMsg{display:none !important;}
-  /* Hero CTAs — the app MUST stay usable with no camera (denied/unavailable):
+  /* THE HERO IS THE PAYWALL'S DESIGN, NOT ITS OWN.
+     Same card gradient, same mint glow, same shimmer headline, same white CTA. These are
+     the only two screens KAMO sells on and they used to look like two different apps: the
+     paywall is a dark green card with a white pill, the hero was a mint pill on flat black
+     with a headline, a subtitle and a footer all competing.
+     One sentence now, not a title plus a subtitle saying the same thing twice.
+     Hero CTAs — the app MUST stay usable with no camera (denied/unavailable):
      "pick a photo" is a full path into the app that never touches getUserMedia. */
-  .heroTitle{position:relative;z-index:2;margin:24px 0 0;font-family:var(--display);font-weight:700;font-size:27px;line-height:1.18;letter-spacing:-.5px;color:#fff;text-align:center;max-width:min(86vw,420px);}
-  .heroSub{position:relative;z-index:2;margin:10px 0 0;font-family:var(--font);font-size:15px;line-height:1.45;color:rgba(255,255,255,.6);text-align:center;max-width:min(82vw,360px);}
-  .heroCta{position:relative;z-index:3;margin-top:26px;padding:15px 32px;border:0;border-radius:999px;cursor:pointer;font-family:var(--font);font-weight:700;font-size:16.5px;letter-spacing:-.2px;color:#04120b;background:var(--mint);box-shadow:0 10px 34px rgba(95,230,164,.38);animation:heroPulse 2.6s ease-in-out infinite;-webkit-tap-highlight-color:transparent;}
-  .heroCta:active{transform:scale(.97);}
-  .heroCta.busy{opacity:.72;animation:none;}
-  @keyframes heroPulse{0%,100%{box-shadow:0 10px 30px rgba(95,230,164,.3);}50%{box-shadow:0 10px 46px rgba(95,230,164,.62);}}
-  .heroPick{position:relative;z-index:3;margin-top:13px;padding:11px 22px;border-radius:999px;cursor:pointer;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.06);color:#fff;font-family:var(--font);font-weight:600;font-size:14.5px;-webkit-tap-highlight-color:transparent;}
-  .heroPick:active{transform:scale(.97);}
+  .heroCard{position:relative;z-index:2;width:min(92vw,420px);display:flex;flex-direction:column;align-items:center;text-align:center;
+    background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-radius:26px;border:1px solid rgba(255,255,255,.22);
+    box-shadow:0 18px 60px rgba(0,0,0,.6);padding:30px 24px 26px;}
+  .heroCard::before{content:"";position:absolute;left:0;right:0;top:0;height:210px;pointer-events:none;border-radius:26px 26px 0 0;
+    background:radial-gradient(72% 130px at 50% -6%, rgba(95,230,164,.22), transparent 70%);animation:pwGlow 3.8s ease-in-out infinite;}
+  .heroCard>*{position:relative;z-index:1;}
+  /* Boot state keeps the card as invisible chrome, so the splash→web handoff still shows
+     the icon alone on black exactly as before. The card materialises only on revealHero(). */
+  #start.booting .heroCard{background:none;border-color:transparent;box-shadow:none;padding:0;}
+  #start.booting .heroCard::before{display:none;}
+  .heroTitle{margin:18px 0 0;font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.3px;line-height:1.22;max-width:16ch;
+    background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
+    background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;animation:pwShimmer 3.4s linear infinite;}
+  .heroCta{position:relative;overflow:hidden;width:100%;height:56px;margin-top:22px;border:none;border-radius:16px;cursor:pointer;
+    font-family:var(--font);font-size:16px;font-weight:900;color:#0a0b0e;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);
+    display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;}
+  .heroCta::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
+  .heroCta:active{transform:scale(.98);}
+  .heroCta.busy{opacity:.92;animation:none;}
+  .heroCta.busy::after{display:none;}
+  .heroPick{width:100%;margin-top:10px;padding:15px 16px;border-radius:16px;cursor:pointer;border:1.5px solid var(--stroke);
+    background:rgba(255,255,255,.05);color:#fff;font-family:var(--font);font-weight:700;font-size:15px;-webkit-tap-highlight-color:transparent;}
+  .heroPick:active{transform:scale(.98);}
   /* camera refused → this is now the way in, so it stops looking secondary */
-  .heroPick.promote{background:var(--mint);border-color:var(--mint);color:#04120b;font-weight:800;font-size:15.5px;padding:14px 26px;box-shadow:0 8px 26px rgba(95,230,164,.34);}
-  #heroMsg{position:relative;z-index:3;display:none;margin-top:16px;padding:0 26px;max-width:min(88vw,380px);text-align:center;font-family:var(--font);font-size:13.5px;line-height:1.45;color:rgba(255,255,255,.72);}
-  @media (prefers-reduced-motion:reduce){ .heroCta{animation:none;} }
-  @media (max-height:680px){ #heroIcon{width:96px;height:96px;} .heroTitle{font-size:23px;margin-top:18px;} .heroCta{margin-top:20px;} }
+  .heroPick.promote{background:#fff;border-color:#fff;color:#0a0b0e;font-weight:900;}
+  #heroMsg{display:none;margin-top:14px;font-family:var(--font);font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.6);}
+  @media (prefers-reduced-motion:reduce){ .heroCta,.heroCta::after,.heroCard::before,.heroTitle{animation:none;} }
+  @media (max-height:680px){ #heroIcon{width:96px;height:96px;} .heroTitle{font-size:21px;margin-top:14px;} .heroCta{margin-top:18px;} }
   .heroFoot{position:absolute;bottom:calc(48px + var(--safe-b));left:0;right:0;text-align:center;z-index:3;font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.3px;color:#fff;opacity:.9;}
   .startBottom{position:absolute;z-index:3;left:0;right:0;bottom:calc(34px + var(--safe-b));display:flex;flex-direction:column;align-items:center;gap:12px;padding:0 24px;}
   .startHint{font-size:13px;font-weight:700;letter-spacing:.3px;opacity:.7;}
@@ -924,12 +945,16 @@
     <!-- START (home) -->
     <div id="start" class="booting">
       <div class="aurora"></div>
-      <img id="heroIcon" src="icon.png" alt="KAMO"/>
-      <h1 class="heroTitle">Hide a tiny figure<br/>in the real world</h1><!-- revealed only if the camera never opens -->
-      <p class="heroSub">Camouflage it, then dare your friends to spot it 👀</p>
-      <button id="heroStart" class="heroCta" type="button">Tap to start</button>
-      <button id="heroPick" class="heroPick" type="button">or pick a photo</button>
-      <div id="heroMsg"></div>
+      <!-- One card, paywall styling. Everything below the icon is revealed only if the
+           camera never opens (see revealHero) — during boot the card is invisible chrome
+           and this is just the icon on black, matching the native splash. -->
+      <div class="heroCard">
+        <img id="heroIcon" src="icon.png" alt="KAMO"/>
+        <h1 class="heroTitle">Hide a tiny figure so well your friends can’t spot it</h1>
+        <button id="heroStart" class="heroCta" type="button">Start hiding</button>
+        <button id="heroPick" class="heroPick" type="button">Use a photo instead</button>
+        <div id="heroMsg"></div>
+      </div>
       <div class="heroFoot">kamo app</div>
     </div>
   </div>
@@ -1477,8 +1502,8 @@ function camSize(){
 // auto=true => launch attempt on boot: on any failure just stay on the branded
 // start screen silently (no scary hint); the user taps "Tap to start" to retry with a gesture.
 async function startCamera(auto){
-  if(!window.isSecureContext){ if(auto) revealHero(); else camFail("Open KAMO in Safari to use the camera — or pick a photo below."); return; }
-  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero(); else camFail("This browser can't open the camera. Try Safari, or tap “pick a photo”."); return; }
+  if(!window.isSecureContext){ if(auto) revealHero(); else camFail("Open KAMO in Safari to use the camera, or use a photo."); return; }
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero(); else camFail("This browser can’t open the camera. Try Safari, or use a photo."); return; }
   const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
@@ -1498,9 +1523,12 @@ async function startCamera(auto){
   // inside the native app the camera setting lives under Settings › KAMO, not Safari
   const where = window.ReactNativeWebView ? "Settings › KAMO › Camera" : "Settings › Safari › Camera";
   // a hang (TimeoutError) on iOS almost always means the permission was denied
-  if(n==="NotAllowedError"||n==="TimeoutError") camFail("KAMO needs the camera to drop your figure into the real world. Turn it on in "+where+" — or just tap “or pick a photo” below.");
-  else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera found — tap “or pick a photo” below to hide your figure in a picture instead.");
-  else camFail("Couldn't reach the camera — tap “or pick a photo” below instead.");
+  /* One line each. These sit under two buttons that already say what to do, so the old
+     copy spent most of its words repeating the button label back at the user — and it
+     quoted “or pick a photo”, a label that no longer exists. Name the fix, name where. */
+  if(n==="NotAllowedError"||n==="TimeoutError") camFail("Camera access is off. Turn it on in "+where+", or use a photo.");
+  else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera on this device — use a photo instead.");
+  else camFail("Couldn’t reach the camera — use a photo instead.");
 }
 function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
@@ -3644,7 +3672,7 @@ initThree();
 /* camera-first: try to open the live camera immediately on launch (native app has
    permission pre-granted). #start stays disguised as the native splash during the
    attempt; if the camera doesn't open we revealHero() so the user always has
-   "Tap to start" + "or pick a photo" instead of a dead black screen. */
+   "Start hiding" + "Use a photo instead" rather than a dead black screen. */
 startCamera(true);
 /* Safety net: never strand the user on the splash disguise. If the camera hasn't
    taken us to compose in 2.5s (permission sheet left open, getUserMedia hanging,
