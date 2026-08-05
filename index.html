@@ -525,12 +525,13 @@
      thing (the all-colours swatch carries it too), so a second meaning here would cost more
      than the scale hint it was briefly used for.
      MOVED TO THE BOTTOM, and made tappable. It used to sit at the top "because that is where
-     there is room — the thumb lives high on the bar for free users", which was true while
-     free rounds were pinned to a 44px roller. They are not any more: free now starts at 24
-     and the locked range is BELOW FREE_BRUSH_MIN, i.e. the bottom of the bar (t=0 is
-     BRUSH_MIN, t=1 is BRUSH_MAX). Left at the top the ✦ was badging the 64px roller — the
-     one part of the scale that is free — and `pointer-events:none` meant a tap on it fell
-     through to the bar and simply selected the biggest brush. Exactly backwards.
+     there is room — the thumb lives high on the bar for free users", and `pointer-events:none`
+     meant a tap on it fell through to the bar and selected the biggest brush. Exactly
+     backwards: the ✦ was badging the one part of the scale a free user already has.
+     Bottom is right under either monetization model — with the 44px wall the whole bar below
+     the thumb is paid, and with a floor the locked range is the bottom too. This survived the
+     revert of that floor (see FREE_BRUSH) on purpose: it is about where the lock LIVES on the
+     bar, not about how much of the bar is locked.
      Padding, not a bigger glyph: 19px of text is a poor tap target, and the box is invisible. */
   #sizeStar{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
     color:#fff;opacity:.9;padding:8px 12px;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
@@ -2020,34 +2021,18 @@ let paintColor="#8a7f6a", brush=20, brushMode="solid", painting=false, eyedrop=f
    which spends roughly half the slider on the bottom quarter of the sizes and leaves the
    broad fill sizes, where precision does not matter, compressed at the top. */
 const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
-/* THE FINE BRUSH IS THE PAID ONE — BUT AS A FLOOR, NOT A WALL.
-   The previous version pinned free rounds to a fixed 44px roller and locked the slider
-   outright, on the reasoning that a usable mid-size brush is a free substitute and
-   "convenience is exactly what nobody has ever paid us for". The comment was explicit that
-   this was a wall and that it would be "visible in the OUTPUT", and it nominated its own
-   tripwire: if share_opened per session drops, look here first.
-
-   IT DROPPED. share_opened per paint_completed, in totals, around the 2026-08-04 16:30
-   deploy:
-       Aug 4, 00-15h (before)   887 paints → 185 opens   20.9%
-       Aug 4, 16-23h (after)    658 paints → 106 opens   16.1%
-       Aug 5, 00-08h            780 paints → 114 opens   14.6%
-   −30%, still falling the next day. Painting itself held up (887 → 658 → 780) and
-   open→completed stayed flat (20.5% → 21.7% → 17.5%), so this is not people failing to
-   finish a share: it is people no longer wanting to start one. The wall did make the free
-   output visibly coarser, exactly as intended — and the result was that they stopped
-   showing it to anyone. Sharing is the app's only free acquisition channel, running
-   against a paid CPI of $0.34.
-   Meanwhile `size` is the most-shown paywall and the worst converting: over 7 days, 161
-   views → 4 trials (2.5%), against round_end's 53 → 5 (9.4%).
-
-   So: keep selling precision, stop breaking the tool. Free gets a live slider from
-   FREE_BRUSH_MIN up, which is enough to work around an arm, a face, or the gap between a
-   body and its background — slowly. Below that floor is genuine detail work and stays
-   KAMO+, and the paywall still fires there, so the lock keeps earning.
-   16 and 24 are a starting point, not a proven optimum: re-read the same ratio in 48h. */
-const FREE_BRUSH=24;        // where a free round starts — usable, not a roller
-const FREE_BRUSH_MIN=16;    // free floor; below this is KAMO+ and opens the paywall
+/* THE FINE BRUSH IS THE PAID ONE. Free rounds start — and stay — on a roller, and the whole
+   bottom of the scale is KAMO+.
+   This is the same test every other lock in this app failed: is there a free substitute?
+   A mid-size brush was one. At 20px on a phone you can still pick your way around an edge,
+   just slowly, so the locked slider was selling convenience and convenience is exactly what
+   nobody has ever paid us for. At 44px you cannot do detail at all — you can cover a torso
+   in three strokes and you cannot touch a face, a hand or the gap between an arm and a
+   body. That is a wall, not an inconvenience, and it is visible in the OUTPUT: the thing
+   you share is visibly coarser than a KAMO+ hide.
+   Deliberately not BRUSH_MAX. A slider pinned to its own end reads as broken; 44 sits high
+   on the bar with obvious travel underneath it, which is the pitch. */
+const FREE_BRUSH=44;
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
@@ -3634,20 +3619,7 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      the star silently vanish the moment someone subscribed, which reads as a feature being
      taken away rather than unlocked. */
   if(sizeStar) sizeStar.style.display="block"; }
-function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
-  let b=brushFromT(t);
-  /* Free users drag freely down to FREE_BRUSH_MIN and stop there. The pitch happens at the
-     floor — where they are actively reaching for precision — instead of on the first touch
-     of the bar, which is what made the tool read as broken.
-     Guarded on the CROSSING (brush>FREE_BRUSH_MIN) rather than on the position, because
-     this runs on every pointermove: without it a single slow drag along the bottom of the
-     bar would fire openPaywall() dozens of times and, once PW_CAP is spent, spam the lock
-     hint on each frame. */
-  if(!canPro() && b<FREE_BRUSH_MIN){
-    if(brush>FREE_BRUSH_MIN) openPaywall("size");
-    b=FREE_BRUSH_MIN;
-  }
-  brush=b; renderSizeBar(); }
+function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
    intent — it is someone adjusting their brush who gets a full screen in the face. It was
@@ -3662,10 +3634,7 @@ let sizing=false;
    It stays wired to openPaywall(), but PW_CAP caps it at one per launch; after that it
    degrades to the tappable lock hint. That keeps what was genuinely right in the note above
    — the hint must not be a dead end — while dropping the part that was wrong. */
-/* No paywall on touch any more — the bar is a working control for everyone, and the lock
-   lives at FREE_BRUSH_MIN inside sizeFromEvent(). Opening the sheet on the first tap meant
-   a free user could never move the slider at all, which is what "it's stuck huge" was. */
-sizeBar.addEventListener("pointerdown",e=>{ e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ openPaywall("size"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
 sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
