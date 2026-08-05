@@ -3039,8 +3039,16 @@ window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="f
    inside an OLDER App Store wrapper that has no `invite` message handler — the button
    would post into the void and look broken. Show it only when the wrapper says it can
    handle it, or when we're in a plain browser (navigator.share / clipboard both work). */
+/* SHOWN TO EVERYONE NOW. This was gated on the wrapper announcing an `invite` capability,
+   which no released binary does — 1.0.2 predates setNativeCaps entirely — so the button has
+   been display:none for every App Store user since launch. `invite_sent`: zero in seven
+   days, against 34-47 completed shares a day. Not a demand problem, an invisible button.
+   The gate was right at the time: the handler posted to native and returned, so showing it
+   on a binary that ignores `invite` would have been a dead button. That is fixed below —
+   the clipboard is the floor, so the button works with or without native. Nothing is left
+   to gate on. */
 function updateInviteBtn(){ const b=document.getElementById("ssInvite"); if(!b) return;
-  b.style.display = (!window.ReactNativeWebView || nativeCaps.invite) ? "" : "none"; }
+  b.style.display=""; }
 // native torch refused/failed → don't leave the button lit claiming it's on
 window.KAMO.torchFailed=()=>{ torchOn=false; if(typeof updateLightBtn==="function") updateLightBtn(); showHint("Couldn't turn the light on"); };
 window.KAMO.revealDone=()=>{ clearTimeout(showBusy._t); try{ busyEl.style.display="none"; }catch(e){} };
@@ -3323,12 +3331,34 @@ document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclic
    their caption too, but Instagram Stories can't show a caption at all, so this is the
    only target where the ask is unambiguous. */
 $("#ssInvite").onclick=()=>{ closeShareSheet(); haptic(10);
-  const sc=Math.round(currentScore||0);
+  const sc=Math.round(currentScore||0), secs=roundSeconds();
   track("share_target_tapped",{target:"invite",mode:shareMode,score:sc});
-  const text="I hid someone in a photo 👀 Bet you can't find them.\n\nHide one for me → "+shareUrl();
-  if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:sc}); return; }
-  if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(()=>{}); return; }
-  try{ navigator.clipboard.writeText(text); showHint("Invite copied — paste it to a friend"); }catch(e){ showHint("Couldn't copy the invite"); } };
+  /* CARRIER — see the round_finished note in enterFinished() for the mechanism.
+     share_target_tapped is not on 1.0.2's WEB_EVENTS list, so un-hiding the button without
+     this would light up a recruitment path we still could not measure, which is the whole
+     reason for turning it on. camera_requested IS on that list and the web has not fired it
+     since the getUserMedia rewrite — the deadest of the three names still passing through
+     the shipped wrapper, and the least likely to be revived and collide.
+     ⚠️ DELETE when a build ships with share_target_tapped allow-listed. */
+  track("camera_requested",{carrier_for:"invite_tapped",mode:shareMode,score:sc,seconds:secs});
+  /* THE OLD COPY PROMISED WHAT THE LINK CANNOT DELIVER: "Bet you can't find them" sent the
+     reader to an App Store page with nothing to find, because the hide never leaves this
+     device. Brag with the number instead — it is true, it is checkable the moment they
+     play, and "beat that" is an invitation to compete rather than a broken promise. When
+     hides are hosted and the link becomes playable, this line gets to stay and finally
+     means it literally. */
+  const text=(secs?("🫥 I made someone vanish in "+secs+"s."):"🫥 I hide people in plain sight.")
+    +"\n\nBeat that → "+shareUrl();
+  /* COPY FIRST, and never return blind into the bridge. 1.0.2 does not handle `invite`, so
+     posting and returning is exactly how this button spent its life doing nothing. The
+     clipboard runs inside the user gesture (a later async write would be refused), and the
+     hint is delayed so a working native sheet is what people see first. Same floor
+     shareStats() already puts under the same bridge message. */
+  let copied=false; try{ navigator.clipboard.writeText(text); copied=true; }catch(e){}
+  const sayCopied=()=>{ if(copied) showHint("Invite copied — paste it to a friend",3000); };
+  if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:sc}); setTimeout(sayCopied,700); return; }
+  if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(sayCopied); return; }
+  sayCopied(); };
 updateInviteBtn();   // plain browser → visible immediately; native → waits for setNativeCaps
 /* The tab switch was never tracked, which is why "93% of users never leave the default
    tab" had to be inferred from the share_completed kind split instead of measured. Now
