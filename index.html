@@ -4093,64 +4093,153 @@ async function chUpload(){
 }
 function chLink(){ return chId?(location.origin+location.pathname+"?h="+chId):""; }
 
-/* THE SEEKER SCREEN. Built in JS rather than markup because it must not exist for the
-   99% of loads that are not a challenge — and because everything it needs is one image
-   and one tap. Deliberately no install wall in front of the fun: play first, offer after. */
+/* THE SEEKER SCREEN =====================================================================
+ * The only screen in KAMO a stranger ever sees, so it is the one that has to sell. Built in
+ * JS rather than markup because it must not exist for the 99% of loads that are not a
+ * challenge, and it borrows the app's own tokens rather than inventing a look: --display
+ * (Space Grotesk) for headlines, the hero card's green gradient for the result panel, and
+ * the existing pwBuyGlow/pwBuySheen clocks on the CTA so it breathes like every other
+ * primary button in the product.
+ *
+ * FIVE TAPS, NOT INFINITE. Unlimited tapping is brute force: no stakes, no tension, and no
+ * moment where the player has clearly lost. The losing moment is the whole point — it is
+ * the only screen where someone has just FELT how hard this is, which is the argument for
+ * the app. Success converts on reciprocity ("hide one back"), failure converts on respect.
+ *
+ * THE TIMER RUNS FROM THE FIRST TAP, not from load. Starting on load punishes reading the
+ * instructions, and the number has to be comparable to the hider's own round time — which
+ * is also measured from when they started, not from when the app opened. */
+const CH_TAPS=5;
 function chSeek(){
   const st=document.createElement("style");
-  st.textContent=".chS{position:fixed;inset:0;z-index:9000;background:#05060a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--font);color:#fff;}"
-    +".chS img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:14px;touch-action:manipulation;}"
-    +".chT{position:absolute;top:calc(16px + var(--safe-t));left:0;right:0;text-align:center;font-size:14px;opacity:.85;padding:0 20px;}"
-    +".chB{position:absolute;bottom:calc(20px + var(--safe-b));left:20px;right:20px;display:flex;flex-direction:column;gap:10px;align-items:center;}"
-    +".chCta{background:var(--mint);color:#04160d;border:none;border-radius:999px;padding:15px 26px;font-weight:800;font-size:16px;width:100%;max-width:340px;}"
-    +".chR{background:none;border:none;color:rgba(255,255,255,.35);font-size:11px;text-decoration:underline;}"
-    +".chM{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:2px solid rgba(255,255,255,.8);pointer-events:none;}"
-    +"@keyframes chShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}"
-    +".chShake{animation:chShake .3s}";
+  st.textContent=
+    /* MOBILE FIRST, and phone-shaped rather than desktop-shrunk. 100dvh not 100vh: on iOS
+       Safari the URL bar makes 100vh taller than the visible viewport, which would push
+       the CTA under the chrome on exactly the screens that matter. The photo takes the
+       space that is left (flex:1 + min-height:0) instead of a fixed vh, so a tall phone
+       gets a big target and a short one still shows the button without scrolling — and
+       nothing here scrolls, body is overflow:hidden. */
+    ".chS{position:fixed;inset:0;height:100dvh;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;"
+      +"justify-content:center;gap:clamp(8px,2.2vh,16px);padding:calc(12px + var(--safe-t)) 16px calc(14px + var(--safe-b));font-family:var(--font);color:var(--text);}"
+    +".chBrand{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.4px;color:#fff;opacity:.9;}"
+    +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(21px,6.2vw,27px);letter-spacing:-.4px;line-height:1.18;text-align:center;margin:0;max-width:18ch;}"
+    +".chSub{font-size:13.5px;opacity:.62;text-align:center;margin:0;}"
+    +".chFrame{position:relative;flex:1 1 auto;min-height:0;display:flex;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;}"
+    /* object-fit:contain inside a flexed frame: the box never exceeds the space left,
+       and the tap coordinates stay honest because the frame shrink-wraps the pixels. */
+    +".chFrame img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;touch-action:manipulation;}"
+    /* Taps left, as pips rather than a number: readable at a glance mid-game, and an empty
+       row reads as "you are out" without anyone having to parse a zero. */
+    +".chPips{display:flex;gap:6px;justify-content:center;}"
+    +".chPip{width:7px;height:7px;border-radius:50%;background:var(--mint);transition:background .2s,transform .2s;}"
+    +".chPip.off{background:rgba(255,255,255,.16);transform:scale(.8);}"
+    +".chClock{font-family:var(--display);font-weight:700;font-size:15px;color:var(--mint);min-height:19px;letter-spacing:-.2px;}"
+    +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
+    +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
+    +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
+    +"@keyframes chShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}"
+    +".chShake{animation:chShake .3s}"
+    /* The result panel is the hero card: same gradient, same radius, same border. A stranger
+       meeting KAMO here should be meeting the same object a new installer meets. */
+    +".chCard{width:min(92vw,420px);background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border:1px solid rgba(255,255,255,.22);"
+      +"border-radius:26px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:22px 20px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}"
+    +".chCta{position:relative;overflow:hidden;width:100%;max-width:340px;height:56px;margin-top:14px;border:none;border-radius:16px;cursor:pointer;"
+      +"font-family:var(--display);font-size:17.5px;font-weight:700;letter-spacing:-.3px;color:#0a0b0e;background:#fff;"
+      +"box-shadow:0 10px 28px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;}"
+    +".chCta::after{content:\"\";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}"
+    +".chCta:active{transform:scale(.98);}"
+    +".chR{background:none;border:none;color:rgba(255,255,255,.3);font-size:11px;text-decoration:underline;margin-top:2px;font-family:var(--font);}";
   document.head.appendChild(st);
+
   const w=document.createElement("div"); w.className="chS";
-  w.innerHTML='<div class="chT" id="chT">Loading…</div><div id="chWrap" style="position:relative"></div><div class="chB" id="chB"></div>';
+  w.innerHTML='<div class="chBrand">KA<b>MO</b></div>'
+    +'<h1 class="chHead" id="chHead">Loading…</h1>'
+    +'<p class="chSub" id="chSub"></p>'
+    +'<div class="chFrame" id="chFrame"></div>'
+    +'<div class="chPips" id="chPips"></div>'
+    +'<div class="chClock" id="chClock"></div>'
+    +'<div id="chFoot"></div>';
   document.body.appendChild(w);
-  const T=()=>document.getElementById("chT"), B=()=>document.getElementById("chB");
-  const cta=(label)=>{ B().innerHTML='<button class="chCta" id="chGo">'+label+'</button><button class="chR" id="chRep">Report this photo</button>';
-    document.getElementById("chGo").onclick=()=>{ track("seek_cta_tapped",{}); location.href=appLink; };
-    document.getElementById("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{});
-      track("seek_reported",{}); B().innerHTML='<div style="opacity:.6;font-size:12px">Reported. Thank you.</div>'; }; };
+  const $$=(id)=>document.getElementById(id);
+
+  /* One ending, two readings. Both land on the same card and the same button shape, because
+     the ask is identical either way — the only thing that changes is why they should want
+     to. Won: reciprocity. Lost: respect for the tool that beat them. */
+  function ending(head,sub,label){
+    $$("chHead").textContent=head;
+    $$("chSub").textContent=sub||"";
+    $$("chPips").innerHTML=""; $$("chClock").textContent="";
+    /* The frame stops growing once the game is over, or on a short phone the card would
+       be pushed off the bottom by a photo nobody is playing any more. */
+    const fr=$$("chFrame"); if(fr) fr.style.flex="0 1 auto";
+    $$("chFoot").innerHTML='<div class="chCard"><button class="chCta" id="chGo">'+label+'</button>'
+      +'<button class="chR" id="chRep">Report this photo</button></div>';
+    $$("chGo").onclick=()=>{ track("seek_cta_tapped",{}); location.href=appLink; };
+    $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{}); track("seek_reported",{});
+      $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
+  }
 
   (async()=>{
     let h; try{ h=await chRpc("get_hide",{p_id:CH_SEEK}); }catch(e){}
-    if(!h||!h.img_path){ T().textContent="This hide has expired."; cta("Play KAMO"); track("seek_missing",{}); return; }
+    if(!h||!h.img_path){ track("seek_missing",{}); ending("This hide is gone.","Expired, or taken down.","Play KAMO"); return; }
     track("seek_opened",{});
+
     const img=document.createElement("img");
     img.src=CH_URL+"/storage/v1/object/public/hides/"+h.img_path;
     img.alt="Find the hidden figure";
-    document.getElementById("chWrap").appendChild(img);
-    T().textContent=h.secs?("Someone vanished in "+h.secs+"s. Tap them."):"Someone is hiding in here. Tap them.";
-    B().innerHTML='<div style="opacity:.55;font-size:12px">'+(h.n_attempts?((h.n_attempts-h.n_found)+" of "+h.n_attempts+" missed"):"Be the first to try")+'</div>';
-    let t0=0, tries=0, done=false;
-    img.onload=()=>{ t0=Date.now(); };
+    $$("chFrame").appendChild(img);
+
+    $$("chHead").textContent=h.secs?("Someone vanished in "+h.secs+"s"):"Someone is hiding in here";
+    /* The social proof goes ABOVE the game, not under the result. It is the dare — "nine
+       people looked and six walked away" is what makes the first tap feel like something. */
+    const missed=(h.n_attempts||0)-(h.n_found||0);
+    $$("chSub").textContent = h.n_attempts
+      ? (missed?(missed+" of "+h.n_attempts+" never found them. Your turn."):"Everyone has found them so far. Your turn.")
+      : "Nobody has tried yet. Tap to find them.";
+    const pips=$$("chPips");
+    const drawPips=(left)=>{ pips.innerHTML=""; for(let i=0;i<CH_TAPS;i++){ const d=document.createElement("div");
+      d.className="chPip"+(i<left?"":" off"); pips.appendChild(d); } };
+    drawPips(CH_TAPS);
+
+    let t0=0, tries=0, done=false, clock=null;
     img.onclick=async(e)=>{
-      if(done||!t0) return;
+      if(done) return;
       const r=img.getBoundingClientRect();
       const x=(e.clientX-r.left)/r.width, y=(e.clientY-r.top)/r.height;
-      const mk=document.createElement("div"); mk.className="chM";
+      if(!t0){ t0=Date.now();
+        clock=setInterval(()=>{ if(!done) $$("chClock").textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100); }
+      tries++; drawPips(CH_TAPS-tries);
+      const mk=document.createElement("div"); mk.className="chMark";
       mk.style.left=(e.clientX-r.left)+"px"; mk.style.top=(e.clientY-r.top)+"px";
-      img.parentNode.appendChild(mk); setTimeout(()=>mk.remove(),900);
-      tries++;
+      $$("chFrame").appendChild(mk); setTimeout(()=>mk.remove(),500);
+
       let res; try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:Date.now()-t0}); }catch(e){ return; }
       if(res&&res.hit){
-        done=true;
+        done=true; clearInterval(clock);
         const secs=((Date.now()-t0)/1000).toFixed(1);
-        T().textContent="Found in "+secs+"s"+(res.missed?(" — "+res.missed+" people missed it"):"");
+        mk.className="chMark hit";
         track("seek_found",{tries:tries,ms:Date.now()-t0});
-        cta("Now hide one yourself");
-      }else{
-        img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
-        track("seek_miss",{tries:tries});
-        /* Three misses and the offer arrives — the point where they have felt how hard it
-           is, which is the argument for the app. The image stays live: nobody is forced
-           out of the game to see a button. */
-        if(tries>=3&&!document.getElementById("chGo")) cta("Too hard? Hide one yourself");
+        ending("Found in "+secs+"s",
+          (res.missed?(res.missed+" people missed them. You didn't."):"First to find them."),
+          "Now hide one back");
+        return;
+      }
+      img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
+      track("seek_miss",{tries:tries});
+      if(tries>=CH_TAPS){
+        done=true; clearInterval(clock);
+        /* THE REVEAL IS THE PITCH. Ending on "you lost" with the figure still invisible is
+           a shrug; showing them what they stared past for thirty seconds is the moment the
+           tool becomes worth having. Asked for only now — never served with the puzzle. */
+        try{
+          const g=await chRpc("reveal_hide",{p_id:CH_SEEK});
+          if(g){ const mk2=document.createElement("div"); mk2.className="chMark hit";
+            mk2.style.left=(g.cx*r.width)+"px"; mk2.style.top=(g.cy*r.height)+"px";
+            mk2.style.animation="none"; mk2.style.opacity="1"; mk2.style.transform="scale(1.2)";
+            $$("chFrame").appendChild(mk2); }
+        }catch(e){}
+        track("seek_failed",{ms:Date.now()-t0});
+        ending("They were right there.","You looked five times and walked past them.","Hide one this good");
       }
     };
   })();
