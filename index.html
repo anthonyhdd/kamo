@@ -2847,32 +2847,44 @@ function shareStats(){
 { const b=document.querySelector(".brand");
   if(b) b.onclick=()=>{ if(brandLongPressed){ brandLongPressed=false; return; }   // the long-press already acted
     if(isPro) openKamoHome(); else openPaywall("brand"); };
-  /* TWO-FINGER 2s HOLD = toggle the free-user preview. FOUNDER TOOL, not a user feature.
-     This was a ONE-finger 1.5s long-press, and "1.5s is hard to hit by accident" was wrong:
-     a thumb resting on the logo clears it. What the victim then experiences is KAMO+ silently
-     switching off across the entire app — every lock back on, the paywall firing again — with
-     nothing on screen saying why or how to undo it. That is a terrible thing for a paying
-     member to stumble into, and it is not something any user should be able to reach.
-     Two pointers held together on an 18px wordmark is not a gesture a hand performs by
-     mistake, and nobody arrives at it by fiddling. It still never touches the entitlement:
-     `kamo_pro`, RevenueCat and the store are untouched, only this local view flag moves. */
-  let t=null; const down=new Set();
-  const cancel=e=>{ if(e && e.pointerId!=null) down.delete(e.pointerId);
-    if(down.size<2){ clearTimeout(t); t=null; } };
-  const start=e=>{
-    if(e && e.pointerId!=null) down.add(e.pointerId);
-    if(down.size!==2 || t) return;          // the SECOND finger arms it, and only once
+  /* TWO CONSECUTIVE LONG-PRESSES = toggle the free-user preview. FOUNDER TOOL, not a feature.
+     History, because both previous attempts were wrong in opposite directions:
+       - ONE 1.5s press: a thumb resting on the logo cleared it, and KAMO+ silently switched
+         off across the whole app with nothing on screen to explain or undo it.
+       - TWO FINGERS held together: unreachable on the device. The .brand wordmark is ~18px
+         tall, and in WKWebView the second touch is claimed by the browser's own pinch
+         gesture before it ever reaches the element. It passed a headless test that
+         dispatched synthetic PointerEvents — which proves the handler, not the reachability.
+     A single-finger long-press is the one gesture that IS reliable here, so the safety has
+     to come from repetition rather than from the number of fingers: the first press only
+     arms a 6s window and says so on screen, the second inside that window acts. A resting
+     thumb does not do that twice, and an accidental first press costs nothing but a hint.
+     It still never touches the entitlement: `kamo_pro`, RevenueCat and the store are
+     untouched, only this local view flag moves. */
+  let t=null, armedUntil=0;
+  const cancel=()=>{ clearTimeout(t); t=null; };
+  const start=()=>{
+    clearTimeout(t);
     t=setTimeout(()=>{
       t=null;
-      brandLongPressed=true;                // swallow the click these pointers will emit
-      forceFree=!forceFree;
-      try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
-      let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
-      isPro = forceFree ? false : real;
-      refreshProUI(); haptic(18);
-      showHint(forceFree ? "Preview: free user \u2014 two-finger hold to restore"
-                         : "KAMO+ restored", 3600);
-    }, 2000);
+      brandLongPressed=true;            // swallow the click this press will emit
+      const now=Date.now();
+      if(now < armedUntil){             // SECOND long-press inside the window \u2192 act
+        armedUntil=0;
+        forceFree=!forceFree;
+        try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
+        let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+        isPro = forceFree ? false : real;
+        refreshProUI(); haptic(18);
+        showHint(forceFree ? "Preview: free user \u2014 long-press twice to restore"
+                           : "KAMO+ restored", 3600);
+        return;
+      }
+      armedUntil = now + 6000;          // FIRST long-press only arms, and says so
+      haptic(10);
+      showHint(forceFree ? "Long-press again to restore KAMO+"
+                         : "Long-press again to preview as a free user", 5000);
+    }, 1500);
   };
   if(b){ b.addEventListener("pointerdown",start);
     ["pointerup","pointercancel","pointerleave"].forEach(e=>b.addEventListener(e,cancel)); } }
