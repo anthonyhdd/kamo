@@ -2572,7 +2572,16 @@ const paywallEl=$("#paywall");
    brush IS what KAMO+ sells on the paint screen, and a pill that says so is a notice about
    a product rather than the product's offer. See the size handler for the crossing guard
    that keeps this to one open per trip below the floor rather than one per frame. */
-const PW_CAP={ color:1, round_end:2, time:2 };
+/* `round_end` 2 -> 4, taking the invitation in the note above ("if it turns out flat, raise
+   these numbers back up") from the other end: not because exposure 4 proved itself, but
+   because the caps were set when nothing distinguished one source from another and that is
+   no longer true. Over 7 days round_end ran 53 views -> 5 trials (9.4%); size ran 161 -> 4
+   (2.5%). Capping the 9.4% at two while the 2.5% is uncapped is backwards whatever the
+   fatigue argument says.
+   RAISED, NOT REMOVED, on purpose. The fatigue evidence above is real and unrefuted, and
+   round_end fires on every retake — a player doing eight hides would meet eight paywalls
+   with no cap at all. Four is a step, not a settlement. */
+const PW_CAP={ color:1, round_end:4, time:2 };
 /* GLOBAL INTERRUPTION BUDGET — the per-source caps above are not enough on their own.
    Four capped sources at 1–2 each already add up to six, and the measurement says they do:
    paywall views per user per day ran 3.7 (Aug 1) → 4.0 (Aug 2) → 5.3 (Aug 3) → 4.8 (Aug 4)
@@ -2592,6 +2601,17 @@ const PW_CAP={ color:1, round_end:2, time:2 };
    budget from degrading it back into the pill the per-source cap no longer produces —
    without this the change would only hold for the first three interruptions of a launch. */
 const PW_USER_INITIATED=new Set(["plus","mark","brand","size"]);
+/* Raising round_end's own cap does nothing on its own: the global budget is first-come,
+   first-served, so a color or time paywall earlier in the session spends the three and the
+   best-converting trigger in the app degrades to a pill. Ordering, not merit, was deciding
+   which offer got the screen.
+   round_end is exempt from the CHECK but still COUNTS — deliberately not folded into
+   PW_USER_INITIATED, which means "the user asked for it" and would be a lie here, and would
+   also stop it incrementing pwInterruptions and quietly corrupt nth_interruption. The
+   justification is narrower than intent: round_end fires 900ms after the player tapped
+   Retake, when the round is over and nothing is in progress. It is the one uninvited paywall
+   that interrupts no activity. */
+const PW_BUDGET_EXEMPT=new Set(["round_end"]);
 const PW_GLOBAL_CAP=3;
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
@@ -2635,7 +2655,10 @@ function openPaywall(source,force){
   /* Global budget, checked AFTER the per-source cap so the lock hint still explains the
      specific feature rather than a generic refusal. Exempt sources bypass entirely. */
   const interruption=!PW_USER_INITIATED.has(src);
-  if(!force && interruption && pwInterruptions>=PW_GLOBAL_CAP){ showLockHint(src); return; }
+  if(!force && interruption && !PW_BUDGET_EXEMPT.has(src) && pwInterruptions>=PW_GLOBAL_CAP){ showLockHint(src); return; }
+  /* Counted even when exempt: pwInterruptions is what nth_interruption reports, and a
+     paywall the user did not ask for is one whether or not the budget was allowed to stop
+     it. Exempting it from the count would make the measurement flatter than reality. */
   if(interruption) pwInterruptions++;
   pwLastSource=src;
   pwSourceOpens[src]=used+1; pwOpens++;
