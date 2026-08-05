@@ -2552,7 +2552,13 @@ const paywallEl=$("#paywall");
    THIS IS A BET WITH A DOWNSIDE: fewer paywalls could mean fewer trials rather than more.
    `nth` below is what settles it — conversion by nth open tells us whether exposure 4 and 5
    were ever worth anything. If it turns out flat, raise these numbers back up. */
-const PW_CAP={ size:1, color:1, round_end:2, time:2 };
+/* `size` is deliberately ABSENT: reaching the bottom of the size bar opens the paywall every
+   time. It used to be capped at 1/launch and degrade to a tap-to-unlock pill, which is the
+   arrangement the numbers above argued for — and it is being reversed on purpose. The fine
+   brush IS what KAMO+ sells on the paint screen, and a pill that says so is a notice about
+   a product rather than the product's offer. See the size handler for the crossing guard
+   that keeps this to one open per trip below the floor rather than one per frame. */
+const PW_CAP={ color:1, round_end:2, time:2 };
 /* GLOBAL INTERRUPTION BUDGET — the per-source caps above are not enough on their own.
    Four capped sources at 1–2 each already add up to six, and the measurement says they do:
    paywall views per user per day ran 3.7 (Aug 1) → 4.0 (Aug 2) → 5.3 (Aug 3) → 4.8 (Aug 4)
@@ -2567,7 +2573,11 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    Same bet and same downside as the per-source caps: fewer paywalls could mean fewer
    trials rather than more. `nth_interruption` on paywall_viewed is what settles it — if
    conversion past the 3rd interruption is not flat, this number is too low. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand"]);
+/* `size` joins them: dragging the slider past the free floor is someone reaching for the
+   fine brush, which is the tool KAMO+ sells here. Exempting it is what stops the global
+   budget from degrading it back into the pill the per-source cap no longer produces —
+   without this the change would only hold for the first three interruptions of a launch. */
+const PW_USER_INITIATED=new Set(["plus","mark","brand","size"]);
 const PW_GLOBAL_CAP=3;
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
@@ -2577,8 +2587,9 @@ let pwOpens=0;                 // resets per app launch: the wrapper reloads the
    apart once the sheet is open. */
 let pwLastSource="generic";
 const pwSourceOpens={};
+/* No `size` entry: that source can no longer reach showLockHint (uncapped and exempt from
+   the global budget), so the line it used to show would be dead copy. */
 const PW_LOCK_HINT={
-  size:  "Fine brush is KAMO+ — tap to unlock",
   color: "Every colour is KAMO+ — tap to unlock",
   round_end:"More time, every tool — tap for KAMO+",
   time:  "75 seconds to paint — tap for KAMO+",
@@ -3712,8 +3723,12 @@ function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-S
      of the bar, which is what made the tool read as broken.
      Guarded on the CROSSING (brush>FREE_BRUSH_MIN) rather than on the position, because
      this runs on every pointermove: without it a single slow drag along the bottom of the
-     bar would fire openPaywall() dozens of times and, once PW_CAP is spent, spam the lock
-     hint on each frame. */
+     bar would fire openPaywall() dozens of times.
+     THIS GUARD IS NOW THE ONLY THING RATE-LIMITING THIS SOURCE — `size` left PW_CAP and is
+     exempt from the global budget, so nothing downstream will absorb a repeat. It holds
+     because the clamp below parks `brush` exactly AT the floor, so the next move fails
+     `brush>FREE_BRUSH_MIN`: one open per trip below the floor, and the user has to drag
+     back up to re-arm it. Anything that changes the clamp has to preserve that. */
   if(!canPro() && b<FREE_BRUSH_MIN){
     if(brush>FREE_BRUSH_MIN) openPaywall("size");
     b=FREE_BRUSH_MIN;
@@ -3733,6 +3748,13 @@ let sizing=false;
    It stays wired to openPaywall(), but PW_CAP caps it at one per launch; after that it
    degrades to the tappable lock hint. That keeps what was genuinely right in the note above
    — the hint must not be a dead end — while dropping the part that was wrong. */
+/* REVERSED, DELIBERATELY, AND NOT BY DATA. The cap and the pill are gone: every trip below
+   FREE_BRUSH_MIN opens the paywall now. The product call is that the fine brush is what
+   KAMO+ sells on this screen, so the moment someone reaches for it is the offer — a pill
+   saying "Fine brush is KAMO+" describes the paywall instead of being it.
+   The 260-opens day above is what this trades against, and it is the number to watch: if
+   `size` returns to a third of all views at ~1% view-to-sheet, the pill was right and this
+   should go back. `source:"size"` on paywall_viewed measures it directly. */
 /* No paywall on touch any more — the bar is a working control for everyone, and the lock
    lives at FREE_BRUSH_MIN inside sizeFromEvent(). Opening the sheet on the first tap meant
    a free user could never move the slider at all, which is what "it's stuck huge" was. */
