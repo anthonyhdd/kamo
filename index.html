@@ -3842,7 +3842,19 @@ initThree();
    camera as before, because CAM_ASKED_KEY is set the moment the sheet is first raised.
    The cost is one extra tap, once per install, for the people who would have allowed
    anyway. The gain is the users who currently deny and can never be asked again. */
-let camAsked=false; try{ camAsked=localStorage.getItem(CAM_ASKED_KEY)==="1"; }catch(_){}
+/* CAM_ASKED_KEY only started being written when priming shipped, so on its own it reports
+   "never asked" for the ENTIRE existing install base — people who answered iOS's sheet days
+   ago. They got primed too: a screen they had never seen, and an extra tap in front of the
+   camera that used to just open. Any other key the app has written is proof this install has
+   been used before, and therefore proof the sheet has already been and gone. */
+let camAsked=false;
+try{
+  camAsked = localStorage.getItem(CAM_ASKED_KEY)==="1"
+    || localStorage.getItem("kamo_onb")==="1"        // finished the paint onboarding
+    || !!localStorage.getItem("kamo_hides")          // completed at least one hide
+    || !!localStorage.getItem("kamo_stats")
+    || !!localStorage.getItem("kamo_pro");
+}catch(_){}
 if(camAsked) startCamera(true);
 else revealHero("primed");
 /* Safety net: never strand the user on the splash disguise. If the camera hasn't
