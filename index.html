@@ -3292,6 +3292,21 @@ async function nativeShare(target){ closeShareSheet();
   const message=(shareMode==="ba")
     ? ("Now you see him. Now you don't! Painted with Kamo — your turn → "+link)
     : ("I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+link);
+  /* THE MEDIA SHARE CARRIES NO LINK, AND NEVER HAS. The web posts {ig-stories, data, score}
+     with no message field, and the native handler shares the media alone — backgroundVideo
+     for Instagram Stories, Share.open({url}) for the fallback. So every completed share
+     since launch has gone out with nothing to click. That is not a mis-attributed link,
+     it is the absence of one, and it is the likeliest reason ~40 shares a day return
+     nobody. (`reveal-video` below does pass `message`, but it only runs when the wrapper
+     advertises revealVideo — which no released build does.)
+     Instagram Stories cannot render a caption at all, so this is not fixable by sending
+     better text: the link has to travel beside the post, not inside it. The clipboard is
+     the only channel that works on a binary frozen since July.
+     Synchronous and BEFORE any await — a clipboard write outside the user gesture is
+     refused. The hint waits 700ms so the share sheet is what they see first. */
+  let linkCopied=false;
+  try{ navigator.clipboard.writeText(message); linkCopied=true; }catch(e){}
+  if(linkCopied) setTimeout(()=>showHint("Link copied — paste it with your post",3200),700);
   // Before/After mode → animated reveal MP4 (native module). Falls back to the static image
   // when the wrapper doesn't advertise the capability (older build) or has no before frame.
   if(shareMode==="ba" && nativeCaps.revealVideo && beforeBoard){
