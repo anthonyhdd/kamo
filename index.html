@@ -2847,23 +2847,35 @@ function shareStats(){
 { const b=document.querySelector(".brand");
   if(b) b.onclick=()=>{ if(brandLongPressed){ brandLongPressed=false; return; }   // the long-press already acted
     if(isPro) openKamoHome(); else openPaywall("brand"); };
-  /* 1.5s LONG-PRESS = toggle the free-user preview. Deliberately long: a normal tap is under
-     300ms, so this is hard to hit by accident, and the confirmation names the way back in the
-     same breath. It never touches the entitlement — a member who trips it has lost a view,
-     not a subscription, and the + returning is the proof. */
-  let t=null;
-  const start=()=>{ clearTimeout(t); t=setTimeout(()=>{
-    brandLongPressed=true;
-    forceFree=!forceFree;
-    try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
-    let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
-    isPro = forceFree ? false : real;
-    refreshProUI(); haptic(18);
-    showHint(forceFree ? "Preview: free user \u2014 long-press to restore"
-                       : "KAMO+ restored", 3600);
-  }, 1500); };
-  const cancel=()=>clearTimeout(t);
-  if(b){ b.addEventListener("pointerdown",start); ["pointerup","pointercancel","pointerleave"].forEach(e=>b.addEventListener(e,cancel)); } }
+  /* TWO-FINGER 2s HOLD = toggle the free-user preview. FOUNDER TOOL, not a user feature.
+     This was a ONE-finger 1.5s long-press, and "1.5s is hard to hit by accident" was wrong:
+     a thumb resting on the logo clears it. What the victim then experiences is KAMO+ silently
+     switching off across the entire app — every lock back on, the paywall firing again — with
+     nothing on screen saying why or how to undo it. That is a terrible thing for a paying
+     member to stumble into, and it is not something any user should be able to reach.
+     Two pointers held together on an 18px wordmark is not a gesture a hand performs by
+     mistake, and nobody arrives at it by fiddling. It still never touches the entitlement:
+     `kamo_pro`, RevenueCat and the store are untouched, only this local view flag moves. */
+  let t=null; const down=new Set();
+  const cancel=e=>{ if(e && e.pointerId!=null) down.delete(e.pointerId);
+    if(down.size<2){ clearTimeout(t); t=null; } };
+  const start=e=>{
+    if(e && e.pointerId!=null) down.add(e.pointerId);
+    if(down.size!==2 || t) return;          // the SECOND finger arms it, and only once
+    t=setTimeout(()=>{
+      t=null;
+      brandLongPressed=true;                // swallow the click these pointers will emit
+      forceFree=!forceFree;
+      try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
+      let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+      isPro = forceFree ? false : real;
+      refreshProUI(); haptic(18);
+      showHint(forceFree ? "Preview: free user \u2014 two-finger hold to restore"
+                         : "KAMO+ restored", 3600);
+    }, 2000);
+  };
+  if(b){ b.addEventListener("pointerdown",start);
+    ["pointerup","pointercancel","pointerleave"].forEach(e=>b.addEventListener(e,cancel)); } }
 /* Clear the Buy spinner without showing a toast — used when a native purchase ends with
    no callback of its own (StoreKit cancel). Without it the button sat spinning, and
    pointer-events:none, for the full 6s of its own safety timer. */
