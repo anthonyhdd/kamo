@@ -525,13 +525,12 @@
      thing (the all-colours swatch carries it too), so a second meaning here would cost more
      than the scale hint it was briefly used for.
      MOVED TO THE BOTTOM, and made tappable. It used to sit at the top "because that is where
-     there is room — the thumb lives high on the bar for free users", and `pointer-events:none`
-     meant a tap on it fell through to the bar and selected the biggest brush. Exactly
-     backwards: the ✦ was badging the one part of the scale a free user already has.
-     Bottom is right under either monetization model — with the 44px wall the whole bar below
-     the thumb is paid, and with a floor the locked range is the bottom too. This survived the
-     revert of that floor (see FREE_BRUSH) on purpose: it is about where the lock LIVES on the
-     bar, not about how much of the bar is locked.
+     there is room — the thumb lives high on the bar for free users", which was true while
+     free rounds were pinned to a 44px roller. They are not any more: free now starts at 24
+     and the locked range is BELOW FREE_BRUSH_MIN, i.e. the bottom of the bar (t=0 is
+     BRUSH_MIN, t=1 is BRUSH_MAX). Left at the top the ✦ was badging the 64px roller — the
+     one part of the scale that is free — and `pointer-events:none` meant a tap on it fell
+     through to the bar and simply selected the biggest brush. Exactly backwards.
      Padding, not a bigger glyph: 19px of text is a poor tap target, and the box is invisible. */
   #sizeStar{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
     color:#fff;opacity:.9;padding:8px 12px;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
@@ -1674,6 +1673,7 @@ async function startCamera(auto){
 function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
+  resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
   shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
@@ -1902,6 +1902,7 @@ function capture(){
   compositeBoard();
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
+  resetZoom();   // every round starts framed as shot — a leftover zoom would silently crop the next hide
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
   /* Reset to the roller on every capture for a non-member. Nothing hands the slider over any
@@ -2021,18 +2022,34 @@ let paintColor="#8a7f6a", brush=20, brushMode="solid", painting=false, eyedrop=f
    which spends roughly half the slider on the bottom quarter of the sizes and leaves the
    broad fill sizes, where precision does not matter, compressed at the top. */
 const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
-/* THE FINE BRUSH IS THE PAID ONE. Free rounds start — and stay — on a roller, and the whole
-   bottom of the scale is KAMO+.
-   This is the same test every other lock in this app failed: is there a free substitute?
-   A mid-size brush was one. At 20px on a phone you can still pick your way around an edge,
-   just slowly, so the locked slider was selling convenience and convenience is exactly what
-   nobody has ever paid us for. At 44px you cannot do detail at all — you can cover a torso
-   in three strokes and you cannot touch a face, a hand or the gap between an arm and a
-   body. That is a wall, not an inconvenience, and it is visible in the OUTPUT: the thing
-   you share is visibly coarser than a KAMO+ hide.
-   Deliberately not BRUSH_MAX. A slider pinned to its own end reads as broken; 44 sits high
-   on the bar with obvious travel underneath it, which is the pitch. */
-const FREE_BRUSH=44;
+/* THE FINE BRUSH IS THE PAID ONE — BUT AS A FLOOR, NOT A WALL.
+   The previous version pinned free rounds to a fixed 44px roller and locked the slider
+   outright, on the reasoning that a usable mid-size brush is a free substitute and
+   "convenience is exactly what nobody has ever paid us for". The comment was explicit that
+   this was a wall and that it would be "visible in the OUTPUT", and it nominated its own
+   tripwire: if share_opened per session drops, look here first.
+
+   IT DROPPED. share_opened per paint_completed, in totals, around the 2026-08-04 16:30
+   deploy:
+       Aug 4, 00-15h (before)   887 paints → 185 opens   20.9%
+       Aug 4, 16-23h (after)    658 paints → 106 opens   16.1%
+       Aug 5, 00-08h            780 paints → 114 opens   14.6%
+   −30%, still falling the next day. Painting itself held up (887 → 658 → 780) and
+   open→completed stayed flat (20.5% → 21.7% → 17.5%), so this is not people failing to
+   finish a share: it is people no longer wanting to start one. The wall did make the free
+   output visibly coarser, exactly as intended — and the result was that they stopped
+   showing it to anyone. Sharing is the app's only free acquisition channel, running
+   against a paid CPI of $0.34.
+   Meanwhile `size` is the most-shown paywall and the worst converting: over 7 days, 161
+   views → 4 trials (2.5%), against round_end's 53 → 5 (9.4%).
+
+   So: keep selling precision, stop breaking the tool. Free gets a live slider from
+   FREE_BRUSH_MIN up, which is enough to work around an arm, a face, or the gap between a
+   body and its background — slowly. Below that floor is genuine detail work and stays
+   KAMO+, and the paywall still fires there, so the lock keeps earning.
+   16 and 24 are a starting point, not a proven optimum: re-read the same ratio in 48h. */
+const FREE_BRUSH=24;        // where a free round starts — usable, not a roller
+const FREE_BRUSH_MIN=16;    // free floor; below this is KAMO+ and opens the paywall
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
@@ -2192,10 +2209,73 @@ function paintAt(p){
   if(paintAt._l){ pctx.beginPath();pctx.moveTo(paintAt._l.x,paintAt._l.y);pctx.lineTo(p.x,p.y);pctx.stroke(); } pctx.beginPath();pctx.arc(p.x,p.y,(brush*paintDpr)/2,0,7);pctx.fill(); paintAt._l=p;
   clipPaintToFigure(from.x,from.y,p.x,p.y); }
 function pick(p){ const d=ctx.getImageData(Math.max(0,Math.min(board.width-1,p.x|0)),Math.max(0,Math.min(board.height-1,p.y|0)),1,1).data; paintColor=`rgb(${d[0]},${d[1]},${d[2]})`; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); return paintColor; }
-board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDefault(); board.setPointerCapture(e.pointerId); const p=pt(e);
+/* ===== PINCH TO ZOOM THE BOARD =================================================
+   Two fingers pan and zoom the frozen frame, like any photo on the phone. One finger still
+   paints, so nothing about the existing gesture changes.
+
+   WHY THIS IS CHEAP: pt() and boardToScreen() both go through board.getBoundingClientRect(),
+   and a rect already reflects CSS transforms. So a transform on #board needs NO change to
+   the painting maths — every stroke, the eyedropper and the poof effects keep landing where
+   the finger is, for free. #board is also the only visible layer once capture() runs
+   (paintLayer is an offscreen canvas composited into it), so there is exactly one element
+   to move. `touch-action:none` is already set, so WebKit will not steal the gesture.
+
+   ⚠️ THE BRUSH DELIBERATELY DOES NOT SCALE. pctx.lineWidth is `brush * paintDpr`, i.e. IMAGE
+   pixels, so at 4x a stroke still covers the same amount of the photo — it merely looks
+   bigger. Zoom therefore buys AIM, not resolution: the free 44px brush stays exactly as
+   coarse as it is meant to be, and the `size` lock (the largest paywall trigger by volume)
+   is untouched. Making zoom grant fine detail would take deliberate extra work — dividing
+   the brush by zoomK. Do not. */
+const ZOOM_MAX=4;
+let zoomK=1, zoomTX=0, zoomTY=0, pinch=null;
+const zPts=new Map();
+function applyZoom(){
+  // Clamp the pan so the frame can never be dragged off its own viewport. offsetWidth is the
+  // LAYOUT size, unaffected by the transform, which is what makes this stable across frames.
+  const mx=Math.max(0,(zoomK-1)*board.offsetWidth/2), my=Math.max(0,(zoomK-1)*board.offsetHeight/2);
+  zoomTX=Math.max(-mx,Math.min(mx,zoomTX)); zoomTY=Math.max(-my,Math.min(my,zoomTY));
+  board.style.transform = zoomK<=1.001 ? "" : `translate(${zoomTX}px,${zoomTY}px) scale(${zoomK})`;
+}
+function resetZoom(){ zoomK=1; zoomTX=0; zoomTY=0; pinch=null; zPts.clear(); board.style.transform=""; }
+const zDist=()=>{ const [a,b]=[...zPts.values()]; return Math.hypot(a.x-b.x,a.y-b.y); };
+const zMid =()=>{ const [a,b]=[...zPts.values()]; return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; };
+
+board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDefault();
+  /* Register the pointer BEFORE capturing it, and never let capture throw the handler away.
+     setPointerCapture rejects an id it does not consider active, and that exception used to
+     take down everything below it — which now includes the pinch bookkeeping. A finger
+     missing from zPts makes the NEXT touch read as the second half of a gesture, i.e.
+     painting silently stops. Order first, then guard. */
+  /* SELF-HEAL. isPrimary marks the first contact of a NEW gesture, so anything still sitting
+     in zPts at that moment is a pointer whose pointerup never arrived — and a single stale id
+     is enough to make the next touch look like the second finger of a pinch, i.e. painting
+     stops working with no visible cause. iOS drops pointerup often enough (interruptions,
+     capture loss, the app backgrounding mid-stroke) that balanced down/up cannot be assumed.
+     Clearing here costs nothing and makes the state unable to wedge. */
+  if(e.isPrimary){ zPts.clear(); pinch=null; }
+  zPts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{ board.setPointerCapture(e.pointerId); }catch(_){}
+  if(zPts.size===2){
+    /* Second finger: abandon the stroke in progress. Deliberately NOT endPaint() — that
+       fires paint_completed, the activation event, and a pinch is not a finished stroke. */
+    painting=false; paintAt._l=null;
+    const m=zMid(); pinch={d0:zDist(),k0:zoomK,mx:m.x,my:m.y,tx0:zoomTX,ty0:zoomTY};
+    return;
+  }
+  if(zPts.size>1) return;
+  const p=pt(e);
   if(eyedrop){ const c=pick(p); const l=$("#loupe"); l.style.display="block"; l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   pushUndo(); painting=true; paintAt._l=null; paintAt(p); haptic(12); });
-board.addEventListener("pointermove",e=>{ if(mode!=="paint")return; const p=pt(e);
+board.addEventListener("pointermove",e=>{ if(mode!=="paint")return;
+  if(zPts.has(e.pointerId)) zPts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch && zPts.size>=2){
+    const m=zMid();
+    zoomK=Math.max(1,Math.min(ZOOM_MAX, pinch.k0*(zDist()/(pinch.d0||1))));
+    zoomTX=pinch.tx0+(m.x-pinch.mx); zoomTY=pinch.ty0+(m.y-pinch.my);
+    applyZoom(); return;
+  }
+  if(zPts.size>1) return;
+  const p=pt(e);
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
   if(painting){ paintAt(p); paintHaptic(); } });
 /* ===== PAINT TIMELAPSE =========================================================
@@ -2263,7 +2343,13 @@ function tlCaptureFinal(){
   }catch(e){}
 }
 function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
-board.addEventListener("pointerup",()=>{ endPaint(); flushExpire(); }); board.addEventListener("pointercancel",()=>{ endPaint(); flushExpire(); });
+/* Lifting a finger has to drop it from the pinch set FIRST, or a two-finger gesture leaves
+   a stale pointer behind and the next single-finger touch is read as the second half of a
+   pinch — i.e. painting silently stops working. Ending the pinch on the way down to one
+   finger (rather than zero) also stops the remaining finger from smearing a stroke across
+   the frame the instant its partner lifts. */
+const zUp=e=>{ zPts.delete(e.pointerId); if(zPts.size<2){ if(pinch){ pinch=null; painting=false; paintAt._l=null; } } endPaint(); flushExpire(); };
+board.addEventListener("pointerup",zUp); board.addEventListener("pointercancel",zUp);
 
 /* FOUR, to match what extractPalette() is asked for. This list is only ever the fallback
    (extractPalette throws), and at ten entries that fallback overflowed the row — the one
@@ -3619,7 +3705,20 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      the star silently vanish the moment someone subscribed, which reads as a feature being
      taken away rather than unlocked. */
   if(sizeStar) sizeStar.style.display="block"; }
-function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t)); brush=brushFromT(t); renderSizeBar(); }
+function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
+  let b=brushFromT(t);
+  /* Free users drag freely down to FREE_BRUSH_MIN and stop there. The pitch happens at the
+     floor — where they are actively reaching for precision — instead of on the first touch
+     of the bar, which is what made the tool read as broken.
+     Guarded on the CROSSING (brush>FREE_BRUSH_MIN) rather than on the position, because
+     this runs on every pointermove: without it a single slow drag along the bottom of the
+     bar would fire openPaywall() dozens of times and, once PW_CAP is spent, spam the lock
+     hint on each frame. */
+  if(!canPro() && b<FREE_BRUSH_MIN){
+    if(brush>FREE_BRUSH_MIN) openPaywall("size");
+    b=FREE_BRUSH_MIN;
+  }
+  brush=b; renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
    intent — it is someone adjusting their brush who gets a full screen in the face. It was
@@ -3634,7 +3733,10 @@ let sizing=false;
    It stays wired to openPaywall(), but PW_CAP caps it at one per launch; after that it
    degrades to the tappable lock hint. That keeps what was genuinely right in the note above
    — the hint must not be a dead end — while dropping the part that was wrong. */
-sizeBar.addEventListener("pointerdown",e=>{ if(!canPro()){ openPaywall("size"); return; } e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+/* No paywall on touch any more — the bar is a working control for everyone, and the lock
+   lives at FREE_BRUSH_MIN inside sizeFromEvent(). Opening the sheet on the first tap meant
+   a free user could never move the slider at all, which is what "it's stuck huge" was. */
+sizeBar.addEventListener("pointerdown",e=>{ e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
 sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
@@ -3715,7 +3817,7 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   const hidden=br?Math.max(0,(r.bottom-br.top)*paintDpr+8*paintDpr):0;
   drawWatermark(rctx,W,Math.max(H*0.5,H-hidden));
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
-function enterFinished(auto){ if(finished) return; finished=true;
+function enterFinished(auto){ if(finished) return; finished=true; resetZoom();   // the reveal composites from #board — a live transform would misalign the wipe
   tlCaptureFinal();   // the reveal's camouflaged beat is frames.last — see tlCaptureFinal()
   /* Remembered for the retake paywall: a round the CLOCK ended is the one case where we
      know which lock to lead with, because the app just took the hide away mid-paint. */
