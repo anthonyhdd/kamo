@@ -526,11 +526,13 @@
      than the scale hint it was briefly used for.
      MOVED TO THE BOTTOM, and made tappable. It used to sit at the top "because that is where
      there is room — the thumb lives high on the bar for free users", which was true while
-     free rounds were pinned to a 44px roller. They are not any more: free now starts at 24
-     and the locked range is BELOW FREE_BRUSH_MIN, i.e. the bottom of the bar (t=0 is
-     BRUSH_MIN, t=1 is BRUSH_MAX). Left at the top the ✦ was badging the 64px roller — the
-     one part of the scale that is free — and `pointer-events:none` meant a tap on it fell
-     through to the bar and simply selected the biggest brush. Exactly backwards.
+     free rounds were pinned to a 44px roller. They are not any more: free is fixed at 24 and
+     the ENTIRE bar is now KAMO+ (t=0 is BRUSH_MIN, t=1 is BRUSH_MAX), so the bottom is no
+     longer "the locked end" so much as the end it was moved to when only the fine range was
+     locked. Kept there because it reads as detail work. Left at the top the ✦ badged the
+     64px roller — at the time the one part of the scale that was free — and
+     `pointer-events:none` meant a tap on it fell through to the bar and simply selected the
+     biggest brush. Exactly backwards.
      Padding, not a bigger glyph: 19px of text is a poor tap target, and the box is invisible. */
   #sizeStar{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
     color:#fff;opacity:.9;padding:8px 12px;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
@@ -708,8 +710,17 @@
      readable. Above the fill it would cover the text instead.
      Delayed 0.9s so the card finishes rising before anything moves, then on the shared 3.4s
      pwShimmer clock. */
-  .pwPlan.active{border-color:transparent;background-clip:padding-box;
-    box-shadow:0 6px 20px rgba(95,230,164,.10);}
+  /* THE STATIC EDGE CAME BACK. Handing the whole selected state to the animated ring meant
+     selection was only unmistakable during the bright part of the sweep: --ring is
+     rgba(95,230,164,.20) across most of its width, and it is 0.9s late on top of that, so
+     for the first second after a tap the row was outlined in 20%-alpha green and read as
+     barely-changed. A choice the user just made has to be legible in the frame after they
+     make it, and it cannot depend on where an animation happens to be.
+     So the border itself is solid mint again and never moves; the ::before shimmer rides
+     just outside it as decoration rather than as the signal. The fill deliberately stays
+     identical to the unselected row — that part of the note below was right. */
+  .pwPlan.active{border-color:var(--mint);background-clip:padding-box;
+    box-shadow:0 6px 20px rgba(95,230,164,.16),0 0 0 3px rgba(95,230,164,.13);}
   .pwPlan.active::before{content:"";position:absolute;inset:-1.5px;border-radius:17.5px;z-index:-1;pointer-events:none;
     padding:1.5px;background:var(--ring);background-size:260% 100%;
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
@@ -2043,13 +2054,16 @@ const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
    Meanwhile `size` is the most-shown paywall and the worst converting: over 7 days, 161
    views → 4 trials (2.5%), against round_end's 53 → 5 (9.4%).
 
-   So: keep selling precision, stop breaking the tool. Free gets a live slider from
-   FREE_BRUSH_MIN up, which is enough to work around an arm, a face, or the gap between a
-   body and its background — slowly. Below that floor is genuine detail work and stays
-   KAMO+, and the paywall still fires there, so the lock keeps earning.
-   16 and 24 are a starting point, not a proven optimum: re-read the same ratio in 48h. */
-const FREE_BRUSH=24;        // where a free round starts — usable, not a roller
-const FREE_BRUSH_MIN=16;    // free floor; below this is KAMO+ and opens the paywall
+   REVISED AGAIN, KNOWING ALL OF THE ABOVE. The slider is gone for free users: one size,
+   and touching the bar opens the paywall (see its pointerdown handler). Everything in this
+   note is the case against, and none of it has been refuted — 161 views → 4 trials is a bad
+   trade if the coarser output costs shares at a $0.34 CPI.
+   What is different is WHICH size they are stuck on. The version that cost shares left them
+   at the 64px roller; 24 covers an arm, a face, or a body-to-background gap. The bet is that
+   the sharing collapse was caused by output nobody wanted to post, not by the lock itself.
+   Two numbers settle it, and both are already tracked: share starts, and `source:"size"` on
+   paywall_viewed. If shares fall again, this is wrong regardless of what trials do. */
+const FREE_BRUSH=24;        // the ONLY size a free user gets — see the note above before changing it
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
@@ -2552,7 +2566,22 @@ const paywallEl=$("#paywall");
    THIS IS A BET WITH A DOWNSIDE: fewer paywalls could mean fewer trials rather than more.
    `nth` below is what settles it — conversion by nth open tells us whether exposure 4 and 5
    were ever worth anything. If it turns out flat, raise these numbers back up. */
-const PW_CAP={ size:1, color:1, round_end:2, time:2 };
+/* `size` is deliberately ABSENT: reaching the bottom of the size bar opens the paywall every
+   time. It used to be capped at 1/launch and degrade to a tap-to-unlock pill, which is the
+   arrangement the numbers above argued for — and it is being reversed on purpose. The fine
+   brush IS what KAMO+ sells on the paint screen, and a pill that says so is a notice about
+   a product rather than the product's offer. See the size handler for the crossing guard
+   that keeps this to one open per trip below the floor rather than one per frame. */
+/* `round_end` 2 -> 4, taking the invitation in the note above ("if it turns out flat, raise
+   these numbers back up") from the other end: not because exposure 4 proved itself, but
+   because the caps were set when nothing distinguished one source from another and that is
+   no longer true. Over 7 days round_end ran 53 views -> 5 trials (9.4%); size ran 161 -> 4
+   (2.5%). Capping the 9.4% at two while the 2.5% is uncapped is backwards whatever the
+   fatigue argument says.
+   RAISED, NOT REMOVED, on purpose. The fatigue evidence above is real and unrefuted, and
+   round_end fires on every retake — a player doing eight hides would meet eight paywalls
+   with no cap at all. Four is a step, not a settlement. */
+const PW_CAP={ color:1, round_end:4, time:2 };
 /* GLOBAL INTERRUPTION BUDGET — the per-source caps above are not enough on their own.
    Four capped sources at 1–2 each already add up to six, and the measurement says they do:
    paywall views per user per day ran 3.7 (Aug 1) → 4.0 (Aug 2) → 5.3 (Aug 3) → 4.8 (Aug 4)
@@ -2567,7 +2596,22 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    Same bet and same downside as the per-source caps: fewer paywalls could mean fewer
    trials rather than more. `nth_interruption` on paywall_viewed is what settles it — if
    conversion past the 3rd interruption is not flat, this number is too low. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand"]);
+/* `size` joins them: dragging the slider past the free floor is someone reaching for the
+   fine brush, which is the tool KAMO+ sells here. Exempting it is what stops the global
+   budget from degrading it back into the pill the per-source cap no longer produces —
+   without this the change would only hold for the first three interruptions of a launch. */
+const PW_USER_INITIATED=new Set(["plus","mark","brand","size"]);
+/* Raising round_end's own cap does nothing on its own: the global budget is first-come,
+   first-served, so a color or time paywall earlier in the session spends the three and the
+   best-converting trigger in the app degrades to a pill. Ordering, not merit, was deciding
+   which offer got the screen.
+   round_end is exempt from the CHECK but still COUNTS — deliberately not folded into
+   PW_USER_INITIATED, which means "the user asked for it" and would be a lie here, and would
+   also stop it incrementing pwInterruptions and quietly corrupt nth_interruption. The
+   justification is narrower than intent: round_end fires 900ms after the player tapped
+   Retake, when the round is over and nothing is in progress. It is the one uninvited paywall
+   that interrupts no activity. */
+const PW_BUDGET_EXEMPT=new Set(["round_end"]);
 const PW_GLOBAL_CAP=3;
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
@@ -2577,8 +2621,9 @@ let pwOpens=0;                 // resets per app launch: the wrapper reloads the
    apart once the sheet is open. */
 let pwLastSource="generic";
 const pwSourceOpens={};
+/* No `size` entry: that source can no longer reach showLockHint (uncapped and exempt from
+   the global budget), so the line it used to show would be dead copy. */
 const PW_LOCK_HINT={
-  size:  "Fine brush is KAMO+ — tap to unlock",
   color: "Every colour is KAMO+ — tap to unlock",
   round_end:"More time, every tool — tap for KAMO+",
   time:  "75 seconds to paint — tap for KAMO+",
@@ -2593,7 +2638,7 @@ function showLockHint(src){
 }
 const PW_PITCH={
   size:  { t:"Paint the details, not just the shape",
-           s:"Free paints with a 44px roller. KAMO+ unlocks the fine brush." },
+           s:"Free paints at one size. KAMO+ unlocks the whole range, down to fine detail." },
   color: { t:"Every color, not just the three",
            s:"Free gets three shades off the photo. KAMO+ opens them all." },
   mark:  { t:"Your hide, without our name on it",
@@ -2610,7 +2655,10 @@ function openPaywall(source,force){
   /* Global budget, checked AFTER the per-source cap so the lock hint still explains the
      specific feature rather than a generic refusal. Exempt sources bypass entirely. */
   const interruption=!PW_USER_INITIATED.has(src);
-  if(!force && interruption && pwInterruptions>=PW_GLOBAL_CAP){ showLockHint(src); return; }
+  if(!force && interruption && !PW_BUDGET_EXEMPT.has(src) && pwInterruptions>=PW_GLOBAL_CAP){ showLockHint(src); return; }
+  /* Counted even when exempt: pwInterruptions is what nth_interruption reports, and a
+     paywall the user did not ask for is one whether or not the budget was allowed to stop
+     it. Exempting it from the count would make the measurement flatter than reality. */
   if(interruption) pwInterruptions++;
   pwLastSource=src;
   pwSourceOpens[src]=used+1; pwOpens++;
@@ -3753,17 +3801,9 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   if(sizeStar) sizeStar.style.display="block"; }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
-  /* Free users drag freely down to FREE_BRUSH_MIN and stop there. The pitch happens at the
-     floor — where they are actively reaching for precision — instead of on the first touch
-     of the bar, which is what made the tool read as broken.
-     Guarded on the CROSSING (brush>FREE_BRUSH_MIN) rather than on the position, because
-     this runs on every pointermove: without it a single slow drag along the bottom of the
-     bar would fire openPaywall() dozens of times and, once PW_CAP is spent, spam the lock
-     hint on each frame. */
-  if(!canPro() && b<FREE_BRUSH_MIN){
-    if(brush>FREE_BRUSH_MIN) openPaywall("size");
-    b=FREE_BRUSH_MIN;
-  }
+  /* No free-user branch here any more: the bar's pointerdown handler turns free users away
+     before sizing ever starts, so this only ever runs for a member. The old floor logic
+     (drag freely down to FREE_BRUSH_MIN, paywall on crossing) is gone with it. */
   brush=b; renderSizeBar(); }
 let sizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
@@ -3779,10 +3819,27 @@ let sizing=false;
    It stays wired to openPaywall(), but PW_CAP caps it at one per launch; after that it
    degrades to the tappable lock hint. That keeps what was genuinely right in the note above
    — the hint must not be a dead end — while dropping the part that was wrong. */
-/* No paywall on touch any more — the bar is a working control for everyone, and the lock
-   lives at FREE_BRUSH_MIN inside sizeFromEvent(). Opening the sheet on the first tap meant
-   a free user could never move the slider at all, which is what "it's stuck huge" was. */
-sizeBar.addEventListener("pointerdown",e=>{ e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+/* REVERSED, DELIBERATELY, AND NOT BY DATA. Brush size is now a KAMO+ tool outright: free
+   users paint at ONE size (FREE_BRUSH) and every touch of the bar opens the paywall. No
+   floor to discover, no pill, no range — the control is the offer.
+   Read the two notes above as the objections this has to answer, because they are real:
+     - "260 opens in a day at 0.9%" — that WAS this arrangement, and it is what the cap and
+       the pill were built to stop. `source:"size"` on paywall_viewed measures it again
+       directly; if it returns to a third of all views at ~1%, this was the wrong call.
+     - "it's stuck huge" — the first version of tap-to-paywall pinned free users at the 64px
+       roller, so the paywall read as an apology for a broken tool. It does not now:
+       FREE_BRUSH is 24, a size you can actually work an outline with. That is the whole
+       difference between this and the version that failed, and it is why FREE_BRUSH must
+       not drift back up.
+   The ✦ still sits at the bottom of the bar (see its CSS note): it was placed at the locked
+   fine end, and the whole bar is locked now, so the position is legacy rather than wrong. */
+sizeBar.addEventListener("pointerdown",e=>{
+  /* Free users never enter `sizing`, which is what keeps pointermove from doing anything:
+     no setPointerCapture, no sizeFromEvent, so `brush` cannot move off FREE_BRUSH. Not
+     forced — `size` is uncapped and exempt from the interruption budget, so a plain call
+     opens every time, and leaving force off means a future cap can still reach it. */
+  if(!canPro()){ e.preventDefault(); haptic(10); openPaywall("size"); return; }
+  e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
 sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
