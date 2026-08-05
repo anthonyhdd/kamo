@@ -2824,7 +2824,19 @@ document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=
    invisible until a build shipping the matching analytics.js entry reaches users. It is
    added there in the same change. */
 $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID);
-  track("purchase_initiated",{ plan:pwPlan, product_id:prod, source:pwLastSource, nth:pwOpens, trial:trialOn() });
+  const buyProps={ plan:pwPlan, product_id:prod, source:pwLastSource, nth:pwOpens, trial:trialOn() };
+  track("purchase_initiated",buyProps);
+  /* CARRIER — the third and LAST of these. purchase_initiated is not on 1.0.2's
+     WEB_EVENTS list, so it reports zero on every single day, including the day that
+     produced 8 trials. Those trials exist, so the event is being fired and dropped.
+     What that costs is the middle of the funnel: 307 paywalls viewed yesterday and no
+     way to tell whether nobody taps Buy or whether everybody taps it and Apple's sheet
+     is where they leave. Those are opposite problems with opposite fixes.
+     paint_started is the last unused name on the shipped allow-list — camera_requested
+     now carries the invite tap and reveal_previewed carries round_finished. After this
+     there is no channel left, and anything else new has to wait for a build.
+     ⚠️ DELETE when a build ships with purchase_initiated allow-listed. */
+  track("paint_started",Object.assign({carrier_for:"purchase_initiated"},buyProps));
   haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ track("restore_tapped"); if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
