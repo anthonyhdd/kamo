@@ -2912,50 +2912,66 @@ function shareStats(){
   if(c) c.onclick=()=>{ closeKamoHome(); haptic(8); };
   /* Tapping the backdrop closes too — the card is the sheet, everything outside it is not. */
   const el=$("#kamoHome"); if(el) el.onclick=e=>{ if(e.target===el) closeKamoHome(); }; }
+/* Entering the free preview needs a passphrase on top of the gesture. The gesture alone
+   cannot stay secret: this file is served from GitHub Pages and the repo behind it is
+   public, so whatever the hold is, it is one "view source" away from being common
+   knowledge. Only the SHA-256 ships. If it ever falls, the damage is that someone hides
+   brushes they paid for from themselves — the flag can only ever subtract.
+   LEAVING the preview is deliberately NOT gated: it must be impossible to end up stuck in
+   a free view, and restoring the real entitlement harms nothing. */
+const FORCE_FREE_HASH="e9e326d5f3b4741fe5967b5f9f3997e6275331ba18567ef9ef9e0e3a00e78371";
+async function forceFreeAuthorized(){
+  if(forceFree) return true;
+  let a=null; try{ a=prompt(""); }catch(e){}   // blank prompt: says nothing to a stranger
+  if(a==null) return false;
+  try{ const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(a.trim()));
+    return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join("")===FORCE_FREE_HASH; }
+  catch(e){ return false; }
+}
 /* THE WORDMARK. Members get their home; everyone else gets the offer, tagged `brand` so
    this entry point is separable in the funnel from the ✦ button next to it. No pitch key:
    tapping the logo is curiosity, not a refusal, so it keeps the generic copy. */
 { const b=document.querySelector(".brand");
   if(b) b.onclick=()=>{ if(brandLongPressed){ brandLongPressed=false; return; }   // the long-press already acted
     if(isPro) openKamoHome(); else openPaywall("brand"); };
-  /* TWO CONSECUTIVE LONG-PRESSES = toggle the free-user preview. FOUNDER TOOL, not a feature.
-     History, because both previous attempts were wrong in opposite directions:
+  /* ONE 6-SECOND PRESS = toggle the free-user preview. FOUNDER TOOL, not a feature.
+     History, because three earlier shapes were each wrong in their own way:
        - ONE 1.5s press: a thumb resting on the logo cleared it, and KAMO+ silently switched
          off across the whole app with nothing on screen to explain or undo it.
        - TWO FINGERS held together: unreachable on the device. The .brand wordmark is ~18px
          tall, and in WKWebView the second touch is claimed by the browser's own pinch
          gesture before it ever reaches the element. It passed a headless test that
          dispatched synthetic PointerEvents — which proves the handler, not the reachability.
-     A single-finger long-press is the one gesture that IS reliable here, so the safety has
-     to come from repetition rather than from the number of fingers: the first press only
-     arms a 6s window and says so on screen, the second inside that window acts. A resting
-     thumb does not do that twice, and an accidental first press costs nothing but a hint.
+       - TWO CONSECUTIVE 1.5s PRESSES: reliable, but a sequence you have to remember, and it
+         had to announce itself on screen to be usable at all — which told every curious
+         user that the preview existed.
+     The duration is the safety now. 1.5s was too short because it sits inside the range of
+     an idle thumb; 6s of continuous, stationary contact on an 18px target is not something
+     a hand does by accident, so one press can be silent AND safe at the same time.
      It still never touches the entitlement: `kamo_pro`, RevenueCat and the store are
-     untouched, only this local view flag moves. */
-  let t=null, armedUntil=0;
+     untouched, only this local view flag moves.
+     ENTERING also asks for a passphrase (see forceFreeAuthorized) — the gesture stops being
+     secret the moment anyone reads this file. LEAVING needs the same 6s hold, no passphrase:
+     being stuck in a free view must never be possible. */
+  const HOLD_MS=6000;
+  let t=null;
   const cancel=()=>{ clearTimeout(t); t=null; };
   const start=()=>{
     clearTimeout(t);
     t=setTimeout(()=>{
       t=null;
       brandLongPressed=true;            // swallow the click this press will emit
-      const now=Date.now();
-      if(now < armedUntil){             // SECOND long-press inside the window \u2192 act
-        armedUntil=0;
+      forceFreeAuthorized().then(ok=>{
+        if(!ok) return;                 // wrong passphrase or cancelled: no hint, nothing to probe
         forceFree=!forceFree;
         try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
         let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
         isPro = forceFree ? false : real;
         refreshProUI(); haptic(18);
-        showHint(forceFree ? "Preview: free user \u2014 long-press twice to restore"
+        showHint(forceFree ? "Preview: free user \u2014 hold the logo 6s to restore"
                            : "KAMO+ restored", 3600);
-        return;
-      }
-      armedUntil = now + 6000;          // FIRST long-press only arms, and says so
-      haptic(10);
-      showHint(forceFree ? "Long-press again to restore KAMO+"
-                         : "Long-press again to preview as a free user", 5000);
-    }, 1500);
+      });
+    }, HOLD_MS);
   };
   if(b){ b.addEventListener("pointerdown",start);
     ["pointerup","pointercancel","pointerleave"].forEach(e=>b.addEventListener(e,cancel)); } }
