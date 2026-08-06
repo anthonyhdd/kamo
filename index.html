@@ -3826,7 +3826,22 @@ function fillShareKicker(){
 (function shareSheetSwipe(){
   const card=shareSheetEl.querySelector(".ssCard"); if(!card) return;
   let y0=null, moved=false;
-  card.addEventListener("pointerdown",e=>{ y0=e.clientY; moved=false; },{passive:true});
+  /* THE UPLOAD STARTS ON THE FIRST TOUCH, NOT ON THE PRESENTATION.
+     The peek deliberately does not publish — it is shown for every finished round, and
+     uploading all of those puts five strangers' rooms on a public URL for each one that
+     gets sent. But "Challenge a friend" is VISIBLE in the peek, and without a published
+     hide chLink() is "" and the message degrades to the generic invite. A change made to
+     increase challenge sends would have sent fewer of them.
+     Touching the card is the middle ground: a deliberate reach, a far smaller population
+     than every round, and it happens well before the tap — the median gap between the
+     reveal and a share is 154 seconds, so the upload has time to land.
+     chUpload() is idempotent (`if(!CH_MAKE||chId) return`), so repeated touches cost
+     nothing. If it still has not finished by the time they send, the message falls back to
+     the honest invite text rather than promising a puzzle that does not exist. */
+  card.addEventListener("pointerdown",e=>{
+    y0=e.clientY; moved=false;
+    if(ssState==="peek"){ try{ chUpload(); }catch(_){} }
+  },{passive:true});
   card.addEventListener("pointermove",e=>{
     if(y0===null||moved) return;
     const dy=e.clientY-y0;
