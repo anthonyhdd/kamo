@@ -86,7 +86,9 @@ try {
    This is the seam that shipped twice. The band shrank while the stops stayed put, and the
    ramp got steeper every redesign until it drew a visible edge across the photo. Assert the
    shape rather than trusting the next person to remember the history. */
-const scrim = html.match(/const bh=Math\.round\(H\*([\d.]+)\);\s*let bg=c\.createLinearGradient[\s\S]{0,600}?c\.fillRect\(0,H-bh,W,bh\)/);
+// Window widened from 600: the stops are now separated by the comment explaining why the
+// final one is opaque, and a check that silently stops finding its target is worse than none.
+const scrim = html.match(/const bh=Math\.round\(H\*([\d.]+)\);\s*let bg=c\.createLinearGradient[\s\S]{0,2000}?c\.fillRect\(0,H-bh,W,bh\)/);
 if (!scrim) bad('could not find the watermark scrim — the check needs updating, or it was removed');
 else {
   const stops = [...scrim[0].matchAll(/addColorStop\(([\d.]+),"rgba\(\d+,\d+,\d+,([\d.]+)\)"\)/g)]
@@ -107,9 +109,25 @@ else {
     // 120 physical px below the top of the band, on the reported 2622px-tall screenshot.
     // The version that drew the seam measured .359 here.
     const a = alphaAt(120 / (band * 2622));
-    a > 0.08
-      ? bad(`scrim reaches alpha ${a.toFixed(3)} only 120px in — that is the visible seam again (must stay under .08)`)
-      : ok(`scrim onset gentle (alpha ${a.toFixed(3)} at 120px, band ${band}H)`);
+    if (a > 0.08) {
+      bad(`scrim reaches alpha ${a.toFixed(3)} only 120px in — that is the visible seam again (must stay under .08)`);
+    } else {
+      ok(`scrim onset gentle (alpha ${a.toFixed(3)} at 120px, band ${band}H)`);
+      /* THE OTHER END, which is where the seam actually lived. A gentle onset that stops at
+         .93 still leaves 7% of the photo in the canvas's last row against a flat #05060a
+         page — invisible on a dark photo, a hard line on a bright one. The final stop must
+         be fully opaque AND the same colour as --bg. */
+      const last = stops[stops.length - 1];
+      const bgVar = (html.match(/--bg:\s*#([0-9a-f]{6})/i) || [])[1];
+      const lastRgb = (scrim[0].match(/addColorStop\([\d.]+,"rgba\((\d+),(\d+),(\d+),[\d.]+\)"\)(?![\s\S]*addColorStop)/) || []).slice(1, 4);
+      const bgRgb = bgVar ? [parseInt(bgVar.slice(0, 2), 16), parseInt(bgVar.slice(2, 4), 16), parseInt(bgVar.slice(4, 6), 16)] : null;
+      if (last[1] !== 1) {
+        bad(`scrim ends at alpha ${last[1]} — the last row of the photo still shows through against the page, `
+          + 'which is the seam on any bright image. It must reach 1.');
+      } else if (bgRgb && lastRgb.length === 3 && lastRgb.map(Number).join() !== bgRgb.join()) {
+        bad(`scrim ends opaque on rgb(${lastRgb.join(',')}) but --bg is rgb(${bgRgb.join(',')}) — they must match exactly`);
+      } else ok(`scrim closes opaque on the page background (rgb(${lastRgb.join(',')}))`);
+    }
   }
 }
 
