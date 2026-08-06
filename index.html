@@ -906,11 +906,10 @@
      draws it too, so by the time this row appears the user has been looking at the mark on
      their own hide. The row and the mark ship together on purpose; neither is worth much
      alone, and `paywall_viewed.source="mark"` measures the pair. */
-  .ssPlus{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:46px;margin-bottom:9px;
-    border-radius:16px;border:1px solid rgba(95,230,164,.42);background:rgba(95,230,164,.11);
-    color:var(--mint);font-size:14.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;
-    transition:transform .12s cubic-bezier(.3,1.5,.5,1),background .18s;}
-  .ssPlus:active{transform:scale(.96);background:rgba(95,230,164,.18);}
+  .ssPlus{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:10px 0 2px;
+    background:none;border:none;padding:6px;color:var(--mint);font-size:13.5px;font-weight:800;
+    letter-spacing:.1px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+  .ssPlus:active{opacity:.6;}
 </style>
 </head>
 <body><div id="app">
@@ -1188,34 +1187,27 @@
          that no handler is listening to. -->
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
-    <!-- Two on a line, because a third full-width slab would have pushed the KAMO+ line and
-         the dismiss past the fold. Instagram keeps the full width above: it is the longest
-         label and the destination the before/after reveal is actually built for. -->
-    <div class="ssRow3">
-      <button class="ssBtn snap" data-target="snapchat"><svg class="snapIc" viewBox="0 0 24 24"><path d="M12 2.3c2.95 0 4.92 2.2 4.92 5.05 0 .9-.05 1.68-.1 2.28.48.19.97.1 1.45-.08.6-.22 1.07.48.68.96-.4.5-1.16.87-1.84 1.07-.28.09-.38.29-.29.56.5 1.56 1.75 2.82 3.1 3.23.4.12.48.6.16.86-.58.48-1.53.79-2.4.87-.2.02-.31.17-.36.37-.1.4-.2.77-.4.96-.2.2-.58.2-.97.12-.58-.11-1.26-.2-2.03 0-.78.2-1.36.88-2.32.88s-1.54-.68-2.32-.88c-.77-.2-1.45-.11-2.03 0-.39.08-.77.08-.97-.12-.2-.19-.3-.56-.4-.96-.05-.2-.16-.35-.36-.37-.87-.08-1.82-.39-2.4-.87-.32-.26-.24-.74.16-.86 1.35-.41 2.6-1.67 3.1-3.23.09-.27-.01-.47-.29-.56-.68-.2-1.44-.57-1.84-1.07-.39-.48.08-1.18.68-.96.48.18.97.27 1.45.08-.05-.6-.1-1.38-.1-2.28C7.08 4.5 9.05 2.3 12 2.3z" fill="currentColor" stroke="none"/></svg>Snapchat</button>
-      <!-- No dedicated branch in the wrapper: App.js handles 'instagram' and 'snapchat' and
-           falls through to the system share sheet for everything else, which is where TikTok
-           is picked. That means it works on the LIVE build with no native release — a
-           one-tap TikTok hand-off would need one. Trade-off taken deliberately: TikTok is
-           where the installs come from, so having it at all beats having it later. -->
-      <button class="ssBtn tiktok" data-target="tiktok"><svg viewBox="0 0 24 24"><path d="M16.6 2h-3.2v13.3a2.55 2.55 0 1 1-2.55-2.55c.26 0 .5.04.74.11V9.55a6.1 6.1 0 0 0-.74-.05 5.75 5.75 0 1 0 5.75 5.75V8.72a6.87 6.87 0 0 0 4 1.28V6.72a3.72 3.72 0 0 1-2.83-1.35A3.68 3.68 0 0 1 16.6 2z" fill="currentColor" stroke="none"/></svg>TikTok</button>
-    </div>
+    <!-- SNAPCHAT AND TIKTOK ARE GONE AS BUTTONS, not as destinations. This sheet had nine
+         tappable things in it; a share sheet that asks nine questions gets answered by the
+         Cancel at the bottom. Four decisions now: challenge one person, post to Instagram,
+         everything else, keep it.
+         Nothing is lost. `more` opens the system sheet, where TikTok, Snapchat, Messages and
+         the rest all live — and TikTok was ALREADY going through it, because App.js only
+         branches on 'instagram' and 'snapchat'. What went away is two full-width slabs, not
+         two channels.
+         Instagram keeps its own button: it is the one destination the wrapper handles
+         directly, and the only one the before/after reveal is built for. -->
+
     <!-- More and Save share this line — see .ssRow2. On native, JS moves #btnSave in here;
          on the web it stays on the action row and More spans the width alone. -->
-    <!-- THE PITCH, AT THE MOMENT IT LANDS — and now where it can actually be seen. It used
-         to sit last, under More/Save and above Cancel, which is the position you scroll past
-         on the way to dismissing. Here it is directly under the destinations, in the path of
-         someone deciding where to post: still after the share buttons (they lead), but read
-         before the secondary actions rather than after them.
-         The user has a finished hide and is about to post it, which remains the only moment
-         the watermark is a real problem. Copy unchanged on purpose — this change is a test
-         of VISIBILITY, and changing the words at the same time would confound it. -->
-    <!-- "Remove", not "Export without": the mark is on screen behind this sheet now, so the
-         row can point at a thing the user is looking at instead of describing a file format. -->
-    <button class="ssPlus" id="ssPlus" style="display:none">✦ Remove the KAMO mark</button>
     <div class="ssRow2" id="ssRow2">
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
     </div>
+    <!-- THE PITCH IS A LINE, NOT A BUTTON. It is an offer, not a destination, and giving it
+         the same slab as Instagram made it compete with the thing the sheet exists to do.
+         Same id and same handler, so the paywall trigger and the isPro gating are untouched:
+         only its weight changed. -->
+    <button class="ssPlus" id="ssPlus" style="display:none">✦ Remove the KAMO mark</button>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
     <button class="ssClose" id="ssClose">Not now</button>
   </div>
@@ -3580,9 +3572,21 @@ async function nativeShare(target){ closeShareSheet();
    on the web it goes straight to navigator.share and the sheet never appears. Moving Save
    in there unconditionally would make it unreachable in Safari, so the web build keeps it
    on the action row exactly as it was. */
+/* SAVE IS HIDDEN IN THE APP, because it has never once worked there. photo_saved is
+   emitted by native on a CONFIRMED camera-roll write and native events are not filtered by
+   WEB_EVENTS — share_completed rides the same path and reports 20-97 a day. photo_saved:
+   ZERO, every day, for seven days.
+   The cause is one missing line in the wrapper: 1.0.2 calls
+   MediaLibrary.saveToLibraryAsync without ever requesting the Photos permission, so iOS
+   throws and the failure is swallowed. Until a build carries that request, this button can
+   only ever disappoint, and the app already has a rule about that — a blocked camera must
+   not leave a button that cannot work.
+   Hidden, not deleted: the web keeps it (there Save is a real download and works), and the
+   day the permission ships this is one condition to remove. */
 if(window.ReactNativeWebView){
   const saveBtn=$("#btnSave"), invite=$("#ssInvite");
-  if(saveBtn&&invite&&invite.parentNode){
+  if(saveBtn) saveBtn.style.display="none";
+  if(false && saveBtn&&invite&&invite.parentNode){
     saveBtn.classList.remove("b","icon"); saveBtn.classList.add("ssBtn","ssSave");
     saveBtn.removeAttribute("title");
     // .dl / .chk are the existing saved-state swap (#btnSave.saved flips them), so the
