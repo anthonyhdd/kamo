@@ -1356,7 +1356,12 @@
          acknowledging the hide instead of announcing itself. Filled at open time. -->
     <div class="ssGrab" id="ssGrab"></div>
     <div class="pwKick" id="ssKick"></div>
-    <div class="pwTitle" style="margin-bottom:14px">Bet they can't spot it</div>
+    <!-- A QUESTION, NOT A CLAIM. "Bet they can't spot it" was the app asserting something on
+         the user's behalf about a friend who does not exist yet — and it closed the subject.
+         A question opens it, and the button directly below is the answer. It is also the only
+         line on this sheet that puts the other person at the centre; everything else is about
+         the hide you just made. -->
+    <div class="pwTitle" style="margin-bottom:14px">Can they find you?</div>
     <!-- CHALLENGE IS THE DEFAULT AGAIN. Before/After took this slot on the argument that the
          reveal MP4 is the differentiator and that ~93% of users never switch tabs, so nobody
          was choosing — both still true.
@@ -3972,10 +3977,21 @@ function expandShareSheet(){
   openShareSheet();          // publishes, fills, and tracks share_opened
 }
 /* Same kicker in both states, so expanding does not change the words under the thumb. */
+/* THE TERMS, NOT THE SCORE. This said "Vanished in 9s" — the same number already on screen
+   200px above it, in the reveal's own chip. The same figure twice in one glance, and neither
+   of them about the thing the button underneath is going to do.
+   The kicker now carries what the FRIEND gets, which is the only information on this screen
+   that exists nowhere else and is exactly what Challenge a friend will send. It is also the
+   same line the preview leads with, so the two screens speak with one voice.
+   Defensive: chEffective reads localStorage and a const declared further down. A throw here
+   would be on the share path, so it falls back to hiding the kicker rather than to nothing. */
 function fillShareKicker(){
   const k=$("#ssKick"); if(!k) return;
-  const sec=roundSeconds();
-  if(sec>0){ k.textContent="Vanished in "+sec+"s"; k.style.display=""; } else k.style.display="none";
+  try{
+    const e=chEffective();
+    k.textContent=e.limit+"S · "+e.taps+(e.taps===1?" TAP":" TAPS");
+    k.style.display="";
+  }catch(_){ k.style.display="none"; }
 }
 
 /* SWIPE UP OPENS, SWIPE DOWN PUTS IT AWAY — on the card itself, so the gesture works
@@ -4229,6 +4245,7 @@ function chPrevRender(){
     if(gear) gear.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevSettings(); };
     /* `ready` records that the thumbnail is actually drawn, so syncShareMode() can put the
        card back when the user leaves the Before/After tab without ever showing an empty one. */
+    fillShareKicker();   // taps/timer may have just changed in the gear
     row.dataset.ready="1";
     row.classList.add("on");
     syncShareMode();   // respect the tab that is currently selected
