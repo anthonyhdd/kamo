@@ -3406,14 +3406,22 @@ function chDeviceId(){
 }
 function chWebTrack(event,props){
   try{
-    fetch("https://api2.amplitude.com/2/httpapi",{method:"POST",keepalive:true,
+    /* EU, NOT api2. This project runs with serverZone:"EU" (see kamo-app/analytics.js), so
+       api2.amplitude.com answers 400 "Invalid API key" for this key — and the .catch below
+       swallowed it. Every web event since this path shipped was dropped in silence: the whole
+       seeker funnel, invite_landed, and every app_opened from a plain browser.
+       The failure is logged now. There is nowhere to report it to — a failed analytics call
+       cannot be reported through analytics — but a console line is the difference between a
+       bug someone can find and one that hides for a week. */
+    fetch("https://api.eu.amplitude.com/2/httpapi",{method:"POST",keepalive:true,
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({api_key:CH_AMP,events:[{
         event_type:event, device_id:chDeviceId(), time:Date.now(), platform:"Web",
         /* app_variant matches the user property the native SDK sets, so KAMO's web traffic
            lands in the same segment as its app traffic instead of a nameless bucket. */
         event_properties:Object.assign({app_variant:"kamo",surface:CH_SEEK?"seek":"web"},props||{})
-      }]})}).catch(()=>{});
+      }]})}).then(r=>{ if(!r.ok) console.warn("kamo: analytics rejected",r.status); })
+        .catch(e=>console.warn("kamo: analytics failed",e&&e.message));
   }catch(e){}   // includes the TDZ case if this ever fires before the CH block evaluates
 }
 function blobToDataURL(b){ return new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b); }); }
