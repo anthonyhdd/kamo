@@ -3325,7 +3325,15 @@ function shareUrl(){ return chLink()||appLink; }
    would only ever reach web visitors, which is the opposite of who these links are for.
    A shared link lands in someone's messages from a friend. anthonyhdd.github.io reads as a
    developer's scratch page at the exact moment a stranger decides whether to tap. */
-const KAMO_HOST="https://kamo.bliss-coach.com/";
+/* BACK TO THE github.io ORIGIN, AND IT HAS TO STAY THERE UNTIL A BUILD MOVES IT.
+   Pointing Pages at kamo.bliss-coach.com made anthonyhdd.github.io/kamo/ — the URL every
+   shipped binary loads — a 301 to *http*://kamo.bliss-coach.com. Plain HTTP: App Transport
+   Security refuses it inside WKWebView before the second hop can upgrade it, so the app
+   reached the splash screen and then its own error. That is exactly what App Review saw
+   today, and every installed user was seeing the same thing.
+   The custom domain comes back the day a build ships that loads it directly, with no
+   github.io hop in the middle. */
+const KAMO_HOST="https://anthonyhdd.github.io/kamo/";
 function inviteUrl(){ return KAMO_HOST+"?i=1"; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
