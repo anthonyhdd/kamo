@@ -2724,7 +2724,7 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    Same bet and same downside as the per-source caps: fewer paywalls could mean fewer
    trials rather than more. `nth_interruption` on paywall_viewed is what settles it — if
    conversion past the 3rd interruption is not flat, this number is too low. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand"]);
+const PW_USER_INITIATED=new Set(["plus","mark","brand","chset"]);
 
 const PW_GLOBAL_CAP=3;
 let pwInterruptions=0;         // non-user-initiated opens this launch
@@ -2778,6 +2778,12 @@ const PW_PITCH={
      gap, which is why the line now says what the multiple IS rather than leaving the reader
      to divide: 2.3x reads as small when it is written as two bare numbers and large when it
      is named. Keep in sync with PAINT_SECONDS / PRO_PAINT_SECONDS and #pwSub. */
+  /* THE GEAR IS THE ONLY PLACE IN THE APP WHERE SOMEONE ASKS TO CHANGE THE GAME THEY ARE
+     SENDING. Answering that with the generic sheet wastes the clearest intent signal the
+     paywall ever gets — they did not stumble into it, they reached for a control. So the
+     copy names the thing they just tried to touch, and nothing else. */
+  chset: { t:"Set the challenge yourself",
+           s:"Free sends 5 taps on a fixed clock. KAMO+ lets you choose both — make it easy, or make it impossible." },
   time:  { t:"Stop losing hides to the clock",
            s:"Line up your shot with no clock at all, then 75 seconds to paint instead of 32." },
 };
@@ -3872,7 +3878,6 @@ function chCopy(text){
  * ?new=1, and turning it on for everyone later is deleting one condition, not deploying
  * anything new. Without the flag the old 4.2s toast still runs, unchanged.
  */
-const NEWUI=/[?&]new=1/.test(location.search);
 
 /* The hider's chosen clock and tap budget. null on both = derive them, which is what every
  * hide did before this existed and what the server still stores for them. Kept in
@@ -3905,6 +3910,13 @@ function chPrevRender(){
     c.width=Math.round(board.width*S); c.height=Math.round(board.height*S);
     c.getContext("2d").drawImage(board,0,0,c.width,c.height);
     shot.appendChild(c);
+    /* BOUND HERE, not at load: this is the only point where the card is guaranteed to exist
+       and to be about to be shown. onclick (not addEventListener) on purpose — chPrevRender
+       runs again on every share sheet open, and a listener would stack a duplicate each
+       time, so the preview would open twice, then three times. */
+    shot.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevPlay(); };
+    const gear=document.getElementById("chPrevGear");
+    if(gear) gear.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevSettings(); };
     row.classList.add("on");
   }catch(e){}
 }
@@ -4011,24 +4023,12 @@ function chPrevSettings(){
   }catch(e){}
 }
 
-function invitePreview(){
-  if(NEWUI){ chPrevRender(); return; }   // permanent card replaces the toast
-  try{
-    const host=document.getElementById("ssInvite"); if(!host||!host.parentNode) return;
-    document.getElementById("ivPrev")?.remove();
-    const secs=roundSeconds(), LIMIT=Math.max(20,Math.min(45,(secs||10)*2));
-    const c=document.createElement("canvas");
-    const S=Math.min(1,168/Math.max(board.width,board.height));
-    c.width=Math.round(board.width*S); c.height=Math.round(board.height*S);
-    c.getContext("2d").drawImage(board,0,0,c.width,c.height);
-    const w=document.createElement("div"); w.id="ivPrev"; w.className="ivPrev";
-    w.innerHTML='<div class="ivShot"></div>'
-      +'<div class="ivTxt"><b>They get this</b><span>'+LIMIT+'s on the clock · 5 taps · no app needed</span></div>';
-    w.querySelector(".ivShot").appendChild(c);
-    host.parentNode.insertBefore(w, host.nextSibling);
-    setTimeout(()=>{ w.classList.add("out"); setTimeout(()=>w.remove(),320); },4200);
-  }catch(e){}
-}
+/* THE TOAST IS GONE. It lived here for one reason — the card had not been seen by anyone
+   yet — and it deleted itself after 4.2s, which is why it could never carry the settings
+   control or a tap target. chPrevRender() draws the permanent card instead, for everyone.
+   The old body is deleted rather than left behind a flag: dead code that cannot run is the
+   drift this file keeps paying for elsewhere. */
+function invitePreview(){ chPrevRender(); }
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
