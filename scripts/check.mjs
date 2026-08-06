@@ -118,5 +118,16 @@ else {
 const chMake = html.match(/const CH_MAKE=(true|false)/);
 chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
 
+/* ---- 6. The share paths -----------------------------------------------------------------
+   Runs the real #ssInvite handler in the three environments it ships into. Chained here so
+   there is ONE command to remember before a push — a second script you have to know about is
+   a script that gets skipped. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-share.mjs')], { stdio: 'pipe' });
+  ok('share paths behave (node scripts/test-share.mjs for the detail)');
+} catch (e) {
+  bad('SHARE PATHS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);
