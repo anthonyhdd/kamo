@@ -3519,7 +3519,17 @@ function drawWatermark(c,W,H){
   bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.30,"rgba(4,6,10,.03)");
   bg.addColorStop(.50,"rgba(4,6,10,.10)"); bg.addColorStop(.66,"rgba(4,6,10,.24)");
   bg.addColorStop(.78,"rgba(4,6,10,.45)"); bg.addColorStop(.88,"rgba(4,6,10,.70)");
-  bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
+  /* THE LAST STOP IS OPAQUE AND IT IS THE PAGE BACKGROUND, EXACTLY.
+     This is the seam, third time. The previous two fixes both worked on the SHAPE of the
+     ramp — band height and stop positions — and the ramp was never the problem by the end.
+     The problem is where it STOPS: at .93 the final row of the canvas still carries 7% of
+     the photo, and the page below it is a flat #05060a. On a dark photo that 7% is
+     invisible; on a bright one — a white sneaker under a light — it is a hard line across
+     the bottom of the image, and no amount of easing above it helps.
+     rgba(5,6,10,1) makes the canvas's last row byte-identical to --bg, so the boundary
+     cannot be seen on ANY photo rather than on most of them. If --bg ever changes, this
+     must change with it. */
+  bg.addColorStop(1,"rgba(5,6,10,1)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
   /* ONE line now: the wordmark. This block has lost a line twice, and both times the fix
      was to re-space rather than leave a hole — an overlay that floats above a band of empty
      gradient reads as a rendering bug, not as restraint.
@@ -3775,6 +3785,17 @@ function openShareSheet(){
      Hidden rather than filled with a placeholder if there is no round time — an empty
      kicker collapses to nothing and the headline simply moves up. */
   fillShareKicker();
+  /* THE CARD IS SUPPOSED TO BE PERMANENT, AND IT WAS INVISIBLE.
+     .chPrev is display:none until chPrevRender() adds .on, and chPrevRender() was only ever
+     reached from invitePreview() — which runs AFTER a share completes — and from the
+     settings sheet. So the "They get this" card, the thing that shows the sender what their
+     friend receives, only appeared once they had already sent it. Backwards, and it is why
+     it looked like the challenge "does not generate the card".
+     Rendered on every open: it redraws the thumbnail from the current board and re-reads
+     chEffective(), so a hide painted since the last open, or taps/timer changed in the gear,
+     are both reflected. It is wrapped in its own try/catch inside, so a failure here cannot
+     take the share sheet down with it. */
+  chPrevRender();
   track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); shareSheetEl.classList.remove("peek"); ssState="hidden"; }
 
