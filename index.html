@@ -3385,7 +3385,23 @@ async function deliver(blob,ext){
   const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 function showSaved(){ const btn=$("#btnSave"); if(!btn) return; haptic(12); btn.classList.add("saved"); clearTimeout(showSaved._t); showSaved._t=setTimeout(()=>btn.classList.remove("saved"),1100); }
-window.__kamoSaved=showSaved;   // native can inject this on a CONFIRMED camera-roll save (truthful ack)
+/* THE ACK MAY NEVER COME, AND SILENCE IS NOT AN ACCEPTABLE ANSWER. 1.0.2 handles `save`,
+   but it calls MediaLibrary.saveToLibraryAsync WITHOUT ever requesting the Photos
+   permission: on iOS that throws, the wrapper swallows it, and the web sits waiting for an
+   ack that is never injected. The user taps Save and nothing happens, forever.
+   The permission request is a native fix and needs a build. This is the honest stand-in —
+   if no confirmation arrives in 2.5s, say so and give them the way out that does work.
+   Cleared by showSaved(), so a wrapper that DOES save never sees this message. */
+let saveAckTimer=null;
+function saveAwaitAck(){
+  clearTimeout(saveAckTimer);
+  saveAckTimer=setTimeout(()=>{
+    track("save_no_ack",{});
+    showHint("Couldn't save — press and hold the photo to save it",4200);
+  },2500);
+}
+function showSavedAck(){ clearTimeout(saveAckTimer); showSaved(); }
+window.__kamoSaved=showSavedAck;   // native injects this on a CONFIRMED camera-roll write
 /* shareBlob(), not staticBlob(): Save now lives inside the share sheet, directly under the
    Challenge / Before-After tabs, so it has to respect the tab that is selected. Saving the
    challenge image while "Before / After" is lit would be the button ignoring the control
@@ -3395,7 +3411,7 @@ window.__kamoSaved=showSaved;   // native can inject this on a CONFIRMED camera-
    that sheet, and a breakdown missing it would make the others look larger than they are. */
 async function saveStatic(){ track("share_target_tapped",{target:"save",mode:shareMode,score:Math.round(currentScore||0)});
   const b=await shareBlob();
-  if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d,score:Math.round(currentScore||0)}); return; }   // native calls window.__kamoSaved() ONLY on a confirmed camera-roll write
+  if(window.ReactNativeWebView){ const d=await blobToDataURL(b); postNative({type:"save",ext:"jpg",mime:"image/jpeg",data:d,score:Math.round(currentScore||0)}); saveAwaitAck(); return; }   // native acks via __kamoSaved on a confirmed write; saveAwaitAck() covers the case where it never does
   const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="kamo.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); showSaved(); }
 
 function drawRevealFrame(c,W,H,t){
