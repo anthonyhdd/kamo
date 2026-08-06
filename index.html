@@ -4533,10 +4533,15 @@ function chSeek(){
     +".chBrand{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.4px;color:#fff;opacity:.9;}"
     +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(21px,6.2vw,27px);letter-spacing:-.4px;line-height:1.18;text-align:center;margin:0;max-width:18ch;}"
     +".chSub{font-size:13.5px;opacity:.62;text-align:center;margin:0;}"
-    +".chFrame{position:relative;flex:1 1 auto;min-height:0;display:flex;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;}"
+    /* SHRINK-WRAPPED, NOT STRETCHED. flex:1 1 auto grew the frame to the full column while the
+       photo inside was portrait and sized by object-fit — so the border enclosed a wide box with
+       the picture pinned left and black filling the rest. The frame is now sized BY the image:
+       align-self:center keeps it off the cross-axis stretch, and the image caps on the viewport
+       height so a tall phone still fills it. */
+    +".chFrame{position:relative;align-self:center;max-width:100%;min-height:0;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;}"
     /* object-fit:contain inside a flexed frame: the box never exceeds the space left,
        and the tap coordinates stay honest because the frame shrink-wraps the pixels. */
-    +".chFrame img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;touch-action:manipulation;}"
+    +".chFrame img{display:block;max-width:100%;max-height:56dvh;width:auto;height:auto;touch-action:manipulation;}"
     /* Taps left, as pips rather than a number: readable at a glance mid-game, and an empty
        row reads as "you are out" without anyone having to parse a zero. */
     +".chPips{display:flex;gap:6px;justify-content:center;}"
@@ -4555,6 +4560,8 @@ function chSeek(){
     +".chClock{font-family:var(--display);font-weight:700;font-size:15px;color:var(--mint);min-height:19px;letter-spacing:-.2px;}"
     +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
     +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
+    +".chMark.stay{animation:chHold 1.6s ease-in-out infinite;opacity:1;}"
+    +"@keyframes chHold{0%,100%{transform:scale(1);box-shadow:0 0 0 6px rgba(95,230,164,.22)}50%{transform:scale(1.12);box-shadow:0 0 0 12px rgba(95,230,164,.05)}}"
     +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
     +"@keyframes chShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}"
     +".chShake{animation:chShake .3s}"
@@ -4650,20 +4657,27 @@ function chSeek(){
       tries++; drawPips(CH_TAPS-tries);
       const mk=document.createElement("div"); mk.className="chMark";
       mk.style.left=(e.clientX-r.left)+"px"; mk.style.top=(e.clientY-r.top)+"px";
-      $$("chFrame").appendChild(mk); setTimeout(()=>mk.remove(),500);
+      $$("chFrame").appendChild(mk); mk._t=setTimeout(()=>{ if(!mk.classList.contains("stay")) mk.remove(); },500);
 
       let res; try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:Date.now()-t0}); }catch(e){ return; }
       if(res&&res.hit){
         done=true; clearInterval(clock);
         const secs=((Date.now()-t0)/1000).toFixed(1);
-        mk.className="chMark hit";
+        /* THE WINNING SPOT STAYS ON SCREEN. Every other mark is a 500ms pop that clears
+           itself; this one is the answer, and clearing it threw away the only moment where
+           the player sees what they were looking for. */
+        mk.className="chMark hit stay"; clearTimeout(mk._t);
         track("seek_found",{tries:tries,ms:Date.now()-t0});
+        /* MY OWN MISSES ARE NOT OTHER PEOPLE. res.missed is every failed attempt ever
+           recorded on this hide, which includes the ones I just made — so a player who
+           found it on their third tap was told "2 people missed them" about themselves.
+           Subtract this session's misses; say nothing rather than something false when
+           nobody else has tried. */
+        const others=Math.max(0,(res.missed||0)-(tries-1));
         ending("Found in "+secs+"s",
-          /* "1 people missed them" shipped and was the first thing visible on a real run.
-             One helper rather than a ternary at each site: the seeker screen quotes counts
-             in three places and they will not stay in sync by hand. */
-          (res.missed?(plural(res.missed,"person","people")+" missed them. You didn't."):"First to find them."),
-          "Now hide one back");
+          others ? (plural(others,"person","people")+" missed them. You didn't.")
+                 : (tries>1 ? ("Took you "+tries+" taps.") : "First try."),
+          "Send one back");
         return;
       }
       img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
@@ -4691,7 +4705,7 @@ function chSeek(){
       track("seek_failed",{reason:why||"time",tries:tries,ms:t0?Date.now()-t0:0});
       ending("They were right there.",
         why==="taps"?"Five taps, and you walked past them every time.":"Time ran out. They never moved.",
-        "Hide one this good");
+        "Send one back");
     }
   })();
 }
