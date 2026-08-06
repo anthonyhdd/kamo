@@ -1,0 +1,40 @@
+name: Production watchdog
+
+# WHY THIS EXISTS. On 2026-08-06 KAMO was unopenable for four hours — 08:00 to 12:25 — and
+# nothing reported it. The repo was fine, CI was green, and the only signal was a hole in the
+# Amplitude data that nobody was looking at until the evening. App Review hit the app during
+# the outage and rejected the build.
+#
+# This checks what is SERVED rather than what is committed, so the failure it is named after
+# is one it can actually see: a Pages custom domain turning the app's URL into a cleartext
+# redirect that WKWebView refuses.
+#
+# A failed run emails the repo owner. That is the whole alerting mechanism — no API keys, no
+# third-party service, nothing to keep paid for.
+
+on:
+  schedule:
+    # Every 10 minutes. NOT every minute: GitHub's smallest cron interval is 5 minutes and
+    # scheduled runs are explicitly best-effort — under load they are delayed or dropped, so a
+    # tighter schedule buys noise rather than resolution. Ten minutes turns a four-hour outage
+    # into a ten-minute one, which is the difference that matters.
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+# One run at a time. A backlog of delayed scheduled runs all reporting the same outage is how
+# an alert becomes something you filter to a folder.
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check what production is serving
+        run: node scripts/watchdog.mjs
