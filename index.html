@@ -4080,14 +4080,53 @@ $("#ssInvite").onclick=async()=>{
   /* Defensive: this is the share path, and a throw here costs the send. chEffective() reads
      localStorage and a const declared further down the file — both fine at click time, but
      the fallback is the shipped default rather than a broken message. */
-  let taps=5; try{ taps=chEffective().taps||5; }catch(_){}
-  const text="🫥 There's a body hidden in this photo."
-    +"\nYou get "+taps+(taps===1?" tap":" taps")+" to find it."
-    +"\n\n"+(chLink()||inviteUrl());
+  /* `lim`, not `secs` — `secs` above is roundSeconds(), how long the HIDER took. Two
+     different numbers, and shadowing one with the other in the share message is how the
+     message ends up quoting the wrong clock. */
+  let taps=5, lim=20; try{ const e=chEffective(); taps=e.taps||5; lim=e.limit||20; }catch(_){}
+  /* THE STAKE IS BOTH NUMBERS, and the seeker screen already says so — "You get X sec and
+     Y taps". The message promised only the taps, so the clock was a surprise sprung on
+     someone who had accepted a different deal. Same two values, from the same
+     chEffective(), in the same order. */
+  /* AND IT ONLY PROMISES A PUZZLE WHEN THERE IS ONE. chUpload() is fire-and-forget by
+     design — a failed upload leaves chId empty and chLink() falls back to inviteUrl(),
+     which opens the app with nothing hidden in it. The old text still announced a body in
+     a photo, so a dropped upload turned the best share in the app into a friend tapping a
+     link and finding no game. Without a hide there is no round to describe, so it invites
+     instead of challenging. */
+  const link=chLink();
+  const text = link
+    ? "🫥 There's a body hidden in this photo."
+      +"\nYou get "+lim+" sec and "+taps+(taps===1?" tap":" taps")+" to find it."
+      +"\n\n"+link
+    : "🫥 KAMO — paint yourself into the background until nobody can find you."
+      +"\n\n"+inviteUrl();
   const b=$("#ssInvite"), original=b?b.innerHTML:"";
-  /* Handled by builds that know `invite`, ignored by 1.0.2. Sent either way, and nothing
-     below depends on it answering — that assumption is what killed this button once. */
-  postNative({type:"invite",message:text,score:sc});
+
+  /* ONE PATH, CHOSEN UP FRONT — the three of them used to fire together.
+     `postNative` opens the real iOS sheet through react-native-share on any build from
+     1.0.4, and the navigator.share added below it opens WebKit's own sheet. Both ran on
+     every tap, so a wrapper that handles `invite` raced two share sheets against each
+     other; before that, the clipboard path ran underneath the native sheet and left the
+     button claiming "Copied" while iOS was presenting.
+     Sending it anyway was safe when the fallback was a silent copy. It stopped being safe
+     the moment the fallback could present UI, so the environment picks exactly one:
+
+       nativeCaps.invite  → native sheet (best: real iOS sheet, attachments, and it reports
+                            invite_sent / invite_cancelled back to Amplitude)
+       otherwise          → navigator.share, then the clipboard
+
+     1.0.2 never calls setNativeCaps, so it lands in the second branch and behaves exactly
+     as it does today. */
+  if(nativeCaps && nativeCaps.invite){
+    postNative({type:"invite",message:text,score:sc});
+    /* Native owns the outcome from here — it tracks invite_sent/invite_cancelled itself,
+       and the web gets no callback either way. So no optimistic "Sent": the sheet the user
+       is looking at is the feedback. The KAMO sheet stays open underneath for a second
+       send, which is the one share people repeat. */
+    track("invite_native",{score:sc});
+    return;
+  }
   /* THE ANSWER LANDS ON THE BUTTON, not in a toast 700ms after the sheet closed. The thumb
      is already here, and a primary action whose only feedback can fail to render is a
      primary action that reads as broken. The sheet stays open until it has said something. */
