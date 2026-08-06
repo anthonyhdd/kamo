@@ -2962,6 +2962,36 @@ function shareStats(){
   if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(sayCopied); return; }
   sayCopied();
 }
+/* THE SWITCH LIVES HERE NOW, on the KAMO+ badge inside this card.
+ * The wordmark gesture was reported dead three times, and the third report carried the
+ * detail that settled it: a short tap on the wordmark DOES open this modal. So the element
+ * was always reachable and every fix I shipped for it addressed a problem that did not
+ * exist — the tap arrives, the six-second hold does not survive. iOS takes the gesture back
+ * (pointercancel) often enough on a held finger that a timer that long cannot be the
+ * mechanism.
+ * Five taps on the badge replaces it. Taps are discrete events that nothing intercepts, and
+ * this card is a better door than the wordmark ever was: it only exists for a member, so a
+ * free user cannot reach the switch at all — which is the population it must be hidden from.
+ * The wordmark hold stays in place, harmless, for whoever it does work for. */
+{ const badge=document.querySelector("#kamoHome .kpBadge");
+  if(badge){ let n=0, last=0;
+    badge.addEventListener("click",async()=>{
+      const now=Date.now();
+      n = (now-last<1200) ? n+1 : 1;   // a run, not five taps spread over a minute
+      last=now;
+      if(n<5) return;
+      n=0;
+      if(!(await forceFreeAuthorized())) return;
+      forceFree=!forceFree;
+      try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
+      let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+      isPro = forceFree ? false : real;
+      refreshProUI(); haptic(18);
+      closeKamoHome();
+      showHint(forceFree ? "Preview: free user — tap the logo, then the badge 5x to restore"
+                         : "KAMO+ restored", 4200);
+    });
+  } }
 { const g=$("#khShare"), c=$("#khClose");
   /* closeKamoHome() AFTER shareStats(), and shareStats() does its clipboard write
      synchronously — so the modal teardown can never land between the tap and the write. */
