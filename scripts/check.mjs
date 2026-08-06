@@ -298,6 +298,56 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     : ok(`no orphan functions (${new Set(declared).size} declared, ${KNOWN_UNCALLED.size} known-dead allowed)`);
 }
 
+/* ---- 5f. Runtime ids belong to the function that builds them -----------------------------
+ * The third "wired to the wrong place" bug of the night, and the first two checks were blind
+ * to it. chPPsend and chPPx0 are built by chPrevPlay's innerHTML, and their handlers were
+ * being assigned inside forceFreeAsk — the founder passphrase prompt, a different overlay
+ * entirely. getElementById returned null there, .onclick threw, and the throw landed BEFORE
+ * that prompt wired its own OK and Cancel, so both of ITS buttons died too. One misplaced
+ * paste, two broken screens, and nothing static could see it: check 2 builds its list of
+ * declared ids with an id="..." regex over the whole file, which happily matches ids written
+ * inside a JS string — so an element that exists only while one overlay is open reads as
+ * "declared" everywhere.
+ *
+ * The rule that actually holds: an id created inside a script may only be dereferenced from
+ * the same top-level function that creates it. Nested helpers are fine — they close over the
+ * same DOM — so enclosing scope is resolved to the outermost function, which is why this
+ * matches on `^function name(` at column zero.
+ */
+{
+  const firstScript = html.search(/<script(?![^>]*\bsrc=)[^>]*>/);
+  const markup = html.slice(0, firstScript < 0 ? html.length : firstScript);
+  const staticIds = new Set([...markup.matchAll(/\bid="([A-Za-z0-9_-]+)"/g)].map((m) => m[1]));
+
+  // Offsets of every top-level function, so any position can be resolved to its owner.
+  const tops = [...html.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/gm)]
+    .map((m) => ({ at: m.index, name: m[1] }));
+  const owner = (pos) => {
+    let best = null;
+    for (const t of tops) { if (t.at <= pos) best = t.name; else break; }
+    return best;
+  };
+
+  const builtIn = new Map();   // runtime id -> function that writes it
+  for (const m of html.matchAll(/\bid="([A-Za-z0-9_-]+)"/g)) {
+    if (m.index < (firstScript < 0 ? html.length : firstScript)) continue;  // real markup
+    if (staticIds.has(m[1])) continue;                                      // also in markup
+    if (!builtIn.has(m[1])) builtIn.set(m[1], owner(m.index));
+  }
+
+  const wrong = [];
+  for (const m of html.matchAll(/getElementById\("([A-Za-z0-9_-]+)"\)\s*\./g)) {
+    const built = builtIn.get(m[1]);
+    if (!built) continue;                    // static element, or never created here
+    const from = owner(m.index);
+    if (from && from !== built) wrong.push(`${m[1]} (built by ${built}, used in ${from})`);
+  }
+  wrong.length
+    ? bad(`element built in one overlay, wired from another: ${wrong.join('; ')}\n    `
+        + 'getElementById returns null there and the throw kills every handler assigned after it.')
+    : ok(`runtime ids wired inside the function that builds them (${builtIn.size} checked)`);
+}
+
 /* ---- 6. The share paths -----------------------------------------------------------------
    Runs the real #ssInvite handler in the three environments it ships into. Chained here so
    there is ONE command to remember before a push — a second script you have to know about is

@@ -3342,9 +3342,6 @@ function forceFreeAsk(){
       +'<button id="ffOk" style="flex:1;height:44px;border-radius:12px;border:none;background:#5fe6a4;color:#04160d;font-size:15px;font-weight:800">OK</button>'
       +'</div></div>';
     document.body.appendChild(w);
-    const send=()=>{ close(); document.getElementById("ssInvite")?.click(); };
-    document.getElementById("chPPsend").onclick=send;
-    document.getElementById("chPPx0").onclick=()=>close();
     const inp=w.querySelector("#ffIn");
     /* 16px on the input on purpose: anything smaller makes iOS zoom the page on focus. */
     setTimeout(()=>{ try{ inp.focus(); }catch(e){} },60);
@@ -4248,6 +4245,18 @@ function chPrevPlay(){
       document.getElementById("chPPx").onclick=close;
     }
     function close(){ over=true; clearInterval(iv); w.remove(); }
+    /* `send` lived in that same misplaced block, so end()'s "Challenge a friend" button was
+       referencing an identifier that did not exist in this scope — a ReferenceError the
+       moment a preview round finished. Defined where it is used. */
+    const send=()=>{ close(); document.getElementById("ssInvite")?.click(); };
+    /* WIRED HERE, where these two elements exist. They were being bound inside
+       forceFreeAsk() — the founder passphrase prompt — which is a different overlay
+       entirely. getElementById returned null there, .onclick threw, and the throw landed
+       BEFORE that prompt assigned its own OK and Cancel handlers, so both of its buttons
+       were dead. One misplaced paste, two broken screens: the preview could not send and
+       the passphrase could not be answered. */
+    document.getElementById("chPPsend").onclick=send;
+    document.getElementById("chPPx0").onclick=close;
 
     img.onclick=(ev)=>{
       if(over) return;
