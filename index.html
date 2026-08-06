@@ -3314,10 +3314,14 @@ let appLink="https://apps.apple.com/app/id6789639784";
    their copy. chLink() is "" unless CH_MAKE published this round, so production keeps
    sending the App Store URL exactly as before. */
 function shareUrl(){ return chLink()||appLink; }
-/* Built from where this page actually is, so it follows the deploy instead of hardcoding an
-   origin that would rot the day the site moves. `i=1` is what separates an invite click from
-   ordinary web traffic in the funnel. */
-function inviteUrl(){ return location.origin+location.pathname+"?i=1"; }
+/* THE PUBLIC HOST IS HARDCODED, and location.origin is not used, on purpose. The app loads
+   anthonyhdd.github.io, so a link built from where the page happens to be would keep sending
+   people to a github.io URL no matter what domain the site answers on — the custom domain
+   would only ever reach web visitors, which is the opposite of who these links are for.
+   A shared link lands in someone's messages from a friend. anthonyhdd.github.io reads as a
+   developer's scratch page at the exact moment a stranger decides whether to tap. */
+const KAMO_HOST="https://kamo.bliss-coach.com/";
+function inviteUrl(){ return KAMO_HOST+"?i=1"; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
 function drawWatermark(c,W,H){
@@ -4510,7 +4514,7 @@ async function chUpload(){
     track("hide_published",{});
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
 }
-function chLink(){ return chId?(location.origin+location.pathname+"?h="+chId):""; }
+function chLink(){ return chId?(KAMO_HOST+"?h="+chId):""; }
 
 /* THE SEEKER SCREEN =====================================================================
  * The only screen in KAMO a stranger ever sees, so it is the one that has to sell. Built in
