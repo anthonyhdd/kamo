@@ -1246,7 +1246,21 @@
     <!-- Both of these are REWRITTEN AT OPEN TIME by openPaywall(source) — see PW_PITCH. The
          markup keeps the generic pitch as the fallback for entry points that aren't a
          specific locked tool (the ✦ button, the post-round prompt). -->
-    <div class="pwTitle" id="pwTitle">Disappear faster, better, stronger</div>
+    <!-- "Disappear faster, better, stronger" was a comparative with nothing to compare to —
+         faster than what? Someone reaching this screen has just lost a hide to the clock or
+         hit a locked tool; they are not wondering whether they could disappear BETTER, they
+         are wondering what stopped them. And nobody disappears "stronger".
+         This sells the outcome from the other person's side, which is the only stake the
+         player actually feels: the whole loop exists so that a friend cannot find you. It
+         also reads the same after a good round and a bad one, which the old line did not —
+         "faster, better, stronger" quietly told someone who had just failed they were doing
+         it wrong.
+         Restored by openPaywall() from dataset.def whenever there is no tool-specific pitch,
+         so this string IS the generic headline, not a placeholder. The per-lock headlines
+         live in PW_PITCH and override it — PW_PITCH.time keeps "Stop losing hides to the
+         clock", which is the sharper line precisely because it is not generic: 54% of rounds
+         end on the clock, so it names a defeat that already happened. -->
+    <div class="pwTitle" id="pwTitle">Nobody finds you now.</div>
     <!-- EVERY CLAIM ON THIS LINE IS NOW UNSUBSTITUTABLE, which is new. The old version sold
          "every Pro pattern brush and fine size control" — the brushes no longer exist (all
          three only varied one colour's value) and the numbers were stale. What is left is
