@@ -2884,7 +2884,7 @@ $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?
      now carries the invite tap and reveal_previewed carries round_finished. After this
      there is no channel left, and anything else new has to wait for a build.
      ⚠️ DELETE when a build ships with purchase_initiated allow-listed. */
-  track("paint_started",Object.assign({carrier_for:"purchase_initiated"},buyProps));
+  trackCarried("purchase_initiated",buyProps);
   haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ track("restore_tapped"); if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
@@ -3391,6 +3391,24 @@ function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWe
    not get made again on purpose.
    Direct HTTP to Amplitude, no SDK: one fetch, the same client key kamo-app already
    embeds. Native still wins when the bridge is there — one event, one path, never both. */
+/* TWO ALLOW-LISTS, ONE CALL SITE. 1.0.2 passes camera_requested / paint_started /
+   reveal_previewed and drops the real event names. 1.0.5 — the build now in the expedited
+   queue — dropped all three of those AND still carries none of the real names, so the day it
+   ships every carrier goes dark at once and the round funnel, the invite taps and the Buy
+   taps all disappear together.
+   torch_toggled is on BOTH lists and is dead in practice on iOS: the button only appears
+   when getCapabilities().torch is true, which WebKit never reports on iPhone. That makes it
+   the 1.0.5 carrier without displacing a live signal.
+   WHICH LIST ARE WE BEHIND? 1.0.2 never calls setNativeCaps; every build from 1.0.4 does. A
+   populated nativeCaps means the newer list, and it arrives on webview load — long before a
+   round can finish or a Buy can be tapped.
+   Exactly one name goes out per launch, never both, so nothing is double counted. Segment on
+   carrier_for either way; the event name it rides under stops mattering. */
+const CARRIER_102={round_finished:"reveal_previewed",invite_tapped:"camera_requested",purchase_initiated:"paint_started"};
+function trackCarried(kind,props){
+  const newer=!!(nativeCaps && Object.keys(nativeCaps).length);
+  track(newer?"torch_toggled":CARRIER_102[kind], Object.assign({carrier_for:kind},props||{}));
+}
 function track(event,props){
   const p={...(props||{}),trial_arm:trialArm};
   if(postNative({type:"track",event:event,props:p})) return;
@@ -3747,7 +3765,7 @@ $("#ssInvite").onclick=async()=>{
   /* CARRIER — see the round_finished note in enterFinished(). share_target_tapped is not on
      1.0.2's WEB_EVENTS list, so the tap would be invisible on every shipped binary.
      ⚠️ DELETE when a build ships with share_target_tapped allow-listed. */
-  track("camera_requested",{carrier_for:"invite_tapped",mode:shareMode,score:sc,seconds:secs});
+  trackCarried("invite_tapped",{mode:shareMode,score:sc,seconds:secs});
   /* THE LINK GOES TO THE WEB, NOT STRAIGHT TO THE APP STORE. 25 people sent a challenge
      today and we cannot say whether one of them was opened: 1.0.2 never calls setAppLink or
      setReferral, so shareUrl() hands back the bare store URL — an install from it is
@@ -4320,7 +4338,7 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
      same round will be counted under two names. `carrier_for` is what makes the duplicate
      detectable in the meantime — segment on it, and never treat reveal_previewed as a
      reveal without checking it. */
-  track("reveal_previewed",Object.assign({carrier_for:"round_finished"},roundProps));
+  trackCarried("round_finished",roundProps);
   currentScore=computeScore();
   /* Feed the member home. Every finished hide counts, including one the clock ended — the
      scoreboard reports what happened, it is not a reward for playing a certain way. */
