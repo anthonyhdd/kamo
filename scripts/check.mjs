@@ -250,6 +250,54 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5e. Nothing is declared and never called ---------------------------------------------
+ * The general form of 5d. Three bugs in one evening were a function that exists, is correct,
+ * and is reached from nowhere — chPrevRender (the challenge card only appeared AFTER a share),
+ * chPrevPlay and chPrevSettings (shipped bound to nothing), and chRepublish would have been
+ * the fourth. Syntax checks pass on all of them. Unit tests pass on all of them. They are
+ * invisible to everything except someone using the feature.
+ *
+ * 5d names three call sites, which protects those three and nothing else. This protects the
+ * shape: any NEW function that nobody calls fails the gate.
+ *
+ * KNOWN_UNCALLED is deliberately a list of names rather than a switch. Adding to it is a
+ * decision someone has to write down.
+ */
+{
+  const scripts2 = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  let code = scripts2.join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/gm, '$1')
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
+    // `...fn()` is a call. Without this the spread's trailing dot trips the "not a property
+    // access" lookbehind and camSize/hdHint read as dead when they are called every launch.
+    .replace(/\.\.\./g, ' ');
+
+  /* Dead by inspection, not by accident — reported once so the list is a decision rather than
+     a silence. None is a correctness bug: blobShadow is a ground shadow for the 3D character,
+     captureBurst a ring flash at capture, roundRectFill a canvas helper. captureBurst is the
+     one worth a second look — an effect that never fires is the same shape as the bugs above,
+     it just costs polish instead of function. */
+  const KNOWN_UNCALLED = new Set(['blobShadow', 'captureBurst', 'roundRectFill']);
+
+  const declared = [...code.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]);
+  // (function name(){...})() runs itself; the name is only a label for stack traces.
+  const iife = new Set([...code.matchAll(/\(\s*function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]));
+  const orphans = [];
+  for (const name of new Set(declared)) {
+    if (KNOWN_UNCALLED.has(name) || iife.has(name)) continue;
+    const refs = (code.match(new RegExp(`(?<![\\w$.])${name.replace(/\$/g, '\\$')}(?![\\w$])`, 'g')) || []).length;
+    const decls = (code.match(new RegExp(`\\bfunction\\s+${name.replace(/\$/g, '\\$')}\\s*\\(`, 'g')) || []).length;
+    if (refs - decls === 0) orphans.push(name);
+  }
+  orphans.length
+    ? bad(`declared but never called: ${orphans.join(', ')}\n    Every feature bug tonight had this shape. `
+        + 'Wire it up, delete it, or add it to KNOWN_UNCALLED with a reason.')
+    : ok(`no orphan functions (${new Set(declared).size} declared, ${KNOWN_UNCALLED.size} known-dead allowed)`);
+}
+
 /* ---- 6. The share paths -----------------------------------------------------------------
    Runs the real #ssInvite handler in the three environments it ships into. Chained here so
    there is ONE command to remember before a push — a second script you have to know about is
