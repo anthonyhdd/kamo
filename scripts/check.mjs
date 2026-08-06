@@ -140,33 +140,32 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
    Static invariants, not behaviour — the state machine is DOM-bound and this repo has no
    browser to run it in. What these guard are the two ways it breaks SILENTLY:
 
-   1. The sheet arriving SHORT. It presents itself full now — the short state is still
-      reachable by swiping down, but it is not what arrives, because the destinations are the
-      thing being shared and a swipe to reach them is the step this was meant to remove.
-      peekShareSheet() keeps its name (two call sites and the reveal schedule it) and must
-      hand straight to openShareSheet(); the day it goes back to adding .peek itself, the
-      sheet silently arrives short again and nothing throws.
-   2. The sheet covering the reveal with a scrim. The reveal is what makes anyone want to
-      share; a backdrop or a blur turns this into the modal it was designed not to be.
-
-   The old rule here — "the peek must never publish" — is deliberately GONE, not slipped.
-   It held because a presentation everyone got was the same population as every round, and
-   uploading all of them put five strangers' rooms on a public URL for one share. Presenting
-   the full sheet automatically makes that true anyway, and the link has to be ready before
-   the first tap, so the upload now starts on arrival. That is a cost we chose. */
+   1. The presentation publishing a photo. openShareSheet() calls chUpload() deliberately
+      late, because only ~1 finished hide in 6 is ever shared and publishing every round put
+      five strangers' rooms on a public URL for nothing. The sheet presents itself on EVERY
+      finished round — so the day someone "tidies up" by moving chUpload() into
+      peekShareSheet(), or by handing it straight to openShareSheet(), that regression comes
+      straight back and nothing user-visible changes. It came back once already, for exactly
+      that reason, and was reverted.
+   2. The sheet arriving FULL. It arrives short: a wall of destinations over the reveal, at
+      the moment the reveal is the thing being looked at, removes the reason to share.
+   3. The sheet covering the reveal with a scrim. Same argument, by a different mechanism —
+      a backdrop or a blur turns this into the modal it was designed not to be. */
 {
   const peekFn = html.match(/function peekShareSheet\(\)\{[\s\S]*?\n\}/);
   if (!peekFn) bad('peekShareSheet() not found — the reveal no longer presents the sheet?');
-  else if (!/openShareSheet\(/.test(peekFn[0])) {
-    bad('peekShareSheet() does not call openShareSheet() — the sheet is arriving short again, '
-      + 'which puts the destinations behind a swipe');
-  } else if (/classList\.add\("peek/.test(peekFn[0])) {
-    bad('peekShareSheet() still adds .peek — it must present the FULL sheet on arrival');
-  } else ok('the sheet presents itself full on the reveal');
+  else if (/chUpload\(/.test(peekFn[0]) || /openShareSheet\(/.test(peekFn[0])) {
+    bad('peekShareSheet() publishes (directly, or via openShareSheet) — that puts a photo on a '
+      + 'public URL for EVERY finished round, and it presents the full sheet over the reveal. '
+      + 'Both are regressions that already shipped once');
+  } else if (!/classList\.add\("peek/.test(peekFn[0])) {
+    bad('peekShareSheet() does not add .peek — the sheet is no longer arriving short');
+  } else ok('the sheet arrives short, and does not publish');
 
-  /* Never publishing is what makes "Challenge a friend" send the generic invite, because
-     chLink() is "" without a published hide. openShareSheet() covers arrival; this covers
-     the other paths in — a card that gets touched before the upload settles. */
+  /* The other half of that rule. Not publishing on presentation is right; never publishing
+     is what makes "Challenge a friend" — visible in the short state — send the generic
+     invite, because chLink() is "" without a published hide. The upload has to start on the
+     first TOUCH of the card. Both halves or neither. */
   /* Structural, not literal. The first version matched the exact expression
      `ssState==="peek"){try{chUpload()`, so widening the condition to cover the open state
      tripped it — a guard that fails on a correct change is a guard people start ignoring.
