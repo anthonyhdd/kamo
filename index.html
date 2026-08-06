@@ -3060,8 +3060,26 @@ async function forceFreeAuthorized(){
       });
     }, HOLD_MS);
   };
-  if(b){ b.addEventListener("pointerdown",start);
-    ["pointerup","pointercancel","pointerleave"].forEach(e=>b.addEventListener(e,cancel)); } }
+  /* DETECTED AT THE DOCUMENT, NOT ON THE ELEMENT. Listeners bound to .brand only fire when
+     .brand is the top-most thing under the finger, and on the finished screen it is not:
+     #revealC is z-index 14, inset:0, and the wordmark is 12. The canvas is transparent
+     where it has not drawn, so the wordmark stays VISIBLE while every touch lands on the
+     canvas above it — press and hold, and nothing happens, with nothing on screen to say
+     why. #revealHandle (15) and #paintUI (15) sit above it too.
+     Hit-testing the wordmark's own rect in the capture phase makes the gesture independent
+     of whatever is stacked over it, on every screen, and consumes nothing: no
+     preventDefault, no stopPropagation, so painting and the reveal drag are untouched.
+     Raising .brand's z-index would have been the smaller change and the wrong one — it
+     would put the wordmark over the reveal canvas and let it eat drags of the handle. */
+  const onBrand=(e)=>{ if(!b) return false; const r=b.getBoundingClientRect();
+    if(!r.width) return false;                       // hidden (KAMO Home, share sheet)
+    return e.clientX>=r.left-10 && e.clientX<=r.right+10 && e.clientY>=r.top-10 && e.clientY<=r.bottom+10; };
+  let sx=0, sy=0;
+  document.addEventListener("pointerdown",e=>{ if(!onBrand(e)) return; sx=e.clientX; sy=e.clientY; start(); },true);
+  /* A hold that drifts is a drag, not a hold — and on the paint screen it IS a brush
+     stroke passing over the wordmark. */
+  document.addEventListener("pointermove",e=>{ if(t && (Math.abs(e.clientX-sx)>14 || Math.abs(e.clientY-sy)>14)) cancel(); },true);
+  ["pointerup","pointercancel"].forEach(ev=>document.addEventListener(ev,cancel,true)); }
 /* Clear the Buy spinner without showing a toast — used when a native purchase ends with
    no callback of its own (StoreKit cancel). Without it the button sat spinning, and
    pointer-events:none, for the full 6s of its own safety timer. */
