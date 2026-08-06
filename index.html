@@ -2973,6 +2973,34 @@ function shareStats(){
  * this card is a better door than the wordmark ever was: it only exists for a member, so a
  * free user cannot reach the switch at all — which is the population it must be hidden from.
  * The wordmark hold stays in place, harmless, for whoever it does work for. */
+/* SECOND DOOR, and the one asked for: hold "Clean export" in the member card.
+ * 1.2s, NOT six. The length of the hold is what killed the wordmark version three times —
+ * iOS reclaims a finger that stays down (pointercancel) long before six seconds on a
+ * scrollable, gesture-heavy screen. Just past a tap is enough to be deliberate and short
+ * enough that the system has no reason to take it back.
+ * Bound straight to the chip: it lives inside a modal that is already the top layer, so
+ * there is nothing stacked over it to intercept the press — which was the other thing that
+ * went wrong. A drift of 12px cancels, so a scroll of the card is not a hold. */
+{ const chips=[...document.querySelectorAll("#kamoHome .kpChip")].filter(c=>/clean export/i.test(c.textContent||""));
+  chips.forEach(chip=>{
+    let t=null, sx=0, sy=0;
+    const cancel=()=>{ clearTimeout(t); t=null; };
+    chip.addEventListener("pointerdown",e=>{ sx=e.clientX; sy=e.clientY; clearTimeout(t);
+      t=setTimeout(async()=>{
+        t=null; haptic(14);            // felt before the card appears: the hold registered
+        if(!(await forceFreeAuthorized())) return;
+        forceFree=!forceFree;
+        try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
+        let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+        isPro = forceFree ? false : real;
+        refreshProUI(); haptic(18); closeKamoHome();
+        showHint(forceFree ? "Preview: free user — hold Clean export again to restore"
+                           : "KAMO+ restored", 4200);
+      },1200); });
+    chip.addEventListener("pointermove",e=>{ if(t && (Math.abs(e.clientX-sx)>12||Math.abs(e.clientY-sy)>12)) cancel(); });
+    ["pointerup","pointercancel","pointerleave"].forEach(ev=>chip.addEventListener(ev,cancel));
+  });
+}
 { const badge=document.querySelector("#kamoHome .kpBadge");
   if(badge){ let n=0, last=0;
     badge.addEventListener("click",async()=>{
