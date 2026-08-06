@@ -3352,8 +3352,25 @@ function drawWatermark(c,W,H){
      fillText, no allocations, no measureText. */
   if(isPro) return;
   const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
-  // bottom scrim
-  const bh=Math.round(H*0.17); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
+  /* BOTTOM SCRIM — EASED, AND ITS SHAPE NO LONGER DEPENDS ON ITS HEIGHT.
+     This drew a visible horizontal seam across the photo, and it had been "fixed" twice in
+     CSS, which could never have worked: the seam is painted HERE, into the canvas, so no
+     rule on #paintUI was ever touching it.
+     The cause is in the history logged just below. The scrim shrank .26H -> .22H -> .17H as
+     hook lines were dropped, but the stops stayed at 0 -> .6 -> .93. That ramp used to climb
+     to 60% black over .117H; at .17H it does it over .0765H — the same curve compressed 35%,
+     and an alpha rising that fast over a smooth photo reads as an edge rather than a fade.
+     Every redesign that shortened the band sharpened it again.
+     So the stops are an ease-in now, and the band is tall enough that the onset is spread
+     over a distance the eye cannot resolve: alpha stays under 10% for the first half, which
+     is what removes the seam, then accelerates into the same near-opaque bottom the wordmark
+     needs to stay legible over a bright sky. Still one gradient and one fill — this runs on
+     every rAF of the Done animation and every pointermove of the slider drag. */
+  const bh=Math.round(H*0.32); let bg=c.createLinearGradient(0,H-bh,0,H);
+  bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.30,"rgba(4,6,10,.03)");
+  bg.addColorStop(.50,"rgba(4,6,10,.10)"); bg.addColorStop(.66,"rgba(4,6,10,.24)");
+  bg.addColorStop(.78,"rgba(4,6,10,.45)"); bg.addColorStop(.88,"rgba(4,6,10,.70)");
+  bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
   /* ONE line now: the wordmark. This block has lost a line twice, and both times the fix
      was to re-space rather than leave a hole — an overlay that floats above a band of empty
      gradient reads as a rendering bug, not as restraint.
