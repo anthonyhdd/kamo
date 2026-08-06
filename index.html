@@ -873,12 +873,15 @@
      No backdrop, no blur, and pointer-events off the container so the reveal handle behind
      it still drags. Only the card itself takes touches. */
   #shareSheet.peek{display:flex;}
-  /* THE RISE PLAYS ONCE, ON ARRIVAL. It was on .peek itself, so collapsing from the full
-     sheet replayed it — the card slid up from translateY(100%) when it was already on
-     screen, which reads as a bounce rather than a transition. Now it is a one-shot class
-     added only when the sheet arrives from nothing. Going long -> short is a resize, and a
-     resize should not re-enter. */
-  #shareSheet.peek.rise .ssCard{animation:ssRise .34s cubic-bezier(.2,.9,.3,1);}
+  /* ONE RISE, AND IT COMES FROM .pwCard. There used to be a second animation here — a `.rise`
+     one-shot class, added on arrival and removed 420ms later — layered on top of the
+     `animation:pwUp` that .ssCard already inherits from .pwCard. Two animations on one
+     element: the more specific `.rise` rule won while the class was there, and the moment JS
+     took it off, .pwCard's pwUp became the winning declaration and PLAYED. The card slid up
+     twice, back to back, and the second one had no trigger anyone could see in the code.
+     Deleting the class leaves exactly one, which fires when #shareSheet stops being
+     display:none — arrival. Collapsing from long to short only toggles classes on the
+     container, so it stays a resize and does not re-enter. */
   /* Everything except the grabber, the kicker, the headline and the one primary action is
      hidden — so the card is SHORT by construction rather than by a translateY guess that
      breaks the moment the content changes height. Swiping up brings the rest back. */
@@ -887,7 +890,6 @@
      and the taps — so hiding it left the button asking for trust. Reading order matches
      intent: see what goes out, then send it. */
   #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite):not(.chPrev){display:none!important;}
-  @keyframes ssRise{from{transform:translateY(100%)}to{transform:translateY(0)}}
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
@@ -3920,7 +3922,7 @@ function openShareSheet(via){
      first. The Share-CTA path (hidden → open) never ran it at all. */
   updateInviteBtn();
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","rise"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -3930,7 +3932,7 @@ function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","rise");
    screen (exitFinished) is what actually closes it. */
 function sheetToFloor(){
   if(!finished){ closeShareSheet(); return; }   // not on the reveal → nothing to keep open
-  shareSheetEl.classList.remove("show","rise");
+  shareSheetEl.classList.remove("show");
   shareSheetEl.classList.add("peek");
   ssState="peek";
 }
@@ -3956,7 +3958,7 @@ function stepSheet(dir){
      still reported, but the sheet stays on screen — the number and the affordance are two
      different questions. */
   if(ssState==="open") track("share_dismissed",{via:"swipe",mode:shareMode,score:Math.round(currentScore||0)});
-  shareSheetEl.classList.remove("show","peek","rise");
+  shareSheetEl.classList.remove("show","peek");
   shareSheetEl.classList.add(next);
   ssState=next;
   haptic(8);
@@ -3989,7 +3991,7 @@ function peekShareSheet(){
   /* Never on top of the paywall, and never over the retake confirm — the sheet is the
      lowest-priority thing on this screen and it must not land on a decision. */
   if(document.querySelector("#paywall.show,#confirmSheet.show")) return;
-  if(!finished) return;   // the reveal went away while the rise was still animating
+  if(!finished) return;   // the reveal went away before this could run
   ssState="peek";
   fillShareKicker();
   updateInviteBtn();
@@ -4002,10 +4004,7 @@ function peekShareSheet(){
      It costs nothing here — it draws a 168px thumbnail off the board and reads chEffective();
      no network, no upload, so the short state still publishes nothing. */
   chPrevRender();
-  shareSheetEl.classList.add("peek","rise");
-  /* Dropped as soon as it has played, so the next short state — reached by collapsing, not by
-     arriving — is a plain resize. Longer than the .34s animation so it cannot cut it short. */
-  setTimeout(()=>{ try{ shareSheetEl.classList.remove("rise"); }catch(_){} },420);
+  shareSheetEl.classList.add("peek");
   haptic(8);
 }
 function expandShareSheet(){
