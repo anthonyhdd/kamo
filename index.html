@@ -911,20 +911,10 @@
      sneaker. The lift is on .show only: in peek and mini the card is short and a shadow that
      size would read as a bar across the image. */
   #shareSheet.show .ssCard{box-shadow:0 -18px 40px rgba(0,0,0,.55),0 -2px 0 rgba(255,255,255,.06);}
-  /* A CARD WITH FOUR CORNERS. It inherited .pwCard's top-only radius and ran flush to the
-     bottom of the screen, so the two side borders travelled all the way down and stopped —
-     no corner, no closure, a shape that reads as cut off rather than finished. The paywall
-     gets away with it because it is a wall; this one floats over a photo the user is looking
-     at, and an unclosed edge on top of an image reads as a rendering fault.
-     Inset 10px and rounded on all four, so the border returns to where it started. The
-     bottom padding keeps the safe area INSIDE the card — the inset is on top of it, not
-     instead of it, or the home indicator would sit on the last button. */
-  /* overflow:hidden because .pwCard::before — the mint glow — is a 210px block with only its
-     TOP corners rounded, sized for a card that has no bottom ones. Floating, a short card
-     would let it run past the new bottom radius as two square corners of light. Clipping to
-     the card's own shape is what makes the radius true for the glow as well as the border. */
-  .ssCard{width:calc(100% - 20px);max-width:460px;margin:0 10px 10px;border-radius:26px;overflow:hidden;
-    padding:20px 20px calc(16px + var(--safe-b));
+  /* FLUSH TO THE BOTTOM, top corners only — .pwCard's geometry, kept. It was briefly inset
+     10px and rounded on all four so the border would close on itself; it reads better
+     anchored to the edge, the way a sheet does, so the open bottom stays. */
+  .ssCard{width:100%;max-width:460px;padding:20px 20px calc(16px + var(--safe-b));
     background:linear-gradient(180deg,#14382d,#0f2a22 55%,#0c1f19);}
   .ssCard .pwTitle{font-size:22px;}
   .ssCard .pwSub{margin-bottom:14px;}
@@ -3972,27 +3962,27 @@ function stepSheet(dir){
   haptic(8);
 }
 
-/* ===== THE SHEET PRESENTS ITSELF, FULL =====================================================
- * The reveal opens the sheet OPEN, not short. The short state still exists — swipe down and
- * it is there — but it is no longer what arrives.
+/* ===== THE SHEET ARRIVES SHORT, AND IT ARRIVES AT ONCE =====================================
+ * Two separate questions, and only one of them was worth changing. WHEN: immediately, with
+ * the screen, rather than after the wipe settles plus a beat — the wipe plays in the top half
+ * and the sheet lives in the bottom, so the wait only bought a second of a screen with no
+ * next step on it. WHAT: the short state. Briefly it arrived full; that puts a wall of
+ * destinations over the reveal at the exact moment the reveal is the thing being looked at,
+ * and the reveal is what makes anyone want to share at all. Short first, swipe up for the
+ * rest.
  *
- * The peek was a compromise with a funnel that no longer needs it: 86% of people who reached
- * the reveal never tapped Share, and the peek was meant to lower that tap to a swipe. A swipe
- * is still a step, and the destinations — the thing that actually gets shared — were behind
- * it. The sheet now arrives with everything on it.
- *
- * WHICH MEANS IT PUBLISHES ON ARRIVAL, and that is a real reversal. The old rule was that a
- * photo leaves the device only on a deliberate act, because ~1 hide in 6 is ever shared and
- * the other 5 were being uploaded for nothing. Auto-presenting the full sheet makes "opened"
- * the same population as "finished", so the deliberate act is gone and the upload has to
- * start here — otherwise chLink() is still empty when someone taps Challenge a friend one
- * second later, and they send the generic invite instead of a playable round. The cost is
- * storage and every hide on a public URL; the reason is that the link is the loop.
+ * WHY THE SHORT STATE DOES NOT PUBLISH. openShareSheet() calls chUpload(), and it does that
+ * there rather than in enterFinished() on purpose: only about one finished hide in six is
+ * ever shared, so publishing every round put five strangers' rooms on a public URL for
+ * nothing. This presentation is given to EVERY finished round — the same population as
+ * "every round" — so it shows the card and uploads NOTHING. The photo leaves the device when
+ * someone expands the sheet, or on the first touch of the card (see shareSheetSwipe), which
+ * is early enough that the link is ready by the time they tap a destination.
  *
  * NO NEW EVENT NAME. 1.0.2's allow-list is full — CARRIER_102 already spends the last three
- * unused names. `share_opened` is on that list, so the auto-present is marked with a
- * PROPERTY (via:"auto") rather than a new event: properties are not filtered. Read the funnel
- * accordingly — share_opened is now ≈ reveals, and the number that moved is share_completed. */
+ * unused names — so `share_peek_shown` would be dropped on 99.8% of installs and measure
+ * nothing. It does not need one: the whole purpose of presenting is to raise `share_opened`,
+ * which IS on that list, and `share_completed` is native. If this works, those two move. */
 let ssState="hidden";
 function peekShareSheet(){
   if(ssState!=="hidden") return;
@@ -4000,7 +3990,14 @@ function peekShareSheet(){
      lowest-priority thing on this screen and it must not land on a decision. */
   if(document.querySelector("#paywall.show,#confirmSheet.show")) return;
   if(!finished) return;   // the reveal went away while the rise was still animating
-  openShareSheet("auto"); // full sheet, publishes, fills, tracks
+  ssState="peek";
+  fillShareKicker();
+  updateInviteBtn();
+  shareSheetEl.classList.add("peek","rise");
+  /* Dropped as soon as it has played, so the next short state — reached by collapsing, not by
+     arriving — is a plain resize. Longer than the .34s animation so it cannot cut it short. */
+  setTimeout(()=>{ try{ shareSheetEl.classList.remove("rise"); }catch(_){} },420);
+  haptic(8);
 }
 function expandShareSheet(){
   shareSheetEl.classList.remove("peek");
@@ -5240,11 +5237,11 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   showScore();   // "vanished in Xs" — the number the round was played for
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
-  /* THE SHEET ARRIVES WITH THE SCREEN. It used to wait for the reveal wipe to settle plus a
-     beat — the argument being that the wipe is the payoff and the ask should not land on top
-     of it. It does not land on top of it: the sheet occupies the bottom of the screen and the
-     wipe plays above it, so the two happen together rather than in sequence. What the wait
-     actually bought was a second of a screen with no next step on it.
+  /* THE SHEET ARRIVES WITH THE SCREEN — short, but immediately. It used to wait for the wipe
+     to settle plus a beat, the argument being that the wipe is the payoff and the ask should
+     not land on top of it. It does not land on top of it: the wipe plays in the top half and
+     the sheet lives in the bottom, so the two happen together rather than in sequence. What
+     the wait actually bought was a second of a screen with no next step on it.
      The two later calls stay as backstops, not as a second trigger — peekShareSheet() returns
      unless the state is still hidden. They cover the case where this call is refused because
      the paywall or the retake confirm is up at this instant. */
