@@ -519,6 +519,18 @@
      sit at the left/right edges — clear of the centred Dynamic Island. KAMO stays at
      14px, deliberately unmoved. */
   .navbtn{position:absolute;top:calc(var(--safe-t) + 10px);right:16px;z-index:18;height:40px;padding:0 22px;border-radius:20px;border:none;background:#fff;color:#0a0b0e;font-size:15px;font-weight:800;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.4);}
+  /* The last 9 seconds of a paint round: Done is the way out and half the players never
+     found it. A mint halo rather than a colour change, so the button does not start
+     shouting danger — it is an invitation to stop, not a warning. */
+  .navbtn.urge{animation:doneUrge 1.05s ease-in-out infinite;}
+  @keyframes doneUrge{
+    0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.4),0 0 0 0 rgba(95,230,164,.55);transform:scale(1);}
+    50%{box-shadow:0 6px 20px rgba(0,0,0,.4),0 0 0 9px rgba(95,230,164,0);transform:scale(1.055);}
+  }
+  @media (prefers-reduced-motion:reduce){
+    /* No pulse, but the affordance still has to read — a steady ring instead of a moving one. */
+    .navbtn.urge{animation:none;box-shadow:0 6px 20px rgba(0,0,0,.4),0 0 0 3px rgba(95,230,164,.6);}
+  }
   .navbtn:active{transform:scale(.94);}
   /* Edit is NOT a primary action. It shared .navbtn with Done, so on the reveal screen it
      rendered as a solid white pill in the strongest corner — competing with Share, which
@@ -1181,7 +1193,7 @@
          nothing in this app is a daily challenge. "Challenge" here means the share format,
          the "Challenge a friend" invite, and the inbound referral hint — all of which are
          FREE. Printing it next to a price would be selling a feature that does not exist. -->
-    <div class="pwSub" id="pwSub">Any brush and color · no clock to line it up · 75s to paint instead of 32s</div>
+    <div class="pwSub" id="pwSub">Any brush and color · no clock to line it up · 75s to paint instead of 40s</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -2811,7 +2823,7 @@ const PW_PITCH={
   /* The free clock moved 22 -> 32 on 2026-08-06, so "instead of 22" became a false number on
      the one line of the paywall that makes a measurable claim. It also stopped being a 3.4x
      gap, which is why the line now says what the multiple IS rather than leaving the reader
-     to divide: 2.3x reads as small when it is written as two bare numbers and large when it
+     to divide: 1.9x reads as small when it is written as two bare numbers and large when it
      is named. Keep in sync with PAINT_SECONDS / PRO_PAINT_SECONDS and #pwSub. */
   /* THE GEAR IS THE ONLY PLACE IN THE APP WHERE SOMEONE ASKS TO CHANGE THE GAME THEY ARE
      SENDING. Answering that with the generic sheet wastes the clearest intent signal the
@@ -2820,7 +2832,7 @@ const PW_PITCH={
   chset: { t:"Set the challenge yourself",
            s:"Free sends 5 taps on a fixed clock. KAMO+ lets you choose both — make it easy, or make it impossible." },
   time:  { t:"Stop losing hides to the clock",
-           s:"Line up your shot with no clock at all, then 75 seconds to paint instead of 32." },
+           s:"Line up your shot with no clock at all, then 75 seconds to paint instead of 40." },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
@@ -4298,12 +4310,17 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    It creates the tension the format is built on, and it GUARANTEES every round lands
    on the reveal, which is the share surface.
 
-   AIM (18s)  -> auto-capture. PAINT (32s) -> auto-Done -> reveal.
+   AIM (18s)  -> auto-capture. PAINT (40s) -> auto-Done -> reveal.
    ~50s a round. It was ~30s (aim 8 / paint 22) and both free clocks gained 10s on
    2026-08-06: a round that ends before the hide is recognisable kills the only thing worth
    sharing, which is the reveal. Pro is untouched, so the KAMO+ gap narrows from 22->75
-   (3.4x) to 32->75 (2.3x) — still the most-felt perk, but the clock now sells less hard
+   (3.4x) to 40->75 (1.9x) — still the most-felt perk, but the clock now sells less hard
    than it did. If time-sourced paywall conversion drops, this is the change that did it.
+
+   2026-08-06, later: 32 -> 40. Measured, not guessed — 54% of every finished hide was
+   being ended BY the clock rather than by the player tapping Done, and those hides took
+   185s to reach the share sheet against 55s for a deliberate finish. More than half the
+   product was being taken away from someone mid-work.
 
    ARMED FROM THE FIRST HIDE, both phases. It used to skip hide one entirely, which meant
    a new player met the product with no clock anywhere and no idea it was a timed game.
@@ -4337,7 +4354,7 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    ⚠️ These numbers are PRINTED at three copy sites — #pwSub, PW_PITCH.time.s and the
    PW_LOCK_HINT line. A silent change here makes the paywall state a false number, which is
    a pricing-adjacent claim. Change them together. */
-const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=32;
+const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=40;
 /* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
    what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
    round, unlike a brush that has a free substitute sitting next to it.
@@ -4345,9 +4362,9 @@ const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=32;
    ⚠️ The comment above argues PAINT must stay identical for everyone "because the round
    time is the score". That still holds for the DISPLAYED time — a Pro user who takes 50s
    still shows "vanished in 50s", the limit only decides when the clock takes the round
-   away. What does change is coverage: a 32s auto-Done can end a hide mid-paint, so Pro
+   away. What does change is coverage: a 40s auto-Done can end a hide mid-paint, so Pro
    hides will trend better-covered. Accepted deliberately — that IS the perk, though at
-   32 vs 75 the gap is 2.3x, down from the 3.4x it was at 22s. */
+   40 vs 75 the gap is 1.9x, down from 2.3x at 32s and 3.4x at 22s. */
 const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
 function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
@@ -4414,6 +4431,10 @@ function stopTimer(){
   timerPhase=null; timerEnd=0; _timerPaused=0; _timerResume=null; _timerOnExpire=null; _pauseReasons.clear(); pendingExpire=null;
   timerBar.style.display="none"; timerBar.className=""; timerBar.style.transition="none"; timerBar.style.transform="scaleX(1)";
   timerTag.style.display="none"; timerTag.className=""; timerNum.style.display="none"; timerNum.className="";
+  /* The pulse belongs to the last seconds of a paint clock and to nothing else. stopTimer
+     runs on every phase change, retake and reveal, so clearing it here is what stops a
+     Done button still throbbing on a screen that has moved on. */
+  { const d=$("#btnDone"); if(d) d.classList.remove("urge"); }
 }
 /* Pause/resume, so the clock never drains behind something the user cannot act on — the
    paywall being the one that matters. A timer running behind a paywall is unfair, and it
@@ -4519,16 +4540,31 @@ function startTimer(phase,seconds,onExpire){
      via _timerTick — everything up to that point was a hairline bar and a static label.
      Not a per-frame loop: one interval writing one string. It runs at 250ms rather than
      1000ms so the displayed second changes when it actually changes, instead of lagging
-     by up to a full second — which on a 32s round is 3% of the clock. Four text writes a
+     by up to a full second — which on a 40s round is 2.5% of the clock. Four text writes a
      second is nothing next to the WebGL camera feed this sits on top of, and it stops the
      moment the phase does (stopTimer and pauseTimer both clear it). */
   const label = phase==="aim" ? "Find a spot" : "Make it vanish";
+  /* THE LABEL HANDS THE ROUND BACK. 54% of every finished hide was ended by this clock
+     rather than by the player tapping Done — more than half the product taken away from
+     someone still working — and those hides then took 185s to reach the share sheet
+     against 55s for a deliberate finish.
+     The countdown was already on screen, so the missing piece was never the number: it is
+     that "Make it vanish · 9s" reads as an instruction to keep painting until zero. Nothing
+     here said stopping early was allowed, or that Done was the way to do it. For the last
+     9 seconds the label says it, and the button pulses so the eye can find it.
+     Paint only: on the aim phase there is nothing to finish early, the capture IS the end
+     of it, so "Find a spot" keeps its own words. */
+  const doneBtn=$("#btnDone");
+  const HAND_BACK_AT=9;
+  const urge=(on)=>{ if(doneBtn) doneBtn.classList.toggle("urge",!!on); };
   const paintTag=()=>{
-    if(timerPhase!==phase){ clearInterval(_timerSec); _timerSec=null; return; }
+    if(timerPhase!==phase){ clearInterval(_timerSec); _timerSec=null; urge(false); return; }
     const left=Math.max(0,Math.ceil((timerEnd-Date.now())/1000));
-    timerTag.textContent=label+" · "+left+"s";
+    const handBack = phase==="paint" && left<=HAND_BACK_AT && left>0;
+    timerTag.textContent=(handBack?"Tap Done when you're happy":label)+" · "+left+"s";
     timerTag.className = left<=3 ? "crit" : (left<=5 ? "warn" : "");
-    if(left<=0){ clearInterval(_timerSec); _timerSec=null; }
+    urge(handBack);
+    if(left<=0){ clearInterval(_timerSec); _timerSec=null; urge(false); }
   };
   clearInterval(_timerSec); _timerSec=setInterval(paintTag,250); paintTag();
   timerTag.style.display="block";
