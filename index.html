@@ -829,6 +829,28 @@
   /* share target chooser */
   #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.55);backdrop-filter:blur(5px);}
   #shareSheet.show{display:flex;}
+  /* PEEK — THE SHEET COMES TO THEM, WITHOUT TAKING THE REVEAL AWAY.
+     186 users reached the reveal today and 26 opened this sheet: 86% never tapped Share.
+     They are not fleeing the screen either — the median gap between the reveal and a share
+     is 154 seconds, so they sit and look at their hide and simply never press the button.
+     And once the sheet IS open, 73% of them send something. The step that leaks is the tap,
+     not the sheet.
+     So the sheet arrives on its own — but in a state that leaves the reveal fully visible,
+     because the reveal is what makes anyone want to share at all. Covering it with a modal
+     would remove the motivation at the same time as the friction.
+     No backdrop, no blur, and pointer-events off the container so the reveal handle behind
+     it still drags. Only the card itself takes touches. */
+  #shareSheet.peek{display:flex;background:transparent;backdrop-filter:none;pointer-events:none;}
+  #shareSheet.peek .ssCard{pointer-events:auto;animation:ssRise .34s cubic-bezier(.2,.9,.3,1);}
+  /* Everything except the grabber, the kicker, the headline and the one primary action is
+     hidden — so the card is SHORT by construction rather than by a translateY guess that
+     breaks the moment the content changes height. Swiping up brings the rest back. */
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite){display:none!important;}
+  @keyframes ssRise{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  /* The grabber is the affordance AND the swipe target: up opens, down puts it away. */
+  .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;}
+  .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
+  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab{display:block;}
   /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
      gradient, same 26px corners, same rise, same breathing mint glow — because the two are
      the only full-width sheets in the app and they were speaking in different voices: the
@@ -1264,6 +1286,7 @@
          labelled the furniture. The paywall's kicker says KAMO+ because that means
          something; this one now reports what the user just did, so the sheet opens by
          acknowledging the hide instead of announcing itself. Filled at open time. -->
+    <div class="ssGrab" id="ssGrab"></div>
     <div class="pwKick" id="ssKick"></div>
     <div class="pwTitle" style="margin-bottom:14px">Bet they can't spot it</div>
     <!-- CHALLENGE IS THE DEFAULT AGAIN. Before/After took this slot on the argument that the
@@ -3725,6 +3748,9 @@ function openShareSheet(){
      Still not awaited: the sheet must not wait on a network round trip. If it is still in
      flight when they tap a destination, chLink() is "" and the share falls back to the
      invite URL, which is exactly the previous behaviour. */
+  /* Reached either from the Share CTA (hidden → open, skipping peek) or from expandShareSheet.
+     Both land here, so the state is settled here rather than in two callers. */
+  shareSheetEl.classList.remove("peek"); ssState="open";
   chUpload(); shareSheetEl.classList.add("show"); haptic(10);
   /* Re-evaluated every open, not once at load: setPro() can flip mid-session (purchase,
      restore, or a revoked entitlement) and a stale pitch shown to someone who just paid is
@@ -3736,11 +3762,76 @@ function openShareSheet(){
   /* Same number the reveal screen is already showing behind this sheet, so the two agree.
      Hidden rather than filled with a placeholder if there is no round time — an empty
      kicker collapses to nothing and the headline simply moves up. */
-  { const k=$("#ssKick"); if(k){ const sec=roundSeconds();
-      if(sec>0){ k.textContent="Vanished in "+sec+"s"; k.style.display=""; }
-      else k.style.display="none"; } }
+  fillShareKicker();
   track("share_opened",{score:Math.round(currentScore||0)}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
+function closeShareSheet(){ shareSheetEl.classList.remove("show"); shareSheetEl.classList.remove("peek"); ssState="hidden"; }
+
+/* ===== THE SHEET IN THREE STATES: hidden → peek → open ==================================
+ * peek is presented BY the reveal, not by a tap. See the #shareSheet.peek CSS for the
+ * numbers that argue for it.
+ *
+ * WHY PEEK DOES NOT PUBLISH. openShareSheet() calls chUpload(), and it does that there
+ * rather than in enterFinished() on purpose: only about one finished hide in six is ever
+ * shared, so publishing every round put five strangers' rooms on a public URL for nothing.
+ * A peek that everyone gets is exactly the same population as "every round" — so the peek
+ * shows the card and uploads NOTHING. The photo leaves the device when someone expands the
+ * sheet, which is still a deliberate act.
+ *
+ * NO NEW EVENT NAME. 1.0.2's allow-list is full — CARRIER_102 already spends the last three
+ * unused names — so `share_peek_shown` would be dropped on 99.8% of installs and measure
+ * nothing. It does not need one: the peek's whole purpose is to raise `share_opened`, which
+ * IS on that list, and `share_completed` is native. If this works, those two move. */
+let ssState="hidden";
+function peekShareSheet(){
+  if(ssState!=="hidden") return;
+  /* Never on top of the paywall, and never over the retake confirm — the peek is the
+     lowest-priority thing on this screen and it must not land on a decision. */
+  if(document.querySelector("#paywall.show,#confirmSheet.show")) return;
+  if(!finished) return;   // the reveal went away while the rise was still animating
+  ssState="peek";
+  fillShareKicker();
+  updateInviteBtn();
+  shareSheetEl.classList.add("peek");
+  haptic(8);
+}
+function expandShareSheet(){
+  shareSheetEl.classList.remove("peek");
+  ssState="open";
+  openShareSheet();          // publishes, fills, and tracks share_opened
+}
+/* Same kicker in both states, so expanding does not change the words under the thumb. */
+function fillShareKicker(){
+  const k=$("#ssKick"); if(!k) return;
+  const sec=roundSeconds();
+  if(sec>0){ k.textContent="Vanished in "+sec+"s"; k.style.display=""; } else k.style.display="none";
+}
+
+/* SWIPE UP OPENS, SWIPE DOWN PUTS IT AWAY — on the card itself, so the gesture works
+   wherever the thumb lands rather than only on the 38px grabber.
+   A drag is only a swipe past 24px; anything shorter is left alone so it lands on whatever
+   button is underneath. That is why nothing is preventDefault()ed until the threshold is
+   crossed: a tap on "Challenge a friend" must still be a tap. */
+(function shareSheetSwipe(){
+  const card=shareSheetEl.querySelector(".ssCard"); if(!card) return;
+  let y0=null, moved=false;
+  card.addEventListener("pointerdown",e=>{ y0=e.clientY; moved=false; },{passive:true});
+  card.addEventListener("pointermove",e=>{
+    if(y0===null||moved) return;
+    const dy=e.clientY-y0;
+    if(Math.abs(dy)<24) return;
+    moved=true;
+    if(dy<0){ if(ssState==="peek") expandShareSheet(); }
+    else if(ssState==="open"){ shareSheetEl.classList.remove("show"); shareSheetEl.classList.add("peek"); ssState="peek"; }
+    else if(ssState==="peek"){ dismissShareSheet("swipe"); }
+    haptic(8);
+  },{passive:true});
+  card.addEventListener("pointerup",()=>{ y0=null; },{passive:true});
+  card.addEventListener("pointercancel",()=>{ y0=null; },{passive:true});
+  /* A tap on the grabber is the same intent as a swipe up, and it is the only part of the
+     peek that is not already a button. */
+  const grab=$("#ssGrab");
+  if(grab) grab.onclick=()=>{ if(ssState==="peek"){ haptic(10); expandShareSheet(); } };
+})();
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
    closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
    counting those as dismissals would make every successful share look like an abandon.
@@ -3750,7 +3841,9 @@ function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
    The other ~20 closed this one and left no trace at all. `mode` rides along so the leak
    can be read per share format now that Before/After is the default. */
 function dismissShareSheet(via){
-  if(!shareSheetEl.classList.contains("show")) return;   // never double-count
+  /* `peek` counts too. It is a state the sheet can be walked away from, and it is now the
+     one most people will see — reading the leak from `show` alone would miss all of them. */
+  if(!shareSheetEl.classList.contains("show") && !shareSheetEl.classList.contains("peek")) return;   // never double-count
   track("share_dismissed",{via,mode:shareMode,score:Math.round(currentScore||0)});
   closeShareSheet();
 }
@@ -4754,8 +4847,26 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   showScore();   // "vanished in Xs" — the number the round was played for
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
-  revealX=1; drawReveal(); let rv=1; const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal(); if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim); else { revealX=0.5; drawReveal(); } }; requestAnimationFrame(anim); }
-function exitFinished(){ finished=false; revealC.style.display="none"; revealHandle.style.display="none"; revealHint.style.display="none";
+  /* THE WIPE PLAYS FIRST, THEN THE SHEET ARRIVES. Presenting it during the animation would
+     put the ask on top of the one second that does the selling — the hide going from
+     visible to camouflaged is the whole payoff of the round. So the peek is scheduled from
+     the frame the wipe SETTLES, plus a beat to let it land.
+     The 1600ms timer is a backstop, not a second trigger: peekShareSheet() is idempotent
+     (it returns unless the state is still hidden), so if the animation finishes normally
+     the timer finds the sheet already peeking and does nothing. It exists because the RAF
+     loop stops running if the tab is backgrounded mid-wipe, and a user who comes back to a
+     settled reveal should still get the sheet. */
+  revealX=1; drawReveal(); let rv=1;
+  const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal();
+    if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim);
+    else { revealX=0.5; drawReveal(); setTimeout(peekShareSheet,420); } };
+  requestAnimationFrame(anim);
+  setTimeout(peekShareSheet,1600); }
+function exitFinished(){ finished=false;
+  /* Back to editing: the sheet belongs to the reveal and must not survive it. Without this
+     the peek stays pinned over the paint tools, which is worse than never showing it. */
+  closeShareSheet();
+  revealC.style.display="none"; revealHandle.style.display="none"; revealHint.style.display="none";
   ["swatchRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again

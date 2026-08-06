@@ -118,6 +118,38 @@ else {
 const chMake = html.match(/const CH_MAKE=(true|false)/);
 chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
 
+/* ---- 5b. The peek sheet ------------------------------------------------------------------
+   Static invariants, not behaviour — the state machine is DOM-bound and this repo has no
+   browser to run it in. What these guard are the two ways it breaks SILENTLY:
+
+   1. The peek publishing a photo. openShareSheet() calls chUpload() deliberately late,
+      because only ~1 finished hide in 6 is ever shared and publishing every round put five
+      strangers' rooms on a public URL for nothing. The peek is shown to EVERY finished
+      round — so the day someone "tidies up" by moving chUpload() into peekShareSheet(),
+      that regression comes straight back, and nothing user-visible changes.
+   2. The peek covering the reveal. Its whole argument is that the reveal stays visible; a
+      backdrop or a blur on .peek quietly turns it into the modal it was designed not to be. */
+{
+  const peekFn = html.match(/function peekShareSheet\(\)\{[\s\S]*?\n\}/);
+  if (!peekFn) bad('peekShareSheet() not found — the reveal no longer presents the sheet?');
+  else if (/chUpload\(/.test(peekFn[0])) {
+    bad('peekShareSheet() calls chUpload() — that publishes a photo for EVERY finished round, '
+      + 'which is the regression openShareSheet() was written to avoid');
+  } else ok('peek does not publish (chUpload stays on the deliberate open)');
+
+  const peekCss = html.match(/#shareSheet\.peek\{[^}]*\}/);
+  if (!peekCss) bad('#shareSheet.peek rule missing — the peek state has no styling');
+  else if (!/background:transparent/.test(peekCss[0]) || !/backdrop-filter:none/.test(peekCss[0])) {
+    bad(`#shareSheet.peek must clear the backdrop and blur, or it hides the reveal: ${peekCss[0]}`);
+  } else if (!/pointer-events:none/.test(peekCss[0])) {
+    bad('#shareSheet.peek must not take pointer events on the container — the reveal handle is behind it');
+  } else ok('peek leaves the reveal visible and draggable');
+
+  /^[\s\S]*$/.test(html) && /setTimeout\(peekShareSheet/.test(html)
+    ? ok('the reveal schedules the peek')
+    : bad('nothing schedules peekShareSheet() — the sheet will never present itself');
+}
+
 /* ---- 6. The share paths -----------------------------------------------------------------
    Runs the real #ssInvite handler in the three environments it ships into. Chained here so
    there is ONE command to remember before a push — a second script you have to know about is
