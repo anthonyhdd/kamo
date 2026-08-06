@@ -137,6 +137,15 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       + 'which is the regression openShareSheet() was written to avoid');
   } else ok('peek does not publish (chUpload stays on the deliberate open)');
 
+  /* The other half of that rule. Not publishing on presentation is right; never publishing
+     is what makes "Challenge a friend" — visible in the peek — send the generic invite
+     instead of a challenge, because chLink() is "" without a published hide. The upload has
+     to start on the first TOUCH of the card. Both halves or neither. */
+  /^[\s\S]*$/.test(html) && /ssState==="peek"\)\{\s*try\{\s*chUpload\(\)/.test(html)
+    ? ok('first touch on the peek starts the upload, so the link is ready to send')
+    : bad('nothing starts chUpload() when the peek is touched — Challenge a friend will send '
+        + 'the generic invite instead of a challenge link');
+
   const peekCss = html.match(/#shareSheet\.peek\{[^}]*\}/);
   if (!peekCss) bad('#shareSheet.peek rule missing — the peek state has no styling');
   else if (!/background:transparent/.test(peekCss[0]) || !/backdrop-filter:none/.test(peekCss[0])) {
