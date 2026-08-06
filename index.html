@@ -583,6 +583,14 @@
      hard-edged green RECTANGLE around nothing. The ✦ is already the premium marker and it
      is a glyph, so it can be pulsed without inventing a shape. */
   #sizeBar.lockPulse #sizeStar{animation:tickPop .55s ease-out;color:var(--mint);}
+  /* THE THREE FREE STOPS, MARKED. A tap-to-pick control nobody can see is a control nobody
+     uses — the preset dots existed before, were removed with the free sizes, and come back
+     with them. Members never see them: the bar is continuous for them and three dots on it
+     would only suggest a limit they do not have. */
+  .sizeDot{position:absolute;left:50%;width:12px;height:12px;margin-left:-6px;margin-top:-6px;border-radius:50%;
+    background:rgba(255,255,255,.28);border:1.5px solid rgba(255,255,255,.5);pointer-events:none;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);transition:background .15s,transform .15s;}
+  .sizeDot.on{background:var(--mint);border-color:var(--mint);transform:scale(1.15);}
   #sizeStar{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
     color:#fff;opacity:.9;padding:8px 12px;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
   /* before/after reveal (finished view) */
@@ -859,10 +867,21 @@
      breaks the moment the content changes height. Swiping up brings the rest back. */
   #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite){display:none!important;}
   @keyframes ssRise{from{transform:translateY(100%)}to{transform:translateY(0)}}
-  /* The grabber is the affordance AND the swipe target: up opens, down puts it away. */
-  .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;}
+  /* MINI — THE FLOOR. Swiping down used to hide the sheet outright, and with the reveal's
+     Share button now gone that was a dead end: nothing on the screen could bring it back,
+     not even swiping up again. The sheet is the only way to share, so it is never allowed to
+     leave the reveal — the lowest it goes is a labelled tab that is still a tap away.
+     Everything but the grabber is hidden, and the grabber grows a word so it reads as a
+     control rather than a decoration. */
+  #shareSheet.mini{display:flex;background:transparent;backdrop-filter:none;pointer-events:none;}
+  #shareSheet.mini .ssCard{pointer-events:auto;padding:4px 20px calc(8px + var(--safe-b));animation:ssRise .28s cubic-bezier(.2,.9,.3,1);}
+  #shareSheet.mini .ssCard > *:not(.ssGrab){display:none!important;}
+  #shareSheet.mini .ssGrab::after{content:"Share";display:block;margin-top:7px;text-align:center;
+    font-size:13px;font-weight:800;color:rgba(255,255,255,.72);letter-spacing:.2px;}
+  /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
+  .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
-  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab{display:block;}
+  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab,#shareSheet.mini .ssGrab{display:block;}
   /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
      gradient, same 26px corners, same rise, same breathing mint glow — because the two are
      the only full-width sheets in the app and they were speaking in different voices: the
@@ -1119,7 +1138,9 @@
         <!-- The generic export glyph said "a file is leaving your phone". The eye says what
              the share is FOR: someone on the other end has to find the figure. Copy follows
              the same line as the home screen ("dare your friends to spot it"). -->
-        <button class="b primary" id="btnShare"><span class="shareIn">Share now</span></button>
+        <!-- "Share now" is gone. The sheet presents itself on the reveal and never leaves it
+             (peek/mini), so a button whose only job was to open that sheet was a second door
+             into a room you are already standing in. Save stays: it does something else. -->
         <button class="b icon" id="btnSave" title="Save photo"><svg class="dl" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg><svg class="chk" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>
         <!-- No "Hide another one" here any more. Going again is still one tap — the
              "← Retake" chevron top-left is visible on this screen (capture() shows it and
@@ -1394,7 +1415,17 @@ let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
 /* The board's effective pixel ratio once PAINT_MAX_W has been applied — see capture().
    Everything that sizes brush geometry uses THIS, not dpr, so strokes keep their
    on-screen thickness whatever the backing store ends up being. */
-const PAINT_MAX_W=1080;      // = the width every share path exports at
+/* 1080 -> 1440. It was pinned to the export width on the argument that every pixel above
+   1080 is downscaled away on the way out — true for the EXPORT, and it ignored what the crop
+   does on the way in. coverInto() keeps roughly a third of a 1920-wide frame and stretches it
+   to fill this board, so the source is the ceiling long before the export is: at 1080 the
+   crop was being upscaled ~1.6x and every stroke landed on already-soft pixels.
+   ⚠️ MEMORY IS THE REASON THIS NUMBER EXISTS. Seven full-board canvases plus every undo
+   frame scale with its SQUARE: 1440 is 1.78x the pixels of 1080. capture() was rewritten
+   once because recapture was the most reliable way to kill the content process, and the
+   release-before-allocate order above is what fixed it. If crashes or blank boards come
+   back after a retake, this is the first thing to put back to 1080. */
+const PAINT_MAX_W=1440;
 let paintDpr=dpr;
 let mode="compose", bgKind=null, facing="environment", stream=null;
 
@@ -1803,9 +1834,25 @@ function gumSafe(c, ms=GUM_MS_DECIDED){
    tunable — a 4:3 image in a 9:19.5 screen is either letterboxed or cropped, and cropping
    is the zoom we are removing. MIN_FIT_H is already set at 0.60 to admit exactly this case
    (4:3 lands at ~0.62); if this ever needs reverting, it is this function alone. */
+/* 4:3 AT THE SENSOR'S OWN ORIENTATION, IN BOTH CASES.
+   Measured, not guessed: camera_granted carries cam_w, and over 72h it is 1920 for ~97% of
+   users against 1440 for 3%. So nearly every phone answers a PORTRAIT request with a
+   LANDSCAPE frame — iOS reports the track in sensor orientation and picks the nearest mode,
+   which lands on 1920x1080. coverInto() then crops that 16:9 frame into a ~0.46 portrait
+   board and keeps 498px of 1920: three quarters of the field of view thrown away, and the
+   remaining quarter blown up 2.2x to fill 1080. That single crop is BOTH complaints — the
+   "hyper zoomed" framing and the softness.
+   Asking for 4:3 explicitly stops the browser settling on 16:9: the crop goes from 26% to
+   ~35% of the frame and the upscale from 2.2x to ~1.6x. It cannot go further than that —
+   a 19.5:9 screen showing a 4:3 sensor full-bleed must lose about half the width, which is
+   why every camera app crops. What was not normal was starting from 16:9 and keeping a
+   quarter.
+   `ideal`, never `exact`: a device that cannot do 1920x1440 must still get a camera. The
+   fallback chain below drops the hint entirely on its last two rungs for the same reason. */
 function hdHint(){
   const portrait=(window.innerHeight||0)>=(window.innerWidth||0);
-  return portrait ? {width:{ideal:1440},height:{ideal:1920}} : {width:{ideal:1920},height:{ideal:1440}};
+  return portrait ? {width:{ideal:1440},height:{ideal:1920},aspectRatio:{ideal:3/4}}
+                  : {width:{ideal:1920},height:{ideal:1440},aspectRatio:{ideal:4/3}};
 }
 // What the camera actually gave us. Constraints are a request, not a contract, and the
 // answer varies by device and facing — worth knowing before blaming the renderer again.
@@ -2244,7 +2291,20 @@ const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
    the sharing collapse was caused by output nobody wanted to post, not by the lock itself.
    Two numbers settle it, and both are already tracked: share starts, and `source:"size"` on
    paywall_viewed. If shares fall again, this is wrong regardless of what trials do. */
-const FREE_BRUSH=24;        // the ONLY size a free user gets — see the note above before changing it
+/* THREE FIXED SIZES, FREE. Not a softening — a reversal the app's own numbers already paid
+   for. Locking the brush outright was measured in the note above: share opens fell 20.9% ->
+   16.1% -> 14.6% of paints across two days while painting itself held up, i.e. people kept
+   playing and stopped showing anyone. Sharing is the only free acquisition channel against a
+   paid CPI of $0.34. And `size` is simultaneously the most-shown paywall and the worst
+   converting — 161 views -> 4 trials (2.5%) over 7 days, against round_end's 9.4%, plus a
+   day where it alone produced 260 opens at a 0.9% view-to-sheet rate.
+   260 people a day reaching for a brush size are not 260 people asking to buy something.
+   The smallest free size is 16, deliberately not tiny: it has to be enough to enjoy the toy
+   and finish a hide worth sending. What stays behind KAMO+ is the CONTINUOUS range and, with
+   it, everything under 16 — the brush the paywall copy actually names, "fine enough to work
+   an edge". A free user picks between three; a member draws anywhere from 2 to 64. */
+const FREE_SIZES=[16,26,40];
+const FREE_BRUSH=FREE_SIZES[1];   // the default a free round starts on
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
@@ -3636,17 +3696,6 @@ function chWebTrack(event,props){
   }catch(e){}   // includes the TDZ case if this ever fires before the CH block evaluates
 }
 function blobToDataURL(b){ return new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b); }); }
-async function deliver(blob,ext){
-  const file=new File([blob],"kamo."+ext,{type:blob.type});
-  // Native app: "Share" goes straight to Instagram Stories (native falls back to the
-  // system share sheet if Instagram isn't installed or the story share fails).
-  if(window.ReactNativeWebView){ const d=await blobToDataURL(blob); postNative({type:"ig-stories",ext,mime:blob.type||"",data:d,score:Math.round(currentScore||0)}); return; }
-  // Web / Safari: system share sheet (IG-Stories deep link isn't reliable from the web).
-  /* `title` was "Can you spot it?" too — the same hook the watermark used to burn in, and
-     it surfaces on the share the same way, so it goes with it. The wordmark is the title. */
-  if(navigator.canShare&&navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:"KAMO",text:"I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+shareUrl()}); return; }catch(e){ if(e.name==="AbortError") return; } }
-  const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
-}
 function showSaved(){ const btn=$("#btnSave"); if(!btn) return; haptic(12); btn.classList.add("saved"); clearTimeout(showSaved._t); showSaved._t=setTimeout(()=>btn.classList.remove("saved"),1100); }
 /* THE ACK MAY NEVER COME, AND SILENCE IS NOT AN ACCEPTABLE ANSWER. 1.0.2 handles `save`,
    but it calls MediaLibrary.saveToLibraryAsync WITHOUT ever requesting the Photos
@@ -3723,7 +3772,6 @@ const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.pl
 function composeShare(W,src){ src=src||board; const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
   const s=Math.max(W/src.width, H/src.height), dw=src.width*s, dh=src.height*s;
   c.drawImage(src,(W-dw)/2,(H-dh)/2,dw,dh); drawWatermark(c,W,H); return o; }
-async function staticBlob(){ return await new Promise(r=>composeShare(1080).toBlob(r,"image/jpeg",0.9)); }
 /* "ba" (Before / After) is the default — see the tab markup for why. It is the ONLY mode
    that reaches the reveal MP4 (nativeShare below gates on it), and the encoder is not the
    reason it was hidden: `reveal_video_render_failed` has never once fired, and the average
@@ -3752,15 +3800,11 @@ function composeBeforeAfter(W){ const H=Math.round(W*16/9); const o=document.cre
   }
   return o; }
 async function shareBlob(){ const canv = shareMode==="ba" ? composeBeforeAfter(1080) : composeShare(1080); return await new Promise(r=>canv.toBlob(r,"image/jpeg",0.9)); }
-async function shareReveal(){
-  // Native app → let the user pick Instagram Story / Snapchat / More.
-  if(window.ReactNativeWebView){ openShareSheet(); return; }
-  // Web / Safari / desktop → system share sheet (with the desktop reveal-video path).
-  if(IS_IOS){ await deliver(await staticBlob(),"jpg"); return; }
-  busyEl.style.display="flex"; let media=null; try{ media=await buildReveal(); }catch(e){ media=null; } busyEl.style.display="none";
-  if(media&&media.blob&&media.blob.size>2000){ await deliver(media.blob, media.mime&&media.mime.includes("mp4")?"mp4":"webm"); return; }
-  await deliver(await staticBlob(),"jpg");
-}
+/* shareReveal() is gone with the button that called it. Its native branch just opened the
+   share sheet, which now presents itself; its web branch delivered a blob, and the sheet's
+   own destinations still reach deliver()/staticBlob()/buildReveal(), so the browser path is
+   intact. Confirmed by the orphan check: removing the button reported shareReveal alone,
+   which is what says those three are still reachable. */
 const shareSheetEl=$("#shareSheet");
 function openShareSheet(){
   /* PUBLISH HERE, NOT AT THE END OF EVERY ROUND. Uploading on enterFinished() sent a photo
@@ -3797,7 +3841,29 @@ function openShareSheet(){
      take the share sheet down with it. */
   chPrevRender();
   track("share_opened",{score:Math.round(currentScore||0)}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show"); shareSheetEl.classList.remove("peek"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","mini"); ssState="hidden"; }
+
+/* THE SHEET NEVER LEAVES THE REVEAL — it only gets smaller. open → peek → mini, and mini is
+   a labelled tab, not nothing. Reaching `hidden` from a gesture would strand the user: the
+   reveal's Share button is gone (the sheet replaced it), so with the sheet hidden there is no
+   way left to share at all, and swiping up on empty space does not bring it back. Only
+   leaving the reveal — Retake/Edit, via exitFinished — closes it for real. */
+const SHEET_STEPS=["mini","peek","open"];
+function stepSheet(dir){
+  const i=SHEET_STEPS.indexOf(ssState);
+  if(i<0) return;                                   // hidden: not on the reveal, nothing to step
+  const next=SHEET_STEPS[Math.max(0,Math.min(SHEET_STEPS.length-1,i+dir))];
+  if(next===ssState) return;                        // already at the floor or the ceiling
+  if(next==="open"){ expandShareSheet(); return; }  // publishes and tracks share_opened
+  /* Stepping DOWN off the full sheet is the walk-away this funnel could never see. It is
+     still reported, but the sheet stays on screen — the number and the affordance are two
+     different questions. */
+  if(ssState==="open") track("share_dismissed",{via:"swipe",mode:shareMode,score:Math.round(currentScore||0)});
+  shareSheetEl.classList.remove("show","peek","mini");
+  shareSheetEl.classList.add(next);
+  ssState=next;
+  haptic(8);
+}
 
 /* ===== THE SHEET IN THREE STATES: hidden → peek → open ==================================
  * peek is presented BY the reveal, not by a tap. See the #shareSheet.peek CSS for the
@@ -3868,17 +3934,16 @@ function fillShareKicker(){
     const dy=e.clientY-y0;
     if(Math.abs(dy)<24) return;
     moved=true;
-    if(dy<0){ if(ssState==="peek") expandShareSheet(); }
-    else if(ssState==="open"){ shareSheetEl.classList.remove("show"); shareSheetEl.classList.add("peek"); ssState="peek"; }
-    else if(ssState==="peek"){ dismissShareSheet("swipe"); }
-    haptic(8);
+    stepSheet(dy<0?1:-1);
   },{passive:true});
   card.addEventListener("pointerup",()=>{ y0=null; },{passive:true});
   card.addEventListener("pointercancel",()=>{ y0=null; },{passive:true});
   /* A tap on the grabber is the same intent as a swipe up, and it is the only part of the
      peek that is not already a button. */
+  /* A tap on the grabber steps UP. It is the only control in the mini state, so it has to be
+     the way back — a tab you can see and cannot open is worse than no tab. */
   const grab=$("#ssGrab");
-  if(grab) grab.onclick=()=>{ if(ssState==="peek"){ haptic(10); expandShareSheet(); } };
+  if(grab) grab.onclick=()=>{ haptic(10); stepSheet(1); };
 })();
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
    closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
@@ -4079,7 +4144,11 @@ function chPrevRender(){
     shot.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevPlay(); };
     const gear=document.getElementById("chPrevGear");
     if(gear) gear.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevSettings(); };
+    /* `ready` records that the thumbnail is actually drawn, so syncShareMode() can put the
+       card back when the user leaves the Before/After tab without ever showing an empty one. */
+    row.dataset.ready="1";
     row.classList.add("on");
+    syncShareMode();   // respect the tab that is currently selected
   }catch(e){}
 }
 
@@ -4331,7 +4400,27 @@ updateInviteBtn();   // plain browser → visible immediately; native → waits 
    that Before/After IS the default, the question flips to whether people actively switch
    BACK to the static image — that is the signal that would justify reverting, and nothing
    in the funnel could see it. */
-document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode=t.dataset.mode; document.querySelectorAll("#ssMode .ssTab").forEach(x=>x.classList.toggle("active",x===t)); haptic(8); track("share_mode_selected",{mode:shareMode}); });
+document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode=t.dataset.mode; document.querySelectorAll("#ssMode .ssTab").forEach(x=>x.classList.toggle("active",x===t)); haptic(8); track("share_mode_selected",{mode:shareMode}); syncShareMode(); });
+
+/* BEFORE/AFTER IS NOT A CHALLENGE. That tab produces a reveal of YOUR OWN hide — a clip to
+ * post — while "Challenge a friend" and the card beneath it describe a link somebody else
+ * plays. Offering both said the sheet would do two contradictory things with one tap.
+ * Both are hidden on that tab and the sheet simply gets shorter: .ssCard has no fixed height,
+ * so removing two rows IS the height change. Nothing animates — a sheet that resizes under
+ * the thumb between a tap and its target is how people hit the wrong button.
+ *
+ * ONLY IN THE OPEN STATE. In peek the challenge CTA is the only control there is, so hiding
+ * it would leave a card with a headline and nothing to press. Someone who picked Before/After
+ * and then collapsed the sheet gets the challenge affordance back, which is the right default
+ * for the state whose whole purpose is to offer it. */
+function syncShareMode(){
+  const ba = shareMode==="ba" && ssState==="open";
+  const inv=document.getElementById("ssInvite"); if(inv) inv.style.display = ba ? "none" : "";
+  const card=document.getElementById("chPrev");
+  /* `on` is what chPrevRender() adds once the thumbnail is drawn. Re-adding it here without
+     that would show an empty card, so the rendered flag is the gate, not this function. */
+  if(card) card.classList.toggle("on", !ba && card.dataset.ready==="1");
+}
 /* 1-tap → Instagram Stories: send the static image to native, which pushes it
    straight into IG Stories via react-native-share (no share sheet). */
 /* ===== ONBOARDING (once) ===== */
@@ -4736,7 +4825,6 @@ $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
 $("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); } };
 $("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); } };
-$("#btnShare").onclick=shareReveal;
 $("#btnSave").onclick=saveStatic;
 
 /* ===== brush-size slider (free) + 3 quick-size presets ===== */
@@ -4751,7 +4839,21 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      just paid for it is precisely the person who should still see it marked. It also made
      the star silently vanish the moment someone subscribed, which reads as a feature being
      taken away rather than unlocked. */
-  if(sizeStar) sizeStar.style.display="block"; }
+  if(sizeStar) sizeStar.style.display="block";
+  /* The dots are positioned from the SAME tFromBrush()/SB_PAD geometry the thumb uses, so a
+     dot always sits exactly where tapping it lands. Built once, then only repositioned —
+     renderSizeBar runs on every capture and on every pro change. */
+  const free=!canPro();
+  let dots=sizeBar._dots;
+  if(!dots){
+    dots=sizeBar._dots=FREE_SIZES.map(()=>{ const d=document.createElement("div"); d.className="sizeDot"; sizeBar.appendChild(d); return d; });
+  }
+  dots.forEach((d,i)=>{
+    d.style.display=free?"block":"none";
+    if(!free) return;
+    d.style.top=(SB_PAD+(1-tFromBrush(FREE_SIZES[i]))*h)+"px";
+    d.classList.toggle("on",brush===FREE_SIZES[i]);
+  }); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
   /* No free-user branch here any more: the bar's pointerdown handler turns free users away
@@ -4791,7 +4893,32 @@ sizeBar.addEventListener("pointerdown",e=>{
      no setPointerCapture, no sizeFromEvent, so `brush` cannot move off FREE_BRUSH. Not
      forced — `size` is uncapped and exempt from the interruption budget, so a plain call
      opens every time, and leaving force off means a future cap can still reach it. */
-  if(!canPro()){ e.preventDefault(); haptic(10); openPaywall("size"); return; }
+  /* FREE USERS NOW GET A CHOICE INSTEAD OF A WALL. A tap snaps to the nearest of the three
+     free sizes — the same control, no full-screen interruption. Dragging stays a member
+     tool: `sizing` is never entered, so the continuous range cannot be reached by holding.
+     The paywall is kept for the one gesture that IS about the locked tool — reaching below
+     the smallest free size, which is the fine brush and nothing else. That is a fraction of
+     the 260 daily opens this control was producing, and it is the fraction that was actually
+     asking for something. */
+  if(!canPro()){
+    e.preventDefault();
+    const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2;
+    let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
+    /* NEAREST DOT BY POSITION, AND NO PAYWALL FROM THIS CONTROL AT ALL.
+       Snapping by SIZE instead of position looked equivalent and was not: BRUSH_CURVE bends
+       the bar, so the three free sizes sit at t=0.51/0.65/0.80 and the whole bottom half maps
+       below 16 — 47% of the bar would still have opened the paywall. That is most of the 260
+       daily opens this control was producing at a 0.9% view-to-sheet rate, which is the thing
+       being fixed. Now every tap on the bar picks a brush and nothing interrupts.
+       The upsell did not disappear, it moved to where it already converts: round_end (9.4%
+       against this control's 2.5%) and the challenge gear, both of which are people reaching
+       for something rather than adjusting a tool. */
+    const dotT=FREE_SIZES.map(tFromBrush);
+    let best=0; for(let i=1;i<dotT.length;i++) if(Math.abs(dotT[i]-t)<Math.abs(dotT[best]-t)) best=i;
+    brush=FREE_SIZES[best];
+    renderSizeBar(); paintHaptic();
+    return;
+  }
   e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
