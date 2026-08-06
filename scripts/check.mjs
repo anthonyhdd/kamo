@@ -62,8 +62,8 @@ const deref = new Set([
   ...[...html.matchAll(/\$\("#([A-Za-z0-9_-]+)"\)\s*\./g)].map((m) => m[1]),
   ...[...html.matchAll(/getElementById\("([A-Za-z0-9_-]+)"\)\s*\./g)].map((m) => m[1]),
 ]);
-// Created at runtime rather than declared in the markup — listed, not guessed.
-const RUNTIME_IDS = new Set(['ivPrev', 'chPreview']);
+// Built by JS at runtime rather than declared in the markup — listed, not guessed.
+const RUNTIME_IDS = new Set(['ivPrev', 'chPPh', 'chSetH', 'chSetS', 'chSetT']);
 const missing = [...deref].filter((id) => !declared.has(id) && !RUNTIME_IDS.has(id));
 missing.length
   ? bad(`script dereferences ids that do not exist, unguarded: ${missing.join(', ')}`)
