@@ -2977,9 +2977,39 @@ function shareStats(){
    LEAVING the preview is deliberately NOT gated: it must be impossible to end up stuck in
    a free view, and restoring the real entitlement harms nothing. */
 const FORCE_FREE_HASH="e9e326d5f3b4741fe5967b5f9f3997e6275331ba18567ef9ef9e0e3a00e78371";
+/* AN IN-PAGE FIELD, NOT prompt(). The native dialog is not something a WKWebView is
+   obliged to provide: if the host does not implement the text-input panel, prompt() hands
+   back null and this function returns false without a word — which is exactly the silent
+   dead end this switch was reported as. Same mistake the invite button made with the
+   clipboard, same fix: stop depending on an API the container may not have.
+   ⚠️ The input MUST re-enable selection. The global *{-webkit-user-select:none} in this
+   file makes a field untypeable in WKWebView, which would have replaced one silent failure
+   with another. */
+function forceFreeAsk(){
+  return new Promise(res=>{
+    const w=document.createElement("div");
+    w.style.cssText="position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px";
+    w.innerHTML='<div style="width:min(88vw,340px);background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border:1px solid rgba(255,255,255,.22);border-radius:22px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:18px">'
+      +'<input id="ffIn" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" '
+      +'style="width:100%;height:46px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-size:16px;padding:0 12px;-webkit-user-select:text;user-select:text;outline:none">'
+      +'<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button id="ffNo" style="flex:1;height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:none;color:rgba(255,255,255,.6);font-size:15px;font-weight:700">Cancel</button>'
+      +'<button id="ffOk" style="flex:1;height:44px;border-radius:12px;border:none;background:#5fe6a4;color:#04160d;font-size:15px;font-weight:800">OK</button>'
+      +'</div></div>';
+    document.body.appendChild(w);
+    const inp=w.querySelector("#ffIn");
+    /* 16px on the input on purpose: anything smaller makes iOS zoom the page on focus. */
+    setTimeout(()=>{ try{ inp.focus(); }catch(e){} },60);
+    const done=(v)=>{ try{ w.remove(); }catch(e){} res(v); };
+    w.querySelector("#ffNo").onclick=()=>done(null);
+    w.querySelector("#ffOk").onclick=()=>done(inp.value);
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.keyCode===13) done(inp.value); });
+    w.onclick=e=>{ if(e.target===w) done(null); };
+  });
+}
 async function forceFreeAuthorized(){
   if(forceFree) return true;
-  let a=null; try{ a=prompt(""); }catch(e){}   // blank prompt: says nothing to a stranger
+  let a=null; try{ a=await forceFreeAsk(); }catch(e){}
   if(a==null) return false;
   try{ const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(a.trim()));
     return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join("")===FORCE_FREE_HASH; }
