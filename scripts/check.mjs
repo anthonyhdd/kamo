@@ -202,6 +202,54 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5d. Defined is not wired ------------------------------------------------------------
+   Three bugs tonight had the same shape: a function that exists, is correct, and is called
+   from nowhere that matters. chPrevRender() only ran after a share had already completed, so
+   the permanent challenge card was a receipt. chPrevPlay/chPrevSettings shipped bound to
+   nothing. chRepublish() would be the third if the call in the settings handlers were ever
+   dropped — silently, because the card and the message would keep showing the new numbers
+   while the friend played the old ones.
+   Syntax checks and unit tests both pass on all of those. Only the wiring says otherwise. */
+{
+  /* Brace-matched, NOT an unbounded [\s\S]*? span. The first version of this check used one
+     and passed with the call deleted: the lazy span simply ran past the end of the function
+     and found the tokens somewhere else in the file. A guard that cannot fail is worse than
+     no guard, because it is also reassuring. */
+  /* Comments are stripped before the check. Without that, `chPrevRender()` matched the
+     COMMENT inside openShareSheet explaining why chPrevRender() has to be called there —
+     so deleting the actual call left the guard green. The prose that documents a call is
+     not the call. `//` is only treated as a comment when it is not preceded by a colon, so
+     the https:// in string literals survives. */
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  const bodyOf = (start) => {
+    const at = html.indexOf(start);
+    if (at < 0) return null;
+    const open = html.indexOf('{', at);
+    let d = 0;
+    for (let i = open; i < html.length; i++) {
+      if (html[i] === '{') d++;
+      else if (html[i] === '}') { d--; if (!d) return strip(html.slice(open + 1, i)); }
+    }
+    return null;
+  };
+  const wiring = [
+    ['openShareSheet renders the challenge card', 'function openShareSheet()', 'chPrevRender()',
+      'openShareSheet() does not call chPrevRender() — the card is display:none until something '
+      + 'adds .on, so it will only appear after a share instead of before one'],
+    ['saving challenge settings republishes the hide', 'document.getElementById("chSetOk").onclick=', 'chRepublish()',
+      'the settings Done handler does not call chRepublish() — the card and the message will '
+      + 'promise the new taps/clock while the published hide keeps the old ones'],
+    ['resetting to automatic republishes the hide', 'document.getElementById("chSetReset").onclick=', 'chRepublish()',
+      'the settings Reset handler does not call chRepublish() — same mismatch, in reverse'],
+  ];
+  for (const [label, start, needs, why] of wiring) {
+    const body = bodyOf(start);
+    if (body === null) bad(`could not locate ${start} — this check needs updating`);
+    else if (!body.includes(needs)) bad(why);
+    else ok(label);
+  }
+}
+
 /* ---- 6. The share paths -----------------------------------------------------------------
    Runs the real #ssInvite handler in the three environments it ships into. Chained here so
    there is ONE command to remember before a push — a second script you have to know about is

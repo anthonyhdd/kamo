@@ -151,5 +151,62 @@ for (const chId of ['abc123', '']) {
     : bad(`${chId ? 'challenge' : 'invite'} message url is not isolated: ${JSON.stringify(calls.text)}`);
 }
 
+/* ---- chRepublish -------------------------------------------------------------------------
+   The gear lives inside the share sheet, but the hide is published when that sheet OPENS.
+   So changing the taps or the clock happens after the round behind the link is already
+   fixed, and only the sender-visible copy moved: the card and the message promised the new
+   numbers while the friend played the old ones. Nothing reported it. */
+function extractFn(name) {
+  const at = html.indexOf(`function ${name}(`);
+  if (at < 0) throw new Error(`${name}() not found`);
+  const open = html.indexOf('{', at);
+  let d = 0, end = -1;
+  for (let i = open; i < html.length; i++) {
+    if (html[i] === '{') d++;
+    else if (html[i] === '}') { d--; if (!d) { end = i; break; } }
+  }
+  return html.slice(open + 1, end);
+}
+
+async function republish({ chId, uploadSets }) {
+  /* chId is a module-level `let` that chRepublish both reads and assigns, and chUpload
+     assigns too. Reproduce that exactly: one binding in a closure the real body sees, with
+     the body wrapped in its own function so its early `return` does not escape. */
+  /* chUpload is declared INSIDE the generated scope so it assigns the same chId binding the
+     real one does. Passing it in from outside cannot work: chRepublish calls it
+     synchronously, before any handle returned by the factory exists. */
+  let uploads = 0;
+  const factory = new Function('CH_MAKE', 'initialId', 'uploadSets', 'onUpload', `
+    let chId = initialId;
+    async function chUpload(){ onUpload(); if (uploadSets !== null) chId = uploadSets; }
+    function chRepublish(){ ${extractFn('chRepublish')} }
+    chRepublish();
+    return () => chId;
+  `);
+  const read = factory(true, chId, uploadSets, () => { uploads++; });
+  await new Promise((r) => setTimeout(r, 10));   // let the republish promise settle
+  return { chId: read(), uploads };
+}
+
+console.log('\nCHANGING TAPS OR THE CLOCK REPUBLISHES THE HIDE');
+{
+  const r = await republish({ chId: '', uploadSets: 'new1' });
+  r.uploads === 0
+    ? ok('nothing published yet → no republish (chUpload will read the new values anyway)')
+    : bad(`republished with no hide: ${JSON.stringify(r)}`);
+}
+{
+  const r = await republish({ chId: 'old1', uploadSets: 'new1' });
+  r.uploads === 1 && r.chId === 'new1'
+    ? ok('already published → republished, and the link points at the new round')
+    : bad(`did not republish onto a new id: ${JSON.stringify(r)}`);
+}
+{
+  const r = await republish({ chId: 'old1', uploadSets: null });
+  r.chId === 'old1'
+    ? ok('republish failed → the previous link is restored rather than lost')
+    : bad(`a failed republish left the sender with no link: ${JSON.stringify(r)}`);
+}
+
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ share paths behave');
 process.exit(failed ? 1 : 0);

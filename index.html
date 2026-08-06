@@ -4184,10 +4184,10 @@ function chPrevSettings(){
            localStorage.setItem(CH_TAP_KEY,document.getElementById("chSetT").textContent); }catch(e){}
       track("challenge_settings_saved",{limit:parseInt(document.getElementById("chSetS").textContent,10),
                                         taps:parseInt(document.getElementById("chSetT").textContent,10)});
-      w.remove(); chPrevRender(); };
+      w.remove(); chRepublish(); chPrevRender(); };
     document.getElementById("chSetReset").onclick=()=>{
       try{ localStorage.removeItem(CH_LIM_KEY); localStorage.removeItem(CH_TAP_KEY); }catch(e){}
-      track("challenge_settings_reset",{}); w.remove(); chPrevRender(); };
+      track("challenge_settings_reset",{}); w.remove(); chRepublish(); chPrevRender(); };
     w.onclick=(ev)=>{ if(ev.target===w) w.remove(); };
   }catch(e){}
 }
@@ -5136,6 +5136,27 @@ async function chUpload(){
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
 }
 function chLink(){ return chId?(KAMO_HOST+"?h="+chId):""; }
+
+/* THE SETTINGS ARE READ AT UPLOAD TIME, AND THE UPLOAD USUALLY HAPPENS FIRST.
+ * chUpload() publishes when the share sheet opens (or on the first touch of the peek) and
+ * then refuses to run again — `if(!CH_MAKE||chId) return`. The gear lives INSIDE that same
+ * sheet, so the ordinary sequence is: publish with the automatic values, then change the
+ * taps and the clock.
+ * Everything the sender can see updates: the card's chips, and the share message, both read
+ * chEffective(). The hide behind the link does not. So the card promised "35s · 3 taps",
+ * the message said "You get 35 sec and 3 taps", and the friend opened a 20-second,
+ * five-tap round — with nothing anywhere reporting a problem.
+ * Republishing is the fix rather than an update_hide RPC: a hide is cheap, and the row that
+ * was already published stays valid for any link ALREADY sent, which is the honest outcome
+ * — that friend accepted the deal that was advertised when they got it.
+ * The previous id is restored if the new upload fails, because a link with stale settings
+ * is a playable round and no link at all is a dead share. */
+function chRepublish(){
+  if(!CH_MAKE||!chId) return;   // nothing published yet: chUpload() will read the new values
+  const prev=chId;
+  chId="";
+  Promise.resolve(chUpload()).then(()=>{ if(!chId) chId=prev; }).catch(()=>{ if(!chId) chId=prev; });
+}
 
 /* THE SEEKER SCREEN =====================================================================
  * The only screen in KAMO a stranger ever sees, so it is the one that has to sell. Built in
