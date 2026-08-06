@@ -1147,7 +1147,7 @@
          nothing in this app is a daily challenge. "Challenge" here means the share format,
          the "Challenge a friend" invite, and the inbound referral hint — all of which are
          FREE. Printing it next to a price would be selling a feature that does not exist. -->
-    <div class="pwSub" id="pwSub">Any size and color of brush · 75s to paint instead of 32s</div>
+    <div class="pwSub" id="pwSub">Any brush and color · no clock to line it up · 75s to paint instead of 32s</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -2744,7 +2744,7 @@ const pwSourceOpens={};
    Every other source keeps its pill; they fire from places with no control to light up. */
 const PW_LOCK_HINT={
   color: "Every colour is KAMO+ — tap to unlock",
-  round_end:"More time, every tool — tap for KAMO+",
+  round_end:"No aim clock, more paint time, every tool — tap for KAMO+",
   time:  "75 seconds to paint — tap for KAMO+",
 };
 /* THE LOCK ANSWERS ON THE CONTROL, NOT IN A SENTENCE. Past its cap, touching the size bar
@@ -2779,7 +2779,7 @@ const PW_PITCH={
      to divide: 2.3x reads as small when it is written as two bare numbers and large when it
      is named. Keep in sync with PAINT_SECONDS / PRO_PAINT_SECONDS and #pwSub. */
   time:  { t:"Stop losing hides to the clock",
-           s:"More than double the paint clock — 75 seconds instead of 32." },
+           s:"Line up your shot with no clock at all, then 75 seconds to paint instead of 32." },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
@@ -3000,8 +3000,8 @@ function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
   /* "Every camo brush" outlived the brushes by two releases. What was actually bought is
      the colour picker, the fine brush and the clock. */
   const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
-    ? "Every color, the fine brush and 75-second rounds — yours forever. Now go disappear."
-    : "Every color, the fine brush and 75-second rounds — cancel anytime.";
+    ? "Every color, the fine brush, no aim clock and 75-second rounds — yours forever. Now go disappear."
+    : "Every color, the fine brush, no aim clock and 75-second rounds — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
 
@@ -4201,7 +4201,17 @@ let timerEnd=0, timerPhase=null, _timerDone=null, _timerTick=null, _timerSec=nul
    nothing left to teach (maybeOnboardPaint deliberately shows no hint) and the round is
    the thing.
    Kept as a function, and still called per phase, so a future phase can opt out again. */
-function timerArmed(){ return true; }
+/* THE AIM PHASE IS UNTIMED FOR MEMBERS, THE PAINT PHASE IS NOT — and the asymmetry is the
+   whole point rather than a half-measure.
+   Aiming carries no score. Finding a wall and framing it is friction, so a clock there only
+   punishes; removing it is pure comfort and costs the game nothing.
+   Painting IS the scored part. Coverage is what the reveal brags about and what the seeker
+   plays against, so it has to stay under tension. Lift that clock too and every paid hide
+   trends to 100 %, the free recipient loses every single challenge, and the loop that
+   recruits them stops being fun to be on the receiving end of — the seeker is the
+   acquisition. The 22 -> 75 gap already trades coverage for the perk, deliberately and
+   measured; infinity is not the same trade with a bigger number, it is a different game. */
+function timerArmed(phase){ return !(phase === "aim" && canPro()); }
 function stopTimer(){
   if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
   if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
@@ -4296,7 +4306,17 @@ function runExpire(fn){ if(midGesture()){ pendingExpire=fn; return; } fn(); }
 function flushExpire(){ const f=pendingExpire; if(!f) return; pendingExpire=null; f(); }
 function startTimer(phase,seconds,onExpire){
   stopTimer();
-  if(!timerArmed(phase)) return;
+  if(!timerArmed(phase)){
+    /* No clock, but the screen still has to say what to do. stopTimer() has just hidden the
+       tag along with the bar, and leaving it hidden would strip the aim screen of its only
+       instruction — a silent regression that reads as a missing feature, not as a perk.
+       The counters are cleared rather than left stale: photo_captured reports aim_given and
+       aim_took, and a value carried over from a previous timed round would quietly claim an
+       aim clock that never ran. */
+    aimStartedAt=0; aimGiven=0;
+    if(phase==="aim"){ timerTag.textContent="Find a spot"; timerTag.className=""; timerTag.style.display=""; }
+    return;
+  }
   _timerOnExpire=onExpire;
   timerPhase=phase; timerEnd=Date.now()+seconds*1000;
   if(phase==="aim"){ aimStartedAt=Date.now(); aimGiven=seconds; }
