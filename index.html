@@ -3497,7 +3497,15 @@ async function shareReveal(){
   await deliver(await staticBlob(),"jpg");
 }
 const shareSheetEl=$("#shareSheet");
-function openShareSheet(){ shareSheetEl.classList.add("show"); haptic(10);
+function openShareSheet(){
+  /* PUBLISH HERE, NOT AT THE END OF EVERY ROUND. Uploading on enterFinished() sent a photo
+     for every finished hide — and only ~16% of them are ever shared, so five out of six
+     uploads were a stranger's bedroom put on a public URL for nothing. Now a photo leaves
+     the device only once someone has opened the sheet to send it.
+     Still not awaited: the sheet must not wait on a network round trip. If it is still in
+     flight when they tap a destination, chLink() is "" and the share falls back to the
+     invite URL, which is exactly the previous behaviour. */
+  chUpload(); shareSheetEl.classList.add("show"); haptic(10);
   /* Re-evaluated every open, not once at load: setPro() can flip mid-session (purchase,
      restore, or a revoked entitlement) and a stale pitch shown to someone who just paid is
      the fastest way to look broken. */
@@ -4242,12 +4250,6 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
      deliberately does NOT prompt for a rating here, because the Share/Save CTA appears
      on this very screen and we don't compete with it. */
   postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
-  /* Publish the hide so the share can carry a playable link. Deliberately NOT awaited and
-     deliberately here, after the reveal is on screen: a network round trip must never sit
-     between finishing a round and seeing it. If it fails or is still in flight when they
-     tap Share, chLink() is "" and every share falls back to the App Store URL — today's
-     behaviour exactly. No-op unless ?ch=1. */
-  chUpload();
   ["swatchRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
   showScore();   // "vanished in Xs" — the number the round was played for
@@ -4376,7 +4378,12 @@ initThree();
 const CH_AMP="c3970f8e3ccf035f1f3a001831dc3414";   // same client key kamo-app/analytics.js embeds
 const CH_URL="https://qpztlobbnjyjbxqyuzgg.supabase.co";
 const CH_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwenRsb2Jibmp5amJ4cXl1emdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTI1NDUsImV4cCI6MjEwMTUyODU0NX0.xvF9S2NA37F2Ug8nKfm6Th-4t05htsFi95EvNZEhGnk";
-const CH_MAKE=/[?&]ch=1(&|$)/.test(location.search);
+/* ON. The flag existed so no link could exist in the wild while the loop was unproven;
+   the hider side has since produced a real hide end to end and the owner has taken the
+   hosting decision. Publishing is now what happens when someone opens the share sheet.
+   ?ch=1 is kept as a manual override for testing a build where it might be turned off
+   again — the condition is the thing to edit, not the plumbing. */
+const CH_MAKE=true;
 const CH_SEEK=(()=>{ try{ return (new URLSearchParams(location.search).get("h")||"").replace(/[^a-f0-9]/gi,"").slice(0,16); }catch(e){ return ""; } })();
 let chId="";   // the hide this round produced; "" until the upload lands
 
