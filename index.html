@@ -4908,7 +4908,6 @@ function chSeek(){
     +".chFrame img{display:block;max-width:100%;max-height:56dvh;width:auto;height:auto;touch-action:manipulation;}"
     /* Taps left, as pips rather than a number: readable at a glance mid-game, and an empty
        row reads as "you are out" without anyone having to parse a zero. */
-    +".chPips{display:flex;gap:6px;justify-content:center;}"
     +".chPip{width:7px;height:7px;border-radius:50%;background:var(--mint);transition:background .2s,transform .2s;}"
     +".chPip.off{background:rgba(255,255,255,.16);transform:scale(.8);}"
     /* THE APP'S OWN CLOCK, not a new one. A bar that drains left to right, the same mint
@@ -4916,12 +4915,7 @@ function chSeek(){
        clock they have already read once. The number stays silent until the last five
        seconds, same rule as #timerNum: a permanent countdown is noise, a late one is
        pressure. */
-    +".chBar{width:min(92vw,420px);height:5px;border-radius:3px;background:rgba(255,255,255,.10);overflow:hidden;}"
-    +".chBar i{display:block;height:100%;width:100%;transform-origin:left center;background:linear-gradient(90deg,#fff,#8ef0bd);"
       +"box-shadow:0 0 12px rgba(95,230,164,.55);transition:transform .1s linear;}"
-    +".chBar.warn i{background:linear-gradient(90deg,#ffb648,#ffd08a);box-shadow:0 0 12px rgba(255,182,72,.6);}"
-    +".chBar.crit i{background:linear-gradient(90deg,#ff5f57,#ff9a94);box-shadow:0 0 14px rgba(255,95,87,.65);}"
-    +".chClock{font-family:var(--display);font-weight:700;font-size:15px;color:var(--mint);min-height:19px;letter-spacing:-.2px;}"
     +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
     +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
     +".chMark.stay{animation:chHold 1.6s ease-in-out infinite;opacity:1;}"
@@ -4955,6 +4949,9 @@ function chSeek(){
       +"box-shadow:0 10px 28px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;}"
     +".chCta::after{content:\"\";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}"
     +".chCta:active{transform:scale(.98);}"
+    +".chNum{color:var(--mint);font-weight:800;}"
+    +".chNum.warn{color:#ffb648;}"
+    +".chNum.crit{color:#ff5f57;}"
     +".chR{background:none;border:none;color:rgba(255,255,255,.3);font-size:11px;text-decoration:underline;margin-top:2px;font-family:var(--font);}";
   document.head.appendChild(st);
 
@@ -4963,9 +4960,6 @@ function chSeek(){
     +'<h1 class="chHead" id="chHead">Loading…</h1>'
     +'<p class="chSub" id="chSub"></p>'
     +'<div class="chFrame" id="chFrame"></div>'
-    +'<div class="chBar" id="chBar"><i id="chFill"></i></div>'
-    +'<div class="chPips" id="chPips"></div>'
-    +'<div class="chClock" id="chClock"></div>'
     +'<div id="chFoot"></div>';
   document.body.appendChild(w);
   const $$=(id)=>document.getElementById(id);
@@ -5002,8 +4996,7 @@ function chSeek(){
   function ending(head,sub,label){
     $$("chHead").textContent=head;
     $$("chSub").textContent=sub||"";
-    $$("chPips").innerHTML=""; $$("chClock").textContent="";
-    const bar=$$("chBar"); if(bar) bar.style.display="none";
+
     /* The frame stops growing once the game is over, or on a short phone the card would
        be pushed off the bottom by a photo nobody is playing any more. */
     const fr=$$("chFrame"); if(fr) fr.style.flex="0 1 auto";
@@ -5024,10 +5017,9 @@ function chSeek(){
     img.alt="Find the hidden figure";
     $$("chFrame").appendChild(img);
 
-    $$("chHead").textContent=h.secs?("Someone vanished in "+h.secs+"s"):"Someone is hiding in here";
-    /* The social proof goes ABOVE the game, not under the result. It is the dare — "nine
-       people looked and six walked away" is what makes the first tap feel like something. */
-    const missed=(h.n_attempts||0)-(h.n_found||0);
+    /* ONE INSTRUCTION, NOT A BRAG. "Someone vanished in 1s" told the seeker about the
+       HIDER's round — a number they cannot act on, on the screen where they have to act. */
+    $$("chHead").textContent="Find the body";
     /* THE CLOCK IS DERIVED FROM THE HIDER'S OWN ROUND, which is what finally makes their
        time mean something beyond a brag: a hide that took 14 seconds buys the seeker 28.
        Bounded 20-45 so a one-second test hide still gives a playable round and a slow one
@@ -5037,15 +5029,21 @@ function chSeek(){
        automatic path still stores, so this is the branch almost every round takes. */
     const LIMIT=h.limit_s||Math.max(20,Math.min(45,(h.secs||10)*2));
     const TAPS=h.max_taps||CH_TAPS;
-    $$("chSub").textContent = (h.n_attempts && missed)
-      ? (missed+" of "+h.n_attempts+" never found them. You get "+LIMIT+"s.")
-      : ("You get "+LIMIT+"s. Tap when you see them.");
-    /* "1 of 1 never found them" is fine; "1 people" is not. Only the bare count needs the
-       word attached to it. */
-    const pips=$$("chPips");
-    const drawPips=(left)=>{ pips.innerHTML=""; for(let i=0;i<TAPS;i++){ const d=document.createElement("div");
-      d.className="chPip"+(i<left?"":" off"); pips.appendChild(d); } };
-    drawPips(TAPS);
+    /* ONE LIVE LINE INSTEAD OF THREE INDICATORS. A progress bar, a row of pips and a
+       countdown all said the same two things, none of them next to the words explaining
+       them, and all three sat below the photo where nobody looks while hunting. The
+       sentence that already states the rules now counts them down in place: the value and
+       its unit are highlighted together, because "18" alone is not information — "18 sec"
+       is. It warms to amber and then to red on the same thresholds the bar used, so the
+       urgency survives the elements that carried it. */
+    const subEl=$$("chSub");
+    const renderSub=(secLeft,tapsLeft)=>{
+      const sec=Math.max(0,Math.ceil(secLeft));
+      const cls=secLeft<=5?" crit":(secLeft<=LIMIT*0.4?" warn":"");
+      subEl.innerHTML='You get <b class="chNum'+cls+'">'+sec+' sec</b> and <b class="chNum">'
+        +tapsLeft+(tapsLeft===1?" tap":" taps")+"</b>.";
+    };
+    renderSub(LIMIT,TAPS);
 
     let t0=0, tries=0, done=false, clock=null;
     img.onclick=async(e)=>{
@@ -5059,13 +5057,10 @@ function chSeek(){
         clock=setInterval(()=>{
           if(done) return;
           const left=LIMIT-(Date.now()-t0)/1000;
-          const bar=$$("chBar"), fill=$$("chFill");
-          if(fill) fill.style.transform="scaleX("+Math.max(0,left/LIMIT)+")";
-          if(bar){ bar.classList.toggle("warn",left<=LIMIT*0.4&&left>5); bar.classList.toggle("crit",left<=5); }
-          $$("chClock").textContent = left<=5 ? Math.max(0,left).toFixed(1)+"s" : "";
+          renderSub(left,TAPS-tries);
           if(left<=0) timeUp();
         },100); }
-      tries++; drawPips(TAPS-tries);
+      tries++; renderSub(t0?LIMIT-(Date.now()-t0)/1000:LIMIT, TAPS-tries);
       const mk=document.createElement("div"); mk.className="chMark";
       mk.style.left=(e.clientX-r.left)+"px"; mk.style.top=(e.clientY-r.top)+"px";
       $$("chFrame").appendChild(mk); mk._t=setTimeout(()=>{ if(!mk.classList.contains("stay")) mk.remove(); },500);
