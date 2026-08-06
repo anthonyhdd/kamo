@@ -747,6 +747,12 @@
   .pwBuy{position:relative;overflow:hidden;width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;animation:pwBuyGlow 3s ease-in-out infinite;}
   /* soft mint halo breathing + a slow glossy sweep — subtle, on-brand */
   @keyframes pwBuyGlow{0%,100%{box-shadow:0 10px 28px rgba(0,0,0,.4);}50%{box-shadow:0 10px 28px rgba(0,0,0,.4),0 0 24px rgba(95,230,164,.5);}}
+  /* THE RULE THE SPAN WAS ALWAYS MISSING. setBuyLabel() wraps every buy label in .pwBuyTxt
+     and its comment says the span exists "so .pwBuy::after's sheen can sit under the text
+     instead of over it" — but nothing ever styled the class, so the absolutely-positioned
+     sheen has been sweeping OVER the label on the paywall's own button. One declaration
+     makes the comment true, for that button and for the preview's CTA which now shares it. */
+  .pwBuyTxt{position:relative;z-index:1;}
   .pwBuy::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
   @keyframes pwBuySheen{0%{left:-60%}45%,100%{left:150%}}
   .pwBuy.loading{pointer-events:none;opacity:.92;animation:none;}
@@ -847,7 +853,13 @@
   .pwClose svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;}
   .pwClose:active{transform:scale(.9);color:rgba(255,255,255,.75);}
   /* share target chooser */
-  #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.55);backdrop-filter:blur(5px);}
+  /* NO SCRIM, IN EITHER STATE. The dim-and-blur belonged to a sheet you summoned; this one
+     presents itself on the reveal and lives there, so darkening the hide behind it hid the
+     one thing that makes anyone want to share. The container also stops taking touches —
+     only the card does — so the reveal handle stays draggable underneath at all times. */
+  #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;
+    background:transparent;backdrop-filter:none;pointer-events:none;}
+  #shareSheet .ssCard{pointer-events:auto;}
   #shareSheet.show{display:flex;}
   /* PEEK — THE SHEET COMES TO THEM, WITHOUT TAKING THE REVEAL AWAY.
      186 users reached the reveal today and 26 opened this sheet: 86% never tapped Share.
@@ -860,8 +872,8 @@
      would remove the motivation at the same time as the friction.
      No backdrop, no blur, and pointer-events off the container so the reveal handle behind
      it still drags. Only the card itself takes touches. */
-  #shareSheet.peek{display:flex;background:transparent;backdrop-filter:none;pointer-events:none;}
-  #shareSheet.peek .ssCard{pointer-events:auto;animation:ssRise .34s cubic-bezier(.2,.9,.3,1);}
+  #shareSheet.peek{display:flex;}
+  #shareSheet.peek .ssCard{animation:ssRise .34s cubic-bezier(.2,.9,.3,1);}
   /* Everything except the grabber, the kicker, the headline and the one primary action is
      hidden — so the card is SHORT by construction rather than by a translateY guess that
      breaks the moment the content changes height. Swiping up brings the rest back. */
@@ -944,19 +956,38 @@
      share sheet and must hand it back. */
   .chPP{position:fixed;inset:0;z-index:90;display:flex;align-items:flex-end;justify-content:center;
     background:rgba(3,5,8,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  /* SAME FAMILY AS THE PAYWALL. This screen was built with its own components while the
+     right ones already existed: the card's gradient and 26px corners are .pwCard's, the
+     kicker is .pwKick, and the CTA below is .pwBuy. It is the same sales moment — the only
+     screen where the sender feels their own hide as the receiver — so it gets the same voice
+     instead of a quieter one. */
   .chPPin{width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px;
-    padding:20px 20px calc(16px + var(--safe-b));border-top-left-radius:26px;border-top-right-radius:26px;
-    border:1px solid rgba(255,255,255,.2);border-bottom:none;
-    background:linear-gradient(180deg,#14382d,#0f2a22 55%,#0c1f19);animation:pwUp .3s cubic-bezier(.2,.9,.3,1);}
-  .chPPh{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:-.3px;color:#fff;}
-  .chPPframe{position:relative;flex:0 1 auto;min-height:0;border-radius:14px;overflow:hidden;
-    border:1px solid rgba(255,255,255,.14);background:#080c0a;display:flex;justify-content:center;}
-  .chPPframe canvas{max-width:100%;max-height:44vh;display:block;cursor:pointer;}
-  .chPPbar{height:4px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
+    padding:22px 22px calc(18px + var(--safe-b));border-top-left-radius:26px;border-top-right-radius:26px;
+    border:1px solid rgba(255,255,255,.22);border-bottom:none;
+    background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);
+    box-shadow:0 -14px 50px rgba(0,0,0,.6);animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
+  .chPPh{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.3px;color:#fff;line-height:1.18;}
+  /* NO BARS. The frame used to be a fixed box wider than the board, so a portrait hide sat
+     between two black pillars — the most visible flaw on the screen. aspect-ratio is set from
+     the board at render time, so the frame is exactly the shape of what is inside it. */
+  .chPPframe{position:relative;width:100%;border-radius:18px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.14);background:#080c0a;display:block;}
+  .chPPframe canvas{width:100%;height:100%;display:block;object-fit:cover;cursor:pointer;}
+  .chPPbar{height:5px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
   .chPPbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#8ef0bd);
-    transition:width 1s linear;}
-  .chPPmeta{display:flex;justify-content:space-between;font-size:13px;font-weight:800;
-    color:rgba(255,255,255,.78);letter-spacing:.06em;}
+    transition:width 1s linear,background .3s;}
+  .chPPbar.warn i{background:linear-gradient(90deg,#ffb648,#ffd08a);}
+  .chPPbar.crit i{background:linear-gradient(90deg,#ff5f57,#ff9a94);}
+  .chPPmeta{display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:800;
+    color:rgba(255,255,255,.85);letter-spacing:.02em;font-family:var(--display);}
+  /* Same escalation the seeker screen uses, so the sender sees the colours the receiver will. */
+  .chPPmeta .warn{color:#ffd08a;}
+  .chPPmeta .crit{color:#ff8b84;}
+  /* Pips: what is LEFT is mint and solid, what is spent is a hollow outline. */
+  .chPPpip{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:5px;
+    background:var(--mint);box-shadow:0 0 8px rgba(95,230,164,.5);}
+  .chPPpip.off{background:none;border:1.5px solid rgba(255,255,255,.28);box-shadow:none;}
+  .chPPpip:first-child{margin-left:0;}   /* the row is right-aligned; a leading gap shifts it off the edge */
   .chPPfoot{display:flex;flex-direction:column;gap:8px;}
   .chPPsub{font-size:12.5px;color:rgba(255,255,255,.58);line-height:1.45;}
   .chPPclose{background:none;border:none;color:rgba(255,255,255,.45);font-size:14px;font-weight:700;
@@ -3945,7 +3976,11 @@ function fillShareKicker(){
    button is underneath. That is why nothing is preventDefault()ed until the threshold is
    crossed: a tap on "Challenge a friend" must still be a tap. */
 (function shareSheetSwipe(){
-  const card=shareSheetEl.querySelector(".ssCard"); if(!card) return;
+  /* THE GRABBER, NOT THE CARD. Listening on the whole card meant any downward drag while
+     touching it — a thumb settling on a button, a scroll that was not a scroll — collapsed
+     the sheet and made its contents vanish under the finger. The card is fixed; the handle
+     is the only thing that moves it, which is what a handle is for. */
+  const card=shareSheetEl.querySelector(".ssGrab"); if(!card) return;
   let y0=null, moved=false;
   /* THE UPLOAD STARTS ON THE FIRST TOUCH, NOT ON THE PRESENTATION.
      The peek deliberately does not publish — it is shown for every finished round, and
@@ -4209,30 +4244,53 @@ function chPrevPlay(){
     track("challenge_preview_opened",{limit:e.limit,taps:e.taps,custom:e.custom});
     document.getElementById("chPP")?.remove();
     const w=document.createElement("div"); w.id="chPP"; w.className="chPP";
+    /* KICKER FIRST, THEN A CLAIM. "What they see" was a caption — it described the screen to
+       someone already looking at it. The paywall never does that: it leads with an uppercase
+       kicker carrying the terms, then a line that asserts something. The terms belong at the
+       TOP here too, because they are the whole offer, and they were sitting in grey at the
+       bottom. */
     w.innerHTML='<div class="chPPin">'
-      +'<div class="chPPh" id="chPPh">What they see</div>'
+      +'<div class="pwKick">'+e.limit+'S · '+e.taps+(e.taps===1?' TAP':' TAPS')+'</div>'
+      +'<div class="chPPh" id="chPPh">Good luck to them.</div>'
       +'<div class="chPPframe" id="chPPframe"></div>'
-      +'<div class="chPPbar"><i id="chPPfill"></i></div>'
+      +'<div class="chPPbar" id="chPPbarEl"><i id="chPPfill"></i></div>'
       +'<div class="chPPmeta"><span id="chPPclock"></span><span id="chPPpips"></span></div>'
       +'<div class="chPPfoot" id="chPPfoot">'
       /* THE SEND IS AVAILABLE FROM THE FIRST FRAME, not only after the round ends. Making
          someone finish — or lose — a preview before they can send is a toll on the one
          action this sheet exists to produce. They opened it to check what the other person
          gets; the moment they are satisfied is theirs to choose, not ours. */
-      +'<button class="ssBtn ssInvite" id="chPPsend">Challenge a friend</button>'
+      +'<button class="pwBuy" id="chPPsend"><span class="pwBuyTxt">Challenge a friend</span></button>'
       +'<button class="chPPclose" id="chPPx0">Back</button>'
       +'</div></div>';
     document.body.appendChild(w);
 
     const frame=document.getElementById("chPPframe");
+    /* The frame takes the BOARD's shape, so the hide fills it edge to edge instead of sitting
+       between two black pillars. Capped at 46vh so the card still fits with the CTA visible —
+       the button must never be below the fold on the screen whose job is to be pressed. */
+    frame.style.aspectRatio=board.width+" / "+board.height;
+    frame.style.maxHeight="46vh";
+    frame.style.margin="0 auto";
     const img=document.createElement("canvas");
     img.width=board.width; img.height=board.height;
     img.getContext("2d").drawImage(board,0,0);
     frame.appendChild(img);
 
     let left=e.limit, tries=0, over=false;
-    const pips=()=>{ document.getElementById("chPPpips").textContent="●".repeat(Math.max(0,e.taps-tries))+"○".repeat(Math.min(tries,e.taps)); };
-    const clock=()=>{ document.getElementById("chPPclock").textContent=left+"s";
+    /* THE SAME ESCALATION THE RECEIVER GETS. The seeker screen turns its numbers amber under
+       40% and red under 5s; this preview showed a flat grey "17s" and five identical dots, so
+       the sender was watching a calmer round than the one they were about to send. Pips are
+       elements now rather than ●/○ text: what is left glows mint, what is spent is a hollow
+       ring, which reads at a glance instead of needing to be counted. */
+    const pips=()=>{ const n=Math.max(0,e.taps-tries);
+      document.getElementById("chPPpips").innerHTML=
+        Array.from({length:e.taps},(_,i)=>'<i class="chPPpip'+(i<n?'':' off')+'"></i>').join(""); };
+    const clock=()=>{ const c=document.getElementById("chPPclock");
+      c.textContent=left+"s";
+      c.className = left<=5 ? "crit" : (left<=e.limit*0.4 ? "warn" : "");
+      const bar=document.getElementById("chPPbarEl");
+      if(bar) bar.className="chPPbar"+(left<=5?" crit":(left<=e.limit*0.4?" warn":""));
       document.getElementById("chPPfill").style.width=(100*left/e.limit)+"%"; };
     clock(); pips();
     const iv=setInterval(()=>{ if(over) return; left--; clock(); if(left<=0) end("Out of time","They never found you."); },1000);
@@ -4242,7 +4300,7 @@ function chPrevPlay(){
       document.getElementById("chPPh").textContent=head;
       document.getElementById("chPPfoot").innerHTML=
         '<div class="chPPsub">'+sub+'</div>'
-        +'<button class="ssBtn ssInvite" id="chPPgo">Challenge a friend</button>'
+        +'<button class="pwBuy" id="chPPgo"><span class="pwBuyTxt">Challenge a friend</span></button>'
         +'<button class="chPPclose" id="chPPx">Back</button>';
       document.getElementById("chPPgo").onclick=send;
       document.getElementById("chPPx").onclick=close;
