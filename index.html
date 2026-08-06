@@ -875,6 +875,17 @@
      clock and the same mask-composite trick as .pwPlan.active — the sheet already teaches
      that a shimmering mint edge means "this is the one", so reusing it costs no new
      vocabulary. border-color goes transparent because the ::before IS the edge now. */
+  .ivPrev{display:flex;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:9px 11px;
+    border-radius:14px;border:1px solid rgba(95,230,164,.28);background:rgba(95,230,164,.08);
+    animation:ivIn .28s cubic-bezier(.2,1.2,.4,1);}
+  .ivPrev.out{opacity:0;transform:translateY(-4px);transition:opacity .3s,transform .3s;}
+  .ivPrev .ivShot{flex:0 0 auto;width:44px;height:58px;border-radius:9px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;background:#000;}
+  .ivPrev .ivShot canvas{max-width:100%;max-height:100%;display:block;}
+  .ivPrev .ivTxt{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left;}
+  .ivPrev .ivTxt b{font-size:14px;font-weight:800;color:#fff;}
+  .ivPrev .ivTxt span{font-size:11.5px;color:rgba(255,255,255,.62);}
+  @keyframes ivIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
   .ssBtn.ssInvite{position:relative;z-index:0;background:rgba(72,214,139,.14);border-color:transparent;background-clip:padding-box;}
   .ssBtn.ssInvite::before{content:"";position:absolute;inset:-1px;border-radius:17px;z-index:-1;pointer-events:none;
     padding:1px;background:var(--ring);background-size:260% 100%;
@@ -2739,8 +2750,20 @@ function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
     /* native cancel doesn't call back to the web, so auto-reset if nothing resolves */
     _pwBuyTimer=setTimeout(()=>setPwBuyLoading(false), 6000); }
   else { b.classList.remove("loading"); b.removeAttribute("aria-busy"); updatePwBuy(); } }
-$("#pwClose").onclick=closePaywall;
-paywallEl.onclick=e=>{ if(e.target===paywallEl) closePaywall(); };
+/* THE EXIT WAS NEVER MEASURED. paywall_dismissed has been on the wrapper's allow-list since
+   1.0.2 — nothing was blocking it, the web simply never fired it. So 307 paywalls a day were
+   opened and how every one of them ended was invisible: closed on the X, closed by tapping
+   the backdrop, or left behind when the app was killed. Those are three different verdicts
+   on an offer and they were all recorded as the same silence.
+   Only a USER-driven close counts. closePaywall() also runs on a successful purchase and on
+   setPro(), and calling those a dismissal would poison the number in the exact direction
+   that flatters us. */
+function dismissPaywall(via){
+  track("paywall_dismissed",{via:via,source:pwLastSource,nth:pwOpens,plan:pwPlan});
+  closePaywall();
+}
+$("#pwClose").onclick=()=>dismissPaywall("close");
+paywallEl.onclick=e=>{ if(e.target===paywallEl) dismissPaywall("backdrop"); };
 /* Nothing is sellable until StoreKit has actually returned a price for a plan. Native
    calls setPrices() with whatever it resolved — possibly {} — and this flips. */
 let storeReady=false;    // a real localized price arrived for at least one plan
@@ -3665,6 +3688,27 @@ function chCopy(text){
   });
 }
 
+/* Built from the board that is already on screen, so there is no second render path to keep
+   in sync and no network round trip: a 168px canvas drawn from the composited hide. The
+   numbers are the same ones the seeker will actually get — LIMIT is derived from the round
+   time exactly as chSeek() derives it, so this cannot promise 28s and then hand over 20. */
+function invitePreview(){
+  try{
+    const host=document.getElementById("ssInvite"); if(!host||!host.parentNode) return;
+    document.getElementById("ivPrev")?.remove();
+    const secs=roundSeconds(), LIMIT=Math.max(20,Math.min(45,(secs||10)*2));
+    const c=document.createElement("canvas");
+    const S=Math.min(1,168/Math.max(board.width,board.height));
+    c.width=Math.round(board.width*S); c.height=Math.round(board.height*S);
+    c.getContext("2d").drawImage(board,0,0,c.width,c.height);
+    const w=document.createElement("div"); w.id="ivPrev"; w.className="ivPrev";
+    w.innerHTML='<div class="ivShot"></div>'
+      +'<div class="ivTxt"><b>They get this</b><span>'+LIMIT+'s on the clock · 5 taps · no app needed</span></div>';
+    w.querySelector(".ivShot").appendChild(c);
+    host.parentNode.insertBefore(w, host.nextSibling);
+    setTimeout(()=>{ w.classList.add("out"); setTimeout(()=>w.remove(),320); },4200);
+  }catch(e){}
+}
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
@@ -3697,6 +3741,12 @@ $("#ssInvite").onclick=async()=>{
   if(b){
     b.innerHTML = ok ? '<span class="ic">✅</span>Copied — send it to a friend'
                      : '<span class="ic">↗</span>Tap again to open the share sheet';
+    /* SHOW THEM WHAT THEY JUST SENT. Nothing in this flow ever revealed that the link is a
+       playable game — the sender taps, a link is copied, and for all they know it points at
+       an App Store page. A thing you cannot picture is a thing you do not send twice.
+       AFTER the copy, never before: an preview screen between intent and action is how share
+       flows die, and this button just went from 0 to 25 taps a day by being more direct. */
+    if(ok) invitePreview();
     if(!ok){
       /* Last rung, and it needs its own gesture: navigator.share must be called from a
          fresh user activation, so it cannot be chained onto the tap that already failed. */
