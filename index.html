@@ -3214,6 +3214,9 @@ function forceFreeAsk(){
       +'<button id="ffOk" style="flex:1;height:44px;border-radius:12px;border:none;background:#5fe6a4;color:#04160d;font-size:15px;font-weight:800">OK</button>'
       +'</div></div>';
     document.body.appendChild(w);
+    const send=()=>{ close(); document.getElementById("ssInvite")?.click(); };
+    document.getElementById("chPPsend").onclick=send;
+    document.getElementById("chPPx0").onclick=()=>close();
     const inp=w.querySelector("#ffIn");
     /* 16px on the input on purpose: anything smaller makes iOS zoom the page on focus. */
     setTimeout(()=>{ try{ inp.focus(); }catch(e){} },60);
@@ -3943,7 +3946,14 @@ function chPrevPlay(){
       +'<div class="chPPframe" id="chPPframe"></div>'
       +'<div class="chPPbar"><i id="chPPfill"></i></div>'
       +'<div class="chPPmeta"><span id="chPPclock"></span><span id="chPPpips"></span></div>'
-      +'<div class="chPPfoot" id="chPPfoot"></div></div>';
+      +'<div class="chPPfoot" id="chPPfoot">'
+      /* THE SEND IS AVAILABLE FROM THE FIRST FRAME, not only after the round ends. Making
+         someone finish — or lose — a preview before they can send is a toll on the one
+         action this sheet exists to produce. They opened it to check what the other person
+         gets; the moment they are satisfied is theirs to choose, not ours. */
+      +'<button class="ssBtn ssInvite" id="chPPsend">Challenge a friend</button>'
+      +'<button class="chPPclose" id="chPPx0">Back</button>'
+      +'</div></div>';
     document.body.appendChild(w);
 
     const frame=document.getElementById("chPPframe");
@@ -3966,7 +3976,7 @@ function chPrevPlay(){
         '<div class="chPPsub">'+sub+'</div>'
         +'<button class="ssBtn ssInvite" id="chPPgo">Challenge a friend</button>'
         +'<button class="chPPclose" id="chPPx">Back</button>';
-      document.getElementById("chPPgo").onclick=()=>{ close(); document.getElementById("ssInvite")?.click(); };
+      document.getElementById("chPPgo").onclick=send;
       document.getElementById("chPPx").onclick=close;
     }
     function close(){ over=true; clearInterval(iv); w.remove(); }
@@ -4069,6 +4079,28 @@ $("#ssInvite").onclick=async()=>{
   /* THE ANSWER LANDS ON THE BUTTON, not in a toast 700ms after the sheet closed. The thumb
      is already here, and a primary action whose only feedback can fail to render is a
      primary action that reads as broken. The sheet stays open until it has said something. */
+  /* THE SYSTEM SHEET FIRST, CLIPBOARD AS THE FALLBACK — the two were the other way round.
+     Copy asks the sender to leave KAMO, pick an app, find a thread and paste; the share
+     sheet puts the message into iMessage or WhatsApp in one tap. For the single action this
+     whole sheet exists to produce, that gap is the feature.
+     It is called BEFORE any await, because navigator.share needs the user activation from
+     this tap and the first await spends it. AbortError means they opened the sheet and
+     chose to close it — that is a decision, not a failure, so it must not fall through to
+     the clipboard and claim something was copied. Any other error means the sheet never
+     opened, and the clipboard path below is exactly what shipped before. */
+  let shared=false, cancelled=false;
+  try{
+    if(navigator.share){ await navigator.share({text:text}); shared=true; }
+  }catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
+  if(shared||cancelled){
+    track("invite_shared",{ok:shared,cancelled:cancelled});
+    if(b){
+      b.innerHTML = shared ? '<span class="ic">✅</span>Sent' : original;
+      if(shared){ invitePreview(); setTimeout(()=>{ if(b) b.innerHTML=original; },1500); }
+    }
+    return;
+  }
+
   const ok=await chCopy(text);
   track("invite_copied",{ok:ok});
   if(b){
