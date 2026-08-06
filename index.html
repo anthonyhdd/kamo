@@ -360,7 +360,10 @@
       var(--ring) border-box;
     background-size:auto,260% 100%;
     box-shadow:0 8px 26px rgba(0,0,0,.5),0 6px 22px rgba(95,230,164,.12);
-    animation:pwShimmer 3.4s linear infinite;animation-delay:.9s;}
+    /* No delay any more. It existed so the card could finish rising before anything moved;
+       now that the ring is the only motion on a selected row, 0.9s of stillness after a
+       tap is the gap where selection looks like it did not register. */
+    animation:pwShimmer 3.4s linear infinite;}
   /* The card's glow, scaled to a button. ::after was the old sheen sweep — replaced rather
      than stacked, so the CTA carries exactly two effects (edge + glow) like the card does. */
   #btnShare::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;
@@ -719,10 +722,16 @@
      So the border itself is solid mint again and never moves; the ::before shimmer rides
      just outside it as decoration rather than as the signal. The fill deliberately stays
      identical to the unselected row — that part of the note below was right. */
+  /* The static edge and the moving one need SPACE BETWEEN THEM, not the same 1.5px. Putting
+     a solid mint border where the sweep already lived, then adding a 3px static halo on top,
+     stacked three greens across 6px: the animation still ran and could no longer be seen,
+     because a moving highlight reads as motion only against something that is not moving in
+     the same place. The halo is gone and the ring moved outward — solid edge on the row,
+     animated ring 1.5px clear of it. Both jobs, neither cancelling the other. */
   .pwPlan.active{border-color:var(--mint);background-clip:padding-box;
-    box-shadow:0 6px 20px rgba(95,230,164,.16),0 0 0 3px rgba(95,230,164,.13);}
-  .pwPlan.active::before{content:"";position:absolute;inset:-1.5px;border-radius:17.5px;z-index:-1;pointer-events:none;
-    padding:1.5px;background:var(--ring);background-size:260% 100%;
+    box-shadow:0 6px 20px rgba(95,230,164,.16);}
+  .pwPlan.active::before{content:"";position:absolute;inset:-3.5px;border-radius:19.5px;z-index:-1;pointer-events:none;
+    padding:2px;background:var(--ring);background-size:260% 100%;
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;
     animation:pwShimmer 3.4s linear infinite;animation-delay:.9s;}
