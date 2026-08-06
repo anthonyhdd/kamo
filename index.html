@@ -4047,8 +4047,21 @@ $("#ssInvite").onclick=async()=>{
      the challenge loop, arrived at without hosting anything.
      chLink() still wins when a hide has been published — that link is strictly better,
      being the actual puzzle. */
-  const text=(secs?("🫥 I made someone vanish in "+secs+"s."):"🫥 I hide people in plain sight.")
-    +"\n\nBeat that → "+(chLink()||inviteUrl());
+  /* WRITTEN FOR THE RECEIVER'S TASK, NOT THE SENDER'S BRAG. The old line led with
+     "I made someone vanish in 22s" and closed on "Beat that →", which asks the receiver to
+     beat a hiding time — except the receiver does not hide, they SEEK. Nothing in the
+     message said what they were being asked to do, or that there was a limit on it.
+     Now: what is hidden, what they get, and the link on its own line so every messaging app
+     renders it tappable. The tap budget is the stake, and it is read from the same
+     chEffective() the preview and the published hide use, so the message cannot promise a
+     number the round does not honour. */
+  /* Defensive: this is the share path, and a throw here costs the send. chEffective() reads
+     localStorage and a const declared further down the file — both fine at click time, but
+     the fallback is the shipped default rather than a broken message. */
+  let taps=5; try{ taps=chEffective().taps||5; }catch(_){}
+  const text="🫥 There's a body hidden in this photo."
+    +"\nYou get "+taps+(taps===1?" tap":" taps")+" to find it."
+    +"\n\n"+(chLink()||inviteUrl());
   const b=$("#ssInvite"), original=b?b.innerHTML:"";
   /* Handled by builds that know `invite`, ignored by 1.0.2. Sent either way, and nothing
      below depends on it answering — that assumption is what killed this button once. */
@@ -4912,6 +4925,23 @@ function chSeek(){
     +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
     +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
     +".chMark.stay{animation:chHold 1.6s ease-in-out infinite;opacity:1;}"
+    /* THE MOMENT THE WHOLE SCREEN EXISTS FOR. Finding it used to be a border turning mint
+       and the card sliding up — the same amount of feedback as a miss, for the one event
+       that is supposed to feel like winning. Three cheap layers, no library, no images:
+       a ring that expands out of the tap point, a flash of the frame, and eight sparks.
+       All pure CSS on elements that remove themselves, so nothing here can leak or block
+       the ending card behind it. */
+    +".chWin{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:hidden;}"
+    +".chRing{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;"
+    +"border:3px solid var(--mint);animation:chRing .72s cubic-bezier(.2,.7,.3,1) forwards;}"
+    +"@keyframes chRing{0%{transform:scale(1);opacity:.95}100%{transform:scale(9);opacity:0}}"
+    +".chFlash{position:absolute;inset:0;background:radial-gradient(circle at var(--fx) var(--fy),"
+    +"rgba(95,230,164,.45),transparent 60%);animation:chFlash .6s ease-out forwards;}"
+    +"@keyframes chFlash{0%{opacity:1}100%{opacity:0}}"
+    +".chSpark{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;"
+    +"background:var(--mint);animation:chSpark .8s cubic-bezier(.15,.8,.3,1) forwards;}"
+    +"@keyframes chSpark{0%{transform:translate(0,0) scale(1);opacity:1}"
+    +"100%{transform:translate(var(--sx),var(--sy)) scale(.2);opacity:0}}"
     +"@keyframes chHold{0%,100%{transform:scale(1);box-shadow:0 0 0 6px rgba(95,230,164,.22)}50%{transform:scale(1.12);box-shadow:0 0 0 12px rgba(95,230,164,.05)}}"
     +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
     +"@keyframes chShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}"
@@ -4943,6 +4973,32 @@ function chSeek(){
   /* One ending, two readings. Both land on the same card and the same button shape, because
      the ask is identical either way — the only thing that changes is why they should want
      to. Won: reciprocity. Lost: respect for the tool that beat them. */
+  /* Self-removing on purpose: the ending card mounts a moment later, and an effect layer
+     that outlived it would sit over the CTA. 900ms covers the longest of the three. */
+  function chCelebrate(host,x,y){
+    try{
+      if(!host) return;
+      const w=document.createElement("div"); w.className="chWin";
+      const flash=document.createElement("div"); flash.className="chFlash";
+      flash.style.setProperty("--fx",x+"px"); flash.style.setProperty("--fy",y+"px");
+      w.appendChild(flash);
+      const ring=document.createElement("div"); ring.className="chRing";
+      ring.style.left=x+"px"; ring.style.top=y+"px"; w.appendChild(ring);
+      for(let i=0;i<8;i++){
+        const a=(Math.PI*2*i)/8 + Math.random()*0.4, d=70+Math.random()*60;
+        const sp=document.createElement("div"); sp.className="chSpark";
+        sp.style.left=x+"px"; sp.style.top=y+"px";
+        sp.style.setProperty("--sx",Math.round(Math.cos(a)*d)+"px");
+        sp.style.setProperty("--sy",Math.round(Math.sin(a)*d)+"px");
+        sp.style.animationDelay=(Math.random()*0.06).toFixed(3)+"s";
+        w.appendChild(sp);
+      }
+      host.appendChild(w);
+      setTimeout(()=>w.remove(),900);
+      try{ navigator.vibrate && navigator.vibrate([12,40,18]); }catch(_){}
+    }catch(_){}
+  }
+
   function ending(head,sub,label){
     $$("chHead").textContent=head;
     $$("chSub").textContent=sub||"";
@@ -5022,6 +5078,7 @@ function chSeek(){
            itself; this one is the answer, and clearing it threw away the only moment where
            the player sees what they were looking for. */
         mk.className="chMark hit stay"; clearTimeout(mk._t);
+        chCelebrate($$("chFrame"), (e.clientX-r.left), (e.clientY-r.top));
         track("seek_found",{tries:tries,ms:Date.now()-t0});
         /* MY OWN MISSES ARE NOT OTHER PEOPLE. res.missed is every failed attempt ever
            recorded on this hide, which includes the ones I just made — so a player who
