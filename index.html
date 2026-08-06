@@ -3413,9 +3413,18 @@ function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWe
    Exactly one name goes out per launch, never both, so nothing is double counted. Segment on
    carrier_for either way; the event name it rides under stops mattering. */
 const CARRIER_102={round_finished:"reveal_previewed",invite_tapped:"camera_requested",purchase_initiated:"paint_started"};
+/* THREE POPULATIONS NOW, ONE CALL SITE.
+   - `eventsV2` (1.0.9 and later): the wrapper allow-lists the real names, so send them. The
+     carrier era ends the moment that build is the only one left.
+   - caps without eventsV2: a build that announces itself but still filters the real names.
+     Rides torch_toggled, which is on that list and dead on iOS.
+   - no caps at all (1.0.2, the only public build): the original three carriers.
+   `carrier_for` is stamped in every case, so a single Amplitude segment spans all three and
+   the migration needs no chart rewrite. */
 function trackCarried(kind,props){
-  const newer=!!(nativeCaps && Object.keys(nativeCaps).length);
-  track(newer?"torch_toggled":CARRIER_102[kind], Object.assign({carrier_for:kind},props||{}));
+  const caps=nativeCaps&&Object.keys(nativeCaps).length?nativeCaps:null;
+  const name = caps && caps.eventsV2 ? kind : (caps ? "torch_toggled" : CARRIER_102[kind]);
+  track(name, Object.assign({carrier_for:kind},props||{}));
 }
 function track(event,props){
   const p={...(props||{}),trial_arm:trialArm};
