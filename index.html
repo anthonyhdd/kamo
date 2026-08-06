@@ -4465,6 +4465,7 @@ function chLink(){ return chId?(location.origin+location.pathname+"?h="+chId):""
  * instructions, and the number has to be comparable to the hider's own round time — which
  * is also measured from when they started, not from when the app opened. */
 const CH_TAPS=5;
+function plural(n,one,many){ return n+" "+(Math.abs(n)===1?one:many); }
 function chSeek(){
   const st=document.createElement("style");
   st.textContent=
@@ -4568,6 +4569,8 @@ function chSeek(){
     $$("chSub").textContent = (h.n_attempts && missed)
       ? (missed+" of "+h.n_attempts+" never found them. You get "+LIMIT+"s.")
       : ("You get "+LIMIT+"s. Tap when you see them.");
+    /* "1 of 1 never found them" is fine; "1 people" is not. Only the bare count needs the
+       word attached to it. */
     const pips=$$("chPips");
     const drawPips=(left)=>{ pips.innerHTML=""; for(let i=0;i<CH_TAPS;i++){ const d=document.createElement("div");
       d.className="chPip"+(i<left?"":" off"); pips.appendChild(d); } };
@@ -4603,7 +4606,10 @@ function chSeek(){
         mk.className="chMark hit";
         track("seek_found",{tries:tries,ms:Date.now()-t0});
         ending("Found in "+secs+"s",
-          (res.missed?(res.missed+" people missed them. You didn't."):"First to find them."),
+          /* "1 people missed them" shipped and was the first thing visible on a real run.
+             One helper rather than a ternary at each site: the seeker screen quotes counts
+             in three places and they will not stay in sync by hand. */
+          (res.missed?(plural(res.missed,"person","people")+" missed them. You didn't."):"First to find them."),
           "Now hide one back");
         return;
       }
