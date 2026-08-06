@@ -152,7 +152,11 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
    3. The sheet covering the reveal with a scrim. Same argument, by a different mechanism —
       a backdrop or a blur turns this into the modal it was designed not to be. */
 {
-  const peekFn = html.match(/function peekShareSheet\(\)\{[\s\S]*?\n\}/);
+  /* COMMENTS STRIPPED FIRST. Third time this trap has been sprung: the body EXPLAINS why it
+     must not call openShareSheet(), so a naive test matched its own rationale and went red on
+     correct code. Every one of these checks reads code, so none of them may read prose. */
+  const peekRaw = html.match(/function peekShareSheet\(\)\{[\s\S]*?\n\}/);
+  const peekFn = peekRaw && [peekRaw[0].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')];
   if (!peekFn) bad('peekShareSheet() not found — the reveal no longer presents the sheet?');
   else if (/chUpload\(/.test(peekFn[0]) || /openShareSheet\(/.test(peekFn[0])) {
     bad('peekShareSheet() publishes (directly, or via openShareSheet) — that puts a photo on a '
@@ -160,7 +164,14 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       + 'Both are regressions that already shipped once');
   } else if (!/classList\.add\("peek/.test(peekFn[0])) {
     bad('peekShareSheet() does not add .peek — the sheet is no longer arriving short');
-  } else ok('the sheet arrives short, and does not publish');
+  } else if (!/chPrevRender\(/.test(peekFn[0])) {
+    /* The peek CSS exempts .chPrev from its hide-everything rule, but .chPrev is display:none
+       until chPrevRender() adds `.on`. Whitelisting it in CSS and never rendering it is a
+       silent no-op — the short sheet shows a headline and a button and no preview, which is
+       exactly the arrangement the card was added to replace. Shipped that way once. */
+    bad('peekShareSheet() does not call chPrevRender() — .chPrev is display:none until it runs, '
+      + 'so the short sheet is whitelisting a card that never gets turned on');
+  } else ok('the sheet arrives short, renders the card, and does not publish');
 
   /* The other half of that rule. Not publishing on presentation is right; never publishing
      is what makes "Challenge a friend" — visible in the short state — send the generic
