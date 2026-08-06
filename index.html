@@ -882,7 +882,11 @@
   /* Everything except the grabber, the kicker, the headline and the one primary action is
      hidden — so the card is SHORT by construction rather than by a translateY guess that
      breaks the moment the content changes height. Swiping up brings the rest back. */
-  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite){display:none!important;}
+  /* The card sits ABOVE the CTA and is kept in the short state too. It is the only thing on
+     the sheet that shows what "Challenge a friend" actually sends — the frame, the seconds
+     and the taps — so hiding it left the button asking for trust. Reading order matches
+     intent: see what goes out, then send it. */
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite):not(.chPrev){display:none!important;}
   @keyframes ssRise{from{transform:translateY(100%)}to{transform:translateY(0)}}
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
@@ -1003,10 +1007,12 @@
   .chSetRow{display:flex;align-items:center;justify-content:space-between;gap:12px;
     padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:14.5px;color:#fff;}
   .chSetCtl{display:flex;align-items:center;gap:12px;}
-  .chSetCtl button{width:34px;height:34px;border-radius:11px;border:1px solid var(--stroke);
+  .chSetCtl button{width:40px;height:40px;border-radius:13px;border:1px solid var(--stroke);
     background:rgba(255,255,255,.07);color:#fff;font-size:19px;font-weight:700;cursor:pointer;
     -webkit-tap-highlight-color:transparent;font-family:var(--font);}
-  .chSetCtl b{min-width:34px;text-align:center;font-size:16px;font-weight:800;color:var(--mint);}
+  /* The value is what is being changed, so it is set like every other number on these
+     screens: display face, and larger than its own label rather than smaller. */
+  .chSetCtl b{min-width:46px;text-align:center;font-family:var(--display);font-size:22px;font-weight:700;color:var(--mint);}
   /* ===== chPreview — the card that shows what the recipient receives =====================
      PERMANENT, where this used to be a 4.2s toast. A strip that deletes itself cannot carry
      a settings control or a tap target, and the sender's most common question at this exact
@@ -1093,7 +1099,9 @@
      alone, and `paywall_viewed.source="mark"` measures the pair. */
   .ssPlus{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:10px 0 2px;
     background:none;border:none;padding:6px;color:var(--mint);font-size:13.5px;font-weight:800;
-    letter-spacing:.1px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+    /* No underline. It is a button, not a link, and the only underlined text in the sheet
+       read as a footnote sitting under the real actions. The mint already marks it. */
+    letter-spacing:.1px;cursor:pointer;}
   .ssPlus:active{opacity:.6;}
 </style>
 </head>
@@ -1381,7 +1389,6 @@
          destinations below it are reach; this is recruitment, so it leads.
          Kept hidden until updateInviteBtn() runs, so a JS failure cannot leave a button
          that no handler is listening to. -->
-    <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Challenge a friend</button>
     <!-- Declared here rather than built in JS so the pre-push check can see its ids, and so a
          JS failure leaves an empty card instead of a half-built one. Shown by chPrevRender(). -->
     <div class="chPrev" id="chPrev">
@@ -1390,6 +1397,7 @@
         <b>They get this</b>
         <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span></div>
       </div>
+    <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Challenge a friend</button>
       <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
     </div>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
@@ -4370,11 +4378,12 @@ function chPrevSettings(){
     const row=(id,label,val,min,max,step)=>'<div class="chSetRow"><span>'+label+'</span>'
       +'<div class="chSetCtl"><button data-a="-" data-t="'+id+'">−</button><b id="'+id+'">'+val+'</b>'
       +'<button data-a="+" data-t="'+id+'">+</button></div></div>';
-    w.innerHTML='<div class="chPPin"><div class="chPPh" id="chSetH">Their challenge</div>'
+    w.innerHTML='<div class="chPPin"><div class="pwKick">YOU DECIDE</div>'
+      +'<div class="chPPh" id="chSetH">Their challenge</div>'
       +row("chSetS","Seconds on the clock",e.limit)
       +row("chSetT","Taps they get",e.taps)
-      +'<div class="chPPsub">Bounded 10–120s and 1–20 taps. The server clamps it too, so a hand-edited request cannot publish an unplayable round.</div>'
-      +'<button class="ssBtn ssInvite" id="chSetOk">Done</button>'
+      +'<div class="chPPsub">Anywhere from 10 to 120 seconds, and 1 to 20 taps. Fewer of either makes it harder.</div>'
+      +'<button class="pwBuy" id="chSetOk"><span class="pwBuyTxt">Done</span></button>'
       +'<button class="chPPclose" id="chSetReset">Back to automatic</button></div>';
     document.body.appendChild(w);
     const clampS=(v)=>Math.max(10,Math.min(120,v)), clampT=(v)=>Math.max(1,Math.min(20,v));
@@ -4995,11 +5004,17 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   if(!dots){
     dots=sizeBar._dots=FREE_SIZES.map(()=>{ const d=document.createElement("div"); d.className="sizeDot"; sizeBar.appendChild(d); return d; });
   }
+  /* ONE DOT, NOT THREE. Three marks turned a size control into a diagram of one — and beside
+     the thumb it read as a scale with four stops. The bar shows WHERE YOU ARE; tapping
+     anywhere still snaps to the nearest of the three, so the choice is unchanged and only the
+     furniture is gone. */
+  const at=FREE_SIZES.indexOf(brush);
   dots.forEach((d,i)=>{
-    d.style.display=free?"block":"none";
-    if(!free) return;
+    const showing = free && i===(at<0?1:at);
+    d.style.display=showing?"block":"none";
+    if(!showing) return;
     d.style.top=(SB_PAD+(1-tFromBrush(FREE_SIZES[i]))*h)+"px";
-    d.classList.toggle("on",brush===FREE_SIZES[i]);
+    d.classList.add("on");
   }); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
