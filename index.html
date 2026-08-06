@@ -3433,15 +3433,21 @@ function shareUrl(){ return chLink()||appLink; }
    would only ever reach web visitors, which is the opposite of who these links are for.
    A shared link lands in someone's messages from a friend. anthonyhdd.github.io reads as a
    developer's scratch page at the exact moment a stranger decides whether to tap. */
-/* BACK TO THE github.io ORIGIN, AND IT HAS TO STAY THERE UNTIL A BUILD MOVES IT.
-   Pointing Pages at kamo.bliss-coach.com made anthonyhdd.github.io/kamo/ — the URL every
-   shipped binary loads — a 301 to *http*://kamo.bliss-coach.com. Plain HTTP: App Transport
-   Security refuses it inside WKWebView before the second hop can upgrade it, so the app
-   reached the splash screen and then its own error. That is exactly what App Review saw
-   today, and every installed user was seeing the same thing.
-   The custom domain comes back the day a build ships that loads it directly, with no
-   github.io hop in the middle. */
-const KAMO_HOST="https://anthonyhdd.github.io/kamo/";
+/* TWO ORIGINS, AND THE DIFFERENCE BETWEEN THEM IS THE WHOLE OUTAGE.
+   The app loads anthonyhdd.github.io/kamo/ and that must never become a redirect. Attaching
+   the custom domain to the `kamo` repo turned it into a 301 to *http*://kamo.bliss-coach.com
+   — plain HTTP, which App Transport Security refuses inside WKWebView before the second hop
+   can upgrade it. The app reached the splash screen and then its own error, for four hours,
+   for everyone, and that is what App Review saw. So `kamo` keeps an empty custom-domain
+   field, permanently.
+   The pretty domain lives on the `kamo-mirror` repo instead, serving the identical file with
+   no redirect in front of it. That is safe for LINKS, which open in the receiver's browser
+   rather than in the WebView, and links are the one place the host is read by a stranger
+   deciding whether to tap: "anthonyhdd.github.io" reads like a developer URL, and shorteners
+   read like spam. Verified serving before this switch.
+   Links already in the wild keep working — `kamo` still serves them. Only new ones move.
+   The mirror must therefore stay byte-identical: scripts/sync-mirror.sh, every push. */
+const KAMO_HOST="https://kamo.bliss-coach.com/";
 function inviteUrl(){ return KAMO_HOST+"?i=1"; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
