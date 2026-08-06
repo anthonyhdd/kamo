@@ -867,21 +867,10 @@
      breaks the moment the content changes height. Swiping up brings the rest back. */
   #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite){display:none!important;}
   @keyframes ssRise{from{transform:translateY(100%)}to{transform:translateY(0)}}
-  /* MINI — THE FLOOR. Swiping down used to hide the sheet outright, and with the reveal's
-     Share button now gone that was a dead end: nothing on the screen could bring it back,
-     not even swiping up again. The sheet is the only way to share, so it is never allowed to
-     leave the reveal — the lowest it goes is a labelled tab that is still a tap away.
-     Everything but the grabber is hidden, and the grabber grows a word so it reads as a
-     control rather than a decoration. */
-  #shareSheet.mini{display:flex;background:transparent;backdrop-filter:none;pointer-events:none;}
-  #shareSheet.mini .ssCard{pointer-events:auto;padding:4px 20px calc(8px + var(--safe-b));animation:ssRise .28s cubic-bezier(.2,.9,.3,1);}
-  #shareSheet.mini .ssCard > *:not(.ssGrab){display:none!important;}
-  #shareSheet.mini .ssGrab::after{content:"Share";display:block;margin-top:7px;text-align:center;
-    font-size:13px;font-weight:800;color:rgba(255,255,255,.72);letter-spacing:.2px;}
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
-  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab,#shareSheet.mini .ssGrab{display:block;}
+  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab{display:block;}
   /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
      gradient, same 26px corners, same rise, same breathing mint glow — because the two are
      the only full-width sheets in the app and they were speaking in different voices: the
@@ -3868,7 +3857,7 @@ function openShareSheet(){
      take the share sheet down with it. */
   chPrevRender();
   track("share_opened",{score:Math.round(currentScore||0)}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","mini"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -3878,9 +3867,9 @@ function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","mini");
    screen (exitFinished) is what actually closes it. */
 function sheetToFloor(){
   if(!finished){ closeShareSheet(); return; }   // not on the reveal → nothing to keep open
-  shareSheetEl.classList.remove("show","peek");
-  shareSheetEl.classList.add("mini");
-  ssState="mini";
+  shareSheetEl.classList.remove("show");
+  shareSheetEl.classList.add("peek");
+  ssState="peek";
 }
 
 /* THE SHEET NEVER LEAVES THE REVEAL — it only gets smaller. open → peek → mini, and mini is
@@ -3888,7 +3877,12 @@ function sheetToFloor(){
    reveal's Share button is gone (the sheet replaced it), so with the sheet hidden there is no
    way left to share at all, and swiping up on empty space does not bring it back. Only
    leaving the reveal — Retake/Edit, via exitFinished — closes it for real. */
-const SHEET_STEPS=["mini","peek","open"];
+/* TWO STATES, NOT THREE. mini was a third — grabber only — and it rendered wrong: .ssCard
+   carries .pwCard, which is sized for the paywall, so hiding everything inside it left a tall
+   empty green block instead of a tab. Worse, it was a state with nothing in it to act on.
+   Short (peek: the round, the headline, Challenge a friend) or long (the full sheet). The
+   sheet is one of those two the whole time it is on the reveal, and never anything else. */
+const SHEET_STEPS=["peek","open"];
 function stepSheet(dir){
   const i=SHEET_STEPS.indexOf(ssState);
   if(i<0) return;                                   // hidden: not on the reveal, nothing to step
@@ -3899,7 +3893,7 @@ function stepSheet(dir){
      still reported, but the sheet stays on screen — the number and the affordance are two
      different questions. */
   if(ssState==="open") track("share_dismissed",{via:"swipe",mode:shareMode,score:Math.round(currentScore||0)});
-  shareSheetEl.classList.remove("show","peek","mini");
+  shareSheetEl.classList.remove("show","peek");
   shareSheetEl.classList.add(next);
   ssState=next;
   haptic(8);
