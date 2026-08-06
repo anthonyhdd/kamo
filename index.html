@@ -4801,6 +4801,37 @@ track("app_opened",{referred:!!new URLSearchParams(location.search).get("r")});
   setTimeout(()=>showHint("👀 Someone hid one for you — beat their time",4600),900);
 } }catch(e){} })();
 
+/* NOTIFICATION COPY. These lines used to exist only inside the binary, which made them the
+   one piece of user-facing text in KAMO that could not be changed without an App Store
+   release — in an app that ships its entire UI from this file precisely to avoid that. The
+   reminders are also the only copy that reaches users who are NOT opening the app, so they
+   were both the hardest to change and the most worth changing.
+   The wrapper caches whatever arrives here and falls back to its own built-in lines when
+   nothing does, so this is inert on every binary already in the wild — including 1.0.2 —
+   and starts working the day a build with the handler ships. Nothing to coordinate.
+   TO EDIT: change a line and BUMP CH_NOTIF_REV. The wrapper ignores a payload whose rev it
+   has already stored, and only a new rev forces a reschedule — the queue is built 14 days
+   out, so without the bump an edit would sit behind two weeks of old reminders and look
+   like it never deployed.
+   Kept identical to the binary's constants at rev 1: this ships the mechanism, not a copy
+   change, so a build that picks it up behaves exactly as it does today. */
+const CH_NOTIF_REV="1";
+const CH_NOTIF={
+  rev:CH_NOTIF_REV,
+  title:"⚠️ Time to KAMO ⚠️",
+  messages:[
+    {subtitle:"Your daily hide",body:"One photo, one camouflage."},
+    {subtitle:"Wherever you are",body:"Whatever’s in front of you — make it disappear."},
+    {subtitle:"Two minutes, no more",body:"Point, paint, vanish."},
+    {subtitle:"Look up from the phone",body:"Somewhere in this room, something can disappear."},
+    {subtitle:"Nothing hidden today",body:"The camera is one tap away."},
+    {subtitle:"Your record",body:"Beat your best hide.",requiresHistory:true},
+    {subtitle:"No schedule, ever",body:"You never know when KAMO hits. It just did."}
+  ],
+  firstHide:{subtitle:"Still nothing hidden",body:"Your first one takes two minutes."}
+};
+(function(){ try{ postNative({type:"notif-copy",copy:CH_NOTIF}); }catch(e){} })();
+
 /* debug bridge (?debug) */
 if(location.search.includes("debug")){
   window.HIDEY={ charPos:()=>{ const c=sel(); return c?{x:+c.group.position.x.toFixed(2),y:+c.group.position.y.toFixed(2),tx:c._tx,ty:c._ty,svx:c._svx,sx:+c.charG.scale.x.toFixed(2),sy:+c.charG.scale.y.toFixed(2)}:null; },
