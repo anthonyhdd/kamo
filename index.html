@@ -3288,6 +3288,10 @@ let appLink="https://apps.apple.com/app/id6789639784";
    their copy. chLink() is "" unless CH_MAKE published this round, so production keeps
    sending the App Store URL exactly as before. */
 function shareUrl(){ return chLink()||appLink; }
+/* Built from where this page actually is, so it follows the deploy instead of hardcoding an
+   origin that would rot the day the site moves. `i=1` is what separates an invite click from
+   ordinary web traffic in the funnel. */
+function inviteUrl(){ return location.origin+location.pathname+"?i=1"; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
 function drawWatermark(c,W,H){
@@ -3661,8 +3665,18 @@ $("#ssInvite").onclick=async()=>{
      1.0.2's WEB_EVENTS list, so the tap would be invisible on every shipped binary.
      ⚠️ DELETE when a build ships with share_target_tapped allow-listed. */
   track("camera_requested",{carrier_for:"invite_tapped",mode:shareMode,score:sc,seconds:secs});
+  /* THE LINK GOES TO THE WEB, NOT STRAIGHT TO THE APP STORE. 25 people sent a challenge
+     today and we cannot say whether one of them was opened: 1.0.2 never calls setAppLink or
+     setReferral, so shareUrl() hands back the bare store URL — an install from it is
+     indistinguishable from an organic one, and a click leaves no trace at all.
+     This page is instrumented and track() now reaches Amplitude directly from a browser, so
+     a landing here is a measurable event with a source. It is also playable: the receiver
+     gets KAMO immediately instead of an App Store listing, which is the whole argument of
+     the challenge loop, arrived at without hosting anything.
+     chLink() still wins when a hide has been published — that link is strictly better,
+     being the actual puzzle. */
   const text=(secs?("🫥 I made someone vanish in "+secs+"s."):"🫥 I hide people in plain sight.")
-    +"\n\nBeat that → "+shareUrl();
+    +"\n\nBeat that → "+(chLink()||inviteUrl());
   const b=$("#ssInvite"), original=b?b.innerHTML:"";
   /* Handled by builds that know `invite`, ignored by 1.0.2. Sent either way, and nothing
      below depends on it answering — that assumption is what killed this button once. */
@@ -4649,6 +4663,16 @@ track("app_opened",{referred:!!new URLSearchParams(location.search).get("r")});
    greet a web visitor. */
 (function(){ try{ if(new URLSearchParams(location.search).get("r")){
   setTimeout(()=>showHint("🎯 You've been challenged — now hide someone too",4200),900);
+} }catch(e){} })();
+
+/* AN INVITE WAS OPENED. The first measurement of anything downstream of a share: until now
+   the funnel ended at "they tapped send". This arrives because the visitor is in a browser,
+   where track() posts straight to Amplitude — no allow-list, no wrapper, nothing to drop it.
+   invite_landed against the invite_tapped carrier gives the click-through rate; app_opened
+   already carries surface:"web" for everything else. */
+(function(){ try{ if(new URLSearchParams(location.search).get("i")){
+  track("invite_landed",{});
+  setTimeout(()=>showHint("👀 Someone hid one for you — beat their time",4600),900);
 } }catch(e){} })();
 
 /* debug bridge (?debug) */
