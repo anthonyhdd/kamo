@@ -3890,7 +3890,7 @@ async function shareBlob(){ const canv = shareMode==="ba" ? composeBeforeAfter(1
    intact. Confirmed by the orphan check: removing the button reported shareReveal alone,
    which is what says those three are still reachable. */
 const shareSheetEl=$("#shareSheet");
-function openShareSheet(){
+function openShareSheet(via){
   /* PUBLISH HERE, NOT AT THE END OF EVERY ROUND. Uploading on enterFinished() sent a photo
      for every finished hide — and only ~16% of them are ever shared, so five out of six
      uploads were a stranger's bedroom put on a public URL for nothing. Now a photo leaves
@@ -3924,7 +3924,12 @@ function openShareSheet(){
      are both reflected. It is wrapped in its own try/catch inside, so a failure here cannot
      take the share sheet down with it. */
   chPrevRender();
-  track("share_opened",{score:Math.round(currentScore||0)}); }
+  /* Moved here from peekShareSheet. #ssInvite ships display:none so a JS failure cannot leave
+     a button nothing is listening to, and only updateInviteBtn() un-hides it — so it has to
+     run on EVERY path into the open sheet, not just the one that used to go through the peek
+     first. The Share-CTA path (hidden → open) never ran it at all. */
+  updateInviteBtn();
+  track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","rise"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
@@ -3967,36 +3972,35 @@ function stepSheet(dir){
   haptic(8);
 }
 
-/* ===== THE SHEET IN THREE STATES: hidden → peek → open ==================================
- * peek is presented BY the reveal, not by a tap. See the #shareSheet.peek CSS for the
- * numbers that argue for it.
+/* ===== THE SHEET PRESENTS ITSELF, FULL =====================================================
+ * The reveal opens the sheet OPEN, not short. The short state still exists — swipe down and
+ * it is there — but it is no longer what arrives.
  *
- * WHY PEEK DOES NOT PUBLISH. openShareSheet() calls chUpload(), and it does that there
- * rather than in enterFinished() on purpose: only about one finished hide in six is ever
- * shared, so publishing every round put five strangers' rooms on a public URL for nothing.
- * A peek that everyone gets is exactly the same population as "every round" — so the peek
- * shows the card and uploads NOTHING. The photo leaves the device when someone expands the
- * sheet, which is still a deliberate act.
+ * The peek was a compromise with a funnel that no longer needs it: 86% of people who reached
+ * the reveal never tapped Share, and the peek was meant to lower that tap to a swipe. A swipe
+ * is still a step, and the destinations — the thing that actually gets shared — were behind
+ * it. The sheet now arrives with everything on it.
+ *
+ * WHICH MEANS IT PUBLISHES ON ARRIVAL, and that is a real reversal. The old rule was that a
+ * photo leaves the device only on a deliberate act, because ~1 hide in 6 is ever shared and
+ * the other 5 were being uploaded for nothing. Auto-presenting the full sheet makes "opened"
+ * the same population as "finished", so the deliberate act is gone and the upload has to
+ * start here — otherwise chLink() is still empty when someone taps Challenge a friend one
+ * second later, and they send the generic invite instead of a playable round. The cost is
+ * storage and every hide on a public URL; the reason is that the link is the loop.
  *
  * NO NEW EVENT NAME. 1.0.2's allow-list is full — CARRIER_102 already spends the last three
- * unused names — so `share_peek_shown` would be dropped on 99.8% of installs and measure
- * nothing. It does not need one: the peek's whole purpose is to raise `share_opened`, which
- * IS on that list, and `share_completed` is native. If this works, those two move. */
+ * unused names. `share_opened` is on that list, so the auto-present is marked with a
+ * PROPERTY (via:"auto") rather than a new event: properties are not filtered. Read the funnel
+ * accordingly — share_opened is now ≈ reveals, and the number that moved is share_completed. */
 let ssState="hidden";
 function peekShareSheet(){
   if(ssState!=="hidden") return;
-  /* Never on top of the paywall, and never over the retake confirm — the peek is the
+  /* Never on top of the paywall, and never over the retake confirm — the sheet is the
      lowest-priority thing on this screen and it must not land on a decision. */
   if(document.querySelector("#paywall.show,#confirmSheet.show")) return;
   if(!finished) return;   // the reveal went away while the rise was still animating
-  ssState="peek";
-  fillShareKicker();
-  updateInviteBtn();
-  shareSheetEl.classList.add("peek","rise");
-  /* Dropped as soon as it has played, so the next peek — reached by collapsing, not by
-     arriving — is a plain resize. Longer than the .34s animation so it cannot cut it short. */
-  setTimeout(()=>{ try{ shareSheetEl.classList.remove("rise"); }catch(_){} },420);
-  haptic(8);
+  openShareSheet("auto"); // full sheet, publishes, fills, tracks
 }
 function expandShareSheet(){
   shareSheetEl.classList.remove("peek");
@@ -5236,15 +5240,15 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   showScore();   // "vanished in Xs" — the number the round was played for
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
-  /* THE WIPE PLAYS FIRST, THEN THE SHEET ARRIVES. Presenting it during the animation would
-     put the ask on top of the one second that does the selling — the hide going from
-     visible to camouflaged is the whole payoff of the round. So the peek is scheduled from
-     the frame the wipe SETTLES, plus a beat to let it land.
-     The 1600ms timer is a backstop, not a second trigger: peekShareSheet() is idempotent
-     (it returns unless the state is still hidden), so if the animation finishes normally
-     the timer finds the sheet already peeking and does nothing. It exists because the RAF
-     loop stops running if the tab is backgrounded mid-wipe, and a user who comes back to a
-     settled reveal should still get the sheet. */
+  /* THE SHEET ARRIVES WITH THE SCREEN. It used to wait for the reveal wipe to settle plus a
+     beat — the argument being that the wipe is the payoff and the ask should not land on top
+     of it. It does not land on top of it: the sheet occupies the bottom of the screen and the
+     wipe plays above it, so the two happen together rather than in sequence. What the wait
+     actually bought was a second of a screen with no next step on it.
+     The two later calls stay as backstops, not as a second trigger — peekShareSheet() returns
+     unless the state is still hidden. They cover the case where this call is refused because
+     the paywall or the retake confirm is up at this instant. */
+  peekShareSheet();
   revealX=1; drawReveal(); let rv=1;
   const anim=()=>{ rv+=(0.5-rv)*0.14; revealX=rv; drawReveal();
     if(Math.abs(rv-0.5)>0.01) requestAnimationFrame(anim);

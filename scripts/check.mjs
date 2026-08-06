@@ -140,25 +140,33 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
    Static invariants, not behaviour — the state machine is DOM-bound and this repo has no
    browser to run it in. What these guard are the two ways it breaks SILENTLY:
 
-   1. The peek publishing a photo. openShareSheet() calls chUpload() deliberately late,
-      because only ~1 finished hide in 6 is ever shared and publishing every round put five
-      strangers' rooms on a public URL for nothing. The peek is shown to EVERY finished
-      round — so the day someone "tidies up" by moving chUpload() into peekShareSheet(),
-      that regression comes straight back, and nothing user-visible changes.
-   2. The peek covering the reveal. Its whole argument is that the reveal stays visible; a
-      backdrop or a blur on .peek quietly turns it into the modal it was designed not to be. */
+   1. The sheet arriving SHORT. It presents itself full now — the short state is still
+      reachable by swiping down, but it is not what arrives, because the destinations are the
+      thing being shared and a swipe to reach them is the step this was meant to remove.
+      peekShareSheet() keeps its name (two call sites and the reveal schedule it) and must
+      hand straight to openShareSheet(); the day it goes back to adding .peek itself, the
+      sheet silently arrives short again and nothing throws.
+   2. The sheet covering the reveal with a scrim. The reveal is what makes anyone want to
+      share; a backdrop or a blur turns this into the modal it was designed not to be.
+
+   The old rule here — "the peek must never publish" — is deliberately GONE, not slipped.
+   It held because a presentation everyone got was the same population as every round, and
+   uploading all of them put five strangers' rooms on a public URL for one share. Presenting
+   the full sheet automatically makes that true anyway, and the link has to be ready before
+   the first tap, so the upload now starts on arrival. That is a cost we chose. */
 {
   const peekFn = html.match(/function peekShareSheet\(\)\{[\s\S]*?\n\}/);
   if (!peekFn) bad('peekShareSheet() not found — the reveal no longer presents the sheet?');
-  else if (/chUpload\(/.test(peekFn[0])) {
-    bad('peekShareSheet() calls chUpload() — that publishes a photo for EVERY finished round, '
-      + 'which is the regression openShareSheet() was written to avoid');
-  } else ok('peek does not publish (chUpload stays on the deliberate open)');
+  else if (!/openShareSheet\(/.test(peekFn[0])) {
+    bad('peekShareSheet() does not call openShareSheet() — the sheet is arriving short again, '
+      + 'which puts the destinations behind a swipe');
+  } else if (/classList\.add\("peek/.test(peekFn[0])) {
+    bad('peekShareSheet() still adds .peek — it must present the FULL sheet on arrival');
+  } else ok('the sheet presents itself full on the reveal');
 
-  /* The other half of that rule. Not publishing on presentation is right; never publishing
-     is what makes "Challenge a friend" — visible in the peek — send the generic invite
-     instead of a challenge, because chLink() is "" without a published hide. The upload has
-     to start on the first TOUCH of the card. Both halves or neither. */
+  /* Never publishing is what makes "Challenge a friend" send the generic invite, because
+     chLink() is "" without a published hide. openShareSheet() covers arrival; this covers
+     the other paths in — a card that gets touched before the upload settles. */
   /* Structural, not literal. The first version matched the exact expression
      `ssState==="peek"){try{chUpload()`, so widening the condition to cover the open state
      tripped it — a guard that fails on a correct change is a guard people start ignoring.
@@ -273,7 +281,9 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     return null;
   };
   const wiring = [
-    ['openShareSheet renders the challenge card', 'function openShareSheet()', 'chPrevRender()',
+    /* No `()` in the anchor: it took a `via` parameter and this check went red on a signature
+       change that had nothing to do with what it guards. Anchors match the NAME. */
+    ['openShareSheet renders the challenge card', 'function openShareSheet(', 'chPrevRender()',
       'openShareSheet() does not call chPrevRender() — the card is display:none until something '
       + 'adds .on, so it will only appear after a share instead of before one'],
     ['saving challenge settings republishes the hide', 'document.getElementById("chSetOk").onclick=', 'chRepublish()',
