@@ -368,7 +368,12 @@
      the padding-box fill is fully OPAQUE, so an engine that dropped the multi-value clip
      would paint the gradient underneath it and nothing would change. */
   #btnShare{color:#fff;border:1.5px solid transparent;overflow:hidden;
-    background:linear-gradient(180deg,#0f2a22,#0a1512 78%) padding-box,
+    /* The dark stop was #0a1512 — rgb(10,21,18), which is the hero card's MIDTONE, so the
+       primary action on the reveal screen sat darker than the panel it lives on and read as
+       recessed rather than raised. Lifted to #0e2419 (14,36,25): still a ramp, still reads
+       as a solid button, but it no longer sinks into the scrim behind it. The top stop is
+       untouched, so the gradient keeps its direction. */
+    background:linear-gradient(180deg,#0f2a22,#0e2419 78%) padding-box,
       var(--ring) border-box;
     background-size:auto,260% 100%;
     box-shadow:0 8px 26px rgba(0,0,0,.5),0 6px 22px rgba(95,230,164,.12);
