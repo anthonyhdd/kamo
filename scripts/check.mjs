@@ -164,13 +164,18 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     : bad('nothing starts chUpload() when the peek is touched — Challenge a friend will send '
         + 'the generic invite instead of a challenge link');
 
-  const peekCss = html.match(/#shareSheet\.peek\{[^}]*\}/);
-  if (!peekCss) bad('#shareSheet.peek rule missing — the peek state has no styling');
-  else if (!/background:transparent/.test(peekCss[0]) || !/backdrop-filter:none/.test(peekCss[0])) {
-    bad(`#shareSheet.peek must clear the backdrop and blur, or it hides the reveal: ${peekCss[0]}`);
-  } else if (!/pointer-events:none/.test(peekCss[0])) {
-    bad('#shareSheet.peek must not take pointer events on the container — the reveal handle is behind it');
-  } else ok('peek leaves the reveal visible and draggable');
+  /* Checked on the BASE rule, not on .peek. The scrim used to live on the base and be undone
+     by .peek; it is now absent from the base, which governs BOTH states — so asserting the
+     override would pass a file that had quietly put the dim-and-blur back on .show. The
+     invariant is "this sheet never darkens the reveal", and the base rule is where that is
+     true or false. */
+  const baseCss = html.match(/#shareSheet\{[^}]*\}/);
+  if (!baseCss) bad('#shareSheet rule missing');
+  else if (!/background:transparent/.test(baseCss[0]) || !/backdrop-filter:none/.test(baseCss[0])) {
+    bad(`#shareSheet must not dim or blur the reveal in any state: ${baseCss[0]}`);
+  } else if (!/pointer-events:none/.test(baseCss[0])) {
+    bad('#shareSheet must not take pointer events on the container — the reveal handle is behind it');
+  } else ok('the sheet never darkens the reveal, and never blocks it');
 
   /^[\s\S]*$/.test(html) && /setTimeout\(peekShareSheet/.test(html)
     ? ok('the reveal schedules the peek')
