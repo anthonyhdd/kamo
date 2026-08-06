@@ -423,5 +423,23 @@ try {
   bad('SHARE PATHS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
+   Everything above reads the file. Two bugs shipped this week that reading the file could not
+   see: the preview card was whitelisted in the short sheet's CSS while nothing ever added the
+   class that displays it, and the card rose twice because .pwCard's animation took over the
+   moment a more specific one was removed. Both were invisible in the source and obvious on a
+   phone. This one opens Chromium.
+   It SKIPS rather than fails when playwright-core is not installed — it is not a dependency of
+   this repo — but it says so loudly, because a check that quietly does nothing is worse than
+   no check. Run it with PW_CORE=<dir containing node_modules>. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-peek-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · DOM TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the short sheet renders correctly (node scripts/test-peek-dom.mjs for the detail)');
+} catch (e) {
+  bad('THE SHARE SHEET RENDERS WRONG:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);
