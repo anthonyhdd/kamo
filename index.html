@@ -1180,15 +1180,18 @@
          acknowledging the hide instead of announcing itself. Filled at open time. -->
     <div class="pwKick" id="ssKick"></div>
     <div class="pwTitle" style="margin-bottom:14px">Bet they can't spot it</div>
-    <!-- BEFORE/AFTER IS THE DEFAULT — it is the only mode that produces the reveal MP4,
-         and the MP4 is the format this app exists to make. Challenge was the default for
-         KAMO's whole life and the cost was hiding the differentiator behind a tab: 70
-         share sheets opened on the static image against 5 on the reveal, i.e. ~93% of
-         users never switched. Not a preference — nobody saw the choice.
+    <!-- CHALLENGE IS THE DEFAULT AGAIN. Before/After took this slot on the argument that the
+         reveal MP4 is the differentiator and that ~93% of users never switch tabs, so nobody
+         was choosing — both still true.
+         What changed underneath it: the sheet now leads with "Challenge a friend", and a
+         challenge link is a playable game rather than a caption. Opening on the reveal tab
+         put the loop's own format one tab away from the button that sells it.
+         The 93% cuts both ways — whichever tab opens is what gets sent — which is the reason
+         it should be the one the product is now built around.
          Must stay in sync with `shareMode`'s initial value below. -->
     <div id="ssMode">
-      <button class="ssTab" data-mode="challenge">Challenge</button>
-      <button class="ssTab active" data-mode="ba">Before / After</button>
+      <button class="ssTab active" data-mode="challenge">Challenge</button>
+      <button class="ssTab" data-mode="ba">Before / After</button>
     </div>
     <!-- FIRST, AND THE LOUDEST THING IN THE SHEET. This is the loop: a challenge sent to
          one person is the only share that asks for something back, and it was sitting last,
@@ -1196,7 +1199,7 @@
          destinations below it are reach; this is recruitment, so it leads.
          Kept hidden until updateInviteBtn() runs, so a JS failure cannot leave a button
          that no handler is listening to. -->
-    <button class="ssBtn ssInvite" id="ssInvite" style="display:none"><span class="ic">💌</span>Challenge a friend</button>
+    <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Challenge a friend</button>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
     <!-- SNAPCHAT AND TIKTOK ARE GONE AS BUTTONS, not as destinations. This sheet had nine
          tappable things in it; a share sheet that asks nine questions gets answered by the
@@ -3488,7 +3491,7 @@ async function staticBlob(){ return await new Promise(r=>composeShare(1080).toBl
    render is 795 ms. Sub-second and perfect, gated behind a tab 93% of users never tapped.
    Safe either way — with no reveal module and no before-frame, composeBeforeAfter() falls
    back to `board` and the share stays a static image. */
-let beforeBoard=null, shareMode="ba";
+let beforeBoard=null, shareMode="challenge";   // must match the .ssTab.active in the markup
 /* native capabilities (injected by the Expo wrapper on load). {revealVideo:true} once the
    native MP4 module ships. Absent on older builds → shares stay static (backward-safe). */
 let nativeCaps={};
