@@ -113,7 +113,9 @@
   #start.booting .heroCard{background:none;border-color:transparent;box-shadow:none;padding:0;}
   #start.booting .heroCard::before{display:none;}
   .heroTitle{margin:18px 0 0;font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.3px;line-height:1.22;max-width:16ch;
-    background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
+    /* Was #fff -> #eafff5 -> mint: three near-whites, so the travelling band never showed.
+       Now it darkens into full mint at the peak, which is what makes the pass readable. */
+    background:linear-gradient(100deg,#fff 22%,#9dffcd 42%,#31c97f 52%,#9dffcd 62%,#fff 80%);
     background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;animation:pwShimmer 3.4s linear infinite;}
   /* Space Grotesk 700, not Avenir 900. --display is the only real typeface the app loads
@@ -125,7 +127,9 @@
   .heroCta{position:relative;overflow:hidden;width:100%;height:56px;margin-top:22px;border:none;border-radius:16px;cursor:pointer;
     font-family:var(--display);font-size:17.5px;font-weight:700;letter-spacing:-.3px;color:#0a0b0e;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);
     display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;}
-  .heroCta::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
+  .heroCta::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;/* A light band on a WHITE button is white on white. The sweep has to be DARKER than
+       what it crosses to exist at all, which is why nobody could see it. */
+    background:linear-gradient(100deg,transparent,rgba(80,215,150,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
   .heroCta:active{transform:scale(.98);}
   .heroCta.busy{opacity:.92;animation:none;}
   .heroCta.busy::after{display:none;}
@@ -335,7 +339,15 @@
        Now it ramps later, peaks lower, and stops at .78 instead of opaque, so the scene
        still shows through behind the buttons. The swatches keep their legibility from
        their own specular highlight and drop shadow rather than from a black wall. */
-    background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.38) 42%,rgba(5,6,10,.78));}
+    background:none;}
+  /* THE FADE HAS TO START ABOVE THE PANEL. The scrim was the panel's own background, so its
+     ramp was squeezed into the panel's height — and on the finished screen the panel holds
+     only Share, so the gradient went from nothing to .78 in ~90px and drew a hard horizontal
+     edge across the photo right under the button. Detaching it lets the fade begin 170px
+     higher, over the picture, where a gradient is supposed to be invisible. */
+  #paintUI::before{content:"";position:absolute;left:0;right:0;bottom:0;top:-170px;pointer-events:none;z-index:-1;
+    background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.28) 46%,rgba(5,6,10,.62) 76%,rgba(5,6,10,.78));}
+  #paintUI{isolation:isolate;}
   .row{display:flex;gap:8px;align-items:center;justify-content:center;}
   /* Snapchat-shaped bottom: one full-width CTA, then the quieter actions on a line of
      their own under it. #btnShare takes the whole row so Save wraps below rather than
@@ -537,6 +549,9 @@
      `pointer-events:none` meant a tap on it fell through to the bar and simply selected the
      biggest brush. Exactly backwards.
      Padding, not a bigger glyph: 19px of text is a poor tap target, and the box is invisible. */
+  #sizeBar.lockPulse{animation:sizeLock .6s ease-out;}
+  @keyframes sizeLock{0%{box-shadow:0 0 0 0 rgba(95,230,164,.6)}100%{box-shadow:0 0 0 16px rgba(95,230,164,0)}}
+  #sizeBar.lockPulse #sizeStar{animation:tickPop .55s ease-out;}
   #sizeStar{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
     color:#fff;opacity:.9;padding:8px 12px;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
   /* before/after reveal (finished view) */
@@ -2628,12 +2643,26 @@ const pwSourceOpens={};
 /* `size` is back: capping it again means it reaches showLockHint again, and without this
    line the pill would fall through to the generic "KAMO+ — tap to unlock" and stop naming
    the thing it is selling. */
+/* NO `size` LINE, DELIBERATELY. The pill it produced was a truncated sentence sitting over
+   the photo — "Fine brush is KAMO+ — tap to unl…" — which is a notice about a product where
+   a control should answer. The bar now answers on itself, without words: see flashSizeLock().
+   Every other source keeps its pill; they fire from places with no control to light up. */
 const PW_LOCK_HINT={
-  size:  "Fine brush is KAMO+ — tap to unlock",
   color: "Every colour is KAMO+ — tap to unlock",
   round_end:"More time, every tool — tap for KAMO+",
   time:  "75 seconds to paint — tap for KAMO+",
 };
+/* THE LOCK ANSWERS ON THE CONTROL, NOT IN A SENTENCE. Past its cap, touching the size bar
+   pulses the bar and its ✦ mint for 600ms and says nothing. The user gets an unmistakable
+   "this is the locked one" on the thing under their thumb, with no text to truncate, no
+   full screen, and nothing to dismiss. The first touch of a launch still opens the sheet. */
+function flashSizeLock(){
+  const b=document.getElementById("sizeBar"); if(!b) return;
+  b.classList.remove("lockPulse"); void b.offsetWidth; b.classList.add("lockPulse");
+  haptic(8);
+  clearTimeout(flashSizeLock._t);
+  flashSizeLock._t=setTimeout(()=>b.classList.remove("lockPulse"),700);
+}
 function showLockHint(src){
   showHint(PW_LOCK_HINT[src]||"KAMO+ — tap to unlock",3600);
   hintEl.classList.add("tap");
@@ -2657,11 +2686,11 @@ const PW_PITCH={
 { const t=$("#pwTitle"), s=$("#pwSub"); if(t) t.dataset.def=t.textContent; if(s) s.dataset.def=s.textContent; }
 function openPaywall(source,force){
   const src=source||"generic", cap=PW_CAP[src], used=pwSourceOpens[src]||0;
-  if(!force && cap!==undefined && used>=cap){ showLockHint(src); return; }
+  if(!force && cap!==undefined && used>=cap){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
   /* Global budget, checked AFTER the per-source cap so the lock hint still explains the
      specific feature rather than a generic refusal. Exempt sources bypass entirely. */
   const interruption=!PW_USER_INITIATED.has(src);
-  if(!force && interruption && pwInterruptions>=PW_GLOBAL_CAP){ showLockHint(src); return; }
+  if(!force && interruption && pwInterruptions>=PW_GLOBAL_CAP){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
   /* Counted even when exempt: pwInterruptions is what nth_interruption reports, and a
      paywall the user did not ask for is one whether or not the budget was allowed to stop
      it. Exempting it from the count would make the measurement flatter than reality. */
@@ -2777,7 +2806,10 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
        the offer. So the trial arm says so on the button. The price and billing period that
        are ALSO stated underneath now, by trialTermsLine() — the plan row alone did not
        connect the trial to what it renews into. */
-    if(trialOn()) setBuyLabel(b,"Try free for "+trialLabel); else setBuyLabel(b,"Get KAMO+");
+    /* "TRY FOR FREE NOW" — the length of the trial is already on the plan row and in the
+       terms under the button; repeating it here spent the CTA on a detail instead of on
+       the ask. Now, and free: the two words that matter. */
+    if(trialOn()) setBuyLabel(b,"TRY FOR FREE NOW"); else setBuyLabel(b,"Get KAMO+");
     setTerms(trialTermsLine()); } }
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
    able to re-render it on its own once the store reports a real trial length, and because
