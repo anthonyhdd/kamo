@@ -42,7 +42,11 @@ const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const at = real.lastIndexOf('</script>');
 if (at < 0) { console.error('no </script> in index.html'); process.exit(1); }
 const html = real.slice(0, at)
-  + '\nwindow.__t={present(){finished=true;ssState="hidden";peekShareSheet();return ssState;}};\n'
+  + '\nwindow.__t={present(){finished=true;ssState="hidden";peekShareSheet();return ssState;},'
+  + 'copy(){return{generic:pwGenericSub(),'
+  + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
+  + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
+  + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};}};\n'
   + real.slice(at);
 /* Everything OTHER than the page is served off disk with a real MIME type. The module does
    `import * as THREE from './vendor/three.module.js'`, and a server that answers every path
@@ -201,6 +205,36 @@ seen.instagram && seen.instagram.display === 'none' ? ok('the destinations are h
    grabber, kicker, headline, card and CTA are displayed, and every destination is not. */
 ok(`short-state content: grabber + kicker + headline + card (${Math.round(seen.card.h)}px) `
   + `+ CTA (${Math.round(seen.cta.h)}px), nothing else`);
+
+/* THE PAYWALL'S PROMISES, RENDERED. check.mjs proves no number is TYPED into the copy; this
+   proves the templates actually resolve to the values the app runs on. A template that
+   interpolates the wrong constant is still a false claim, and it looks perfect in the source. */
+console.log('\nTHE PAYWALL QUOTES THE APP IT IS SELLING');
+const copy = await page.evaluate(() => window.__t.copy());
+const f = copy.facts;
+const all = [['generic', copy.generic], ...Object.entries(copy.pitch), ...Object.entries(copy.hint)]
+  .map(([k, v]) => [k, String(v)]);
+const undef = all.filter(([, v]) => /undefined|NaN/.test(v));
+undef.length
+  ? bad(`copy renders a missing value: ${undef.map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(' · ')}`)
+  : ok(`${all.length} paywall lines render with no undefined`);
+
+/* Each claim against the constant it is about. Named individually rather than swept, because a
+   sweep that only greps for "any of these numbers appears somewhere" would pass a line that
+   swapped the free and pro clocks — which reads as a bargain in the wrong direction. */
+const says = (key, needles) => {
+  const line = (all.find(([k]) => k === key) || [])[1];
+  if (!line) return bad(`no paywall line for "${key}"`);
+  const miss = needles.filter((n) => !line.includes(n));
+  miss.length
+    ? bad(`the "${key}" pitch does not state ${miss.join(', ')} — it reads: ${JSON.stringify(line)}`)
+    : ok(`"${key}" states ${needles.join(', ')}`);
+};
+says('generic', [`${f.pro}s`, `${f.paint}s`]);
+says('time', [`${f.pro} seconds`, `instead of ${f.paint}`]);
+says('size', [`${f.sizes} fixed sizes`]);
+says('color', [`${f.shades} shades`]);
+says('chset', [`${f.taps} taps`, `${f.lo}-${f.hi}s`]);
 
 await browser.close();
 server.close();
