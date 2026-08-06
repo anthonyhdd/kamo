@@ -159,10 +159,45 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
      is what makes "Challenge a friend" — visible in the peek — send the generic invite
      instead of a challenge, because chLink() is "" without a published hide. The upload has
      to start on the first TOUCH of the card. Both halves or neither. */
-  /^[\s\S]*$/.test(html) && /ssState==="peek"\)\{\s*try\{\s*chUpload\(\)/.test(html)
-    ? ok('first touch on the peek starts the upload, so the link is ready to send')
-    : bad('nothing starts chUpload() when the peek is touched — Challenge a friend will send '
-        + 'the generic invite instead of a challenge link');
+  /* Structural, not literal. The first version matched the exact expression
+     `ssState==="peek"){try{chUpload()`, so widening the condition to cover the open state
+     tripped it — a guard that fails on a correct change is a guard people start ignoring.
+     What matters is that SOME pointerdown listener publishes: that is the whole invariant. */
+  const pointerdowns = [...html.matchAll(/addEventListener\("pointerdown"[\s\S]{0,400}?\}\s*,\s*\{passive/g)]
+    .map((m) => m[0]);
+  pointerdowns.some((b) => b.includes('chUpload('))
+    ? ok('touching the sheet starts the upload, so the link is ready to send')
+    : bad('no pointerdown listener calls chUpload() — Challenge a friend will send the generic '
+        + 'invite instead of a challenge link');
+
+  /* THE CTA IS A DIRECT CHILD OF THE CARD, AND IT COMES AFTER THE PREVIEW.
+     Two invariants, one line of markup, and moving that line is the most ordinary edit on
+     this sheet — "put the card above the button" was a request, not a refactor. It landed
+     the button INSIDE .chPrev, which is `display:flex` in a row: the full-width CTA turned
+     into a cell squeezed between the caption and the gear icon. Nothing threw, no test
+     noticed, and the diff read exactly like the change that was asked for.
+     Two things have to hold. (1) Direct child of .ssCard — .ssCard is the column, and the
+     peek rule is `.ssCard > *`, so a nested button is not governed by it at all. (2) After
+     .chPrev — see what goes out, then send it. Depth is counted rather than pattern-matched
+     so this survives the markup around it changing. */
+  {
+    const cardAt = html.indexOf('<div class="ssCard');
+    const prevAt = html.indexOf('<div class="chPrev"');
+    const btnAt = html.indexOf('id="ssInvite"');
+    if (cardAt < 0 || prevAt < 0 || btnAt < 0) bad('.ssCard / .chPrev / #ssInvite not all found in the sheet markup');
+    else {
+      const between = html.slice(html.indexOf('>', cardAt) + 1, btnAt);
+      const depth = (between.match(/<div\b/g) || []).length - (between.match(/<\/div>/g) || []).length;
+      depth === 0
+        ? ok('#ssInvite is a direct child of .ssCard (the peek rule reaches it, and it is full width)')
+        : bad(`#ssInvite is nested ${depth} level(s) deep inside .ssCard — if that is .chPrev it is a `
+            + 'flex ROW, so the CTA renders as a squeezed cell beside the gear, and `.ssCard > *` '
+            + 'in the peek rule no longer governs it');
+      btnAt > prevAt
+        ? ok('the preview card comes before the CTA')
+        : bad('#ssInvite appears before .chPrev — the button asks for trust before showing what it sends');
+    }
+  }
 
   /* Checked on the BASE rule, not on .peek. The scrim used to live on the base and be undone
      by .peek; it is now absent from the base, which governs BOTH states — so asserting the
