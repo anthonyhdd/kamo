@@ -235,28 +235,67 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     : bad('nothing schedules peekShareSheet() — the sheet will never present itself');
 }
 
-/* ---- 5c. The paint clock is printed on the paywall ---------------------------------------
-   PAINT_SECONDS appears in the code once and in PAID COPY twice — #pwSub and PW_PITCH.time.
-   Those two lines are the only place the paywall makes a checkable numeric claim, so a
-   clock changed in the constant and not in the copy leaves the app advertising a number it
-   does not honour. It has already drifted once (22 -> 32). Assert instead of trusting the
-   comment that asks people to remember. */
+/* ---- 5c. The paywall may not quote a number ------------------------------------------------
+   The paywall is the only screen in the app that makes checkable promises in exchange for
+   money. Its copy used to state the figures as prose — "75s to paint instead of 40s", "Free
+   paints at one size", "5 taps on a fixed clock" — and prose does not move when a constant
+   does. The old version of this check compared ONE of those sentences to PAINT_SECONDS, which
+   is why the clock stayed honest while two other claims quietly went false: free got three
+   fixed sizes and the sentence still said one, and the free challenge clock is derived and
+   clamped, not fixed. Both were live, on a paywall, next to a price.
+   Comparing each sentence to its constant does not scale — it needs a new rule per sentence,
+   written by whoever adds the sentence, which is exactly the person who just got it wrong.
+   The rule that does scale is: PAYWALL COPY CONTAINS NO NUMBER. Every figure is interpolated
+   from the constant that governs it, so there is no sentence left to be false. A bare numeral
+   anywhere in that copy means someone typed a value instead of reading one. */
 {
-  // Lookbehind, or this matches PRO_PAINT_SECONDS first and compares the pro clock to itself.
-  const paint = html.match(/(?<!PRO_)PAINT_SECONDS=(\d+)/);
-  const pro = html.match(/PRO_PAINT_SECONDS=(\d+)/);
-  if (!paint || !pro) bad('PAINT_SECONDS / PRO_PAINT_SECONDS not found');
-  else {
-    const claims = [...html.matchAll(/(\d+)s? to paint instead of (\d+)|(\d+) seconds to paint instead of (\d+)/g)]
-      .map((m) => (m[1] ? [m[1], m[2]] : [m[3], m[4]]));
-    if (!claims.length) bad('no "X to paint instead of Y" line found — did the paywall copy move?');
-    else {
-      const wrong = claims.filter(([p, f]) => p !== pro[1] || f !== paint[1]);
-      wrong.length
-        ? bad(`paywall copy claims ${JSON.stringify(wrong)} but the code is free=${paint[1]}s pro=${pro[1]}s `
-            + '— the paywall is advertising a clock the app does not give')
-        : ok(`paint clock consistent (free ${paint[1]}s, pro ${pro[1]}s, ${claims.length} copy sites agree)`);
+  const stripC = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const block = (start) => {
+    const at = html.indexOf(start);
+    if (at < 0) return null;
+    const open = html.indexOf('{', at);
+    let d = 0;
+    for (let i = open; i < html.length; i++) {
+      if (html[i] === '{') d++;
+      else if (html[i] === '}') { d--; if (!d) return stripC(html.slice(open, i + 1)); }
     }
+    return null;
+  };
+  const pitch = block('const PW_PITCH=');
+  const hint = block('const PW_LOCK_HINT=');
+  const generic = (html.match(/const pwGenericSub=[^\n]*/) || [''])[0];
+  const subTag = (html.match(/<div class="pwSub"[^>]*>([^<]*)</) || [])[1] || '';
+  if (!pitch || !hint) bad('PW_PITCH / PW_LOCK_HINT not found — did the paywall copy move?');
+  else {
+    /* Quoted strings and template literals, with ${...} holes removed first: an interpolated
+       number is the CORRECT form and must not be mistaken for a typed one. Spelled-out numbers
+       count too — "not just the three" was a claim about FREE_SHADES with no digit in it. */
+    const WORDS = /\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/i;
+    const sources = [['PW_PITCH', pitch], ['PW_LOCK_HINT', hint], ['pwGenericSub', generic],
+      ['the #pwSub markup', JSON.stringify(subTag)]];
+    const offenders = [];
+    for (const [where, src] of sources) {
+      for (const m of src.matchAll(/`([^`]*)`|"([^"]*)"|'([^']*)'/g)) {
+        const lit = (m[1] ?? m[2] ?? m[3] ?? '').replace(/\$\{[^}]*\}/g, '');
+        if (/\d/.test(lit) || WORDS.test(lit)) offenders.push(`${where}: ${JSON.stringify(lit.trim())}`);
+      }
+    }
+    offenders.length
+      ? bad('PAYWALL COPY QUOTES A NUMBER instead of reading it — it will go false the next time '
+          + 'the value changes, and it is a paid claim:\n    ' + offenders.join('\n    '))
+      : ok('no paywall copy quotes a number — every figure is read from its constant');
+
+    /* And the constants those templates interpolate must actually exist. A rename would
+       otherwise turn a promise into "undefined seconds to paint". */
+    const refs = new Set();
+    for (const src of [pitch, hint, generic]) {
+      for (const m of src.matchAll(/\$\{\s*([A-Za-z_$][\w$]*)/g)) refs.add(m[1]);
+    }
+    const missing = [...refs].filter((r) => !new RegExp(`(const|let|var)\\s+[^;\\n]*\\b${r}\\b`).test(html));
+    missing.length
+      ? bad(`paywall copy interpolates ${missing.join(', ')} — not declared anywhere, so the `
+          + 'sentence renders "undefined"')
+      : ok(`paywall figures resolve (${[...refs].sort().join(', ')})`);
   }
 }
 

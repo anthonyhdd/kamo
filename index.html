@@ -1262,7 +1262,12 @@
          nothing in this app is a daily challenge. "Challenge" here means the share format,
          the "Challenge a friend" invite, and the inbound referral hint — all of which are
          FREE. Printing it next to a price would be selling a feature that does not exist. -->
-    <div class="pwSub" id="pwSub">Any brush and color · no clock to line it up · 75s to paint instead of 40s</div>
+    <!-- NO NUMBERS IN THE MARKUP. This line is always written by openPaywall() from
+         pwGenericSub(), which interpolates PAINT_SECONDS / PRO_PAINT_SECONDS. The text below
+         is only what sits in the DOM before the sheet is ever opened — and it is never shown,
+         because opening the sheet is what replaces it. Typing the clocks here once put
+         "75s instead of 40s" in a file where nothing could check it. -->
+    <div class="pwSub" id="pwSub">Any brush and color · no clock to line it up · a longer round</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -2212,7 +2217,7 @@ function capture(){
      was permanently sliced by the tools pinned to the right — a colour you could see but
      never fully tap. Nothing scrolls into view any more, which is the point: everything in
      this row is reachable without discovering that it scrolls. */
-  try{ buildSwatches(extractPalette(sceneCanvas,3,sceneBand)); }catch(e){}
+  try{ buildSwatches(extractPalette(sceneCanvas,FREE_SHADES,sceneBand)); }catch(e){}
   try{ bumpHides(); }catch(e){}   // hide counter only — feeds the teaching hints + aim clock
   suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
@@ -2383,6 +2388,10 @@ const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
    it, everything under 16 — the brush the paywall copy actually names, "fine enough to work
    an edge". A free user picks between three; a member draws anywhere from 2 to 64. */
 const FREE_SIZES=[16,26,40];
+/* How many colours are sampled off the scene for a free row. Named because the PAYWALL makes
+   a claim about it ("Free gets N shades off the photo") and a number that lives in two places
+   is a number that will one day disagree with itself. extractPalette() reads this. */
+const FREE_SHADES=3;
 const FREE_BRUSH=FREE_SIZES[1];   // the default a free round starts on
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
@@ -2931,7 +2940,9 @@ const pwSourceOpens={};
 const PW_LOCK_HINT={
   color: "Every colour is KAMO+ — tap to unlock",
   round_end:"No aim clock, more paint time, every tool — tap for KAMO+",
-  time:  "75 seconds to paint — tap for KAMO+",
+  /* Same rule as PW_PITCH: a function, because PRO_PAINT_SECONDS is declared later, and
+     because a hint that quotes a stale clock is a promise the round will not keep. */
+  time:  ()=>`${PRO_PAINT_SECONDS} seconds to paint — tap for KAMO+`,
 };
 /* THE LOCK ANSWERS ON THE CONTROL, NOT IN A SENTENCE. Past its cap, touching the size bar
    pulses the bar and its ✦ mint for 600ms and says nothing. The user gets an unmistakable
@@ -2945,37 +2956,59 @@ function flashSizeLock(){
   flashSizeLock._t=setTimeout(()=>b.classList.remove("lockPulse"),700);
 }
 function showLockHint(src){
-  showHint(PW_LOCK_HINT[src]||"KAMO+ — tap to unlock",3600);
+  showHint(pwText(PW_LOCK_HINT[src])||"KAMO+ — tap to unlock",3600);
   hintEl.classList.add("tap");
   const clear=()=>{ hintEl.classList.remove("tap"); hintEl.onclick=null; };
   // force=true: they just asked for it, so the cap that produced this hint must not eat it.
   hintEl.onclick=()=>{ clear(); showHint(""); openPaywall(src,true); };
   clearTimeout(showLockHint._t); showLockHint._t=setTimeout(clear,3600);
 }
+/* EVERY NUMBER HERE IS READ FROM THE THING IT DESCRIBES.
+   These lines are the only place the app makes checkable promises in exchange for money, and
+   they were written as prose with the figures typed in. Prose does not move when a constant
+   does. Two had already drifted by the time anyone looked: "Free paints at one size" survived
+   the day free got THREE fixed sizes, and "a fixed clock" describes a clock that is derived
+   from the round length and clamped to a range. Both were live, on a paywall, next to a price.
+   So the copy interpolates PAINT_SECONDS, PRO_PAINT_SECONDS, FREE_SIZES, FREE_SHADES, CH_TAPS
+   and the CH_LIMIT bounds instead of quoting them, and check.mjs refuses a push if a bare
+   numeral reappears in any of these strings. The value drifting can no longer make the
+   sentence false, because there is no longer a sentence to be false — only a template.
+   `s` is a FUNCTION, not a string: this object is declared long before PAINT_SECONDS and
+   CH_TAPS exist, so evaluating the numbers here would be a TDZ throw at load. Deferring to
+   call time also means a constant changed at runtime is reflected. */
 const PW_PITCH={
   size:  { t:"Paint the details, not just the shape",
-           s:"Free paints at one size. KAMO+ unlocks the whole range, down to fine detail." },
-  color: { t:"Every color, not just the three",
-           s:"Free gets three shades off the photo. KAMO+ opens them all." },
+           s:()=>`Free paints at ${FREE_SIZES.length} fixed sizes. KAMO+ unlocks the whole range, down to fine detail.` },
+  /* The title used to end "not just the three" — the same claim as the body, spelled out, and
+     the one word a template cannot fix without printing a digit in a headline. It says nothing
+     numeric now; the body carries the figure. */
+  color: { t:"Every color, not just the ones in the shot",
+           s:()=>`Free gets ${FREE_SHADES} shades off the photo. KAMO+ opens them all.` },
   mark:  { t:"Your hide, without our name on it",
-           s:"No mark on the image or the reveal clip." },
-  /* The free clock moved 22 -> 32 on 2026-08-06, so "instead of 22" became a false number on
-     the one line of the paywall that makes a measurable claim. It also stopped being a 3.4x
-     gap, which is why the line now says what the multiple IS rather than leaving the reader
-     to divide: 1.9x reads as small when it is written as two bare numbers and large when it
-     is named. Keep in sync with PAINT_SECONDS / PRO_PAINT_SECONDS and #pwSub. */
+           s:()=>"No mark on the image or the reveal clip." },
   /* THE GEAR IS THE ONLY PLACE IN THE APP WHERE SOMEONE ASKS TO CHANGE THE GAME THEY ARE
      SENDING. Answering that with the generic sheet wastes the clearest intent signal the
      paywall ever gets — they did not stumble into it, they reached for a control. So the
-     copy names the thing they just tried to touch, and nothing else. */
+     copy names the thing they just tried to touch, and nothing else.
+     "a fixed clock" was wrong: chDerivedLimit() gives twice the round, clamped. Saying so is
+     also a better pitch — it names the thing KAMO+ takes away, which is not being asked. */
   chset: { t:"Set the challenge yourself",
-           s:"Free sends 5 taps on a fixed clock. KAMO+ lets you choose both — make it easy, or make it impossible." },
+           s:()=>`Free sends ${CH_TAPS} taps and a clock it picks for you (${CH_LIMIT_MIN}-${CH_LIMIT_MAX}s). KAMO+ lets you choose both — make it easy, or make it impossible.` },
   time:  { t:"Stop losing hides to the clock",
-           s:"Line up your shot with no clock at all, then 75 seconds to paint instead of 40." },
+           s:()=>`Line up your shot with no clock at all, then ${PRO_PAINT_SECONDS} seconds to paint instead of ${PAINT_SECONDS}.` },
 };
-/* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
+/* The generic pitch, for entry points that are not a specific locked tool. Built here rather
+   than typed into the markup for the same reason as the rest — it carried "75s to paint
+   instead of 40s" as literal text sitting in HTML, where nothing could ever check it. */
+const pwGenericSub=()=>`Any brush and color · no clock to line it up · ${PRO_PAINT_SECONDS}s to paint instead of ${PAINT_SECONDS}s`;
+/* Resolves either shape. Copy that needs no number stays a plain string; copy that does is a
+   function. Both arrive here. */
+const pwText=(v)=>(typeof v==="function"?v():v);/* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
-{ const t=$("#pwTitle"), s=$("#pwSub"); if(t) t.dataset.def=t.textContent; if(s) s.dataset.def=s.textContent; }
+/* Only the TITLE is snapshotted now. The subtitle is rebuilt from the constants on every open
+   (pwGenericSub), so remembering what the markup said would just be a second, staler copy of
+   a number that already has one home. */
+{ const t=$("#pwTitle"); if(t) t.dataset.def=t.textContent; }
 function openPaywall(source,force){
   const src=source||"generic", cap=PW_CAP[src], used=pwSourceOpens[src]||0;
   if(!force && cap!==undefined && used>=cap){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
@@ -2993,8 +3026,10 @@ function openPaywall(source,force){
   const t=$("#pwTitle"), s=$("#pwSub");
   /* Restore the generic copy when there is no pitch — without this the sheet would keep
      whichever tool-specific line was shown last, and answer a question nobody asked. */
-  if(t) t.textContent = pitch ? pitch.t : (t.dataset.def || t.textContent);
-  if(s) s.textContent = pitch ? pitch.s : (s.dataset.def || s.textContent);
+  if(t) t.textContent = pitch ? pwText(pitch.t) : (t.dataset.def || t.textContent);
+  /* The generic line is REBUILT, not restored from a snapshot of the markup — the markup is
+     the fallback for a JS failure, not the source of truth for a number. */
+  if(s) s.textContent = pitch ? pwText(pitch.s) : pwGenericSub();
   /* IS THIS PAYWALL EVEN SELLABLE? 144 people saw it yesterday and 7 reached Apple's sheet.
      That is either a weak offer or a dead button, and nothing in the funnel could tell them
      apart: the plan rows stay hidden until setPrices() delivers a real localized price, and
@@ -4252,7 +4287,10 @@ function chCopy(text){
  * hide did before this existed and what the server still stores for them. Kept in
  * localStorage rather than in a variable because the choice should outlive the round. */
 const CH_LIM_KEY="kamo_ch_limit", CH_TAP_KEY="kamo_ch_taps";
-function chDerivedLimit(){ const secs=roundSeconds(); return Math.max(20,Math.min(45,(secs||10)*2)); }
+/* The clock a FREE hide gives the seeker: twice the round, clamped. Named because the paywall
+   describes this range, and a range described in prose drifts away from the range in code. */
+const CH_LIMIT_MIN=20, CH_LIMIT_MAX=45;
+function chDerivedLimit(){ const secs=roundSeconds(); return Math.max(CH_LIMIT_MIN,Math.min(CH_LIMIT_MAX,(secs||10)*2)); }
 function chSettings(){
   let l=null,t=null;
   try{ const a=parseInt(localStorage.getItem(CH_LIM_KEY),10); if(a>=10&&a<=120) l=a;
