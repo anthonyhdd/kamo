@@ -1,0 +1,56 @@
+{
+  "_README": [
+    "KAMO daily reminder — live configuration. Edit this file, commit, push: GitHub Pages",
+    "serves it in a couple of minutes and every device picks it up on its next launch. No",
+    "build, no App Store review.",
+    "",
+    "enabled:false is the kill switch. It does not merely stop scheduling — it CANCELS what",
+    "is already pending, so the fortnight of reminders sitting in the queue stops too.",
+    "",
+    "Anything invalid here is ignored field by field and falls back to what shipped in the",
+    "binary, so a typo costs you that one value, never the feature. Ranges are clamped:",
+    "hours 0-23 (start must be <= end), horizonDays 1-21, settleMs 0-15000.",
+    "",
+    "The 7 message lines rotate by calendar date. requiresHistory:true lines are swapped for",
+    "firstHide until the user has finished at least one hide.",
+    "",
+    "settingsRecovery is OFF. iOS never shows its permission prompt twice, so this is the",
+    "only way back for someone who tapped Don't Allow: a dialog offering to open Settings.",
+    "Switch it to true once daily_reminder_optin_outcome shows how many people are stuck",
+    "behind a denial — it is worth having and easy to overdo."
+  ],
+
+  "enabled": true,
+
+  "title": "⚠️ Time to KAMO ⚠️",
+  "messages": [
+    { "subtitle": "Your daily hide", "body": "One photo, one camouflage." },
+    { "subtitle": "Wherever you are", "body": "Whatever's in front of you — make it disappear." },
+    { "subtitle": "Two minutes, no more", "body": "Point, paint, vanish." },
+    { "subtitle": "Look up from the phone", "body": "Somewhere in this room, something can disappear." },
+    { "subtitle": "Nothing hidden today", "body": "The camera is one tap away." },
+    { "subtitle": "Your record", "body": "Beat your best hide.", "requiresHistory": true },
+    { "subtitle": "No schedule, ever", "body": "You never know when KAMO hits. It just did." }
+  ],
+  "firstHide": { "subtitle": "Still nothing hidden", "body": "Your first one takes two minutes." },
+
+  "windowStartHour": 11,
+  "windowEndHour": 21,
+  "horizonDays": 14,
+
+  "sessionsBeforeAsk": 2,
+  "maxSoftAsks": 3,
+  "minDaysBetweenAsks": 7,
+  "settleMs": 2600,
+
+  "askTitle": "Want one of these tomorrow?",
+  "askBody": "\"⚠️ Time to KAMO ⚠️\" — one a day, at an hour you can't predict. Nothing else, ever.",
+  "askYes": "Yes, remind me",
+  "askNo": "Not now",
+
+  "settingsRecovery": false,
+  "settingsTitle": "Notifications are off",
+  "settingsBody": "iOS only asks once. You can turn the daily KAMO back on in Settings.",
+  "settingsYes": "Open Settings",
+  "settingsNo": "Not now"
+}
