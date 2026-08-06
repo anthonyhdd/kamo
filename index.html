@@ -3993,6 +3993,15 @@ function peekShareSheet(){
   ssState="peek";
   fillShareKicker();
   updateInviteBtn();
+  /* THE CARD IS WHITELISTED IN THE SHORT STATE, AND IT WAS STILL INVISIBLE. `.chPrev` ships
+     display:none and only chPrevRender() adds `.on` — and chPrevRender() was only ever
+     called from openShareSheet(), which the short state deliberately does not go through.
+     So the CSS exempted `.chPrev` from the peek's hide-everything rule while nothing had
+     ever turned it on: on a fresh reveal the short sheet showed the headline and a button
+     and no preview at all, which is the arrangement the card was added to replace.
+     It costs nothing here — it draws a 168px thumbnail off the board and reads chEffective();
+     no network, no upload, so the short state still publishes nothing. */
+  chPrevRender();
   shareSheetEl.classList.add("peek","rise");
   /* Dropped as soon as it has played, so the next short state — reached by collapsing, not by
      arriving — is a plain resize. Longer than the .34s animation so it cannot cut it short. */
