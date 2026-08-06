@@ -896,6 +896,11 @@
      Same hue, shallower fall, and it never reaches black — the bottom stop is still
      visibly green, which is what keeps it looking like the paywall's sibling rather than
      a different component. Declared after .pwCard, so this simply wins. */
+  /* A SHADOW ABOVE THE CARD WHEN IT IS FULL HEIGHT. Open, it sits directly on the photo and
+     the top edge dissolved into whatever happened to be behind it — bright sky, white
+     sneaker. The lift is on .show only: in peek and mini the card is short and a shadow that
+     size would read as a bar across the image. */
+  #shareSheet.show .ssCard{box-shadow:0 -18px 40px rgba(0,0,0,.55),0 -2px 0 rgba(255,255,255,.06);}
   .ssCard{width:100%;max-width:460px;padding:20px 20px calc(16px + var(--safe-b));
     background:linear-gradient(180deg,#14382d,#0f2a22 55%,#0c1f19);}
   .ssCard .pwTitle{font-size:22px;}
@@ -1856,9 +1861,20 @@ function hdHint(){
 }
 // What the camera actually gave us. Constraints are a request, not a contract, and the
 // answer varies by device and facing — worth knowing before blaming the renderer again.
+/* TWO DIFFERENT NUMBERS, AND ONLY ONE OF THEM DECIDES THE CROP.
+   cam_w/cam_h come from getSettings(), which iOS reports in the SENSOR's orientation — that
+   is where "1920 wide for 97% of users" came from. But coverInto() crops using
+   cam.videoWidth/videoHeight, the frame as the element actually presents it, and on iOS the
+   browser rotates that upright. The two can disagree, and if they do then the crop was never
+   as severe as getSettings() suggested — which would explain why forcing 4:3 improved
+   sharpness and left the framing where it was.
+   vid_w/vid_h are the numbers the geometry uses, so they are the ones worth having before
+   anyone changes the framing again. */
 function camSize(){
-  try{ const s=stream.getVideoTracks()[0].getSettings(); return {cam_w:s.width||null,cam_h:s.height||null}; }
-  catch(_){ return {cam_w:null,cam_h:null}; }
+  const out={cam_w:null,cam_h:null,vid_w:null,vid_h:null};
+  try{ const s=stream.getVideoTracks()[0].getSettings(); out.cam_w=s.width||null; out.cam_h=s.height||null; }catch(_){}
+  try{ out.vid_w=cam.videoWidth||null; out.vid_h=cam.videoHeight||null; }catch(_){}
+  return out;
 }
 // auto=true => launch attempt on boot: on any failure just stay on the branded
 // start screen silently (no scary hint); the user taps "Tap to start" to retry with a gesture.
@@ -3843,6 +3859,19 @@ function openShareSheet(){
   track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","mini"); ssState="hidden"; }
 
+/* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
+   of the job: "Not now", a tap on the backdrop, and the return from a completed share all
+   called closeShareSheet() and left the reveal with no sheet AND no Share button — the same
+   dead end by three other doors. On the reveal the sheet is the only way to share, so it is
+   never allowed to reach `hidden` from anything a user does on that screen; leaving the
+   screen (exitFinished) is what actually closes it. */
+function sheetToFloor(){
+  if(!finished){ closeShareSheet(); return; }   // not on the reveal → nothing to keep open
+  shareSheetEl.classList.remove("show","peek");
+  shareSheetEl.classList.add("mini");
+  ssState="mini";
+}
+
 /* THE SHEET NEVER LEAVES THE REVEAL — it only gets smaller. open → peek → mini, and mini is
    a labelled tab, not nothing. Reaching `hidden` from a gesture would strand the user: the
    reveal's Share button is gone (the sheet replaced it), so with the sheet hidden there is no
@@ -3958,9 +3987,9 @@ function dismissShareSheet(via){
      one most people will see — reading the leak from `show` alone would miss all of them. */
   if(!shareSheetEl.classList.contains("show") && !shareSheetEl.classList.contains("peek")) return;   // never double-count
   track("share_dismissed",{via,mode:shareMode,score:Math.round(currentScore||0)});
-  closeShareSheet();
+  sheetToFloor();
 }
-async function nativeShare(target){ closeShareSheet();
+async function nativeShare(target){ sheetToFloor();   // a completed share must not strand them either
   const link=shareUrl();
   /* "Tap to reveal" was a promise nothing could keep — there is no backend, the shared
      photo isn't hosted anywhere, so no link could ever reveal it. The ask is now the one
@@ -4840,6 +4869,11 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      the star silently vanish the moment someone subscribed, which reads as a feature being
      taken away rather than unlocked. */
   if(sizeStar) sizeStar.style.display="block";
+  /* FOUR CIRCLES, NOT THREE. The thumb is a circle too, so beside the three preset dots it
+     read as a fourth stop that behaves differently from the others. A free user picks from a
+     fixed set — the active dot IS the indicator — so the thumb belongs to the continuous
+     control and hides with it. */
+  sizeThumb.style.display = canPro() ? "block" : "none";
   /* The dots are positioned from the SAME tFromBrush()/SB_PAD geometry the thumb uses, so a
      dot always sits exactly where tapping it lands. Built once, then only repositioned —
      renderSizeBar runs on every capture and on every pro change. */
