@@ -873,7 +873,12 @@
      No backdrop, no blur, and pointer-events off the container so the reveal handle behind
      it still drags. Only the card itself takes touches. */
   #shareSheet.peek{display:flex;}
-  #shareSheet.peek .ssCard{animation:ssRise .34s cubic-bezier(.2,.9,.3,1);}
+  /* THE RISE PLAYS ONCE, ON ARRIVAL. It was on .peek itself, so collapsing from the full
+     sheet replayed it — the card slid up from translateY(100%) when it was already on
+     screen, which reads as a bounce rather than a transition. Now it is a one-shot class
+     added only when the sheet arrives from nothing. Going long -> short is a resize, and a
+     resize should not re-enter. */
+  #shareSheet.peek.rise .ssCard{animation:ssRise .34s cubic-bezier(.2,.9,.3,1);}
   /* Everything except the grabber, the kicker, the headline and the one primary action is
      hidden — so the card is SHORT by construction rather than by a translateY guess that
      breaks the moment the content changes height. Swiping up brings the rest back. */
@@ -3888,7 +3893,7 @@ function openShareSheet(){
      take the share sheet down with it. */
   chPrevRender();
   track("share_opened",{score:Math.round(currentScore||0)}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","rise"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -3898,7 +3903,7 @@ function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssStat
    screen (exitFinished) is what actually closes it. */
 function sheetToFloor(){
   if(!finished){ closeShareSheet(); return; }   // not on the reveal → nothing to keep open
-  shareSheetEl.classList.remove("show");
+  shareSheetEl.classList.remove("show","rise");
   shareSheetEl.classList.add("peek");
   ssState="peek";
 }
@@ -3924,7 +3929,7 @@ function stepSheet(dir){
      still reported, but the sheet stays on screen — the number and the affordance are two
      different questions. */
   if(ssState==="open") track("share_dismissed",{via:"swipe",mode:shareMode,score:Math.round(currentScore||0)});
-  shareSheetEl.classList.remove("show","peek");
+  shareSheetEl.classList.remove("show","peek","rise");
   shareSheetEl.classList.add(next);
   ssState=next;
   haptic(8);
@@ -3955,7 +3960,10 @@ function peekShareSheet(){
   ssState="peek";
   fillShareKicker();
   updateInviteBtn();
-  shareSheetEl.classList.add("peek");
+  shareSheetEl.classList.add("peek","rise");
+  /* Dropped as soon as it has played, so the next peek — reached by collapsing, not by
+     arriving — is a plain resize. Longer than the .34s animation so it cannot cut it short. */
+  setTimeout(()=>{ try{ shareSheetEl.classList.remove("rise"); }catch(_){} },420);
   haptic(8);
 }
 function expandShareSheet(){
