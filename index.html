@@ -1147,7 +1147,7 @@
          nothing in this app is a daily challenge. "Challenge" here means the share format,
          the "Challenge a friend" invite, and the inbound referral hint — all of which are
          FREE. Printing it next to a price would be selling a feature that does not exist. -->
-    <div class="pwSub" id="pwSub">Any size and color of brush · 75s to paint instead of 22s</div>
+    <div class="pwSub" id="pwSub">Any size and color of brush · 75s to paint instead of 32s</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -1526,15 +1526,18 @@ function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!render
 // when the camera didn't open, so a normal launch stays splash→camera with no
 // flash of hero copy in between.
 /* `reason` says WHY this screen is on the user's phone, and it is the whole point of the
-   event. Since priming, every new install sees the hero on first launch, so "shown" no
-   longer implies "something failed" — primed, denied and no_camera are three different
-   populations that need reading apart.
-   Fires ONCE: revealHero() is called from the auto-failure path and again from the 2.5s
+   event. The live reasons are denied, no_camera, insecure_context, no_getusermedia and
+   boot_pending — the permission sheet is up and nothing has settled yet. "primed" is GONE:
+   it died with the priming boot in `df4289d`, which restored camera-first because the
+   localStorage gate it depended on is wiped on every launch inside the 1.0.2 WebView.
+   Fires ONCE: revealHero() is called from the auto-failure path and again from the boot
    failsafe, and a screen counted twice makes every rate computed against it wrong.
-   ⚠️ hero_shown is a NEW event name, so the wrapper's WEB_EVENTS allow-list drops it until
-   a build carrying it ships — 1.0.7 is already in review without it. Until then the
-   priming effect is still readable from camera_granted/camera_denied, which carry `auto`:
-   auto=true is the old straight-to-camera launch, auto=false is a tap on the primed hero. */
+   ⚠️ hero_shown IS on the wrapper's WEB_EVENTS allow-list — but that list only exists in
+   builds from 1.0.9. On 1.0.2, which is ~96% of installs, track() posts to a bridge that
+   drops any name it doesn't know, so this event reads as zero in Amplitude no matter how
+   many times it fires. It starts producing data when 1.0.9 reaches users, not when it is
+   deployed here. Until then camera_granted/camera_denied carry `auto` and are the handle:
+   auto=true is a straight-to-camera launch, auto=false is a tap on the hero. */
 let heroShown=false;
 /* The OS has refused the camera for this session. iOS never re-prompts, so this is a
    one-way latch: nothing after it should send the user back down the camera path. */
@@ -2770,8 +2773,13 @@ const PW_PITCH={
            s:"Free gets three shades off the photo. KAMO+ opens them all." },
   mark:  { t:"Your hide, without our name on it",
            s:"No mark on the image or the reveal clip." },
+  /* The free clock moved 22 -> 32 on 2026-08-06, so "instead of 22" became a false number on
+     the one line of the paywall that makes a measurable claim. It also stopped being a 3.4x
+     gap, which is why the line now says what the multiple IS rather than leaving the reader
+     to divide: 2.3x reads as small when it is written as two bare numbers and large when it
+     is named. Keep in sync with PAINT_SECONDS / PRO_PAINT_SECONDS and #pwSub. */
   time:  { t:"Stop losing hides to the clock",
-           s:"75 seconds to paint instead of 22." },
+           s:"More than double the paint clock — 75 seconds instead of 32." },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
@@ -4095,17 +4103,18 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    It creates the tension the format is built on, and it GUARANTEES every round lands
    on the reveal, which is the share surface.
 
-   AIM (8s)   -> auto-capture. PAINT (22s) -> auto-Done -> reveal.
-   ~30s a round, down from 60. The old numbers were set when the colour row still had a free
-   all-colours picker and three pattern brushes to work through; with that gone there is far
-   less to do. Shorter also sharpens the KAMO+ clock: 22 -> 75 is a difference you feel,
-   where 45 -> 90 was just two long rounds.
+   AIM (18s)  -> auto-capture. PAINT (32s) -> auto-Done -> reveal.
+   ~50s a round. It was ~30s (aim 8 / paint 22) and both free clocks gained 10s on
+   2026-08-06: a round that ends before the hide is recognisable kills the only thing worth
+   sharing, which is the reveal. Pro is untouched, so the KAMO+ gap narrows from 22->75
+   (3.4x) to 32->75 (2.3x) — still the most-felt perk, but the clock now sells less hard
+   than it did. If time-sourced paywall conversion drops, this is the change that did it.
 
    ARMED FROM THE FIRST HIDE, both phases. It used to skip hide one entirely, which meant
    a new player met the product with no clock anywhere and no idea it was a timed game.
    First run still gets protection, but as a longer AIM window (FIRST_AIM_SECONDS) rather
-   than as no clock: maybeOnboard() needs 7.2s to teach, and an 8s aim would fire on the
-   beat it finishes.
+   than as no clock: maybeOnboard() needs 7.2s to teach, and a standard aim would fire on
+   the beat it finishes.
 
    Driven by ONE CSS transition on a transform. No rAF, no per-frame JS, no
    allocation; the only timers are two setTimeouts. */
@@ -4116,20 +4125,24 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    wrong is costly in both directions: too tight and the clock snatches a badly-framed shot,
    too loose and the round opens with dead air. So it fits itself to the person instead:
    remember how long their recent captures actually took and give them that plus headroom,
-   clamped to a sane band. Someone who lines up a shot in 4s gets a taut 8s; someone the
-   clock keeps beating gets pushed out toward 14s until it stops beating them.
+   clamped to a sane band. Someone who lines up a shot in 4s gets a taut 18s; someone the
+   clock keeps beating gets pushed out toward 24s until it stops beating them.
    Adjusts only BETWEEN rounds, so the clock never changes under you mid-aim. */
-/* Cut again: aim 10 -> 8 (band 7-18 -> 6-14), paint 30 -> 22. Free rounds are now ~30s.
+/* +10s ON BOTH FREE CLOCKS (2026-08-06): aim 8 -> 18, paint 22 -> 32.
+   THE WHOLE BAND MOVES WITH THE DEFAULT, not just the default. AIM_MAX was 14, so leaving
+   it there would have handed the adaptive branch a ceiling BELOW the new default: anyone
+   with two rounds of history would be clamped straight back down to 14s and the +10 would
+   exist only for brand-new players. Band 6-14 -> 16-24, i.e. the same ±band around the new
+   default. Same reason FIRST_AIM_SECONDS moves: at 15 it was no longer the LONGER first-run
+   window it is documented to be, it was 3s shorter than a standard aim.
+   Previous pass, for the record: aim 10 -> 8 (band 7-18 -> 6-14), paint 30 -> 22.
    ⚠️ A "the paint clock feels far too long" report was once acted on and had to be reverted:
    it came from a KAMO+ account, which is on PRO_PAINT_SECONDS=75, not this number. Before
    touching PAINT_SECONDS again, confirm the report is from a FREE round.
-   The floor under this is the FREE_BRUSH change in the same pass — a 44px roller covers a
-   figure in a handful of strokes, so 30s of paint had become slack at the end rather than
-   pressure. Two levers moving together: less time AND a coarser brush, which is what makes
-   the free output visibly rougher than a KAMO+ one instead of merely slower to produce.
-   ⚠️ If share_opened per session drops, this is the change to look at first — a round that
-   ends before the hide is recognisable kills the only thing worth sharing. */
-const AIM_DEFAULT=8, AIM_MIN=6, AIM_MAX=14, PAINT_SECONDS=22;
+   ⚠️ These numbers are PRINTED at three copy sites — #pwSub, PW_PITCH.time.s and the
+   PW_LOCK_HINT line. A silent change here makes the paywall state a false number, which is
+   a pricing-adjacent claim. Change them together. */
+const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=32;
 /* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
    what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
    round, unlike a brush that has a free substitute sitting next to it.
@@ -4137,19 +4150,21 @@ const AIM_DEFAULT=8, AIM_MIN=6, AIM_MAX=14, PAINT_SECONDS=22;
    ⚠️ The comment above argues PAINT must stay identical for everyone "because the round
    time is the score". That still holds for the DISPLAYED time — a Pro user who takes 50s
    still shows "vanished in 50s", the limit only decides when the clock takes the round
-   away. What does change is coverage: a 22s auto-Done can end a hide mid-paint, so Pro
-   hides will trend better-covered. Accepted deliberately — that IS the perk, and at 22 vs
-   75 it is now a 3.4x gap rather than the 2x it started as. */
+   away. What does change is coverage: a 32s auto-Done can end a hide mid-paint, so Pro
+   hides will trend better-covered. Accepted deliberately — that IS the perk, though at
+   32 vs 75 the gap is 2.3x, down from the 3.4x it was at 22s. */
 const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
 function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
-/* HIDE ONE ONLY. maybeOnboard() spends 7.2s on two hints; this leaves ~8s of aiming after
+/* HIDE ONE ONLY. maybeOnboard() spends 7.2s on two hints; this leaves ~18s of aiming after
    they clear, which is a normal round. It replaces "no clock at all on the first hide" —
    the player now sees the countdown from their first second and learns the rule by reading
    it, instead of discovering on hide two that this was a timed game all along.
    Read BEFORE the history branch on purpose: aimHistory() is empty on hide one, so that
-   branch would hand back the standard 8s and put the tutorial in a race it loses. */
-const FIRST_AIM_SECONDS=15;
+   branch would hand back the standard aim and put the tutorial in a race it loses.
+   MUST STAY ABOVE AIM_DEFAULT. At 15 against the new 18s default this was the shorter
+   window, which inverts the whole point of it. Moved 15 -> 25 with the +10s pass. */
+const FIRST_AIM_SECONDS=25;
 function aimSeconds(){
   if(firstRun()) return FIRST_AIM_SECONDS;
   /* Pro gets the bonus AND a raised ceiling. Adding the bonus alone would do almost
@@ -4289,7 +4304,7 @@ function startTimer(phase,seconds,onExpire){
      via _timerTick — everything up to that point was a hairline bar and a static label.
      Not a per-frame loop: one interval writing one string. It runs at 250ms rather than
      1000ms so the displayed second changes when it actually changes, instead of lagging
-     by up to a full second — which on a 22s round is 5% of the clock. Four text writes a
+     by up to a full second — which on a 32s round is 3% of the clock. Four text writes a
      second is nothing next to the WebGL camera feed this sits on top of, and it stops the
      moment the phase does (stopTimer and pauseTimer both clear it). */
   const label = phase==="aim" ? "Find a spot" : "Make it vanish";
