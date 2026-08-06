@@ -280,7 +280,11 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
      captureBurst a ring flash at capture, roundRectFill a canvas helper. captureBurst is the
      one worth a second look — an effect that never fires is the same shape as the bugs above,
      it just costs polish instead of function. */
-  const KNOWN_UNCALLED = new Set(['blobShadow', 'captureBurst', 'roundRectFill']);
+  /* hidesDone reads the kamo_hides counter that bumpHides() still writes on every capture.
+     Its only caller was teachHint's "stop after the second hide" guard, and the teaching
+     hints are off — so it is parked, not dead: turning the hints back on needs it, and
+     deleting it would leave the counter write-only and invite someone to delete that too. */
+  const KNOWN_UNCALLED = new Set(['blobShadow', 'captureBurst', 'roundRectFill', 'hidesDone']);
 
   const declared = [...code.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]);
   // (function name(){...})() runs itself; the name is only a label for stack traces.

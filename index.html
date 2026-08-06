@@ -1502,7 +1502,13 @@ const trialOn=()=>trialArm==="trial";
    "Stats copied", "Couldn't turn the light on" and friends still call showHint() directly,
    because those answer an action rather than teach a control. */
 function hidesDone(){ try{ return +localStorage.getItem("kamo_hides")||0; }catch(e){ return 0; } }
-function teachHint(t,ms){ if(hidesDone()>1) return; showHint(t,ms); }
+/* THE TEACHING HINTS ARE OFF. Kept as a no-op rather than deleted from a dozen call sites:
+   the call sites are where the app WOULD explain itself, and that list is worth keeping
+   legible if it is ever wanted back. Turning it on again is deleting one line.
+   Removed because the app is not a tool that needs a manual — the figure changes when you
+   tap it, the brush paints when you drag it — and every hint was a pill covering the scene
+   the user was composing. */
+function teachHint(t,ms){ }
 function showHint(t,ms=2600){ hintEl.textContent=t; hintEl.style.opacity=t?1:0; clearTimeout(showHint._t); if(t&&ms) showHint._t=setTimeout(()=>hintEl.style.opacity=0,ms); }
 function haptic(ms=8){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify({type:"haptic",style:"impact"})); }catch(e){} } if(navigator.vibrate) navigator.vibrate(ms); }
 /* throttled tactile tick while painting (native = expo-haptics selection; web = vibrate) */
@@ -1584,7 +1590,10 @@ const POSES=[
   {label:"Point", p:{shR:[-1.3,0,-.12],elR:[.15,0,0]}},
 ];
 function fullPose(i){ const o=JSON.parse(JSON.stringify(REST)); const p=POSES[i].p; for(const k in p) o[k]=p[k]; return o; }
-function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); haptic(); showHint(POSES[char.poseIdx].label); updatePoseBar(); }
+/* NO NAME PILL ON POSE CHANGE. Tapping the figure cycles the pose and the figure itself is
+   the feedback — it visibly changes shape. Announcing "Stand" over it labelled something the
+   user was already looking at, once per tap, on the screen where they are framing a shot. */
+function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); haptic(); updatePoseBar(); }
 function setPoseInstant(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); for(const k in REST){ if(k==="rootDY"){ char.charG.position.y=char.target.rootDY; continue;} char.parts[k].rotation.set(char.target[k][0],char.target[k][1],char.target[k][2]); } }
 function lerpChar(char){ const s=0.18; const g=char.group;
   // position spring — momentum + elastic settle on release (weight feel; stays where you leave it)
@@ -4474,7 +4483,14 @@ function syncShareMode(){
    straight into IG Stories via react-native-share (no share sheet). */
 /* ===== ONBOARDING (once) ===== */
 function firstRun(){ try{ return !localStorage.getItem("kamo_onb"); }catch(e){ return !seenPaint; } }
-function maybeOnboard(){ if(!firstRun()) return; showHint("Tap the figure to pose",3600); setTimeout(()=>{ if(mode==="compose") showHint("Drag & pinch · then Capture ▼",3600); },3800); }
+/* THE FIRST-RUN HINTS ARE OFF TOO — they were the two biggest pills, 7.2 seconds of text
+   over the very first scene anyone frames. maybeOnboard is kept because the aim-clock logic
+   below is written against it by name and reads better with the function still present.
+   ⚠️ FIRST_AIM_SECONDS was sized to leave ~18s of aiming AFTER these 7.2 seconds. It is now
+   7.2s longer than it needs to be. Left alone deliberately: a first-run aim window that is
+   generous is not a bug, and changing a clock in the same pass as removing UI would make
+   both impossible to judge. */
+function maybeOnboard(){ }
 function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem("kamo_onb","1"); }catch(e){} seenPaint=true; }  /* no top hint here — the bottom badge already guides + it overlapped Done */
 
 /* ===== ROUND TIMER =========================================================
