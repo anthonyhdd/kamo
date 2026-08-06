@@ -3336,7 +3336,7 @@ function drawWatermark(c,W,H){
   if(isPro) return;
   const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
   // bottom scrim
-  const bh=Math.round(H*0.14); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
+  const bh=Math.round(H*0.17); let bg=c.createLinearGradient(0,H-bh,0,H); bg.addColorStop(0,"rgba(4,6,10,0)"); bg.addColorStop(.45,"rgba(4,6,10,.6)"); bg.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=bg; c.fillRect(0,H-bh,W,bh);
   /* ONE line now: the wordmark. This block has lost a line twice, and both times the fix
      was to re-space rather than leave a hole — an overlay that floats above a band of empty
      gradient reads as a rendering bug, not as restraint.
@@ -3349,8 +3349,19 @@ function drawWatermark(c,W,H){
      video answers its own question two seconds later.
      .14H keeps the gradient's .45 midpoint just above the wordmark's baseline, so it still
      sits on dark pixels over a bright photo instead of disappearing into it. */
-  // KAMO wordmark
-  c.fillStyle="#fff"; c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO", W/2, H-Math.round(28*u)-pad);
+  /* BIGGER, AND A LOCKUP RATHER THAN A CAPTION. At 23u this read as a small line of text at
+     the bottom of a photo — which is what a caption looks like, and nobody pays to remove a
+     caption. 30u plus a mint rule under it reads as a mark that was placed there, which is
+     the thing "Remove the KAMO mark" is actually selling. It also survives being watched at
+     thumbnail size in a feed, where 23u disappeared entirely.
+     Still two cheap calls and no allocations: this runs on every rAF of the Done animation
+     and every pointermove of the reveal drag. */
+  const fs=Math.round(30*u), y=H-Math.round(30*u)-pad;
+  c.fillStyle="#fff"; c.font=`700 ${fs}px ${KF}`; c.fillText("KAMO", W/2, y);
+  /* The mint rule is the brand's only colour and it is what stops the wordmark reading as
+     someone's font choice. Width tied to the type size so it tracks at any export scale. */
+  const rw=Math.round(fs*2.05), rh=Math.max(2,Math.round(u*1.6));
+  c.fillStyle="#5fe6a4"; c.fillRect(Math.round(W/2-rw/2), y+Math.round(fs*0.34), rw, rh);
 }
 /* native bridge (when wrapped in the Expo WebView) */
 function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); return true; }catch(e){} } return false; }
