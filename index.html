@@ -900,7 +900,17 @@
      the sheet that shows what "Challenge a friend" actually sends — the frame, the seconds
      and the taps — so hiding it left the button asking for trust. Reading order matches
      intent: see what goes out, then send it. */
-  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite):not(.chPrev){display:none!important;}
+  /* INSTAGRAM IS IN THE SHORT SHEET TOO, and the numbers are why. Over the 7 days to
+     2026-08-07 the destination row was tapped 28 times in total (invite 18 — a button that no
+     longer exists — instagram 7, more 3) against roughly 2,000 hides published. Those buttons
+     are not unpopular, they are unreachable: they only exist once someone swipes the sheet
+     open, and almost nobody does. Anything left below the fold here is the same as not shipped.
+     It stays SECOND, under the white CTA, because the two shares are not worth the same:
+     "Challenge a friend" carries a link, files an attempt and recruits a named player, whereas
+     Instagram Stories cannot render a caption at all (see nativeShare) — a story is reach and a
+     watermark, nothing clickable. Reach is still the cheaper half of the loop right now, which
+     is the whole argument for putting it where it can be seen. */
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite):not(.chPrev):not(.ig){display:none!important;}
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
@@ -1043,7 +1053,10 @@
     border:1px solid rgba(255,255,255,.18);background:#0a0f0d;padding:0;cursor:pointer;
     -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
   .chPrevShot:active{transform:scale(.94);}
-  .chPrevShot canvas{max-width:100%;max-height:100%;display:block;}
+  /* Fills the box outright. It used to be max-width/max-height, which is a FIT: a full-screen
+     board in a 3:4 box left a black band down one side. chPrevRender() now crops to this exact
+     box, so the canvas is already the right shape and only has to be told to occupy it. */
+  .chPrevShot canvas{width:100%;height:100%;display:block;}
   /* A play glyph, so the thumbnail reads as something you can open rather than as decoration.
      Small and low-contrast on purpose: it is a hint, not a second CTA competing with Share. */
   .chPrevShot::after{content:"";position:absolute;left:50%;top:50%;width:0;height:0;
@@ -1082,7 +1095,14 @@
   .ivPrev .ivTxt b{font-size:14px;font-weight:800;color:#fff;}
   .ivPrev .ivTxt span{font-size:11.5px;color:rgba(255,255,255,.62);}
   @keyframes ivIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-  .ssBtn.ssInvite{position:relative;z-index:0;background:rgba(72,214,139,.14);border-color:transparent;background-clip:padding-box;}
+  /* WHITE SLAB, BLACK TEXT — the paywall's primary treatment, and for the same reason. This was
+     a 14%-opacity mint tint sitting on a mint-green card: the one action the sheet exists to
+     produce was the LOWEST-contrast thing on it, and the Instagram button below it is a
+     full-saturation brand gradient. The loudest element was the destination, not the
+     recruitment. White is the only value on this card that nothing else uses, so it wins
+     without needing a colour to shout with. The shimmering --ring rim stays: it is what marks
+     this button as the primary and it reads better against white than against the tint. */
+  .ssBtn.ssInvite{position:relative;z-index:0;background:#fff;color:#04120c;border-color:transparent;background-clip:padding-box;}
   .ssBtn.ssInvite::before{content:"";position:absolute;inset:-1px;border-radius:17px;z-index:-1;pointer-events:none;
     padding:1px;background:var(--ring);background-size:260% 100%;
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
@@ -4381,10 +4401,24 @@ function chPrevRender(){
     document.getElementById("chChipT").textContent=e.taps+(e.taps===1?" tap":" taps");
     const shot=document.getElementById("chPrevShot");
     shot.querySelector("canvas")?.remove();
+    /* COVER-CROP, NOT FIT — this is what made the thumbnail look broken. `board` is the whole
+       screen (~9:19.5 on a modern phone); the box is 46x60 (~3:4). Fitting the board inside it
+       by its longest side left the frame 28px wide in a 46px box, flush left, with 18px of the
+       box's near-black background down the right. That does not read as a small preview, it
+       reads as an image that failed to load. Crop to the box instead, centred, and let it fill.
+       Backing store follows the device pixel ratio (capped at 3) so it is not soft on retina —
+       46x60 CSS pixels is small enough that a 1x canvas is visibly mushy.
+       The crop is honest here: this is the "open me" affordance, and tapping it plays the real
+       full-frame preview (chPrevPlay) — the thumbnail is not the deliverable. */
     const c=document.createElement("canvas");
-    const S=Math.min(1,168/Math.max(board.width,board.height));
-    c.width=Math.round(board.width*S); c.height=Math.round(board.height*S);
-    c.getContext("2d").drawImage(board,0,0,c.width,c.height);
+    /* Floor of 2, not just a cap of 3. dpr is the device's, and this thumbnail is 46x60 CSS
+       pixels — the smallest image in the app and the one that shows softness first. Two extra
+       device pixels per side costs nothing here and stops a 1x display drawing it mushy. */
+    const BOX_W=46, BOX_H=60, ratio=Math.max(2,Math.min(3,window.devicePixelRatio||2));
+    c.width=Math.round(BOX_W*ratio); c.height=Math.round(BOX_H*ratio);
+    const cover=Math.max(c.width/Math.max(1,board.width),c.height/Math.max(1,board.height));
+    const dw=board.width*cover, dh=board.height*cover;
+    c.getContext("2d").drawImage(board,(c.width-dw)/2,(c.height-dh)/2,dw,dh);
     shot.appendChild(c);
     /* BOUND HERE, not at load: this is the only point where the card is guaranteed to exist
        and to be about to be shown. onclick (not addEventListener) on purpose — chPrevRender
