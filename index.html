@@ -3283,7 +3283,23 @@ function openPaywall(source,force){
   const t=$("#pwTitle"), s=$("#pwSub");
   /* Restore the generic copy when there is no pitch — without this the sheet would keep
      whichever tool-specific line was shown last, and answer a question nobody asked. */
-  if(t) t.textContent = pitch ? pwText(pitch.t) : (t.dataset.def || t.textContent);
+  /* THE FIRST PAYWALL LEADS WITH THE TRIAL. THE REST LEAD WITH THE LOCK.
+     Measured: the median gap between install and trial_started is 5 minutes 6 seconds, over
+     2,030 new users. Half the trials this app will ever get are decided inside the first few
+     minutes, and D3 under 10% means there is no later to collect from. So the first paywall
+     of a launch is worth more than the two after it combined — and until now all three were
+     identical, arguing about a brush size to someone who has not decided whether this app is
+     worth anything yet.
+     ONLY THE TITLE. The lock's own pitch still runs in the subline below, so the specific
+     thing they just reached for is still answered — the headline changes what the screen is
+     ABOUT, from "you hit a limit" to "this is free to try". Losing the sub as well would
+     make the sheet generic exactly where it is most specific.
+     GATED ON trialOn(), because the control arm has no trial to lead with, and on trialLabel
+     rather than a typed number — check.mjs refuses a bare numeral in paywall copy, and it is
+     right to: the store can report a different trial length than TRIAL.days. */
+  const leadTrial = pwOpens===1 && trialOn();
+  if(t) t.textContent = leadTrial ? `Try everything free for ${trialLabel}`
+                      : pitch ? pwText(pitch.t) : (t.dataset.def || t.textContent);
   /* The generic line is REBUILT, not restored from a snapshot of the markup — the markup is
      the fallback for a JS failure, not the source of truth for a number. */
   if(s) s.textContent = pitch ? pwText(pitch.s) : pwGenericSub();
@@ -3402,10 +3418,20 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
        the offer. So the trial arm says so on the button. The price and billing period that
        are ALSO stated underneath now, by trialTermsLine() — the plan row alone did not
        connect the trial to what it renews into. */
-    /* "TRY FOR FREE NOW" — the length of the trial is already on the plan row and in the
-       terms under the button; repeating it here spent the CTA on a detail instead of on
-       the ask. Now, and free: the two words that matter. */
-    if(trialOn()) setBuyLabel(b,"TRY FOR FREE NOW"); else setBuyLabel(b,"Get KAMO+");
+    /* THE LENGTH IS BACK ON THE BUTTON, and the shouting is gone. "TRY FOR FREE NOW" was
+       argued on the grounds that the duration is already on the plan row and in the terms —
+       true, and beside the point once we measured where people actually leave: 8 cancels
+       against 4 completed purchases in a day, ALL of them on Apple's sheet, with
+       purchase_failed at zero. They are not blocked, they are re-deciding.
+       Apple's sheet says "$2.99 per week after 3 days". A button that promised only "free"
+       makes that sheet a SURPRISE; a button that says three days makes it a confirmation of
+       something already agreed to. That is the one copy lever that reaches the step where
+       two thirds of the intent is lost.
+       Lower case on purpose too: all-caps reads as pressure, and pressure raises the bar on
+       a $2.99 impulse rather than lowering it.
+       Built from trialLabel, never a typed numeral — the store can report a trial length
+       different from TRIAL.days, and check.mjs refuses a bare number in paywall copy. */
+    if(trialOn()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
     setTerms(trialTermsLine()); } }
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
    able to re-render it on its own once the store reports a real trial length, and because
@@ -3598,7 +3624,18 @@ function setHandle(v){
    membership signal on it — the +, the perk chips, the upsell — has to be able to say no. */
 function khSetPlus(){
   const plus=$("#khPlus"); if(plus) plus.style.display = isPro ? "" : "none";
-  const up=$("#khUpsell"); if(up) up.style.display = isPro ? "none" : "";
+  /* THE DOORWAY HAS TO NAME THE OFFER, NOT THE PRICE OF REFUSING IT. This said "Unlock
+     everything", which a free user reads as "pay" — so the one entry point that converts
+     (paywalls the user opens themselves tap at ~4%, ones that interrupt them at 0% over
+     2,100 views) was inviting them to spend rather than to try. Naming the free trial is the
+     whole change; nothing here moves or grows.
+     CONDITIONAL, because the trial is a rollout flag and not a fact. At TRIAL.rollout 100
+     everyone is in the trial arm, but the control branch still exists, and a button
+     promising "free" to someone whose purchase would charge immediately is a lie on the one
+     screen Apple reads hardest. */
+  const up=$("#khUpsell");
+  if(up){ up.style.display = isPro ? "none" : "";
+    up.textContent = trialOn() ? "Try KAMO+ for free" : "Unlock everything"; }
 }
 /* One switch, because these two are never both right. Focus is deliberate on reveal: the
    button said "change name", so the next thing should be a caret, not a second tap. */
