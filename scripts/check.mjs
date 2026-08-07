@@ -647,5 +647,19 @@ try {
         + 'signature is gone or it is being written as HTML, and the value comes off a stranger\'s device');
 }
 
+/* ---- 13. The control the paywall sells --------------------------------------------------
+   "KAMO+ unlocks the whole range, down to fine detail" is a promise about a slider, made to
+   someone deciding whether to pay. A member silently snapped to the three presets looks exactly
+   like normal use — the bar renders the same either way apart from a 10px thumb — so nothing
+   would report it except the person who paid. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-brush-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · BRUSH TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('members get the brush range they paid for (node scripts/test-brush-dom.mjs)');
+} catch (e) {
+  bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);

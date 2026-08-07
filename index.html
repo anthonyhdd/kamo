@@ -2576,7 +2576,15 @@ const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
    and finish a hide worth sending. What stays behind KAMO+ is the CONTINUOUS range and, with
    it, everything under 16 — the brush the paywall copy actually names, "fine enough to work
    an edge". A free user picks between three; a member draws anywhere from 2 to 64. */
-const FREE_SIZES=[16,26,40];
+/* WIDER, BUT NOT WIDE OPEN. These were 16/26/40 — a 2.5x spread sitting between t=0.51 and
+   t=0.80 on a bar the eye reads as full height, so three "different" sizes all landed in the
+   top third of the scale and felt like one. 14/26/46 is 3.3x and spans t=0.47 to t=0.86:
+   visibly three choices, still nowhere near either end.
+   THE MIDDLE IS UNCHANGED on purpose — it is FREE_BRUSH, the size every free round starts on,
+   and moving it would change the default round for everyone to answer a spacing complaint.
+   The small end is held back deliberately too: BRUSH_MIN is 2, and "down to fine detail" is
+   what the paywall sells. 14 widens the choice without handing over the tool. */
+const FREE_SIZES=[14,26,46];
 /* How many colours are sampled off the scene for a free row. Named because the PAYWALL makes
    a claim about it ("Free gets N shades off the photo") and a number that lives in two places
    is a number that will one day disagree with itself. extractPalette() reads this. */
