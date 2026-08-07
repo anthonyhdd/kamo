@@ -47,6 +47,18 @@ const html = real.slice(0, at)
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
   + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
+  + 'row(){const b=(s)=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();'
+  + 'return{d:getComputedStyle(e).display,x:r.left,y:r.top,w:r.width,h:r.height};};'
+  /* Every infinite animation inside the card, pseudo-elements included — that is where the
+     sheens live, and "how many things are moving" is the invariant, not any one selector. */
+  /* BUTTONS ONLY. The headline carries its own pwShimmer and always has — that is type, not a
+     sheen competing for the tap, and sweeping it in would make this check ask for the title
+     treatment to be deleted. The invariant is about the row of actions. */
+  + 'const spin=(document.getAnimations?document.getAnimations():[]).filter(a=>a.effect&&a.effect.target'
+  + '&&a.effect.target.closest&&a.effect.target.closest("#shareSheet .ssBtn")'
+  + '&&a.effect.getTiming().iterations===Infinity)'
+  + '.map(a=>(a.effect.target.id||a.effect.target.className||"?")+(a.effect.pseudoElement||"")+":"+(a.animationName||"anim"));'
+  + 'return{more:b(".ssBtn.ssMore"),plus:b("#ssPlus"),spin:spin};},'
   + 'grab(){document.getElementById("ssGrab").click();return this.snap();},'
   + 'backdrop(){shareSheetEl.click();return this.snap();},'
   + 'snap(){const c=shareSheetEl.querySelector(".ssCard");return{state:ssState,'
@@ -351,6 +363,38 @@ console.log('\nTHE SHEET RESIZES, IN BOTH DIRECTIONS');
   open.pe === 'auto'
     ? ok('the long state takes the backdrop, so a tap outside can reach it')
     : bad(`#shareSheet is pointer-events:${open.pe} while open — the tap-outside handler cannot fire`);
+
+  /* THE UPSELL IS HALF A ROW, NOT A ROW. It was a borderless mint text link on its own line
+     below everything, in the position people scroll past on the way to Cancel. Sharing the More
+     line makes it a real target for no extra height — Save is dead on native, so More had the
+     line to itself. Geometry, not classes: "side by side" is a claim about where they land. */
+  console.log('\nMORE AND THE UPSELL SHARE ONE LINE');
+  const row = await page.evaluate(() => window.__t.row());
+  if (!row.more || !row.plus || row.plus.d === 'none') {
+    bad(`the row is not both buttons — More=${!!row.more}, Remove mark=${row.plus && row.plus.d}`);
+  } else {
+    Math.abs(row.more.y - row.plus.y) < 2 && Math.abs(row.more.h - row.plus.h) < 2
+      ? ok('they sit on the same line, at the same height')
+      : bad(`they are on different lines (More at y=${Math.round(row.more.y)}h${Math.round(row.more.h)}, `
+          + `Remove mark at y=${Math.round(row.plus.y)}h${Math.round(row.plus.h)})`);
+    row.more.x < row.plus.x
+      ? ok('More is on the left, the upsell on the right')
+      : bad('the upsell is to the LEFT of More — the offer is leading the row');
+    Math.abs(row.more.w - row.plus.w) < 2
+      ? ok(`they split the line evenly (${Math.round(row.more.w)}px each)`)
+      : bad(`the cells are ${Math.round(row.more.w)}px and ${Math.round(row.plus.w)}px — one is `
+          + 'being squeezed, which is what happens when the flex share is not shared');
+  }
+
+  /* ONE MOVING THING ON THIS CARD. Instagram carried the paywall CTA's sheen, so the brightest
+     animation on the sheet was on the button we do NOT want tapped first, right beside the
+     ring on the one we do. Counted rather than grepped: a second sheen added under any other
+     selector is the same mistake with a different name. */
+  const spin = (row.spin || []).filter((s) => !/pwGlow/.test(s));
+  spin.length === 1 && /ssInvite/.test(spin[0])
+    ? ok(`exactly one button animates, and it is the right one (${spin[0]})`)
+    : bad(`${spin.length} button animation(s): ${spin.join(', ') || 'none'} — the ring on `
+        + '"Challenge a friend" is supposed to be the only one, and it is supposed to be there');
 
   /* Going DOWN, the long content must still be on screen while the box closes over it.
      Committing the short state up front animates an empty pocket instead. */
