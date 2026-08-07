@@ -57,7 +57,7 @@ const html = real.slice(0, at)
   + 'const r=img.getBoundingClientRect();'
   + 'img.dispatchEvent(new MouseEvent("click",{clientX:r.left+r.width/2,clientY:r.top+r.height/2,bubbles:true}));'
   + 'return{found:!!document.querySelector("#chPPframe.found"),confetti:document.querySelectorAll(".kConfetti").length,'
-  + 'sub:!!document.querySelector(".chPPsub"),head:(document.getElementById("chPPh")||{}).textContent};},'
+  + 'sub:(document.querySelector(".chPPsub")||{}).textContent||"",head:(document.getElementById("chPPh")||{}).textContent};},'
   + 'litter(){return document.querySelectorAll(".kConfetti").length;},'
   + 'row(){const b=(s)=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();'
   + 'return{d:getComputedStyle(e).display,x:r.left,y:r.top,w:r.width,h:r.height};};'
@@ -457,11 +457,13 @@ console.log('\nTHE CARD OPENS THE PREVIEW');
     won && won.confetti === 1
       ? ok('one confetti layer is thrown')
       : bad(`${won && won.confetti} confetti layers — expected exactly 1`);
-    /* THE COPY IS GONE. "That is the screen they get" described the screen to someone looking
-       straight at it. The green frame and the burst are the ending now. */
-    won && !won.sub
-      ? ok('and it says nothing — the frame and the confetti are the ending')
-      : bad('the win still renders a .chPPsub caption');
+    /* IT ARGUES, IT DOES NOT DESCRIBE. The old line ("That is the screen they get") captioned
+       the screen to someone staring at it. Whatever the line says, it must not be about the
+       screen — that is the failure mode worth failing on, not the exact words. */
+    const sub = won && won.sub;
+    sub && !/screen|this is what|you (are|'re) (looking|seeing)/i.test(sub)
+      ? ok(`the win makes a claim ("${sub}")`)
+      : bad(sub ? `the win is captioning itself again: "${sub}"` : 'the win renders no line at all');
 
     /* IT HAS TO LEAVE. The canvas sits at z-index 95, above the share sheet and above the
        preview's own CTA. One left behind is a screen nobody can tap. */
