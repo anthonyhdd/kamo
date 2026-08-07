@@ -3641,7 +3641,18 @@ function openKamoHome(){
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
-function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show"); }
+function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show");
+  /* AND THE SHARE SHEET COMES BACK, SHORT. On the reveal the sheet is the only route to a
+     share, and the wordmark now sits over that screen — so opening the card from there and
+     closing it must not leave someone on a reveal with no way to send. Short rather than
+     whatever it was: the long sheet covers the reveal, and coming back from an unrelated
+     detour into a wall of destinations is not where anyone left off.
+     Guarded on `finished`, so this does nothing on the camera screen where there is no sheet.
+     Every exit routes through here — Back, the backdrop, the pass grant — so there is one
+     place that owes this rather than four that might forget. */
+  if(!finished) return;
+  if(ssState==="hidden") peekShareSheet(); else if(ssState==="open") sheetToFloor();
+}
 /* THE SWITCH LIVES HERE NOW, on the KAMO+ badge inside this card.
  * The wordmark gesture was reported dead three times, and the third report carried the
  * detail that settled it: a short tap on the wordmark DOES open this modal. So the element
@@ -3789,15 +3800,20 @@ async function forceFreeAuthorized(){
 /* THE WORDMARK. Members get their home; everyone else gets the offer, tagged `brand` so
    this entry point is separable in the funnel from the ✦ button next to it. No pitch key:
    tapping the logo is curiosity, not a refusal, so it keeps the generic copy. */
+/* ONE DESTINATION, NOT TWO. This used to fork: members got their home, everyone else got the
+   paywall. That fork cost the free user the only screen with their own name on it, and it
+   bought 65 paywall views in seven days — 1.1% of 5,834, the lowest-intent entry in the
+   funnel, since tapping a logo is curiosity rather than running into a lock. The card carries
+   an upsell row for non-members (tagged `home`), so the path is not gone.
+   NOT AN onclick ON THE ELEMENT ANY MORE. That only ever fired on the camera screen: on the
+   paint and reveal screens #paintUI and #revealC cover the wordmark, and on the reveal it is
+   now deliberately pointer-events:none so it cannot swallow the start of a wipe drag. The tap
+   is hit-tested at the document in the capture phase, exactly like the long-press below and
+   for exactly the same reason — the gesture becomes independent of whatever is stacked over
+   the mark, on every screen. */
+function brandTap(){ if(brandLongPressed){ brandLongPressed=false; return; }   // the long-press already acted
+  haptic(10); openKamoHome(); }
 { const b=document.querySelector(".brand");
-  if(b) b.onclick=()=>{ if(brandLongPressed){ brandLongPressed=false; return; }   // the long-press already acted
-    /* ONE DESTINATION, NOT TWO. This used to fork: members got their home, everyone else got
-       the paywall. That fork cost the free user the only screen with their own name on it,
-       and it bought 65 paywall views in seven days — 1.1% of 5,834, the lowest-intent entry
-       in the funnel, since tapping a logo is curiosity rather than running into a lock. The
-       card carries an upsell row for non-members (tagged `home`), so the path is not gone,
-       it is just no longer the whole destination. */
-    openKamoHome(); };
   /* ONE 6-SECOND PRESS = toggle the free-user preview. FOUNDER TOOL, not a feature.
      History, because three earlier shapes were each wrong in their own way:
        - ONE 1.5s press: a thumb resting on the logo cleared it, and KAMO+ silently switched
@@ -3852,7 +3868,22 @@ async function forceFreeAuthorized(){
     if(!r.width) return false;                       // hidden (KAMO Home, share sheet)
     return e.clientX>=r.left-10 && e.clientX<=r.right+10 && e.clientY>=r.top-10 && e.clientY<=r.bottom+10; };
   let sx=0, sy=0;
-  document.addEventListener("pointerdown",e=>{ if(!onBrand(e)) return; sx=e.clientX; sy=e.clientY; start(); },true);
+  let downAt=0, downOk=false;
+  document.addEventListener("pointerdown",e=>{ if(!onBrand(e)) return; sx=e.clientX; sy=e.clientY;
+    downAt=Date.now(); downOk=true; start(); },true);
+  /* A TAP IS A SHORT PRESS THAT DID NOT MOVE AND ENDED ON THE MARK. All four conditions are
+     needed: `downOk` so a pointerup that merely passes over the wordmark cannot open anything,
+     the drift check so a brush stroke crossing it is not a tap, the 600ms ceiling so a hold
+     that fell short of the long-press does not fall through to the card instead, and onBrand
+     again so releasing somewhere else cancels. Consumes nothing — no preventDefault, no
+     stopPropagation — so painting and the reveal drag are untouched, same as the long-press. */
+  document.addEventListener("pointerup",e=>{
+    const ok=downOk && !brandLongPressed && onBrand(e)
+      && Math.abs(e.clientX-sx)<=14 && Math.abs(e.clientY-sy)<=14
+      && Date.now()-downAt<600;
+    downOk=false;
+    if(ok) brandTap();
+  },true);
   /* A hold that drifts is a drag, not a hold — and on the paint screen it IS a brush
      stroke passing over the wordmark. */
   document.addEventListener("pointermove",e=>{ if(t && (Math.abs(e.clientX-sx)>14 || Math.abs(e.clientY-sy)>14)) cancel(); },true);

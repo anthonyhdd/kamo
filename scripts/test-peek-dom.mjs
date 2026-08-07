@@ -59,6 +59,18 @@ const html = real.slice(0, at)
   + 'return{found:!!document.querySelector("#chPPframe.found"),confetti:document.querySelectorAll(".kConfetti").length,'
   + 'sub:(document.querySelector(".chPPsub")||{}).textContent||"",head:(document.getElementById("chPPh")||{}).textContent};},'
   + 'litter(){return document.querySelectorAll(".kConfetti").length;},'
+  /* A real tap on the wordmark, dispatched at the document the way a finger arrives — the
+     handler is a capture-phase hit test on the mark's rect, not a listener on the element,
+     so calling openKamoHome() directly would prove nothing about whether a tap reaches it. */
+  + 'tapBrand(dx,ms){const b=document.querySelector(".brand");const r=b.getBoundingClientRect();'
+  + 'const x=r.left+r.width/2,y=r.top+r.height/2;'
+  + 'document.dispatchEvent(new PointerEvent("pointerdown",{clientX:x,clientY:y,bubbles:true}));'
+  + 'const go=()=>document.dispatchEvent(new PointerEvent("pointerup",{clientX:x+(dx||0),clientY:y,bubbles:true}));'
+  + 'if(ms){return new Promise(r2=>setTimeout(()=>{go();r2(this.cardState());},ms));}'
+  + 'go();return Promise.resolve(this.cardState());},'
+  + 'cardState(){return{card:document.getElementById("kamoHome").classList.contains("show"),'
+  + 'sheet:shareSheetEl.className,state:ssState};},'
+  + 'closeCard(){closeKamoHome();return this.cardState();},'
   + 'sign(){const c=document.getElementById("chChipN");if(!c)return null;'
   + 'return{text:c.textContent,unsigned:c.classList.contains("unsigned")};},'
   /* Any preview left open by an earlier check is cleared FIRST, or "did the tap fall through
@@ -540,6 +552,42 @@ console.log('\nTHE CARD ASKS TO BE SIGNED, WITHOUT BLOCKING THE SEND');
   !after.unsigned
     ? ok('and the chip stops asking')
     : bad('the chip still reads as unsigned after a name was saved');
+}
+
+/* THE WORDMARK IS THE WAY INTO THE CARD FROM THE REVEAL, AND THE SHEET MUST SURVIVE IT.
+   On the reveal the share sheet is the only route to a share — the Share button was removed
+   when the sheet started presenting itself — so opening the card over that screen and closing
+   it must not strand someone on a reveal with no way to send. */
+console.log('\nTAPPING THE WORDMARK OPENS THE CARD, AND CLOSING IT GIVES THE SHEET BACK');
+{
+  await page.evaluate(() => window.__t.present());
+  const opened = await page.evaluate(() => window.__t.tapBrand(0, 0));
+  opened.card
+    ? ok('a tap on the wordmark opens the player card')
+    : bad('the wordmark did not open the card — the tap is hit-tested at the document, so a '
+        + 'listener bound to the element would not fire here at all');
+
+  const closed = await page.evaluate(() => window.__t.closeCard());
+  !closed.card && /peek/.test(closed.sheet) && closed.state === 'peek'
+    ? ok('closing it brings the share sheet back, short')
+    : bad(`after closing the card the sheet is "${closed.sheet}" (${closed.state}) — on the reveal `
+        + 'that is a screen with no way to share');
+
+  /* From the LONG sheet it must come back short, not as it was: coming out of an unrelated
+     detour into a wall of destinations is not where anyone left off. */
+  await page.evaluate(() => window.__t.grab());
+  await page.waitForTimeout(520);
+  await page.evaluate(() => window.__t.tapBrand(0, 0));
+  const back = await page.evaluate(() => window.__t.closeCard());
+  back.state === 'peek'
+    ? ok('and it comes back short even when it was long')
+    : bad(`the sheet came back as "${back.state}" — the long sheet covers the reveal`);
+
+  /* A drag across the mark is a brush stroke, not a tap. */
+  const dragged = await page.evaluate(() => window.__t.tapBrand(40, 0));
+  !dragged.card
+    ? ok('a drag across it is not a tap')
+    : bad('dragging over the wordmark opened the card — a brush stroke crossing it would too');
 }
 
 /* THE PAYWALL'S PROMISES, RENDERED. check.mjs proves no number is TYPED into the copy; this
