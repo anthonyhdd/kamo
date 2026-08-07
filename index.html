@@ -235,8 +235,11 @@
      that happened while they were away. */
   /* A dot on the wordmark when a hide this device sent has been played since it was last
      read. Absolutely positioned off the mark itself so it cannot change the wordmark's
-     metrics, and it breathes on the same clock as everything else that wants attention here. */
-  .brand{position:relative;}
+     metrics, and it breathes on the same clock as everything else that wants attention here.
+     NO `position:relative` HERE. I added one to give the ::after a containing block, and it
+     was both unnecessary and destructive: .brand is already position:absolute — which is a
+     containing block — and this rule came LATER in the file at the same specificity, so it won
+     and dropped the wordmark out of absolute positioning entirely. It shipped that way. */
   .brand.hasNews::after{content:"";position:absolute;top:-2px;right:-9px;width:8px;height:8px;
     border-radius:50%;background:var(--mint);box-shadow:0 0 10px rgba(95,230,164,.9);
     animation:pwGlow 2.4s ease-in-out infinite;pointer-events:none;}
