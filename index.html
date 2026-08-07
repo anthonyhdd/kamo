@@ -739,27 +739,12 @@
     font-family:var(--display);font-size:22px;font-weight:900;color:#fff;line-height:1;padding:0;
     -webkit-user-select:text;user-select:text;caret-color:var(--mint);}
   #khHandle::placeholder{color:rgba(255,255,255,.28);font-weight:800;}
-  /* THE SAME SHIMMER THE HEADLINES WEAR, on the name itself — .kpTitle and .pwTitle already
-     run this exact gradient on this exact clock, and the handle is the one other thing on
-     this card that is the user's own.
-     Behind @supports, and this is not decoration: the trick works by painting the text
-     transparent and letting a background show through it. In a browser that ignores
-     background-clip the transparent fill still applies and the field goes INVISIBLE — you
-     would be typing your name into nothing. The guard means such a browser keeps plain white.
-     caret-color is set above, separately, because it inherits from `color` — which this rule
-     makes transparent. Without it the caret disappears too, in every browser, including the
-     ones where the effect works.
-     ::placeholder gets its fill back for the same reason: -webkit-text-fill-color cascades
-     into it, so "yourname" would vanish and the empty field would look broken rather than
-     empty. */
-  @supports ((-webkit-background-clip:text) or (background-clip:text)){
-    #khHandle,.khAt{
-      background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
-      background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
-      -webkit-text-fill-color:transparent;color:transparent;
-      animation:pwShimmer 3.4s linear infinite;}
-    #khHandle::placeholder{-webkit-text-fill-color:rgba(255,255,255,.28);color:rgba(255,255,255,.28);}
-  }
+  /* NO SHIMMER ON THE FIELD. It was here, and it was the wrong target: the effect paints the
+     text transparent and shows a gradient through it, which on an INPUT means the thing you
+     are typing is a special case away from being invisible — and it needed a caret-color
+     override and a placeholder override just to stay usable. The headline carries it instead,
+     and the headline IS the name once there is one, so the name shimmers and the field you
+     type into is plain white. Same effect, none of the risk. */
   /* Its own rule rather than borrowing .ssBtn.ssPlus from the share sheet: that class is
      scoped to a flex ROW there and carries the row's height and flex share, so reusing it
      here rendered an unstyled browser button. Same colours — the mint tint, the mint border,
@@ -1180,6 +1165,12 @@
      as part of the app rather than as a system label. */
   .chPrevTxt b{font-family:var(--display);font-weight:700;font-size:15.5px;letter-spacing:-.2px;color:#fff;}
   .chPrevChips{display:flex;gap:6px;flex-wrap:wrap;}
+  /* The signature reads as one of the terms, because it is one: it is part of what the friend
+     receives. Unsigned it goes grey and dashed — an empty slot asking to be filled rather than
+     a value claiming to be set. */
+  .chChip.chSign{cursor:pointer;font-family:var(--display);-webkit-tap-highlight-color:transparent;}
+  .chChip.chSign.unsigned{color:rgba(255,255,255,.5);background:rgba(255,255,255,.05);
+    border:1px dashed rgba(255,255,255,.28);}
   /* The two numbers are the DEAL being offered, so they stop being grey run-on text and
      become the only coloured thing in the row. "no app needed" is gone: it answered a
      question nobody was asking here and diluted the two that matter. */
@@ -1546,9 +1537,11 @@
          a day the wordmark used to send can be told apart from the ones this row sends. -->
     <button class="kpPrimary" id="khUpsell" style="display:none">Unlock everything</button>
     <button class="kpSecondary" id="khDiscord">Join the Discord</button>
-    <!-- Quiet on purpose. It is the thing you need on the day the app has forgotten what you
-         bought, and nothing on the other 364. -->
-    <button class="kpQuiet" id="khRestore">Restore purchases</button>
+    <!-- NO RESTORE HERE. It was added on the argument that this is an account screen and that
+         five people had tapped Restore in a week looking for it — but those five taps happened
+         on the PAYWALL, which is the only place it existed. They prove people find it there.
+         A store action on a card about who you are and where the other players are was the odd
+         row out, and the paywall satisfies Apple's requirement that Restore be reachable. -->
     <button class="kpClose" id="khClose">Back</button>
   </div>
 </div>
@@ -1599,7 +1592,7 @@
       <button class="chPrevShot" id="chPrevShot" aria-label="Preview what they receive"></button>
       <div class="chPrevTxt">
         <b>My challenge</b>
-        <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span></div>
+        <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span><button class="chChip chSign" id="chChipN"></button></div>
       </div>
       <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
     </div>
@@ -3503,10 +3496,6 @@ function doRestore(){
   if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); }
   else showHint("Nothing to restore");
 }
-{ const r=$("#khRestore");
-  if(r){ bindPassHold(r);
-    r.onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; } haptic(10); doRestore(); }; }
-}
 function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",url:u}); } else { window.open(u,"_blank","noopener"); } }
 document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.url));
 /* native bridge — RevenueCat (native) calls these on purchase/restore success + to inject the localized price */
@@ -4726,6 +4715,22 @@ function chPrevRender(){
    screen — the two chips ARE the deal the friend gets, so they read like terms. */
     document.getElementById("chChipS").textContent=e.limit+"s";
     document.getElementById("chChipT").textContent=e.taps+(e.taps===1?" tap":" taps");
+    /* THE ASK LIVES HERE, AND NOT IN FRONT OF THE SEND.
+       Only about 3% of hide-makers ever tap the wordmark (9 logo taps a day against ~300
+       hides), so a handle that can only be set on the player card is a handle almost nobody
+       will set — and an unsigned challenge is the thing the whole feature exists to stop.
+       But the send is the one number this app is trying to move and it is flat at 71 a day, so
+       putting a prompt in FRONT of it is the fastest way to make it worse. This is the middle:
+       a third chip on the card the sender is already reading to see what goes out, next to the
+       two numbers that are also part of what goes out. It costs no height and blocks nothing.
+       Signed, it stops being an ask and becomes the answer to "what will they see". */
+    const nChip=document.getElementById("chChipN");
+    if(nChip){
+      const who=getHandle();
+      nChip.textContent = who ? "@"+who : "+ your name";
+      nChip.classList.toggle("unsigned",!who);
+      nChip.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chSignAsk(); };
+    }
     const shot=document.getElementById("chPrevShot");
     shot.querySelector("canvas")?.remove();
     /* COVER-CROP, NOT FIT — this is what made the thumbnail look broken. `board` is the whole
@@ -6182,6 +6187,49 @@ async function chMyResults(){
  * — that friend accepted the deal that was advertised when they got it.
  * The previous id is restored if the new upload fails, because a link with stale settings
  * is a playable round and no link at all is a dead share. */
+/* SIGNING FROM THE SHARE SHEET.
+ * Its own small overlay rather than opening the player card: that card is a second full sheet
+ * and stacking one on top of the share sheet is how you lose both — the file already learned
+ * that with the paywall.
+ *
+ * REPUBLISHES IF THE HIDE IS ALREADY OUT. chUpload() runs on the first touch of the sheet, so
+ * by the time anyone taps this chip the row usually exists on the server WITHOUT a name, and
+ * setHandle() alone would change the message text while the seeker screen still said "Find the
+ * body". chRepublish() is exactly the machinery the gear already uses when taps or the clock
+ * change, and it keeps the remembered-id list straight. */
+function chSignAsk(){
+  const w=document.createElement("div");
+  w.style.cssText="position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px";
+  w.innerHTML='<div style="width:min(88vw,340px);background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border:1px solid rgba(255,255,255,.22);border-radius:22px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:20px">'
+    +'<div style="font-family:var(--display);font-size:20px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px">Who is hiding?</div>'
+    +'<div style="font-size:13.5px;color:rgba(255,255,255,.6);text-align:center;margin-bottom:14px">They will see this on your challenge.</div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:2px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid var(--stroke)">'
+    +'<span style="font-family:var(--display);font-size:22px;font-weight:900;color:rgba(95,230,164,.75);line-height:1">@</span>'
+    +'<input id="csIn" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname" '
+    +'style="width:100%;max-width:220px;background:none;border:none;outline:none;font-family:var(--display);font-size:22px;font-weight:900;color:#fff;line-height:1;padding:0;-webkit-user-select:text;user-select:text;caret-color:var(--mint)">'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button id="csNo" style="flex:1;height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:none;color:rgba(255,255,255,.6);font-size:15px;font-weight:700">Not now</button>'
+    +'<button id="csOk" style="flex:1;height:44px;border-radius:12px;border:none;background:#fff;color:#04120c;font-size:15px;font-weight:800">Save</button>'
+    +'</div></div>';
+  document.body.appendChild(w);
+  const inp=w.querySelector("#csIn");
+  inp.value=getHandle();
+  setTimeout(()=>{ try{ inp.focus(); }catch(e){} },60);
+  const close=()=>{ try{ w.remove(); }catch(e){} };
+  const save=()=>{
+    const before=getHandle(), after=setHandle(inp.value);
+    close();
+    chPrevRender();
+    track("hide_signed",{had_name:!!before,named:!!after});
+    /* Only when it actually changed, and only when there is something published to change. */
+    if(after!==before) chRepublish();
+  };
+  w.querySelector("#csNo").onclick=close;
+  w.querySelector("#csOk").onclick=save;
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.keyCode===13) save(); });
+  w.onclick=e=>{ if(e.target===w) close(); };
+}
 function chRepublish(){
   if(!CH_MAKE||!chId) return;   // nothing published yet: chUpload() will read the new values
   const prev=chId;
