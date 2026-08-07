@@ -4036,7 +4036,13 @@ function shareUrl(){ return chLink()||appLink; }
 const ONELINK_URL="https://kamo.onelink.me/dc9X";
 function refLink(campaign,sub1){
   if(!ONELINK_URL) return appLink;
-  const q=["pid=user_referral","c="+encodeURIComponent(campaign||"web"),"deep_link_value=referral"];
+  /* af_xp IS NOT OPTIONAL DECORATION. It declares the link's experience type, and it is on
+     every link AppsFlyer's own UI generates for this template (…?af_xp=custom&pid=…). A link
+     without it can be classified as something other than acquisition, which produces the
+     worst possible failure here: the redirect works, the install happens, and the campaign
+     stays empty — indistinguishable from "the loop brings nobody". Matched to what the UI
+     emits rather than guessed. */
+  const q=["af_xp=custom","pid=user_referral","c="+encodeURIComponent(campaign||"web"),"deep_link_value=referral"];
   if(sub1) q.push("deep_link_sub1="+encodeURIComponent(sub1));
   return ONELINK_URL+(ONELINK_URL.indexOf("?")<0?"?":"&")+q.join("&");
 }

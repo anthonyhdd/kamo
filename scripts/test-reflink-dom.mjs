@@ -118,6 +118,12 @@ console.log('\nTHE REFERRAL LINK AT THE END OF THE LOOP');
     q.get('pid') === 'user_referral'
       ? ok('pid=user_referral')
       : bad(`pid is ${JSON.stringify(q.get('pid'))}`);
+    /* Present on every link AppsFlyer's own UI builds for this template. Without it the
+       redirect still works and the install still happens — only the campaign stays empty,
+       which reads as "the loop brings nobody" rather than as a broken link. */
+    q.get('af_xp') === 'custom'
+      ? ok('af_xp=custom — the click is declared the way AppsFlyer\'s own links declare it')
+      : bad(`af_xp is ${JSON.stringify(q.get('af_xp'))} — the click may not be classified as acquisition`);
     q.get('c') && q.get('c') !== 'in_app_share'
       ? ok(`c=${q.get('c')} — separable from the wrapper's in_app_share`)
       : bad(`c is ${JSON.stringify(q.get('c'))} — browser referrals must not merge into the members' campaign`);
