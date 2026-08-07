@@ -4217,7 +4217,19 @@ function trackCarried(kind,props){
    mint a web id before. Watch the user totals for a step change. */
 const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened"]);
 function track(event,props){
-  const p={...(props||{}),trial_arm:trialArm};
+  /* `emit` STAMPS EVERY EVENT THIS FILE SENDS, and it exists because of a question the data
+     could not answer. 21 of 29 purchase_initiated over three days arrived carrying NOTHING —
+     no plan, no source, no trial_arm — while the #pwBuy handler attaches five properties and
+     track() attaches trial_arm to everything (it is always "trial" at rollout 100, never
+     undefined). So those events cannot have come from the Buy button, and there is no second
+     emitter of that name anywhere in this file or in kamo-app. Something else is writing to
+     this project under a name we own, and it silently tripled the buy-tap numerator: the
+     "1% of paywalls get a Buy tap" figure was computed on a polluted count.
+     Reading harder was not going to settle it. One property does: from now on anything
+     WITHOUT emit="web" is provably not from this page, and the split shows up within hours
+     instead of after another day of reasoning about it.
+     Cheap on purpose — one short string on an event that already carries five. */
+  const p={...(props||{}),trial_arm:trialArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
