@@ -4738,7 +4738,12 @@ function chPrevPlay(){
       const r=img.getBoundingClientRect();
       const x=(ev.clientX-r.left)/r.width, y=(ev.clientY-r.top)/r.height;
       const d=Math.hypot(x-g.cx,y-g.cy);
-      if(d<=g.r){ haptic(18); end("Found you","",true); return; }
+      /* NOT A CAPTION THIS TIME. "That is the screen they get" described the screen to
+         someone staring at it. This says the one thing the sender does not know they know:
+         the preview was rigged — they painted it, so of course they found it — and the
+         person they send it to will not have that. It is the argument for pressing the
+         button underneath it. */
+      if(d<=g.r){ haptic(18); end("Found you","You knew where it was. They won't.",true); return; }
       tries++; pips(); haptic(8);
       img.classList.remove("chPPshake"); void img.offsetWidth; img.classList.add("chPPshake");
       if(tries>=e.taps) end("Out of taps","They never found you.");
