@@ -737,17 +737,30 @@
      the pale mint label — because it is the same offer in the same voice, but the geometry
      belongs to this card. Deliberately quieter than the Discord slab above it: the community
      is the thing this card is for, the upsell is the thing it also happens to sell. */
-  .kpPlus{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;height:48px;
-    margin-top:11px;border-radius:16px;cursor:pointer;
-    background:rgba(95,230,164,.13);border:1px solid rgba(95,230,164,.34);color:#c9ffe4;
-    font-family:var(--font);font-size:14.5px;font-weight:800;
+  /* THE APP'S PRIMARY TREATMENT, the one "Challenge a friend" wears on the share sheet. White
+     is the only value nothing else on this card uses, so it wins without a colour to shout
+     with — which is exactly what two competing mint slabs could not do. */
+  .kpPrimary{display:flex;align-items:center;justify-content:center;width:100%;height:54px;
+    margin-top:4px;border-radius:16px;border:none;cursor:pointer;background:#fff;color:#04120c;
+    font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.2px;
     -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
-  .kpPlus:active{transform:scale(.97);}
-  /* Quieter than .kpClose is loud: a real action, but one nobody should be drawn to. */
+  .kpSecondary{display:flex;align-items:center;justify-content:center;width:100%;height:50px;
+    margin-top:9px;border-radius:16px;cursor:pointer;
+    background:rgba(95,230,164,.13);border:1px solid rgba(95,230,164,.34);color:#c9ffe4;
+    font-family:var(--display);font-size:15.5px;font-weight:800;letter-spacing:-.1px;
+    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+  .kpPrimary:active,.kpSecondary:active{transform:scale(.97);}
+  /* The scoreboard of the hides you sent. Numbers in the brand face and in mint, the words
+     around them quiet — the same treatment the preview card's chips get, for the same reason:
+     the figures are the message and the sentence is only there to make them read. */
+  .khScore{width:100%;max-width:320px;margin:0 auto 20px;padding:13px 14px;border-radius:16px;
+    background:rgba(255,255,255,.05);border:1px solid var(--stroke);
+    font-size:14px;color:rgba(255,255,255,.66);line-height:1.5;}
+  .khScore b{font-family:var(--display);font-weight:900;color:var(--mint);font-size:16px;}
+  .khScore .khNone{color:rgba(255,255,255,.5);}
   .kpQuiet{display:block;width:100%;margin-top:10px;background:none;border:none;
     color:rgba(255,255,255,.5);font-size:13px;font-weight:700;cursor:pointer;padding:8px;
     -webkit-tap-highlight-color:transparent;}
-  .kpPlus .ic{font-size:13px;color:var(--mint);}
   .kpClose{display:block;width:100%;margin-top:11px;background:none;border:none;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px;}
   @keyframes pwFade{from{opacity:0}to{opacity:1}}
   .pwCard{position:relative;width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
@@ -1473,24 +1486,37 @@
     <div class="kpSub" id="khSub"></div>
     <!-- The @ is furniture, so it lives in the markup and never in the value. Storing it
          would put a second @ in every message the first time someone typed one. -->
-    <div class="khName">
+    <!-- Hidden once a handle exists — the headline above IS the handle by then, and showing
+         it again in a field 40px lower is the same value twice in one glance. "Change name"
+         takes its place, and reveals it. -->
+    <div class="khName" id="khName">
       <span class="khAt">@</span>
       <input id="khHandle" type="text" inputmode="text" autocomplete="off" autocapitalize="none"
              autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname"
              aria-label="Your handle">
     </div>
+    <!-- WHAT HAPPENED TO THE HIDES YOU SENT. Filled asynchronously by khResults() and hidden
+         until there is something true to put in it — a zero here would greet someone who has
+         never sent a challenge with their own inactivity, and an empty row is worse than no
+         row. This is the only reason to open this card twice. -->
+    <div class="khScore" id="khScore" style="display:none"></div>
+    <!-- AFTER the score, not before it. Sitting directly on top of that box it read as the
+         box's label — "Change name" over a row of numbers about other people. -->
+    <button class="kpQuiet khEdit" id="khEdit" style="display:none">Change name</button>
     <!-- NO PERK CHIPS. They listed what KAMO+ contains, on a card that is now about who the
          player is and where the other players are — and for a member they were three things
          they already owned, restated. The post-purchase card still carries them, which is the
          one place that list is the point. -->
-    <!-- THE PRIMARY POINTS OUT OF THE APP, and that is the point. "Share my stats" was the
-         primary before, and it shared the three numbers that were already the weakest thing
-         on the card. This is the only door in the product to other players. -->
-    <button class="kpGo" id="khDiscord">Join the Discord</button>
-    <!-- Free users only — see khSetPlus(). Tagged `home`, not `brand`, so the 9 paywall views
-         a day the wordmark used to send can be told apart from the ones this line sends and
-         we can see whether repurposing the wordmark cost anything. -->
-    <button class="kpPlus" id="khUpsell" style="display:none"><span class="ic">✦</span>Unlock every tool</button>
+    <!-- TWO SLABS IN THE SAME MINT WAS THE PROBLEM. Discord and the upsell were both green
+         and both full-width, so neither won and the pair read as a mistake. They are different
+         KINDS of action, so they now look it: the upsell takes the app's primary treatment —
+         the white slab "Challenge a friend" wears — and Discord is the tinted secondary.
+         The upsell leads because it is the only thing on this card that is worth money; the
+         card still exists for the other two rows. -->
+    <!-- Free users only — see khSetPlus(). Tagged `home`, not `brand`, so the ~9 paywall views
+         a day the wordmark used to send can be told apart from the ones this row sends. -->
+    <button class="kpPrimary" id="khUpsell" style="display:none">Unlock everything</button>
+    <button class="kpSecondary" id="khDiscord">Join the Discord</button>
     <!-- Quiet on purpose. It is the thing you need on the day the app has forgotten what you
          bought, and nothing on the other 364. -->
     <button class="kpQuiet" id="khRestore">Restore purchases</button>
@@ -3539,6 +3565,13 @@ function khSetPlus(){
   const plus=$("#khPlus"); if(plus) plus.style.display = isPro ? "" : "none";
   const up=$("#khUpsell"); if(up) up.style.display = isPro ? "none" : "";
 }
+/* One switch, because these two are never both right. Focus is deliberate on reveal: the
+   button said "change name", so the next thing should be a caret, not a second tap. */
+function khShowField(on){
+  const f=$("#khName"), e=$("#khEdit");
+  if(f) f.style.display = on ? "" : "none";
+  if(e) e.style.display = on ? "none" : "";
+}
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
   const t=$("#khTitle"), sub=$("#khSub"), inp=$("#khHandle");
@@ -3555,7 +3588,15 @@ function openKamoHome(){
      sync and nothing to read twice. */
   if(sub) sub.textContent="The name on every challenge you send.";
   if(inp) inp.value=h;
+  /* The field and its "Change name" stand-in are mutually exclusive, and the state is
+     recomputed on every open rather than remembered — someone who clears their name and
+     reopens the card must get the field back, not a button offering to change nothing. */
+  khShowField(!h);
   khSetPlus();
+  /* Not awaited: the card must open at once. The row appears under the handle a moment later
+     if there is anything to say, and never moves anything the user is already reaching for —
+     it sits above the buttons, not between them. */
+  try{ khResults(); }catch(_){}
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
@@ -3636,6 +3677,8 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
   }
   /* The only door in the product to other players. openURL() goes through the native bridge
      when there is one, so it opens the Discord app rather than a web view of it. */
+  const ed=$("#khEdit");
+  if(ed) ed.onclick=()=>{ haptic(8); khShowField(true); const i=$("#khHandle"); if(i){ i.focus(); try{ i.setSelectionRange(i.value.length,i.value.length); }catch(_){} } };
   const d=$("#khDiscord");
   if(d) d.onclick=()=>{ haptic(12); track("discord_opened",{}); openURL(DISCORD_URL); };
   /* `home`, not `brand`. The wordmark used to send ~9 paywall views a day tagged `brand`;
@@ -4047,7 +4090,7 @@ function trackCarried(kind,props){
    into the web, which needs a build.
    It also means one extra Amplitude user per install, because the WebView had no reason to
    mint a web id before. Watch the user totals for a step change. */
-const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","hide_result_shown","challenge_preview_opened","creator_pass_used"]);
+const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","hide_result_shown","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened"]);
 function track(event,props){
   const p={...(props||{}),trial_arm:trialArm};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
@@ -6020,6 +6063,40 @@ let mineMsg="";
 function updateMineChip(){
   const el=$("#mineChip"); if(!el) return;
   el.style.display = (mineMsg && mode==="compose" && !finished) ? "block" : "none";
+}
+/* THE SCOREBOARD OF WHAT YOU SENT, for the player card.
+ * chMyResults() answers the same question in one line, once, on the camera screen, for the
+ * newest hide only — it is a notification, and it is gone the moment it is dismissed. This is
+ * the place you can go and look, which is the difference between a nudge and a reason to open
+ * the app again.
+ *
+ * EVERY HIDE IN PARALLEL, and the failures dropped rather than surfaced. get_hide returns
+ * nothing for a hide that has expired (30 days), been blocked, or was never published, and a
+ * player whose oldest challenge aged out has not lost anything they should be told about. So
+ * a null is simply not counted, and if every one is null the block stays hidden — chMine()
+ * caps at 10, so this is at most ten small requests on a deliberate tap.
+ *
+ * ZERO IS NOT A NUMBER WORTH PRINTING. Someone who has sent challenges nobody has opened yet
+ * gets no row at all, rather than a row that says nothing happened. That was the whole flaw of
+ * the stat tiles this card replaced. */
+async function khResults(){
+  const el=$("#khScore"); if(!el) return;
+  el.style.display="none";
+  try{
+    const ids=chMine(); if(!ids.length) return;
+    const rows=(await Promise.all(ids.map(id=>chRpc("get_hide",{p_id:id}).catch(()=>null)))).filter(Boolean);
+    if(!rows.length) return;
+    const tried=rows.reduce((a,h)=>a+((h&&h.n_attempts)|0),0);
+    const found=rows.reduce((a,h)=>a+((h&&h.n_found)|0),0);
+    if(tried<1) return;
+    /* Two facts and a divider, not a sentence. "12 people have played your hides. 3 found
+       you." wrapped to two lines on a 390px card, and the numbers — the only part anyone
+       reads — ended up at opposite ends of it. */
+    el.innerHTML = "<b>"+tried+"</b> "+(tried===1?"played":"played")+" your hide"+(rows.length===1?"":"s")+" · "
+      + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>');
+    el.style.display="block";
+    track("home_results_shown",{hides:rows.length,tried:tried,found:found});
+  }catch(e){}
 }
 async function chMyResults(){
   try{
