@@ -45,7 +45,13 @@ const html = real.slice(0, at)
   + 'plus:g("#khPlus"),upsell:g("#khUpsell"),title:(document.getElementById("khTitle")||{}).textContent,'
   + 'value:(document.getElementById("khHandle")||{}).value,stored:(()=>{try{return localStorage.getItem("kamo_handle")||"";}catch(e){return"";}})(),'
   + 'discord:DISCORD_URL,chips:document.querySelectorAll("#kamoHome .kpChip").length,'
-  + 'restore:g("#khRestore")};},'
+  + 'restore:g("#khRestore"),field:g("#khName"),edit:g("#khEdit"),'
+  + 'score:g("#khScore"),scoreText:(document.getElementById("khScore")||{}).textContent||""};},'
+  /* chRpc is a function DECLARATION, so it is replaceable from inside the module. Stubbed per
+     id so the aggregate can be checked against known rows — and so a null (an expired or
+     blocked hide, which get_hide answers with nothing) is exercised rather than assumed. */
+  + 'hides(ids,rows){try{localStorage.setItem("kamo_hides",JSON.stringify(ids))}catch(e){}'
+  + 'chRpc=(fn,b)=>Promise.resolve(rows[b.p_id]||null);},'
   /* The invite text is built inside the click handler, so it cannot be read without sending.
      Rebuilt here from the same getHandle() the handler uses — what is under test is that the
      stored value is handle-shaped and reachable, not the string concatenation, which
@@ -160,9 +166,44 @@ console.log('\nIT SURVIVES A RELAUNCH, AND IT LEADS SOMEWHERE');
   back.title === '@tony'
     ? ok(`the handle IS the headline once it exists ("${back.title}")`)
     : bad(`the headline is ${JSON.stringify(back.title)} — expected the bare handle`);
+  /* AND THE FIELD STANDS DOWN. With the headline showing @tony, a field showing @tony forty
+     pixels lower is the same value twice in one glance. */
+  back.field === 'none' && back.edit !== 'none' && back.edit !== 'absent'
+    ? ok('the field gives way to "Change name" once there is a name')
+    : bad(`with a handle set the field is ${back.field} and the edit button is ${back.edit} — `
+        + 'the card is showing the same value twice');
   back.discord === 'https://discord.gg/ET9PYFt8M'
     ? ok('Discord points at the real invite')
     : bad(`DISCORD_URL is ${JSON.stringify(back.discord)}`);
+}
+
+console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
+{
+  /* Nobody has played anything yet → no row. A "0 people have played" line would greet
+     someone with their own inactivity, which is the flaw the stat tiles died of. */
+  await page.evaluate(() => window.__h.hides(['a'], { a: { n_attempts: 0, n_found: 0 } }));
+  const quiet = await page.evaluate(() => window.__h.open(false));
+  quiet.score === 'none'
+    ? ok('nothing played yet → no row at all, rather than a row that says nothing happened')
+    : bad(`the score row shows with zero attempts: ${JSON.stringify(quiet.scoreText)}`);
+
+  /* Aggregated across every hide, with an expired one (null from get_hide) dropped. */
+  await page.evaluate(() => window.__h.hides(['a', 'b', 'gone'], {
+    a: { n_attempts: 9, n_found: 2 }, b: { n_attempts: 3, n_found: 1 } }));
+  await page.evaluate(() => window.__h.open(false));
+  await page.waitForTimeout(250);
+  const many = await page.evaluate(() => window.__h.state());
+  /12 played your hides/.test(many.scoreText) && /3 found you/.test(many.scoreText)
+    ? ok(`it sums every hide and drops the expired one ("${many.scoreText.trim()}")`)
+    : bad(`the aggregate is wrong: ${JSON.stringify(many.scoreText)}`);
+
+  await page.evaluate(() => window.__h.hides(['a'], { a: { n_attempts: 1, n_found: 0 } }));
+  await page.evaluate(() => window.__h.open(false));
+  await page.waitForTimeout(250);
+  const none = await page.evaluate(() => window.__h.state());
+  /^1 played your hide ·/.test(none.scoreText.trim()) && /nobody found you/.test(none.scoreText)
+    ? ok('one player, none found → singular, and the loss is stated plainly')
+    : bad(`the singular / nobody-found case reads: ${JSON.stringify(none.scoreText)}`);
 }
 
 await browser.close();
