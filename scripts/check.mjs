@@ -214,6 +214,21 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       btnAt > prevAt
         ? ok('the preview card comes before the CTA')
         : bad('#ssInvite appears before .chPrev — the button asks for trust before showing what it sends');
+      /* THE ROUND'S TERMS APPEAR ONCE. A kicker above the headline used to print "20S · 5 TAPS"
+         while the preview card ~100px below printed the same two numbers as chips. It was not
+         a duplicate when it was written — the card was only drawn after a share had gone out —
+         and it became one silently the day the card became permanent in the short sheet. The
+         same drift will happen again the moment anything is added above the title, so the
+         invariant is stated where it can be checked: this sheet has no kicker. .pwKick itself
+         stays legitimate on the paywall and the preview overlay, where it is the only place
+         the terms are stated at all. */
+      const sheetAt = html.indexOf('<div id="shareSheet">');
+      const sheetEnd = html.indexOf('<div id="confirmSheet">', sheetAt);
+      const sheetHtml = sheetAt >= 0 && sheetEnd > sheetAt ? html.slice(sheetAt, sheetEnd) : '';
+      !/class="pwKick"/.test(sheetHtml)
+        ? ok("the round's terms are stated once, on the card that sends them")
+        : bad('the share sheet has a .pwKick again — it prints the same seconds and taps the '
+            + 'preview card already carries on its chips, twice in one glance');
     }
   }
 
