@@ -474,6 +474,30 @@ console.log('\nTHE CARD OPENS THE PREVIEW');
       : bad(`${left} confetti canvas(es) still in the DOM — at z-index 95 that is an invisible `
           + 'sheet over every control on the screen');
   }
+
+  /* REDUCED MOTION IS A REAL PATH, NOT A SWITCH THAT TURNS THE FEATURE OFF. It used to return
+     early and leave those users with a headline and nothing else. Emulated for real here —
+     asserting on the CSS text would prove nothing about what the branch does. */
+  console.log('\n  · and again with Reduce Motion on');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => !!window.__t);
+  await page.evaluate(() => window.__t.present());
+  const rmOpen = await page.evaluate(() => window.__t.preview());
+  if (!rmOpen) { bad('the preview does not open under Reduce Motion'); }
+  else {
+    const rm = await page.evaluate(() => window.__t.win());
+    rm && rm.found && rm.confetti === 1
+      ? ok('it still celebrates — green ring and a still bloom, no flying particles')
+      : bad(`Reduce Motion gets found=${rm && rm.found}, layers=${rm && rm.confetti} — the `
+          + 'setting asks for less movement, not for no feedback');
+    await page.waitForTimeout(1400);
+    const rmLeft = await page.evaluate(() => window.__t.litter());
+    rmLeft === 0
+      ? ok('and the bloom cleans up too')
+      : bad(`${rmLeft} bloom(s) left at z-index 95 — an invisible sheet over every control`);
+  }
+  await page.emulateMedia({ reducedMotion: null });
 }
 
 /* THE PAYWALL'S PROMISES, RENDERED. check.mjs proves no number is TYPED into the copy; this
