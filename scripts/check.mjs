@@ -228,7 +228,37 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     bad(`#shareSheet must not dim or blur the reveal in any state: ${baseCss[0]}`);
   } else if (!/pointer-events:none/.test(baseCss[0])) {
     bad('#shareSheet must not take pointer events on the container — the reveal handle is behind it');
-  } else ok('the sheet never darkens the reveal, and never blocks it');
+  } else ok('the sheet never darkens the reveal');
+
+  /* POINTER EVENTS ARE NOW PER-STATE, AND THE BASE RULE ALONE NO LONGER SETTLES IT. The check
+     above used to be the whole story and its own comment explains why that was right: assert
+     the base, because an override on .show would slip past a check aimed at .peek. Then .show
+     got exactly such an override — deliberately, so that a tap outside the long sheet can
+     collapse it, which is what a modal owes you and which had never worked because the handler
+     was unreachable. The base check passed while the thing it was protecting had changed.
+     So the invariant is split, and both halves are asserted where they are true:
+       · SHORT must stay transparent to touch. It overlays a live reveal whose wipe handle sits
+         directly behind it; swallowing events there breaks the screen the sheet exists to sell.
+       · LONG must take them, or tap-outside-to-dismiss is dead code that reads as a feature.
+     And neither state may reintroduce a scrim, which is the part that was never negotiable. */
+  {
+    const rule = (sel) => (html.match(new RegExp(sel.replace(/[.#]/g, '\\$&') + '\\{[^}]*\\}')) || [])[0] || '';
+    const peekCss = rule('#shareSheet.peek');
+    const showCss = rule('#shareSheet.show');
+    /pointer-events\s*:\s*auto/.test(peekCss)
+      ? bad('#shareSheet.peek takes pointer events — the short sheet sits over a live reveal and '
+          + 'the wipe handle behind it stops responding')
+      : ok('the short state stays transparent to touch');
+    /pointer-events\s*:\s*auto/.test(showCss)
+      ? ok('the long state takes the backdrop, so a tap outside collapses it')
+      : bad('#shareSheet.show does not take pointer events — the container is pointer-events:none, '
+          + 'so shareSheetEl.onclick can never fire and tap-outside-to-dismiss is dead code');
+    [['peek', peekCss], ['show', showCss]].forEach(([n, css]) => {
+      if (/backdrop-filter\s*:\s*(?!none)/.test(css) || /background\s*:\s*(?!transparent)/.test(css)) {
+        bad(`#shareSheet.${n} puts a scrim back over the reveal: ${css}`);
+      }
+    });
+  }
 
   /^[\s\S]*$/.test(html) && /setTimeout\(peekShareSheet/.test(html)
     ? ok('the reveal schedules the peek')

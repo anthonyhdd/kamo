@@ -47,6 +47,12 @@ const html = real.slice(0, at)
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
   + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
+  + 'grab(){document.getElementById("ssGrab").click();return this.snap();},'
+  + 'backdrop(){shareSheetEl.click();return this.snap();},'
+  + 'snap(){const c=shareSheetEl.querySelector(".ssCard");return{state:ssState,'
+  + 'cls:shareSheetEl.className,h:c.getBoundingClientRect().height,inline:c.style.height,'
+  + 'resizing:shareSheetEl.classList.contains("ssResizing"),'
+  + 'pe:getComputedStyle(shareSheetEl).pointerEvents};},'
   + 'thumb(w,h){board.width=w;board.height=h;'
   + 'const x=board.getContext("2d");x.fillStyle="#ff00ff";x.fillRect(0,0,w,h);'
   + 'chPrevRender();'
@@ -138,7 +144,14 @@ const seen = await page.evaluate(() => {
     more: box('#shareSheet .ssBtn.ssMore'),
     ctaColor: (() => {
       const s = getComputedStyle(document.querySelector('#ssInvite'));
-      return { bg: s.backgroundColor, fg: s.color };
+      const r = getComputedStyle(document.querySelector('#ssInvite'), '::before');
+      /* The shimmer lives on the ::before, and getAnimations() reports pseudo-element
+         animations with `pseudoElement` set — the only way to see it from the outside. */
+      const shimmer = (document.getAnimations ? document.getAnimations() : [])
+        .filter((a) => a.effect && a.effect.target === document.querySelector('#ssInvite')
+          && a.effect.pseudoElement === '::before')
+        .map((a) => ({ name: a.animationName || 'anim', iter: a.effect.getTiming().iterations }));
+      return { bg: s.backgroundColor, fg: s.color, shimmer, ring: r.padding, ringBg: r.backgroundImage };
     })(),
   };
 });
@@ -219,6 +232,22 @@ console.log('\nTHE PRIMARY LOOKS PRIMARY');
     ? ok(`the CTA is a white slab (text ${seen.ctaColor.fg})`)
     : bad(`the CTA background is ${seen.ctaColor.bg} — it is tinted again, and it sits above a `
         + 'full-brand Instagram gradient that will out-shout it');
+  /* THE RING MUST STILL MOVE. Making the fill opaque did not delete this animation, it hid it:
+     the gradient used to show through a 14%-alpha face, and afterwards only a 1px rim was left
+     of it. Nothing in the CSS broke, so nothing failed — it was reported by eye. Checked here
+     because "the animation is gone" is not a thing a diff can show. */
+  const sh = seen.ctaColor.shimmer || [];
+  sh.some((a) => a.iter === Infinity)
+    ? ok(`the border still shimmers (${sh.map((a) => a.name).join(', ')}, infinite)`)
+    : bad('no infinite animation on #ssInvite::before — the travelling border is dead');
+  /* And it has to be thick enough to see. At 1px, against a dark card, the gradient's troughs
+     are indistinguishable from no border at all for most of the 3.4s cycle. */
+  parseFloat(seen.ctaColor.ring) >= 2
+    ? ok(`the ring is ${seen.ctaColor.ring} wide`)
+    : bad(`the ring is only ${seen.ctaColor.ring} — too thin for the motion to register on a phone`);
+  /rgba?\(/.test(seen.ctaColor.ringBg || '') && /255,\s*255,\s*255/.test(seen.ctaColor.ringBg || '')
+    ? ok('it uses the high-contrast ring (white peak), the one meant for edges against a dark ground')
+    : bad(`the ring gradient is ${seen.ctaColor.ringBg} — --ring's 20% troughs vanish against the card`);
 }
 
 console.log('\nTHE SHORT SHEET IS STILL SHORT');
@@ -279,6 +308,74 @@ if (!th) {
   th.iw >= th.bw * 2
     ? ok(`drawn at ${(th.iw / th.bw).toFixed(1)}x device pixels, not 1x`)
     : bad(`the canvas is only ${(th.iw / th.bw).toFixed(1)}x the box in device pixels — it will look soft`);
+}
+
+/* THE HANDLE TOGGLES, AND THE RESIZE IS A TRANSITION.
+   Both halves shipped broken in a way no diff shows: the handle only ever stepped UP, so once
+   the sheet was open it was an affordance that did nothing; and the tap-outside handler had
+   never fired in its life, because #shareSheet is pointer-events:none and a container that
+   cannot be hit cannot report a tap on itself.
+   Driven through the real click handlers rather than by calling stepSheet, so the wiring is
+   under test and not just the function. */
+console.log('\nTHE SHEET RESIZES, IN BOTH DIRECTIONS');
+{
+  const settle = () => page.waitForTimeout(520);
+  await page.evaluate(() => window.__t.present());
+  const short = await page.evaluate(() => window.__t.snap());
+
+  const up = await page.evaluate(() => window.__t.grab());
+  up.state === 'open'
+    ? ok('a tap on the handle opens it')
+    : bad(`a tap on the handle left it at "${up.state}"`);
+  up.resizing && up.inline
+    ? ok(`the growth is animated (playing to ${up.inline})`)
+    : bad('the card jumped straight to the long state — no height transition was set up');
+
+  await settle();
+  const open = await page.evaluate(() => window.__t.snap());
+  /* THE TARGET HAS TO BE THE HEIGHT IT ACTUALLY ENDS AT. It was not: openShareSheet() resized
+     first and un-hid the upsell row afterwards, so the transition played to a height 38px short
+     and the card snapped the rest of the way when the inline height was released. Silent — the
+     animation ran, it just ended in the wrong place. */
+  Math.abs(parseFloat(up.inline) - open.h) < 2
+    ? ok(`and it plays to the height it settles at (${Math.round(open.h)}px)`)
+    : bad(`it animates to ${up.inline} but settles at ${Math.round(open.h)}px — the content is `
+        + 'still changing after the target was measured, so the card jumps at the end');
+  open.inline === '' && !open.resizing
+    ? ok('it lets go of the height when the transition ends')
+    : bad(`the card is still pinned at ${JSON.stringify(open.inline)} (resizing=${open.resizing}) — `
+        + 'it is stuck at a size the stylesheet no longer agrees with');
+  open.h > short.h
+    ? ok(`long is taller than short (${Math.round(short.h)}px → ${Math.round(open.h)}px)`)
+    : bad(`the long state is ${Math.round(open.h)}px against a short state of ${Math.round(short.h)}px`);
+  open.pe === 'auto'
+    ? ok('the long state takes the backdrop, so a tap outside can reach it')
+    : bad(`#shareSheet is pointer-events:${open.pe} while open — the tap-outside handler cannot fire`);
+
+  /* Going DOWN, the long content must still be on screen while the box closes over it.
+     Committing the short state up front animates an empty pocket instead. */
+  const down = await page.evaluate(() => window.__t.grab());
+  down.state === 'peek'
+    ? ok('a tap on the handle closes it again — the same control, both directions')
+    : bad(`a tap on the open sheet left it at "${down.state}" — the handle is inert once open`);
+  /show/.test(down.cls) && down.resizing
+    ? ok('the long content is held in place while the box closes over it')
+    : bad(`the sheet is already "${down.cls}" at the start of the close — the destinations blink `
+        + 'out and what animates is an empty green pocket');
+
+  await settle();
+  const back = await page.evaluate(() => window.__t.snap());
+  /peek/.test(back.cls) && back.inline === '' && !back.resizing
+    ? ok('and it commits to the short state once closed')
+    : bad(`after the close the sheet is "${back.cls}" with height ${JSON.stringify(back.inline)}`);
+
+  await page.evaluate(() => window.__t.grab());
+  await settle();
+  const out = await page.evaluate(() => window.__t.backdrop());
+  out.state === 'peek'
+    ? ok('a tap outside the card puts the long sheet back to short')
+    : bad(`a tap outside left it at "${out.state}" — dismissShareSheet is still unreachable`);
+  await settle();
 }
 
 /* THE PAYWALL'S PROMISES, RENDERED. check.mjs proves no number is TYPED into the copy; this
