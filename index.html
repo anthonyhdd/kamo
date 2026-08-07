@@ -729,8 +729,29 @@
   .khAt{font-family:var(--display);font-size:22px;font-weight:900;color:rgba(95,230,164,.75);line-height:1;}
   #khHandle{flex:0 1 auto;min-width:0;width:100%;max-width:220px;background:none;border:none;outline:none;
     font-family:var(--display);font-size:22px;font-weight:900;color:#fff;line-height:1;padding:0;
-    -webkit-user-select:text;user-select:text;}
+    -webkit-user-select:text;user-select:text;caret-color:var(--mint);}
   #khHandle::placeholder{color:rgba(255,255,255,.28);font-weight:800;}
+  /* THE SAME SHIMMER THE HEADLINES WEAR, on the name itself — .kpTitle and .pwTitle already
+     run this exact gradient on this exact clock, and the handle is the one other thing on
+     this card that is the user's own.
+     Behind @supports, and this is not decoration: the trick works by painting the text
+     transparent and letting a background show through it. In a browser that ignores
+     background-clip the transparent fill still applies and the field goes INVISIBLE — you
+     would be typing your name into nothing. The guard means such a browser keeps plain white.
+     caret-color is set above, separately, because it inherits from `color` — which this rule
+     makes transparent. Without it the caret disappears too, in every browser, including the
+     ones where the effect works.
+     ::placeholder gets its fill back for the same reason: -webkit-text-fill-color cascades
+     into it, so "yourname" would vanish and the empty field would look broken rather than
+     empty. */
+  @supports ((-webkit-background-clip:text) or (background-clip:text)){
+    #khHandle,.khAt{
+      background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
+      background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
+      -webkit-text-fill-color:transparent;color:transparent;
+      animation:pwShimmer 3.4s linear infinite;}
+    #khHandle::placeholder{-webkit-text-fill-color:rgba(255,255,255,.28);color:rgba(255,255,255,.28);}
+  }
   /* Its own rule rather than borrowing .ssBtn.ssPlus from the share sheet: that class is
      scoped to a flex ROW there and carries the row's height and flex share, so reusing it
      here rendered an unstyled browser button. Same colours — the mint tint, the mint border,
@@ -3586,7 +3607,11 @@ function openKamoHome(){
      explained the feature twice ("pick a name" + "so people know who to beat") and the set
      version restated the headline. This is true either way, so there is no branch to keep in
      sync and nothing to read twice. */
-  if(sub) sub.textContent="The name on every challenge you send.";
+  /* AN ARGUMENT, NOT A DESCRIPTION. "The name on every challenge you send" told the user what
+     the field below them was, which they could already see. This says why it is worth
+     filling in — and it is the actual reason the feature exists: a dare from nobody is
+     easier to close than a dare from a person. */
+  if(sub) sub.textContent="A dare from nobody is easy to ignore.";
   if(inp) inp.value=h;
   /* The field and its "Change name" stand-in are mutually exclusive, and the state is
      recomputed on every open rather than remembered — someone who clears their name and
@@ -5999,15 +6024,28 @@ async function chUpload(){
     const up=await fetch(CH_URL+"/storage/v1/object/hides/"+name,{method:"POST",
       headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
     if(!up.ok) throw new Error("upload "+up.status);
-    /* The 8-argument overload only when the hider actually chose something. Sending nulls
-       would work identically, but calling the legacy signature keeps every automatic hide on
-       the exact path that has been running in production. */
-    const cs=chSettings();
-    chId=await chRpc("create_hide",(cs.limit||cs.taps)
-      ? {p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,p_secs:roundSeconds(),
-         p_coverage:Math.round(currentScore||0),p_limit_s:cs.limit,p_max_taps:cs.taps}
-      : {p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,p_secs:roundSeconds(),
-         p_coverage:Math.round(currentScore||0)});
+    /* WHICH OVERLOAD, AND WHY THERE ARE THREE. create_hide exists at 6, 8 and 9 arguments and
+       PostgREST resolves by the exact set of keys sent. The narrowest one that carries what
+       this hide actually has is used, so a hide with no settings and no signature still takes
+       the byte-for-byte path that has been running in production since launch, and only a
+       signed hide reaches the newest function.
+       The 9-argument form is also the only one that can be MISSING: the database migration
+       and this file do not deploy together, so if the page ships first every signed upload
+       would 404 and publish nothing. Hence the fallback below rather than a bare await. */
+    const cs=chSettings(), who=getHandle();
+    const base={p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,p_secs:roundSeconds(),
+                p_coverage:Math.round(currentScore||0)};
+    const withSettings=(cs.limit||cs.taps) ? {...base,p_limit_s:cs.limit,p_max_taps:cs.taps} : base;
+    if(who){
+      try{
+        chId=await chRpc("create_hide",{...base,p_limit_s:cs.limit||null,p_max_taps:cs.taps||null,p_name:who});
+      }catch(_){
+        /* A hide that goes out unsigned is a smaller loss than a hide that never goes out. */
+        chId=await chRpc("create_hide",withSettings);
+      }
+    } else {
+      chId=await chRpc("create_hide",withSettings);
+    }
     chRemember(chId);
     track("hide_published",{});
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
@@ -6301,8 +6339,15 @@ function chSeek(){
     $$("chFrame").appendChild(img);
 
     /* ONE INSTRUCTION, NOT A BRAG. "Someone vanished in 1s" told the seeker about the
-       HIDER's round — a number they cannot act on, on the screen where they have to act. */
-    $$("chHead").textContent="Find the body";
+       HIDER's round — a number they cannot act on, on the screen where they have to act.
+       A NAME IS NOT A BRAG, THOUGH — it is who you are playing against, and it is the whole
+       reason the handle exists. "Find @tony" is a person to beat; "Find the body" is a
+       chore. Unsigned hides keep the original line exactly, and most will: the handle is
+       optional and every hide published before today has none.
+       textContent, never innerHTML — the value comes off another user's device and lands in
+       front of a stranger. The page narrows it on the way in and the database narrows it
+       again on insert, and this is the third place it cannot become markup. */
+    $$("chHead").textContent = h.name ? "Find @"+h.name : "Find the body";
     /* THE CLOCK IS DERIVED FROM THE HIDER'S OWN ROUND, which is what finally makes their
        time mean something beyond a brag: a hide that took 14 seconds buys the seeker 28.
        Bounded 20-45 so a one-second test hide still gives a playable round and a slow one
