@@ -4003,6 +4003,43 @@ let appLink="https://apps.apple.com/app/id6789639784";
    their copy. chLink() is "" unless CH_MAKE published this round, so production keeps
    sending the App Store URL exactly as before. */
 function shareUrl(){ return chLink()||appLink; }
+/* THE ONE LINK IN THIS FILE THAT LEADS TO AN INSTALL, AND IT WAS UNTRACKED.
+   Every other App Store link in KAMO is `appLink`, which the native wrapper overwrites at
+   launch with the fully-attributed form (window.KAMO.setAppLink → kamo-app/links.js). The
+   seeker's "Play KAMO" button is the exception, and structurally so: the seeker screen only
+   ever runs in a stranger's browser, on kamo.bliss-coach.com, where there IS no wrapper. So
+   setAppLink never fires there and the button has always pointed at the bare listing.
+   The consequence is that the referral loop is invisible. 43 people tapped that button
+   yesterday; every install it produced landed in AppsFlyer as organic, indistinguishable
+   from someone who found the app on their own. The loop was not weak, it was unmeasured.
+
+   ONELINK, NOT AN APPLE CAMPAIGN LINK. The obvious fix is `?pt=…&ct=…&mt=8`, and it is the
+   wrong one: PROVIDER_TOKEN is still empty in kamo-app/links.js, Apple discards a `ct` with
+   no `pt` in silence, and the result would be a param that looks like measurement and
+   measures nothing. The OneLink template exists and was verified against the AppsFlyer API
+   (dc9X · kamo.onelink.me · account bliss-coach · iOS id6789639784), so it works today and
+   it survives the install, which `ct` does not.
+
+   `c` IS DELIBERATELY NOT `in_app_share`. That value belongs to oneLinkFor() in the wrapper,
+   i.e. a member sending a link from inside the app. This is a stranger who just played a
+   hide in a browser — a different population with a different intent, and merging them
+   would make both unreadable in AppsFlyer.
+
+   NO af_referrer_customer_id. The native path sends the sharer's install code there. The
+   browser does not know it; it knows the HIDE, so the hide id goes in deep_link_sub1 and
+   the customer field is left off rather than filled with something that is not a customer
+   id. A wrong join key is worse than a missing one — it would silently attribute installs
+   to a user that does not exist.
+
+   Falls back to `appLink` if the template is ever blanked, so this can be switched off by
+   emptying one constant without leaving a dead redirect in the viral path. */
+const ONELINK_URL="https://kamo.onelink.me/dc9X";
+function refLink(campaign,sub1){
+  if(!ONELINK_URL) return appLink;
+  const q=["pid=user_referral","c="+encodeURIComponent(campaign||"web"),"deep_link_value=referral"];
+  if(sub1) q.push("deep_link_sub1="+encodeURIComponent(sub1));
+  return ONELINK_URL+(ONELINK_URL.indexOf("?")<0?"?":"&")+q.join("&");
+}
 /* THE PUBLIC HOST IS HARDCODED, and location.origin is not used, on purpose. The app loads
    anthonyhdd.github.io, so a link built from where the page happens to be would keep sending
    people to a github.io URL no matter what domain the site answers on — the custom domain
@@ -6456,7 +6493,13 @@ function chSeek(){
     const fr=$$("chFrame"); if(fr) fr.style.flex="0 1 auto";
     $$("chFoot").innerHTML='<div class="chCard"><button class="chCta" id="chGo">'+label+'</button>'
       +'<button class="chR" id="chRep">Report this photo</button></div>';
-    $$("chGo").onclick=()=>{ track("seek_cta_tapped",{}); location.href=appLink; };
+    /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
+       listing silently, and a silent degradation in the ONE measured link is exactly the
+       failure this change exists to end. Split seek_cta_tapped by tier and a template that
+       stopped resolving shows up as a column, not as a slow drift in "organic". */
+    $$("chGo").onclick=()=>{ const u=refLink("seek_cta",CH_SEEK);
+      track("seek_cta_tapped",{tier:u===appLink?"plain":"onelink"});
+      location.href=u; };
     $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{}); track("seek_reported",{});
       $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
   }
