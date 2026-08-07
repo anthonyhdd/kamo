@@ -152,6 +152,38 @@ console.log('\nTHE HANDLE IS KEPT, AND KEPT CLEAN');
     : bad(`the field shows ${JSON.stringify(clean.value)} but ${JSON.stringify(clean.stored)} is stored`);
 }
 
+/* THE CARD KEEPS UP WHILE YOU TYPE. It did not: khShowField() and the headline were computed
+   only in openKamoHome(), so someone who typed a name sat looking at "Sign your hides" above a
+   field containing the name they had just signed, and only saw it take effect the next time
+   they opened the card. */
+console.log('\nIT SWITCHES OVER AS SOON AS YOU ARE DONE');
+{
+  await page.evaluate(() => { window.__h.wipe(); window.__h.open(false); });
+  await page.click('#khHandle');
+  await page.type('#khHandle', 'nova');
+  const typing = await page.evaluate(() => window.__h.state());
+  typing.title === '@nova'
+    ? ok('the headline follows the keystrokes')
+    : bad(`the headline is still ${JSON.stringify(typing.title)} while the name is being typed`);
+  typing.field !== 'none'
+    ? ok('and the field stays put while there is a caret in it')
+    : bad('the field collapsed mid-keystroke — the caret has nowhere to be');
+
+  await page.evaluate(() => document.getElementById('khHandle').blur());
+  const done = await page.evaluate(() => window.__h.state());
+  done.field === 'none' && done.edit !== 'none'
+    ? ok('and stands down on blur, without reopening the card')
+    : bad(`after blur the field is ${done.field} and the edit button is ${done.edit}`);
+
+  /* Clearing it must NOT collapse to a button offering to change nothing. */
+  await page.evaluate(() => { document.getElementById('khEdit').click(); });
+  await page.evaluate(() => { const i = document.getElementById('khHandle'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); });
+  const cleared = await page.evaluate(() => window.__h.state());
+  cleared.field !== 'none' && cleared.title === 'Sign your hides'
+    ? ok('clearing it puts the field and the instruction back')
+    : bad(`after clearing, field=${cleared.field} title=${JSON.stringify(cleared.title)}`);
+}
+
 console.log('\nIT SURVIVES A RELAUNCH, AND IT LEADS SOMEWHERE');
 {
   await page.evaluate(() => { window.__h.wipe(); window.__h.open(false); });
@@ -197,7 +229,9 @@ console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
     ? ok(`it sums every hide and drops the expired one ("${many.scoreText.trim()}")`)
     : bad(`the aggregate is wrong: ${JSON.stringify(many.scoreText)}`);
 
-  await page.evaluate(() => window.__h.hides(['a'], { a: { n_attempts: 1, n_found: 0 } }));
+  /* NOT GATED ON THE HANDLE. The score is about hides you sent, and you can send hides
+     without ever naming yourself — most people will. */
+  await page.evaluate(() => { window.__h.wipe(); window.__h.hides(['a'], { a: { n_attempts: 1, n_found: 0 } }); });
   await page.evaluate(() => window.__h.open(false));
   await page.waitForTimeout(250);
   const none = await page.evaluate(() => window.__h.state());
