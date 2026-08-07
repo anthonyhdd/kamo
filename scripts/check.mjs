@@ -626,5 +626,26 @@ try {
   bad('THE PLAYER CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-seek-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · SEEKER TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the seeker screen names the sender (node scripts/test-seek-dom.mjs)');
+} catch (e) {
+  bad('THE SEEKER SCREEN IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
+/* The handle crosses a trust boundary: one user types it, another user's phone renders it.
+   It is narrowed in the page and again in create_hide, and this is the assertion that the
+   third layer never becomes markup. A single innerHTML here would undo both. */
+{
+  const seek = html.match(/\$\$\("chHead"\)\.textContent\s*=\s*h\.name\s*\?/);
+  seek
+    ? ok('the seeker headline names the sender, via textContent')
+    : bad('the seeker headline no longer branches on h.name through textContent — either the '
+        + 'signature is gone or it is being written as HTML, and the value comes off a stranger\'s device');
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);
