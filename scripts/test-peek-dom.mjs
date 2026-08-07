@@ -46,7 +46,16 @@ const html = real.slice(0, at)
   + 'copy(){return{generic:pwGenericSub(),'
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
-  + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};}};\n'
+  + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
+  + 'thumb(w,h){board.width=w;board.height=h;'
+  + 'const x=board.getContext("2d");x.fillStyle="#ff00ff";x.fillRect(0,0,w,h);'
+  + 'chPrevRender();'
+  + 'const c=document.querySelector("#chPrevShot canvas");if(!c)return null;'
+  /* clientWidth/Height, not the bounding rect: .chPrevShot carries a 1px rim by design, and a
+     border-box measurement would report the canvas as 2px short of a box it is in fact
+     filling — a permanently-red check that asks for the rim to be removed. */
+  + 'const s=document.getElementById("chPrevShot"),r=c.getBoundingClientRect();'
+  + 'return{iw:c.width,ih:c.height,rw:r.width,rh:r.height,bw:s.clientWidth,bh:s.clientHeight};}};\n'
   + real.slice(at);
 /* Everything OTHER than the page is served off disk with a real MIME type. The module does
    `import * as THREE from './vendor/three.module.js'`, and a server that answers every path
@@ -126,6 +135,11 @@ const seen = await page.evaluate(() => {
     title: box('#shareSheet .pwTitle'),
     tabs: box('#ssMode'),
     instagram: box('#shareSheet .ssBtn.ig'),
+    more: box('#shareSheet .ssBtn.ssMore'),
+    ctaColor: (() => {
+      const s = getComputedStyle(document.querySelector('#ssInvite'));
+      return { bg: s.backgroundColor, fg: s.color };
+    })(),
   };
 });
 
@@ -194,9 +208,39 @@ w > 300
   ? ok(`the CTA is full width (${Math.round(w)}px of a 390px viewport)`)
   : bad(`the CTA is only ${Math.round(w)}px wide — it is being laid out as a cell, not a button`);
 
+/* THE CTA HAS TO WIN THE CARD. It is white on a green card precisely because the button below
+   it is a full-saturation Instagram gradient; a tinted CTA lost that contest, and the sheet
+   exists to produce challenge sends. Asserted rather than eyeballed because a colour change is
+   one token and nothing else in the file would object to it. */
+console.log('\nTHE PRIMARY LOOKS PRIMARY');
+{
+  const bg = (seen.ctaColor.bg || '').replace(/\s/g, '');
+  bg === 'rgb(255,255,255)'
+    ? ok(`the CTA is a white slab (text ${seen.ctaColor.fg})`)
+    : bad(`the CTA background is ${seen.ctaColor.bg} — it is tinted again, and it sits above a `
+        + 'full-brand Instagram gradient that will out-shout it');
+}
+
 console.log('\nTHE SHORT SHEET IS STILL SHORT');
 seen.tabs && seen.tabs.display === 'none' ? ok('the Challenge / Before-After tabs are hidden') : bad('the tabs are showing — this is not the short state');
-seen.instagram && seen.instagram.display === 'none' ? ok('the destinations are hidden') : bad('Instagram is showing — this is the full sheet');
+/* Instagram is DELIBERATELY in the short state — 7 taps in 7 days told us the destinations were
+   unreachable, not unwanted. What must stay true is that it is second: below the CTA, never
+   above it. If that order ever flips, the loudest thing on the sheet becomes the share that
+   carries no link and recruits nobody. */
+seen.instagram && seen.instagram.display !== 'none' && seen.instagram.h > 0
+  ? ok(`Instagram is reachable without swiping (${Math.round(seen.instagram.h)}px tall)`)
+  : bad('Instagram is hidden in the short sheet again — it is then only reachable by a swipe '
+      + 'almost nobody performs, which is the state that produced 7 taps in a week');
+seen.instagram && seen.cta && seen.instagram.top >= seen.cta.bottom - 1
+  ? ok('it sits UNDER "Challenge a friend" — recruitment first, reach second')
+  : bad('Instagram is above the CTA — the share that carries no link is leading the sheet');
+/* Measured by HEIGHT, not by computed display. More lives inside .ssRow2, and the peek rule
+   hides the ROW — the button's own computed display stays `flex` while it occupies nothing.
+   Asking for display:none here would fail forever on a sheet that is behaving correctly. */
+seen.more && seen.more.h === 0
+  ? ok('More / Save are still behind the swipe')
+  : bad(`More is taking up ${seen.more && Math.round(seen.more.h)}px — the short sheet is turning `
+      + 'back into the full one');
 /* NO ASSERTION ON HOW FAR UP THE SCREEN IT REACHES. That is the invariant I care about most —
    the reveal has to stay visible behind the short sheet — and this harness cannot answer it
    honestly: there is no camera here, so the app frame never gets its real height and the sheet
@@ -205,6 +249,37 @@ seen.instagram && seen.instagram.display === 'none' ? ok('the destinations are h
    grabber, kicker, headline, card and CTA are displayed, and every destination is not. */
 ok(`short-state content: grabber + kicker + headline + card (${Math.round(seen.card.h)}px) `
   + `+ CTA (${Math.round(seen.cta.h)}px), nothing else`);
+
+/* THE THUMBNAIL FILLS ITS BOX. It did not, and it shipped: `board` is the whole screen
+   (~9:19.5) and .chPrevShot is 46x60 (~3:4), so a fit-by-longest-side put a 28px-wide frame in
+   a 46px box, flush left, with the box's near-black background filling the rest. On a phone
+   that does not read as a small preview, it reads as an image that failed to load — which is
+   exactly how it was reported. A real phone aspect is used rather than the 300x150 default
+   canvas, because the default is WIDER than the box and would have passed the broken code. */
+console.log('\nTHE PREVIEW THUMBNAIL FILLS ITS BOX');
+const th = await page.evaluate(() => window.__t.thumb(1080, 2337));
+if (!th) {
+  bad('chPrevRender() drew no canvas into #chPrevShot at all');
+} else {
+  const near = (a, b) => Math.abs(a - b) <= 0.75;
+  near(th.rw, th.bw) && near(th.rh, th.bh)
+    ? ok(`the frame covers the whole ${Math.round(th.bw)}x${Math.round(th.bh)} box`)
+    : bad(`the frame is ${th.rw.toFixed(1)}x${th.rh.toFixed(1)} inside a ${th.bw.toFixed(1)}x${th.bh.toFixed(1)} box `
+        + `— ${Math.round(th.bw - th.rw)}px of dead background shows down the side, which reads as a broken image`);
+  /* The backing store must be the BOX's shape, not the board's. If it still matches 1080:2337
+     the crop never happened and the fill above is only CSS stretching a letterbox — same black
+     band, now smeared. */
+  const boxAR = th.bw / th.bh, imgAR = th.iw / th.ih;
+  Math.abs(imgAR - boxAR) < 0.03
+    ? ok(`it is cropped to the box (canvas ${th.iw}x${th.ih}, ratio ${imgAR.toFixed(2)} vs box ${boxAR.toFixed(2)})`)
+    : bad(`the canvas is ${th.iw}x${th.ih} (ratio ${imgAR.toFixed(2)}) but the box is ${boxAR.toFixed(2)} `
+        + '— the board is being fitted, not cover-cropped');
+  /* And it has to be a retina backing store. 46x60 CSS pixels at 1x is visibly mushy next to
+     everything else on this card, and "soft" is the failure this size of thumbnail dies of. */
+  th.iw >= th.bw * 2
+    ? ok(`drawn at ${(th.iw / th.bw).toFixed(1)}x device pixels, not 1x`)
+    : bad(`the canvas is only ${(th.iw / th.bw).toFixed(1)}x the box in device pixels — it will look soft`);
+}
 
 /* THE PAYWALL'S PROMISES, RENDERED. check.mjs proves no number is TYPED into the copy; this
    proves the templates actually resolve to the values the app runs on. A template that
