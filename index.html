@@ -871,7 +871,15 @@
   #shareSheet{position:absolute;inset:0;z-index:58;display:none;align-items:flex-end;justify-content:center;
     background:transparent;backdrop-filter:none;pointer-events:none;}
   #shareSheet .ssCard{pointer-events:auto;}
-  #shareSheet.show{display:flex;}
+  /* THE LONG STATE TAKES THE BACKDROP BACK. shareSheetEl.onclick already collapses the sheet on
+     a tap outside the card — and it had never once fired, because the container above is
+     pointer-events:none in every state and a container that cannot be hit cannot report a tap
+     on itself. Dead code that looked like a working feature.
+     Restored only under .show, and that distinction is the whole point. Short is deliberately
+     NOT a modal: it sits over the reveal without claiming it, so the wipe handle behind stays
+     draggable — taking the events there would break the screen the sheet is trying to sell.
+     Long IS a modal, it covers the reveal, and outside-to-dismiss is what a modal owes you. */
+  #shareSheet.show{display:flex;pointer-events:auto;}
   /* PEEK — THE SHEET COMES TO THEM, WITHOUT TAKING THE REVEAL AWAY.
      186 users reached the reveal today and 26 opened this sheet: 86% never tapped Share.
      They are not fleeing the screen either — the median gap between the reveal and a share
@@ -911,6 +919,21 @@
      watermark, nothing clickable. Reach is still the cheaper half of the loop right now, which
      is the whole argument for putting it where it can be seen. */
   #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwKick):not(.pwTitle):not(.ssInvite):not(.chPrev):not(.ig){display:none!important;}
+  /* RESIZING BETWEEN THE TWO STATES IS A TRANSITION, NOT A CUT. Short and long differ by a few
+     hundred pixels and the card used to jump between them in one frame, which on a bottom sheet
+     reads as a glitch rather than as a change of size.
+     The whole effect is one transitioned height plus overflow:hidden, and that is deliberate —
+     the content is not animated at all. The card is anchored to the bottom of the screen and
+     lays its children out from the top, so growing moves the headline up while the box uncovers
+     the destinations below, and shrinking closes back over them. That is exactly how a native
+     detent behaves, and it needs no per-element fade to sell it. setSheetSize() does the other
+     half: on the way down it holds the long content in place until the box has finished closing
+     over it, so nothing blinks out and leaves an empty green pocket behind.
+     Only applied WHILE resizing — a permanent transition on .ssCard would also animate the
+     height change that happens when the gear sheet edits the chips, and a permanent
+     overflow:hidden would clip anything that ever needs to escape the card. */
+  #shareSheet.ssResizing .ssCard{overflow:hidden;transition:height .3s cubic-bezier(.32,.72,0,1);}
+  @media (prefers-reduced-motion:reduce){ #shareSheet.ssResizing .ssCard{transition:none;} }
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
@@ -1103,8 +1126,19 @@
      without needing a colour to shout with. The shimmering --ring rim stays: it is what marks
      this button as the primary and it reads better against white than against the tint. */
   .ssBtn.ssInvite{position:relative;z-index:0;background:#fff;color:#04120c;border-color:transparent;background-clip:padding-box;}
-  .ssBtn.ssInvite::before{content:"";position:absolute;inset:-1px;border-radius:17px;z-index:-1;pointer-events:none;
-    padding:1px;background:var(--ring);background-size:260% 100%;
+  /* THICKER AND BRIGHTER SINCE THE SLAB WENT WHITE, because turning the fill opaque quietly
+     took most of this animation away. The old fill was mint at 14% alpha, so the travelling
+     gradient behind (z-index:-1) showed faintly through the WHOLE face of the button — the
+     motion you actually noticed was across the slab, not around it. An opaque #fff hides all
+     of that and leaves only the rim, and the rim was 1px of --ring, whose troughs sit at 20%
+     alpha and disappear against the dark card for most of the cycle.
+     So: --ring-hi (troughs at 34%, peak pure white) instead of --ring — this edge is now drawn
+     between a white slab and a dark green card, which is the high-contrast case that token
+     exists for. And 3px of padding against inset:-2px, so the band spans -2px to +1px: two
+     pixels outside the border box plus the 1px transparent border, which makes the ring TOUCH
+     the white instead of being separated from it by a hairline of card. */
+  .ssBtn.ssInvite::before{content:"";position:absolute;inset:-2px;border-radius:18px;z-index:-1;pointer-events:none;
+    padding:3px;background:var(--ring-hi);background-size:260% 100%;
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
     mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;
     animation:pwShimmer 3.4s linear infinite;}
@@ -1452,7 +1486,7 @@
     <div class="chPrev" id="chPrev">
       <button class="chPrevShot" id="chPrevShot" aria-label="Preview what they receive"></button>
       <div class="chPrevTxt">
-        <b>They get this</b>
+        <b>My challenge</b>
         <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span></div>
       </div>
       <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
@@ -4014,8 +4048,13 @@ function openShareSheet(via){
      invite URL, which is exactly the previous behaviour. */
   /* Reached either from the Share CTA (hidden → open, skipping peek) or from expandShareSheet.
      Both land here, so the state is settled here rather than in two callers. */
-  shareSheetEl.classList.remove("peek"); ssState="open";
-  chUpload(); shareSheetEl.classList.add("show"); haptic(10);
+  /* ssState FIRST, THE SIZE LAST. syncShareMode() branches on ssState, so it has to be true
+     before any of the fill functions below run — but the resize has to happen AFTER them, or it
+     measures a target height the content is about to invalidate. It did exactly that: the
+     "Remove the KAMO mark" row is un-hidden 8 lines down, so the card animated to a height 38px
+     short of where it actually ends up and then snapped the rest of the way on settle. */
+  ssState="open";
+  chUpload();
   /* Re-evaluated every open, not once at load: setPro() can flip mid-session (purchase,
      restore, or a revoked entitlement) and a stale pitch shown to someone who just paid is
      the fastest way to look broken. */
@@ -4043,6 +4082,10 @@ function openShareSheet(via){
      run on EVERY path into the open sheet, not just the one that used to go through the peek
      first. The Share-CTA path (hidden → open) never ran it at all. */
   updateInviteBtn();
+  /* LAST, so it measures the card that is actually about to be on screen. Everything above
+     changes the long state's height — the upsell row, the kicker, the preview card, the CTA —
+     and setSheetSize() plays the current height into the target one by measuring both. */
+  setSheetSize("open"); haptic(10);
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssState="hidden"; }
 
@@ -4054,8 +4097,7 @@ function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssStat
    screen (exitFinished) is what actually closes it. */
 function sheetToFloor(){
   if(!finished){ closeShareSheet(); return; }   // not on the reveal → nothing to keep open
-  shareSheetEl.classList.remove("show");
-  shareSheetEl.classList.add("peek");
+  setSheetSize("peek");
   ssState="peek";
 }
 
@@ -4070,6 +4112,60 @@ function sheetToFloor(){
    Short (peek: the round, the headline, Challenge a friend) or long (the full sheet). The
    sheet is one of those two the whole time it is on the reveal, and never anything else. */
 const SHEET_STEPS=["peek","open"];
+/* THE ONE PLACE THE SHEET CHANGES SIZE. Three callers used to swap the classes themselves —
+ * openShareSheet, sheetToFloor and stepSheet — so animating the change once means routing all
+ * three through here rather than transitioning in three places and forgetting the fourth.
+ *
+ * The shape of it: measure, apply, measure, then play the first height into the second. The
+ * apply has to happen before the second measurement because the target height is whatever the
+ * stylesheet decides it is — hardcoding it would go stale the first time a button is added.
+ *
+ * GOING DOWN, THE LONG CONTENT IS PUT BACK for the duration of the close. Committing the short
+ * state up front is the obvious version and it looks wrong: the destinations vanish in one
+ * frame and what animates is an empty green pocket collapsing. Holding the previous state and
+ * letting overflow:hidden clip the extra content away as the box closes is the whole reason
+ * this reads as a sheet resizing rather than as two different sheets.
+ *
+ * IT MUST ALWAYS LET GO OF THE HEIGHT. An inline height left behind would pin the card at a
+ * size the stylesheet no longer agrees with — and this is the reveal's only route to a share,
+ * so a card stuck at the wrong height is a dead end, not a cosmetic bug. Hence both a
+ * transitionend and a timer: transitionend does not fire if the transition is interrupted or
+ * never starts, and the timer is the only thing that catches that. */
+let sheetResizeT=null;
+function setSheetSize(next){
+  const cls = next==="open" ? "show" : "peek";
+  const apply=()=>{ shareSheetEl.classList.remove("show","peek"); shareSheetEl.classList.add(cls); };
+  const card=shareSheetEl.querySelector(".ssCard");
+  const was = shareSheetEl.classList.contains("show") ? "show"
+            : shareSheetEl.classList.contains("peek") ? "peek" : null;
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /* `was` is null when the sheet is not on screen at all — the Share CTA's hidden → open path.
+     There is no height to animate FROM there; the card's own entrance (pwUp) is the animation. */
+  if(!card || !was || reduce){ apply(); return; }
+  clearTimeout(sheetResizeT);
+  card.style.height="";                       // never measure a height this function set
+  shareSheetEl.classList.remove("ssResizing");
+  const from=card.getBoundingClientRect().height;
+  apply();
+  const to=card.getBoundingClientRect().height;
+  if(Math.abs(to-from)<2){ return; }           // same size — nothing worth transitioning
+  if(to<from) { shareSheetEl.classList.remove("show","peek"); shareSheetEl.classList.add(was); }
+  card.style.height=from+"px";
+  shareSheetEl.classList.add("ssResizing");
+  void card.offsetHeight;                      // commit `from` as a style, or the browser only ever sees `to`
+  card.style.height=to+"px";
+  const settle=()=>{
+    clearTimeout(sheetResizeT); sheetResizeT=null;
+    card.style.height="";
+    shareSheetEl.classList.remove("ssResizing");
+    if(to<from) apply();                       // the short state, now that the box has closed over the rest
+  };
+  sheetResizeT=setTimeout(settle,460);
+  card.addEventListener("transitionend",function te(e){
+    if(e.propertyName!=="height"||e.target!==card) return;
+    card.removeEventListener("transitionend",te); settle();
+  });
+}
 function stepSheet(dir){
   const i=SHEET_STEPS.indexOf(ssState);
   if(i<0) return;                                   // hidden: not on the reveal, nothing to step
@@ -4080,8 +4176,7 @@ function stepSheet(dir){
      still reported, but the sheet stays on screen — the number and the affordance are two
      different questions. */
   if(ssState==="open") track("share_dismissed",{via:"swipe",mode:shareMode,score:Math.round(currentScore||0)});
-  shareSheetEl.classList.remove("show","peek");
-  shareSheetEl.classList.add(next);
+  setSheetSize(next);
   ssState=next;
   haptic(8);
 }
@@ -4130,7 +4225,11 @@ function peekShareSheet(){
   haptic(8);
 }
 function expandShareSheet(){
-  shareSheetEl.classList.remove("peek");
+  /* THE PEEK CLASS IS NOT DROPPED HERE. It used to be, one line before openShareSheet(), and
+     that made the growth un-animatable: setSheetSize() measures the state it is leaving, and a
+     sheet carrying neither `peek` nor `show` looks exactly like a sheet that was never on
+     screen — so it took the un-animated path and the card jumped. openShareSheet() owns the
+     swap now, and it is the only place that does it. */
   ssState="open";
   openShareSheet();          // publishes, fills, and tracks share_opened
 }
@@ -4200,10 +4299,15 @@ function fillShareKicker(){
   card.addEventListener("pointercancel",()=>{ y0=null; },{passive:true});
   /* A tap on the grabber is the same intent as a swipe up, and it is the only part of the
      peek that is not already a button. */
-  /* A tap on the grabber steps UP. It is the only control in the mini state, so it has to be
-     the way back — a tab you can see and cannot open is worse than no tab. */
+  /* A tap on the grabber TOGGLES. It used to only ever step up, so once the sheet was open the
+     handle was inert — the affordance was still there, still said "I move this", and did
+     nothing. Closing was a downward drag or nothing, and a drag is the harder gesture of the
+     two. Same control, both directions.
+     The handle and not the card: the card is almost entirely buttons, and a tap anywhere on it
+     resizing the sheet would fire every time a thumb missed "Challenge a friend" by a few
+     pixels — a mis-tap that hides the thing you were reaching for. */
   const grab=$("#ssGrab");
-  if(grab) grab.onclick=()=>{ haptic(10); stepSheet(1); };
+  if(grab) grab.onclick=()=>{ haptic(10); stepSheet(ssState==="open"?-1:1); };
 })();
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
    closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
