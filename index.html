@@ -553,6 +553,16 @@
   #btnEdit{background:rgba(16,16,20,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
     color:#fff;border:1px solid var(--stroke);box-shadow:0 4px 14px rgba(0,0,0,.35);font-weight:700;}
   .brand.mid{left:50%;transform:translateX(-50%);}   /* centered on the captured (paint/finished) screen */
+  /* THE WORDMARK WAS NOT HIDDEN ON THE REVEAL — IT WAS PAINTED OVER. #revealC is z-index 14
+     and inset:0, the wordmark is 12, and the reveal composites across the whole stage. So the
+     one screen where people sit and look at their hide, and the one screen where the results
+     dot most needs to be seen, was the one screen the mark did not exist on.
+     Lifted above the canvas only there, and made INERT while it is up: #revealHandle is the
+     wipe drag and its line runs straight through the wordmark's box, so a tappable mark at
+     the top centre would eat the start of that drag. pointer-events:none costs nothing that
+     was working — #paintUI and #revealC have covered .brand for clicks on these screens all
+     along, which is exactly why the long-press is hit-tested at the document instead. */
+  #stage.done .brand{z-index:16;pointer-events:none;}
   /* AFTER .brand.mid on purpose. Both selectors are (0,2,0), so source order decides — put
      the press state above .mid and the wordmark stops reacting to taps on the paint screen,
      which is precisely where a member is most likely to reach for it. */
@@ -2192,7 +2202,7 @@ function enterCompose(){
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
   shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
-  $(".brand").classList.remove("mid");
+  $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   clearCharacters(); spawnHider();
   startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
@@ -2210,7 +2220,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
-  $(".brand").classList.remove("mid");
+  $(".brand").classList.remove("mid"); stage.classList.remove("done");
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
@@ -5852,6 +5862,10 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   showScore();   // "vanished in Xs" — the number the round was played for
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
+  /* A class, so the stylesheet can lift the wordmark over the reveal canvas — see .brand
+     under `#stage.done`. Set here rather than derived from `finished` because CSS cannot
+     read a variable, and every other screen change on this path is already a style. */
+  stage.classList.add("done");
   /* THE SHEET ARRIVES WITH THE SCREEN — short, but immediately. It used to wait for the wipe
      to settle plus a beat, the argument being that the wipe is the payoff and the ask should
      not land on top of it. It does not land on top of it: the wipe plays in the top half and
@@ -5867,7 +5881,7 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
     else { revealX=0.5; drawReveal(); setTimeout(peekShareSheet,420); } };
   requestAnimationFrame(anim);
   setTimeout(peekShareSheet,1600); }
-function exitFinished(){ finished=false;
+function exitFinished(){ finished=false; stage.classList.remove("done");
   /* Back to editing: the sheet belongs to the reveal and must not survive it. Without this
      the peek stays pinned over the paint tools, which is worse than never showing it. */
   closeShareSheet();

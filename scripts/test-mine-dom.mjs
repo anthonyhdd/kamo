@@ -57,7 +57,13 @@ const html = real.slice(0, at)
   + 'mark(news){const b=document.querySelector(".brand");b.classList.toggle("hasNews",!!news);'
   + 'const rg=document.createRange();rg.selectNodeContents(b);const t=rg.getBoundingClientRect();'
   + 'return{pos:getComputedStyle(b).position,cx:Math.round(t.left+t.width/2),'
-  + 'boxW:Math.round(b.getBoundingClientRect().width)};}};\n'
+  + 'boxW:Math.round(b.getBoundingClientRect().width)};},'
+  /* The reveal composites across the whole stage, so "is the wordmark above #revealC" is a
+     question about z-index in the shared stacking context, not about display. */
+  + 'reveal(on){stage.classList.toggle("done",!!on);const b=document.querySelector(".brand");'
+  + 'const z=(el)=>parseInt(getComputedStyle(el).zIndex,10)||0;'
+  + 'return{brand:z(b),canvas:z(document.getElementById("revealC")),'
+  + 'handle:z(document.getElementById("revealHandle")),pe:getComputedStyle(b).pointerEvents};}};\n'
   + real.slice(at);
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
@@ -157,6 +163,28 @@ console.log('\nAND IT DOES NOT MOVE THE WORDMARK');
       : bad(`.brand is ${m.boxW}px wide ${label} — it is a full-width block in flow, so it also `
           + 'takes layout space it is not supposed to occupy');
   }
+}
+
+/* THE REVEAL SCREEN IS WHERE THE DOT MATTERS MOST, and it was the one screen the wordmark
+   did not exist on — not hidden, PAINTED OVER: #revealC is inset:0 at z-index 14 and the mark
+   was 12. People sit on that screen looking at their hide, and the thing telling them someone
+   played was underneath the picture. */
+console.log('\nAND IT IS VISIBLE ON THE REVEAL, WITHOUT EATING THE WIPE');
+{
+  const off = await page.evaluate(() => window.__m.reveal(false));
+  off.brand < off.canvas
+    ? ok(`on the camera it sits under the reveal canvas (${off.brand} < ${off.canvas}), where that canvas is hidden anyway`)
+    : bad(`the wordmark is z-index ${off.brand} on the camera screen`);
+  const on = await page.evaluate(() => window.__m.reveal(true));
+  on.brand > on.canvas
+    ? ok(`on the reveal it rises above it (${on.brand} > ${on.canvas}) instead of being painted over`)
+    : bad(`the wordmark is still under the reveal canvas (${on.brand} vs ${on.canvas}) — invisible on the `
+        + 'one screen where the dot most needs to be seen');
+  on.pe === 'none'
+    ? ok('and is inert there, so it cannot eat the start of a wipe drag')
+    : bad(`it takes pointer events on the reveal (pointer-events:${on.pe}) — #revealHandle's line runs `
+        + 'straight through the wordmark, so a drag started on it would be swallowed');
+  await page.evaluate(() => window.__m.reveal(false));
 }
 
 await browser.close();
