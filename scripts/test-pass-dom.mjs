@@ -53,7 +53,7 @@ const html = real.slice(0, at)
   /* The pass is entered through a 1.2s hold on #pwRestore. Reproduced with real pointer
      events and a real wait, so the timeout, the drift guard and the click-swallow are all
      under test — not just the handler they eventually call. */
-  + 'async hold(phrase){const b=document.getElementById("pwRestore");'
+  + 'async hold(phrase,which){const b=document.getElementById(which||"pwRestore");if(!b)return"no-button";'
   + 'const r=b.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;'
   + 'const ev=(t)=>b.dispatchEvent(new PointerEvent(t,{clientX:x,clientY:y,bubbles:true}));'
   + 'ev("pointerdown");await new Promise(r=>setTimeout(r,1400));'
@@ -109,6 +109,25 @@ async function fresh() {
   await page.waitForFunction(() => !!window.__p, null, { timeout: 10000 });
   await page.evaluate(() => { try { openPaywall('plus', true); } catch (e) { document.getElementById('paywall').classList.add('show'); } });
   return page;
+}
+
+/* THE SUPPORT INSTRUCTION IS "HOLD RESTORE", AND THERE ARE TWO OF THEM. The paywall's and the
+   player card's. If only one answered, half the people told that would hold the wrong button
+   and report the code as dead — which is the same support thread this feature exists to end. */
+console.log('\nBOTH RESTORE BUTTONS TAKE THE CODE');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForFunction(() => !!window.__p);
+  await page.evaluate(() => { try { openKamoHome(); } catch (e) {} });
+  const res = await page.evaluate((p) => window.__p.hold(p, 'khRestore'), PHRASE);
+  res === 'ok' ? ok('holding Restore on the player card opens the field') : bad(`the card's Restore did not answer (${res})`);
+  await page.waitForTimeout(250);
+  const s2 = await page.evaluate(() => ({ pro: window.__p.pro(), stored: window.__p.stored() }));
+  s2.pro && s2.stored === PASS_HASH
+    ? ok('and it grants the same pass')
+    : bad(`the card's Restore did not grant the pass (pro=${s2.pro})`);
+  await page.close();
 }
 
 console.log('\nA WRONG CODE UNLOCKS NOTHING');

@@ -731,10 +731,6 @@
     font-family:var(--display);font-size:22px;font-weight:900;color:#fff;line-height:1;padding:0;
     -webkit-user-select:text;user-select:text;}
   #khHandle::placeholder{color:rgba(255,255,255,.28);font-weight:800;}
-  /* The perk chips are shown to everyone now, so for a non-member they have to read as
-     "what's behind the door" rather than as "what you have". Dimmed, not hidden: an empty
-     card sells nothing, and the upsell row directly under them is the door. */
-  .kpChip.off{opacity:.42;}
   /* Its own rule rather than borrowing .ssBtn.ssPlus from the share sheet: that class is
      scoped to a flex ROW there and carries the row's height and flex share, so reusing it
      here rendered an unstyled browser button. Same colours — the mint tint, the mint border,
@@ -747,6 +743,10 @@
     font-family:var(--font);font-size:14.5px;font-weight:800;
     -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
   .kpPlus:active{transform:scale(.97);}
+  /* Quieter than .kpClose is loud: a real action, but one nobody should be drawn to. */
+  .kpQuiet{display:block;width:100%;margin-top:10px;background:none;border:none;
+    color:rgba(255,255,255,.5);font-size:13px;font-weight:700;cursor:pointer;padding:8px;
+    -webkit-tap-highlight-color:transparent;}
   .kpPlus .ic{font-size:13px;color:var(--mint);}
   .kpClose{display:block;width:100%;margin-top:11px;background:none;border:none;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px;}
   @keyframes pwFade{from{opacity:0}to{opacity:1}}
@@ -1479,11 +1479,10 @@
              autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname"
              aria-label="Your handle">
     </div>
-    <div class="kpChips">
-      <span class="kpChip">Every color</span>
-      <span class="kpChip">Fine brush</span>
-      <span class="kpChip">Clean export</span>
-    </div>
+    <!-- NO PERK CHIPS. They listed what KAMO+ contains, on a card that is now about who the
+         player is and where the other players are — and for a member they were three things
+         they already owned, restated. The post-purchase card still carries them, which is the
+         one place that list is the point. -->
     <!-- THE PRIMARY POINTS OUT OF THE APP, and that is the point. "Share my stats" was the
          primary before, and it shared the three numbers that were already the weakest thing
          on the card. This is the only door in the product to other players. -->
@@ -1492,6 +1491,9 @@
          a day the wordmark used to send can be told apart from the ones this line sends and
          we can see whether repurposing the wordmark cost anything. -->
     <button class="kpPlus" id="khUpsell" style="display:none"><span class="ic">✦</span>Unlock every tool</button>
+    <!-- Quiet on purpose. It is the thing you need on the day the app has forgotten what you
+         bought, and nothing on the other 364. -->
+    <button class="kpQuiet" id="khRestore">Restore purchases</button>
     <button class="kpClose" id="khClose">Back</button>
   </div>
 </div>
@@ -3392,7 +3394,7 @@ $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?
   haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; }   // the hold already acted
-  track("restore_tapped"); if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
+  doRestore(); };
 /* HOLD RESTORE = ENTER A PASS. On the paywall, and on Restore specifically, because that is
    where the person this exists for already is: someone who was told they had been given
    KAMO+, tapped Restore, and was correctly told there was nothing to restore. "Hold the button
@@ -3405,7 +3407,14 @@ $("#pwRestore").onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; } 
    silence is right for the founder tool (nothing should confirm it exists) and wrong here,
    where someone typing a code they were given needs to know they typed it wrong. */
 let pwRestoreHeld=false;
-{ const b=$("#pwRestore"); let t=null, sx=0, sy=0;
+/* ONE IMPLEMENTATION, BOUND TO EVERY RESTORE BUTTON THERE IS. There are two now — the
+   paywall's and the player card's — and the support instruction is "hold Restore". If only
+   one of them answered, half the people told that would hold the wrong button and conclude
+   the code is dead. A second copy of this block would be worse: it decides who gets KAMO+
+   for free, and two copies drift. */
+function bindPassHold(b){
+  if(!b) return;
+  let t=null, sx=0, sy=0;
   const cancel=()=>{ clearTimeout(t); t=null; };
   b.addEventListener("pointerdown",e=>{ sx=e.clientX; sy=e.clientY; clearTimeout(t);
     t=setTimeout(async()=>{
@@ -3422,11 +3431,26 @@ let pwRestoreHeld=false;
       let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
       isPro=computePro(real);
       track("creator_pass_used",{});
-      refreshProUI(); haptic(18); closePaywall();
+      refreshProUI(); haptic(18); closePaywall(); closeKamoHome();
       showHint("KAMO+ unlocked ✓",4200);
     },1200); });
   b.addEventListener("pointermove",e=>{ if(t && (Math.abs(e.clientX-sx)>12||Math.abs(e.clientY-sy)>12)) cancel(); });
   ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,cancel));
+}
+bindPassHold($("#pwRestore"));
+/* THE PLAYER CARD IS AN ACCOUNT SCREEN NOW, so Restore belongs on it. It was reachable only
+   from the paywall — the screen you are on when you want to BUY, not the one you are on when
+   you already did and the app has forgotten. Five people tapped Restore in seven days and all
+   four completions came back empty; they were looking for it, and they had to open a sales
+   screen to find it. */
+function doRestore(){
+  track("restore_tapped");
+  if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); }
+  else showHint("Nothing to restore");
+}
+{ const r=$("#khRestore");
+  if(r){ bindPassHold(r);
+    r.onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; } haptic(10); doRestore(); }; }
 }
 function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",url:u}); } else { window.open(u,"_blank","noopener"); } }
 document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.url));
@@ -3514,7 +3538,6 @@ function setHandle(v){
 function khSetPlus(){
   const plus=$("#khPlus"); if(plus) plus.style.display = isPro ? "" : "none";
   const up=$("#khUpsell"); if(up) up.style.display = isPro ? "none" : "";
-  document.querySelectorAll("#kamoHome .kpChip").forEach(c=>c.classList.toggle("off",!isPro));
 }
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
@@ -3523,10 +3546,14 @@ function openKamoHome(){
   /* The headline states what the field is FOR, and changes once it is filled — before, it is
      an instruction; after, it is a fact about the app. Neither is a label on the furniture,
      which is what "Your hides" was. */
-  if(t) t.textContent = h ? "You're @"+h : "Sign your hides";
-  if(sub) sub.textContent = h
-    ? "That's the name on every challenge you send."
-    : "Pick a name. It goes out with every challenge, so people know who to beat.";
+  /* The handle IS the headline once it exists — "You're @tony" spent two words introducing a
+     name the field below already shows. Before it exists, the headline is the instruction. */
+  if(t) t.textContent = h ? "@"+h : "Sign your hides";
+  /* ONE LINE FOR BOTH STATES. It was two, and neither earned its length: the unset version
+     explained the feature twice ("pick a name" + "so people know who to beat") and the set
+     version restated the headline. This is true either way, so there is no branch to keep in
+     sync and nothing to read twice. */
+  if(sub) sub.textContent="The name on every challenge you send.";
   if(inp) inp.value=h;
   khSetPlus();
   el.classList.add("show"); haptic(12);

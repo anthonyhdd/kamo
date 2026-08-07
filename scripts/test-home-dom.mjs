@@ -44,7 +44,8 @@ const html = real.slice(0, at)
   + 'return{shown:document.getElementById("kamoHome").classList.contains("show"),'
   + 'plus:g("#khPlus"),upsell:g("#khUpsell"),title:(document.getElementById("khTitle")||{}).textContent,'
   + 'value:(document.getElementById("khHandle")||{}).value,stored:(()=>{try{return localStorage.getItem("kamo_handle")||"";}catch(e){return"";}})(),'
-  + 'discord:DISCORD_URL,chipsOff:document.querySelectorAll("#kamoHome .kpChip.off").length};},'
+  + 'discord:DISCORD_URL,chips:document.querySelectorAll("#kamoHome .kpChip").length,'
+  + 'restore:g("#khRestore")};},'
   /* The invite text is built inside the click handler, so it cannot be read without sending.
      Rebuilt here from the same getHandle() the handler uses — what is under test is that the
      stored value is handle-shaped and reachable, not the string concatenation, which
@@ -90,16 +91,21 @@ console.log('\nTHE CARD OPENS FOR EVERYONE, AND CLAIMS ONLY WHAT IS TRUE');
   free.upsell !== 'none' && free.upsell !== 'absent'
     ? ok('the upsell row is offered')
     : bad(`the upsell is ${free.upsell} for a free user — the wordmark's paywall path is gone with nothing replacing it`);
-  free.chipsOff === 3
-    ? ok('the perk chips read as locked')
-    : bad(`${free.chipsOff} of 3 chips are dimmed — a free user is being shown perks as if they had them`);
+  free.chips === 0
+    ? ok('no perk list — the card is about who you are, not what the subscription contains')
+    : bad(`${free.chips} perk chips are back on the player card`);
+  free.restore !== 'none' && free.restore !== 'absent'
+    ? ok('Restore is reachable without opening a sales screen')
+    : bad(`Restore is ${free.restore} on the card — the only way back to a lost purchase is the paywall`);
 
   const pro = await page.evaluate(() => window.__h.open(true));
   pro.plus !== 'none' ? ok('a member gets the +') : bad('the + is hidden from someone who paid for it');
   pro.upsell === 'none'
     ? ok('and is not sold what they already own')
     : bad('the upsell row shows to a member');
-  pro.chipsOff === 0 ? ok('their perks read as theirs') : bad('a member sees their own perks dimmed');
+  pro.restore !== 'none' && pro.restore !== 'absent'
+    ? ok('and to a member too — a lost entitlement is their problem, not a free user\'s')
+    : bad('Restore is hidden from members');
 }
 
 console.log('\nTHE HANDLE IS KEPT, AND KEPT CLEAN');
@@ -151,9 +157,9 @@ console.log('\nIT SURVIVES A RELAUNCH, AND IT LEADS SOMEWHERE');
   back.value === 'tony' && back.stored === 'tony'
     ? ok('the handle is still there after a relaunch')
     : bad(`the handle did not survive a reload (field ${JSON.stringify(back.value)}, stored ${JSON.stringify(back.stored)})`);
-  /^You.re @tony$/.test(back.title || '')
-    ? ok(`the headline becomes a fact once it is set ("${back.title}")`)
-    : bad(`the headline still asks after the handle is set: ${JSON.stringify(back.title)}`);
+  back.title === '@tony'
+    ? ok(`the handle IS the headline once it exists ("${back.title}")`)
+    : bad(`the headline is ${JSON.stringify(back.title)} — expected the bare handle`);
   back.discord === 'https://discord.gg/ET9PYFt8M'
     ? ok('Discord points at the real invite')
     : bad(`DISCORD_URL is ${JSON.stringify(back.discord)}`);
