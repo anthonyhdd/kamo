@@ -209,13 +209,24 @@ console.log('\nIT SURVIVES A RELAUNCH, AND IT LEADS SOMEWHERE');
 
 console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
 {
-  /* Nobody has played anything yet → no row. A "0 people have played" line would greet
-     someone with their own inactivity, which is the flaw the stat tiles died of. */
-  await page.evaluate(() => window.__h.hides(['a'], { a: { n_attempts: 0, n_found: 0 } }));
-  const quiet = await page.evaluate(() => window.__h.open(false));
-  quiet.score === 'none'
-    ? ok('nothing played yet → no row at all, rather than a row that says nothing happened')
-    : bad(`the score row shows with zero attempts: ${JSON.stringify(quiet.scoreText)}`);
+  /* SENT BUT UNPLAYED IS ITS OWN ANSWER. An absent row here is ambiguous in the wrong
+     direction — "nobody opened them" and "this is broken" look identical. */
+  await page.evaluate(() => window.__h.hides(['a', 'b'],
+    { a: { n_attempts: 0, n_found: 0 }, b: { n_attempts: 0, n_found: 0 } }));
+  await page.evaluate(() => window.__h.open(false));
+  await page.waitForTimeout(250);
+  const quiet = await page.evaluate(() => window.__h.state());
+  /2 challenges sent/.test(quiet.scoreText) && /nobody has played yet/.test(quiet.scoreText)
+    ? ok(`sent but unplayed says so ("${quiet.scoreText.trim()}")`)
+    : bad(`zero attempts renders ${JSON.stringify(quiet.scoreText)}`);
+
+  /* But someone who has never sent anything still gets nothing — that row would be about
+     their own inactivity rather than about other people. */
+  await page.evaluate(() => window.__h.hides([], {}));
+  const none0 = await page.evaluate(() => window.__h.open(false));
+  none0.score === 'none'
+    ? ok('and someone who has never sent a challenge gets no row at all')
+    : bad(`a never-sent user sees ${JSON.stringify(none0.scoreText)}`);
 
   /* Aggregated across every hide, with an expired one (null from get_hide) dropped. */
   await page.evaluate(() => window.__h.hides(['a', 'b', 'gone'], {

@@ -233,12 +233,13 @@
      scoreChip belongs to the reveal and this belongs to the camera screen someone lands on
      when they reopen the app. Mint rather than accent: it is not a score, it is something
      that happened while they were away. */
-  #mineChip{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
-    background:var(--panel);backdrop-filter:blur(14px);border:1px solid rgba(72,214,139,.45);padding:7px 15px;border-radius:999px;
-    font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);
-    cursor:pointer;-webkit-tap-highlight-color:transparent;animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
-  #mineChip b{color:var(--mint);font-weight:850;}
-  #mineChip:active{opacity:.6;}
+  /* A dot on the wordmark when a hide this device sent has been played since it was last
+     read. Absolutely positioned off the mark itself so it cannot change the wordmark's
+     metrics, and it breathes on the same clock as everything else that wants attention here. */
+  .brand{position:relative;}
+  .brand.hasNews::after{content:"";position:absolute;top:-2px;right:-9px;width:8px;height:8px;
+    border-radius:50%;background:var(--mint);box-shadow:0 0 10px rgba(95,230,164,.9);
+    animation:pwGlow 2.4s ease-in-out infinite;pointer-events:none;}
   /* ---- Round timer ----------------------------------------------------------
      A hairline that drains along the very top edge, above everything, out of the way
      of both the shutter (aim phase) and the figure (paint phase) — one position that
@@ -1279,9 +1280,6 @@
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
     <div id="scoreChip"></div>
-    <!-- Filled and shown by chMyResults() only when a hide this device published has been
-         played. Declared here so the pre-push id check can see it. -->
-    <div id="mineChip"></div>
     <button id="btnBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Retake</button>
     <button id="btnDone" class="navbtn">Done</button>
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
@@ -2189,7 +2187,6 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  updateMineChip();   // the results chip belongs to this screen and to no other
   shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
@@ -2209,7 +2206,6 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
-  updateMineChip();
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
@@ -3600,7 +3596,11 @@ function khShowField(on){
 function khRenderName(){
   const t=$("#khTitle"), sub=$("#khSub"), h=getHandle();
   if(t) t.textContent = h ? "@"+h : "Sign your hides";
-  if(sub) sub.textContent="A dare from nobody is easy to ignore.";
+  /* PLAIN. This said "A dare from nobody is easy to ignore" — a construction you have to stop
+     and parse, on a line whose whole job is to make an unfamiliar field obvious in one glance.
+     Clever and opaque is the worst trade available here. This states the consequence instead,
+     in the words someone would use out loud. */
+  if(sub) sub.textContent="So they know who they're trying to beat.";
 }
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
@@ -4120,7 +4120,7 @@ function trackCarried(kind,props){
    into the web, which needs a build.
    It also means one extra Amplitude user per install, because the WebView had no reason to
    mint a web id before. Watch the user totals for a step change. */
-const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","hide_result_shown","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened"]);
+const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened"]);
 function track(event,props){
   const p={...(props||{}),trial_arm:trialArm};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
@@ -6118,36 +6118,46 @@ function chMarkSent(){
  * cannot load is a chip nobody notices is missing.
  * Only speaks when there is something to say — n_attempts of 0 shows nothing rather than
  * "0 tried", which would turn the reward into a reproach on the 88% of hides nobody opens. */
-let mineMsg="";
-function updateMineChip(){
-  const el=$("#mineChip"); if(!el) return;
-  el.style.display = (mineMsg && mode==="compose" && !finished) ? "block" : "none";
+/* ONE FETCH, TWO READERS. The dot on the wordmark and the row on the card are the same
+   question — "did anything happen to the hides I sent" — and answering it twice with two
+   copies of the same loop is how the two end up disagreeing about a number the user can see
+   in both places within one tap of each other. */
+async function chTally(){
+  const ids=chMine(); if(!ids.length) return null;
+  const rows=(await Promise.all(ids.map(id=>chRpc("get_hide",{p_id:id}).catch(()=>null)))).filter(Boolean);
+  if(!rows.length) return null;
+  return { hides:rows.length,
+    tried:rows.reduce((a,h)=>a+((h&&h.n_attempts)|0),0),
+    found:rows.reduce((a,h)=>a+((h&&h.n_found)|0),0) };
 }
-/* THE SCOREBOARD OF WHAT YOU SENT, for the player card.
- * chMyResults() answers the same question in one line, once, on the camera screen, for the
- * newest hide only — it is a notification, and it is gone the moment it is dismissed. This is
- * the place you can go and look, which is the difference between a nudge and a reason to open
- * the app again.
- *
- * EVERY HIDE IN PARALLEL, and the failures dropped rather than surfaced. get_hide returns
- * nothing for a hide that has expired (30 days), been blocked, or was never published, and a
- * player whose oldest challenge aged out has not lost anything they should be told about. So
- * a null is simply not counted, and if every one is null the block stays hidden — chMine()
- * caps at 10, so this is at most ten small requests on a deliberate tap.
- *
- * ZERO IS NOT A NUMBER WORTH PRINTING. Someone who has sent challenges nobody has opened yet
- * gets no row at all, rather than a row that says nothing happened. That was the whole flaw of
- * the stat tiles this card replaced. */
+/* HOW MUCH OF IT HAS ALREADY BEEN READ. Storing the count rather than a flag is what makes the
+   dot mean "something NEW", not "you have results" — it comes back on the next person who
+   plays and not before. */
+const SEEN_KEY="kamo_seen_tries";
+function seenTries(){ try{ return parseInt(localStorage.getItem(SEEN_KEY)||"0",10)||0; }catch(e){ return 0; } }
+function markSeen(n){ try{ localStorage.setItem(SEEN_KEY,String(n|0)); }catch(e){} }
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
   el.style.display="none";
   try{
-    const ids=chMine(); if(!ids.length) return;
-    const rows=(await Promise.all(ids.map(id=>chRpc("get_hide",{p_id:id}).catch(()=>null)))).filter(Boolean);
-    if(!rows.length) return;
-    const tried=rows.reduce((a,h)=>a+((h&&h.n_attempts)|0),0);
-    const found=rows.reduce((a,h)=>a+((h&&h.n_found)|0),0);
-    if(tried<1) return;
+    const t=await chTally(); if(!t) return;
+    const {tried,found}=t, rows={length:t.hides};
+    /* NOTHING PLAYED IS NOT NOTHING TO SAY. This used to return here, and an absent row is
+       ambiguous in exactly the wrong direction: someone who sent three challenges and sees
+       no row cannot tell "nobody has opened them" from "this is broken". They DID act — they
+       sent — so the honest answer is the count they earned plus the truth about it. The rule
+       that still holds is the original one: someone who has never sent anything gets no row,
+       because that row would be about their inactivity rather than about other people. */
+    if(tried<1){
+      markSeen(0); brandDot(false);
+      el.innerHTML="<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")
+        +' sent · <span class="khNone">nobody has played yet</span>';
+      el.style.display="block";
+      track("home_results_shown",{hides:t.hides,tried:0,found:0});
+      return;
+    }
+    /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
+    markSeen(tried); brandDot(false);
     /* Two facts and a divider, not a sentence. "12 people have played your hides. 3 found
        you." wrapped to two lines on a 390px card, and the numbers — the only part anyone
        reads — ended up at opposite ends of it. */
@@ -6157,19 +6167,22 @@ async function khResults(){
     track("home_results_shown",{hides:rows.length,tried:tried,found:found});
   }catch(e){}
 }
-async function chMyResults(){
+/* THE DOT, NOT A SENTENCE ACROSS THE VIEWFINDER.
+ * There used to be a chip pinned under the wordmark that said "12 people tried · 3 found you"
+ * — once per launch, for the newest hide only, dismissible and then gone. It was a
+ * notification that could only ever be read at the moment it happened to appear, it wrote text
+ * over the camera, and the player card now carries the same numbers for EVERY hide, any time.
+ * Two places saying the same thing, one of them worse.
+ * So the camera keeps a dot and nothing else: it says there is something to read, the wordmark
+ * it sits on is what you tap to read it, and the card clears it. */
+function brandDot(on){
+  const b=document.querySelector(".brand"); if(!b) return;
+  b.classList.toggle("hasNews",!!on);
+}
+async function chNewsCheck(){
   try{
-    const ids=chMine(); if(!ids.length) return;
-    const h=await chRpc("get_hide",{p_id:ids[0]});
-    const n=(h&&h.n_attempts)|0, f=(h&&h.n_found)|0;
-    if(n<1) return;
-    const tried = n===1 ? "1 person tried" : n+" people tried";
-    mineMsg = f>0 ? (tried+" · <b>"+f+" found you</b>") : (tried+" · <b>nobody found you</b>");
-    const el=$("#mineChip"); if(!el) return;
-    el.innerHTML=mineMsg;
-    el.onclick=()=>{ mineMsg=""; updateMineChip(); haptic(8); };
-    updateMineChip();
-    track("hide_result_shown",{attempts:n,found:f});
+    const t=await chTally(); if(!t) return;
+    if(t.tried>seenTries()){ brandDot(true); track("results_pending",{tried:t.tried,found:t.found}); }
   }catch(e){}
 }
 
@@ -6594,7 +6607,7 @@ const CH_NOTIF={
 /* AFTER EVERYTHING, AND NEVER ON THE SEEKER SCREEN. A stranger opening a challenge link has
    no hides of their own, and CH_SEEK is exactly that case. Delayed a beat so the launch path
    — camera permission, first frame — never waits on this. */
-if(!CH_SEEK) setTimeout(()=>{ try{ chMyResults(); }catch(e){} },1200);
+if(!CH_SEEK) setTimeout(()=>{ try{ chNewsCheck(); }catch(e){} },1200);
 
 if(location.search.includes("debug")){
   window.HIDEY={ charPos:()=>{ const c=sel(); return c?{x:+c.group.position.x.toFixed(2),y:+c.group.position.y.toFixed(2),tx:c._tx,ty:c._ty,svx:c._svx,sx:+c.charG.scale.x.toFixed(2),sy:+c.charG.scale.y.toFixed(2)}:null; },
