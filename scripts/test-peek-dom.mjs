@@ -59,6 +59,15 @@ const html = real.slice(0, at)
   + 'return{found:!!document.querySelector("#chPPframe.found"),confetti:document.querySelectorAll(".kConfetti").length,'
   + 'sub:(document.querySelector(".chPPsub")||{}).textContent||"",head:(document.getElementById("chPPh")||{}).textContent};},'
   + 'litter(){return document.querySelectorAll(".kConfetti").length;},'
+  + 'sign(){const c=document.getElementById("chChipN");if(!c)return null;'
+  + 'return{text:c.textContent,unsigned:c.classList.contains("unsigned")};},'
+  /* Any preview left open by an earlier check is cleared FIRST, or "did the tap fall through
+     to chPrevPlay" would be answered by a #chPP that was already on screen. */
+  + 'signOpen(){document.getElementById("chPP")?.remove();document.getElementById("chChipN").click();'
+  + 'return{prompt:!!document.getElementById("csIn"),preview:!!document.getElementById("chPP")};},'
+  + 'signSave(v){const i=document.getElementById("csIn");i.value=v;document.getElementById("csOk").click();'
+  + 'return{stored:getHandle(),chip:(document.getElementById("chChipN")||{}).textContent,'
+  + 'promptGone:!document.getElementById("csIn")};},'
   + 'row(){const b=(s)=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();'
   + 'return{d:getComputedStyle(e).display,x:r.left,y:r.top,w:r.width,h:r.height};};'
   /* Every infinite animation inside the card, pseudo-elements included — that is where the
@@ -498,6 +507,39 @@ console.log('\nTHE CARD OPENS THE PREVIEW');
       : bad(`${rmLeft} bloom(s) left at z-index 95 — an invisible sheet over every control`);
   }
   await page.emulateMedia({ reducedMotion: null });
+}
+
+/* THE ASK FOR A NAME LIVES ON THE CARD, NOT IN FRONT OF THE SEND.
+   Only ~3% of hide-makers ever tap the wordmark, so a handle settable only on the player card
+   is one almost nobody sets. But the send is the number this app is trying to move and it is
+   flat, so a prompt in front of it would be the fastest way to make it worse. The chip is the
+   middle, and what has to hold is that it is REACHABLE and that it never blocks anything. */
+console.log('\nTHE CARD ASKS TO BE SIGNED, WITHOUT BLOCKING THE SEND');
+{
+  await page.evaluate(() => { try{ localStorage.removeItem('kamo_handle'); }catch(e){} });
+  await page.evaluate(() => window.__t.present());
+  const empty = await page.evaluate(() => window.__t.sign());
+  empty && empty.unsigned && /your name/i.test(empty.text)
+    ? ok(`unsigned, the chip asks ("${empty.text}")`)
+    : bad(`the signature chip is ${JSON.stringify(empty)}`);
+
+  /* Tapping it must NOT open the full preview — the chip sits inside .chPrev, whose whole row
+     opens chPrevPlay(), so without stopPropagation this tap would launch a rehearsal round
+     instead of a name field. */
+  const opened = await page.evaluate(() => window.__t.signOpen());
+  opened.prompt && !opened.preview
+    ? ok('tapping it opens the field, and does not fall through to the preview round')
+    : bad(`tapping the chip gave prompt=${opened.prompt} preview=${opened.preview}`);
+
+  const saved = await page.evaluate(() => window.__t.signSave('nova'));
+  saved.stored === 'nova' && saved.promptGone && /@nova/.test(saved.chip || '')
+    ? ok(`saving signs the card in place ("${saved.chip}")`)
+    : bad(`after saving: ${JSON.stringify(saved)}`);
+
+  const after = await page.evaluate(() => window.__t.sign());
+  !after.unsigned
+    ? ok('and the chip stops asking')
+    : bad('the chip still reads as unsigned after a name was saved');
 }
 
 /* THE PAYWALL'S PROMISES, RENDERED. check.mjs proves no number is TYPED into the copy; this

@@ -100,18 +100,16 @@ console.log('\nTHE CARD OPENS FOR EVERYONE, AND CLAIMS ONLY WHAT IS TRUE');
   free.chips === 0
     ? ok('no perk list — the card is about who you are, not what the subscription contains')
     : bad(`${free.chips} perk chips are back on the player card`);
-  free.restore !== 'none' && free.restore !== 'absent'
-    ? ok('Restore is reachable without opening a sales screen')
-    : bad(`Restore is ${free.restore} on the card — the only way back to a lost purchase is the paywall`);
+  free.restore === 'absent'
+    ? ok('no Restore row — a store action does not belong on a card about who you are')
+    : bad(`Restore is back on the player card (${free.restore}); it lives on the paywall, which is `
+        + 'where the five taps that justified it actually happened');
 
   const pro = await page.evaluate(() => window.__h.open(true));
   pro.plus !== 'none' ? ok('a member gets the +') : bad('the + is hidden from someone who paid for it');
   pro.upsell === 'none'
     ? ok('and is not sold what they already own')
     : bad('the upsell row shows to a member');
-  pro.restore !== 'none' && pro.restore !== 'absent'
-    ? ok('and to a member too — a lost entitlement is their problem, not a free user\'s')
-    : bad('Restore is hidden from members');
 }
 
 console.log('\nTHE HANDLE IS KEPT, AND KEPT CLEAN');
