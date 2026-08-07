@@ -50,7 +50,14 @@ const html = real.slice(0, at)
   + 'seen:(()=>{try{return localStorage.getItem("kamo_seen_tries")}catch(e){return null}})(),'
   + 'text:(document.getElementById("khScore")||{}).textContent||"",'
   + 'shown:(document.getElementById("khScore")||{}).style.display};},'
-  + 'dot(){const b=document.querySelector(".brand");return !!b&&b.classList.contains("hasNews");}};\n'
+  + 'dot(){const b=document.querySelector(".brand");return !!b&&b.classList.contains("hasNews");},'
+  /* The TEXT rect, not the element's. A block in normal flow is full-width, so its box centre
+     lands on the viewport centre whether or not the word inside it does — which is exactly how
+     a wordmark pinned to the left edge measured as perfectly centred. */
+  + 'mark(news){const b=document.querySelector(".brand");b.classList.toggle("hasNews",!!news);'
+  + 'const rg=document.createRange();rg.selectNodeContents(b);const t=rg.getBoundingClientRect();'
+  + 'return{pos:getComputedStyle(b).position,cx:Math.round(t.left+t.width/2),'
+  + 'boxW:Math.round(b.getBoundingClientRect().width)};}};\n'
   + real.slice(at);
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
@@ -122,6 +129,34 @@ console.log('\nREADING IT CLEARS IT, AND ONLY NEW PLAY BRINGS IT BACK');
   (await page.evaluate(() => window.__m.check())) === true
     ? ok('one more person plays → it comes back')
     : bad('a new attempt did not raise the dot — it only ever fires once');
+}
+
+/* THE DOT MUST NOT MOVE THE WORDMARK IT SITS ON, and it did.
+   Giving the ::after a containing block looked like it needed `position:relative` on .brand.
+   It did not — .brand is already position:absolute, which IS one — and that rule came later in
+   the file at equal specificity, so it won and dropped the wordmark out of absolute positioning
+   entirely. Live, the mark sat at x=43 instead of x=195 and its box went from 86px to the full
+   390, taking flow space at the top of the screen. It shipped, because every check in this repo
+   asked about behaviour and none about where anything was. */
+console.log('\nAND IT DOES NOT MOVE THE WORDMARK');
+{
+  const half = 195;
+  for (const news of [false, true]) {
+    const m = await page.evaluate((n) => window.__m.mark(n), news);
+    const label = news ? 'with the dot' : 'without it';
+    m.pos === 'absolute'
+      ? ok(`the wordmark stays absolutely positioned ${label}`)
+      : bad(`.brand computes to position:${m.pos} ${label} — something later in the file is `
+          + 'overriding it, and top/left/transform stop meaning what they were written to mean');
+    Math.abs(m.cx - half) <= 2
+      ? ok(`and stays centred ${label} (text centre ${m.cx} of ${half * 2})`)
+      : bad(`the wordmark's TEXT sits at x=${m.cx}, not ${half} ${label} — it is out of position `
+          + 'on every screen it appears on');
+    m.boxW < 200
+      ? ok(`and hugs its own text ${label} (${m.boxW}px)`)
+      : bad(`.brand is ${m.boxW}px wide ${label} — it is a full-width block in flow, so it also `
+          + 'takes layout space it is not supposed to occupy');
+  }
 }
 
 await browser.close();
