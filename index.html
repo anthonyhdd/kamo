@@ -2948,7 +2948,47 @@ const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.p
 const FORCE_FREE_KEY="kamo_force_free";
 let forceFree=false; try{ forceFree=localStorage.getItem(FORCE_FREE_KEY)==="1"; }catch(e){}
 let brandLongPressed=false;   // swallows the click that follows a long-press
-let isPro=false; try{ isPro=!forceFree && localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+
+/* THE CREATOR PASS — Pro without Apple, without RevenueCat, and without knowing who they are.
+ *
+ * The problem it solves, exactly: a creator was sent an App Store promo code and told it
+ * unlocked premium. It did not. Those codes grant a free DOWNLOAD of the app, and KAMO is
+ * already free — so her redemption succeeded and gave her what she already had. She then
+ * tapped Restore four times and RevenueCat correctly reported that there was nothing to
+ * restore, because Apple had never recorded a purchase.
+ *
+ * The Apple-shaped fix is a subscription offer code, and it is the right long-term answer.
+ * But it takes a round trip through App Store Connect, it only works on the weekly, and it
+ * cannot help the person who is already sitting in the app expecting it to work. Granting the
+ * entitlement in RevenueCat cannot help her either: every live install is anonymous, because
+ * the build that reports the RevenueCat user id to Amplitude is not the one people are
+ * running — three of the four Restore taps came back with no id at all.
+ *
+ * So the pass is local, and it is exactly the mirror of the free-user preview above. Same
+ * shape, same prompt, same reason only a SHA-256 ships: this file is served from GitHub Pages
+ * out of a public repo, so the phrase itself would be one "view source" from being public.
+ *
+ * WHAT IS STORED IS THE HASH, NOT A FLAG. That is the difference that matters. A "1" would be
+ * permanent and unrevokable; storing the hash means the pass is only valid while it still
+ * matches the constant below — so rotating PASS_HASH and pushing revokes every pass that was
+ * ever handed out, everywhere, within one launch. No Apple, no refunds, no support thread.
+ *
+ * IT ONLY EVER ADDS. forceFree only subtracts; this only adds; neither touches `kamo_pro`,
+ * which keeps recording what RevenueCat actually said. Real entitlements are unaffected in
+ * both directions, and the pass survives the setPro(false) that native injects on every
+ * launch for a non-paying account — which is the whole reason it needs its own key.
+ *
+ * The honest cost: 60 bits of entropy in a public hash is not a licence server. If the phrase
+ * leaks, people get KAMO+ free until it is rotated. That is a deliberate trade for a tool
+ * that is handed out by hand, a few people at a time, and can be killed in one push. */
+const PASS_KEY="kamo_pass";
+const PASS_HASH="3e841173f002cbe58668659973bef81ed5fac401da53e91b5394045c51d19bb9";
+let hasPass=false; try{ hasPass=localStorage.getItem(PASS_KEY)===PASS_HASH; }catch(e){}
+/* ONE PLACE DECIDES WHAT PRO MEANS. It was computed inline in four places — the initial read,
+   setPro(), and both free-preview toggles — and adding a third input to that expression four
+   times is how the four quietly stop agreeing. */
+function computePro(real){ return forceFree ? false : (hasPass || !!real); }
+let isPro=false; try{ isPro=computePro(localStorage.getItem("kamo_pro")==="1"); }catch(e){ isPro=computePro(false); }
 /* NO FREE ROUND. Paid tools require a real entitlement — a subscription or Apple's own
    3-day trial — and nothing in the app hands them out.
    What used to be here: first a silent fully-unlocked hide #2, then a daily pass the user
@@ -3328,7 +3368,43 @@ $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?
   trackCarried("purchase_initiated",buyProps);
   haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
 updatePwBuy();
-$("#pwRestore").onclick=()=>{ track("restore_tapped"); if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
+$("#pwRestore").onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; }   // the hold already acted
+  track("restore_tapped"); if(window.ReactNativeWebView){ postNative({type:"restore"}); showHint("Restoring…"); } else { showHint("Nothing to restore"); } };
+/* HOLD RESTORE = ENTER A PASS. On the paywall, and on Restore specifically, because that is
+   where the person this exists for already is: someone who was told they had been given
+   KAMO+, tapped Restore, and was correctly told there was nothing to restore. "Hold the button
+   you already tried" is one sentence of support, on the screen they are looking at.
+   Not the wordmark, which is where the founder's free-user preview lives: that gesture sits
+   inside #kamoHome, a modal only a Pro user can open, so it is unreachable by definition for
+   the person who needs this one.
+   1.2s with a 12px drift cancel, matching the two holds already in this file — long enough
+   that a tap is never a hold, short enough to describe in a message. Failure says so out loud:
+   silence is right for the founder tool (nothing should confirm it exists) and wrong here,
+   where someone typing a code they were given needs to know they typed it wrong. */
+let pwRestoreHeld=false;
+{ const b=$("#pwRestore"); let t=null, sx=0, sy=0;
+  const cancel=()=>{ clearTimeout(t); t=null; };
+  b.addEventListener("pointerdown",e=>{ sx=e.clientX; sy=e.clientY; clearTimeout(t);
+    t=setTimeout(async()=>{
+      t=null; pwRestoreHeld=true; haptic(14);   // felt before the field appears: the hold registered
+      let a=null; try{ a=await secretAsk(); }catch(e){}
+      if(a==null) return;                       // cancelled: say nothing
+      let h=""; try{ const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(a.trim()));
+        h=[...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join(""); }catch(e){}
+      if(h!==PASS_HASH){ showHint("That code isn't valid",2600); return; }
+      /* The HASH is what gets stored, so rotating PASS_HASH revokes every pass ever handed out,
+         on the next launch, everywhere. A "1" here would be permanent and unrevokable. */
+      try{ localStorage.setItem(PASS_KEY,h); }catch(e){}
+      hasPass=true;
+      let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
+      isPro=computePro(real);
+      track("creator_pass_used",{});
+      refreshProUI(); haptic(18); closePaywall();
+      showHint("KAMO+ unlocked ✓",4200);
+    },1200); });
+  b.addEventListener("pointermove",e=>{ if(t && (Math.abs(e.clientX-sx)>12||Math.abs(e.clientY-sy)>12)) cancel(); });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,cancel));
+}
 function openURL(u){ if(window.ReactNativeWebView){ postNative({type:"open-url",url:u}); } else { window.open(u,"_blank","noopener"); } }
 document.querySelectorAll(".pwlink").forEach(a=>a.onclick=()=>openURL(a.dataset.url));
 /* native bridge — RevenueCat (native) calls these on purchase/restore success + to inject the localized price */
@@ -3338,7 +3414,7 @@ window.KAMO.setPro=(v)=>{
      the truth and derive the view from it, never the other way round, or leaving preview mode
      would need a RevenueCat round-trip that may not come until the next cold start. */
   try{ localStorage.setItem("kamo_pro",v?"1":"0"); }catch(e){}
-  isPro = forceFree ? false : !!v;
+  isPro = computePro(v);
   refreshProUI(); setPwBuyLoading(false); if(isPro) closePaywall();
   /* Celebrate ONLY a fresh purchase — not a restore, not the cold-start pro-sync (both call
      setPro(true) too). pwBuyIntent is set only when the user taps Buy, so this fires once. */
@@ -3499,7 +3575,7 @@ function shareStats(){
         forceFree=!forceFree;
         try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
         let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
-        isPro = forceFree ? false : real;
+        isPro = computePro(real);
         refreshProUI(); haptic(18); closeKamoHome();
         showHint(forceFree ? "Preview: free user — hold Clean export again to restore"
                            : "KAMO+ restored", 4200);
@@ -3520,7 +3596,7 @@ function shareStats(){
       forceFree=!forceFree;
       try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
       let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
-      isPro = forceFree ? false : real;
+      isPro = computePro(real);
       refreshProUI(); haptic(18);
       closeKamoHome();
       showHint(forceFree ? "Preview: free user — tap the logo, then the badge 5x to restore"
@@ -3550,7 +3626,7 @@ const FORCE_FREE_HASH="e9e326d5f3b4741fe5967b5f9f3997e6275331ba18567ef9ef9e0e3a0
    ⚠️ The input MUST re-enable selection. The global *{-webkit-user-select:none} in this
    file makes a field untypeable in WKWebView, which would have replaced one silent failure
    with another. */
-function forceFreeAsk(){
+function secretAsk(){
   return new Promise(res=>{
     const w=document.createElement("div");
     w.style.cssText="position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px";
@@ -3574,7 +3650,7 @@ function forceFreeAsk(){
 }
 async function forceFreeAuthorized(){
   if(forceFree) return true;
-  let a=null; try{ a=await forceFreeAsk(); }catch(e){}
+  let a=null; try{ a=await secretAsk(); }catch(e){}
   if(a==null) return false;
   try{ const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(a.trim()));
     return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join("")===FORCE_FREE_HASH; }
@@ -3618,7 +3694,7 @@ async function forceFreeAuthorized(){
         forceFree=!forceFree;
         try{ localStorage.setItem(FORCE_FREE_KEY, forceFree?"1":"0"); }catch(e){}
         let real=false; try{ real=localStorage.getItem("kamo_pro")==="1"; }catch(e){}
-        isPro = forceFree ? false : real;
+        isPro = computePro(real);
         refreshProUI(); haptic(18);
         showHint(forceFree ? "Preview: free user \u2014 hold the logo 6s to restore"
                            : "KAMO+ restored", 3600);
@@ -3929,7 +4005,7 @@ function trackCarried(kind,props){
    into the web, which needs a build.
    It also means one extra Amplitude user per install, because the WebView had no reason to
    mint a web id before. Watch the user totals for a step change. */
-const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","hide_result_shown","challenge_preview_opened"]);
+const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","hide_result_shown","challenge_preview_opened","creator_pass_used"]);
 function track(event,props){
   const p={...(props||{}),trial_arm:trialArm};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
@@ -4742,7 +4818,7 @@ function chPrevPlay(){
        moment a preview round finished. Defined where it is used. */
     const send=()=>{ close(); document.getElementById("ssInvite")?.click(); };
     /* WIRED HERE, where these two elements exist. They were being bound inside
-       forceFreeAsk() — the founder passphrase prompt — which is a different overlay
+       secretAsk() — the shared passphrase prompt — which is a different overlay
        entirely. getElementById returned null there, .onclick threw, and the throw landed
        BEFORE that prompt assigned its own OK and Cancel handlers, so both of its buttons
        were dead. One misplaced paste, two broken screens: the preview could not send and
