@@ -661,5 +661,33 @@ try {
   bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 14. The end of the viral loop ------------------------------------------------------
+   The seeker's "Play KAMO" is the only link in this file that leads to an install, and it is
+   the one App Store link the native wrapper can never improve — the seeker screen runs in a
+   stranger's browser, so window.KAMO.setAppLink is never called there. Losing the OneLink on
+   it costs nothing visible: taps keep counting, installs keep arriving, and only the
+   attribution goes quiet. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-reflink-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · REFERRAL-LINK TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the seeker CTA is attributed (node scripts/test-reflink-dom.mjs)');
+} catch (e) {
+  bad('THE REFERRAL LINK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
+/* The regression this change exists to prevent, asserted on the source as well as at runtime:
+   a bare `location.href=appLink` in the seeker handler is one keystroke away, and it would put
+   every referred install back into the organic bucket with nothing on screen to show for it. */
+{
+  const cta = html.match(/\$\$\("chGo"\)\.onclick[\s\S]{0,300}?location\.href[^;]*;/);
+  if (!cta) bad('the seeker CTA handler is gone — #chGo no longer navigates anywhere');
+  else if (/location\.href\s*=\s*appLink\s*;/.test(cta[0]))
+    bad('the seeker CTA navigates straight to appLink again — referred installs will land as organic');
+  else if (!/refLink\(/.test(cta[0]))
+    bad('the seeker CTA no longer routes through refLink() — attribution on the viral loop is gone');
+  else ok('the seeker CTA still routes through refLink(), not the bare listing');
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);
