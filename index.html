@@ -671,6 +671,14 @@
   #kamoPlus,#kamoHome{position:absolute;inset:0;z-index:80;display:none;align-items:flex-end;justify-content:center;background:radial-gradient(120% 90% at 50% 28%,rgba(95,230,164,.18),rgba(3,5,8,.9));backdrop-filter:blur(8px);}
   #kamoPlus.show,#kamoHome.show{display:flex;animation:pwFade .3s ease;}
   .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;animation:kpRise .4s cubic-bezier(.2,.9,.3,1);}
+  /* THE PLAYER CARD DOES NOT FLOAT. It inherits .pwCard, which is a bottom sheet: a drop
+     shadow to lift it off the reveal behind it, and a breathing mint glow across its top.
+     Both are right for a sheet that slides over a photo and wrong for a card that sits on a
+     flat background — there is nothing behind it to lift away from, so the shadow reads as a
+     smudge and the glow as a halo nobody asked for. The post-purchase card and the paywall
+     keep both; this one is flat. */
+  #kamoHome .kpCard{box-shadow:none;}
+  #kamoHome .kpCard::before{display:none;}
   @keyframes kpRise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
   /* THE KAMO FACE, like everything else that speaks for the brand. The badge and the
      headline were both set in --font (Avenir) while the paywall's kicker and title next
@@ -3593,25 +3601,23 @@ function khShowField(on){
   if(f) f.style.display = on ? "" : "none";
   if(e) e.style.display = on ? "none" : "";
 }
+/* The headline and the subline, from whatever the handle is RIGHT NOW. Split out of
+   openKamoHome() because it stopped being true only at open time: typing a name has to move it
+   to the headline as it is typed, or the card sits there still saying "Sign your hides" to
+   someone who has just finished signing, and only catches up the next time it is opened.
+   The handle IS the headline once it exists; before it exists the headline is the instruction.
+   The subline is one line for both states — it is an argument for filling the field in, and
+   that argument does not change once you have. */
+function khRenderName(){
+  const t=$("#khTitle"), sub=$("#khSub"), h=getHandle();
+  if(t) t.textContent = h ? "@"+h : "Sign your hides";
+  if(sub) sub.textContent="A dare from nobody is easy to ignore.";
+}
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
-  const t=$("#khTitle"), sub=$("#khSub"), inp=$("#khHandle");
+  const inp=$("#khHandle");
   const h=getHandle();
-  /* The headline states what the field is FOR, and changes once it is filled — before, it is
-     an instruction; after, it is a fact about the app. Neither is a label on the furniture,
-     which is what "Your hides" was. */
-  /* The handle IS the headline once it exists — "You're @tony" spent two words introducing a
-     name the field below already shows. Before it exists, the headline is the instruction. */
-  if(t) t.textContent = h ? "@"+h : "Sign your hides";
-  /* ONE LINE FOR BOTH STATES. It was two, and neither earned its length: the unset version
-     explained the feature twice ("pick a name" + "so people know who to beat") and the set
-     version restated the headline. This is true either way, so there is no branch to keep in
-     sync and nothing to read twice. */
-  /* AN ARGUMENT, NOT A DESCRIPTION. "The name on every challenge you send" told the user what
-     the field below them was, which they could already see. This says why it is worth
-     filling in — and it is the actual reason the feature exists: a dare from nobody is
-     easier to close than a dare from a person. */
-  if(sub) sub.textContent="A dare from nobody is easy to ignore.";
+  khRenderName();
   if(inp) inp.value=h;
   /* The field and its "Change name" stand-in are mutually exclusive, and the state is
      recomputed on every open rather than remembered — someone who clears their name and
@@ -3694,8 +3700,18 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
      when nobody has a caret in it. */
   const inp=$("#khHandle");
   if(inp){
-    inp.addEventListener("input",()=>{ setHandle(inp.value); });
-    inp.addEventListener("blur",()=>{ inp.value=setHandle(inp.value); });
+    /* The headline follows every keystroke — see khRenderName(). */
+    inp.addEventListener("input",()=>{ setHandle(inp.value); khRenderName(); });
+    /* AND THE FIELD STANDS DOWN WHEN THEY STOP TYPING — on blur, not on input. Collapsing
+       mid-keystroke would pull the field out from under the caret on the first character.
+       Blur is the moment they are done: the name is saved, the headline already shows it, and
+       a field repeating it is the duplicate this collapse exists to remove. If they cleared
+       it, the field stays — there is nothing to collapse to. */
+    inp.addEventListener("blur",()=>{
+      inp.value=setHandle(inp.value);
+      khRenderName();
+      khShowField(!inp.value);
+    });
     /* Enter dismisses the keyboard instead of doing nothing — on iOS there is otherwise no
        way off this field except tapping away, and tapping away closes the card. */
     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.keyCode===13) inp.blur(); });
