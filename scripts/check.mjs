@@ -328,6 +328,39 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5c-ter. WEB_ONLY and the wrapper's allow-list must not overlap -------------------------
+   WEB_ONLY names bypass postNative() and go straight to Amplitude, because the wrapper drops
+   anything not on its compiled WEB_EVENTS set and track() returns the moment postNative
+   succeeds. That is only correct while the two lists are disjoint. The day someone adds one
+   of these to WEB_EVENTS in kamo-app and does not remove it here, the event still skips the
+   wrapper — so the native path is quietly lost and the number silently changes meaning
+   without anything failing.
+   Cross-repo, so it can only run where kamo-app sits next to kamo. It says so rather than
+   passing quietly: a check that skips in silence is the same as no check. */
+{
+  const webOnly = html.match(/const WEB_ONLY=new Set\(\[([^\]]*)\]\)/);
+  if (!webOnly) bad('WEB_ONLY not found — events the wrapper cannot carry are being dropped again');
+  else {
+    const names = [...webOnly[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+    let wrapper = null;
+    try {
+      const src = readFileSync(join(ROOT, '..', 'kamo-app', 'analytics.js'), 'utf8');
+      wrapper = src.split('WEB_EVENTS = new Set([')[1].split('])')[0];
+    } catch { /* sibling repo not checked out here */ }
+    if (!wrapper) {
+      console.log(`  · WEB_ONLY not cross-checked (${names.length} names) — kamo-app is not beside kamo, `
+        + 'so the overlap with WEB_EVENTS cannot be verified on this machine');
+    } else {
+      const listed = names.filter((n) => new RegExp(`'${n}'`).test(wrapper));
+      listed.length
+        ? bad(`${listed.join(', ')} are in BOTH WEB_ONLY and the wrapper's WEB_EVENTS — the web `
+            + 'skips postNative for them, so adding them to the wrapper does nothing and the '
+            + 'native path is lost. Remove them from WEB_ONLY.')
+        : ok(`WEB_ONLY is disjoint from the wrapper's allow-list (${names.length} names routed direct)`);
+    }
+  }
+}
+
 /* ---- 5d. Defined is not wired ------------------------------------------------------------
    Three bugs tonight had the same shape: a function that exists, is correct, and is called
    from nowhere that matters. chPrevRender() only ran after a share had already completed, so
