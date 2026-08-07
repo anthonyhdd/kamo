@@ -1032,14 +1032,28 @@
   .chPPframe{position:relative;width:100%;border-radius:18px;overflow:hidden;
     border:1px solid rgba(255,255,255,.14);background:#080c0a;display:block;}
   .chPPframe canvas{width:100%;height:100%;display:block;object-fit:cover;cursor:pointer;}
-  /* FOUND. The border turns mint and gains a ring — a box-shadow ring rather than a thicker
-     border, so the frame does not resize by 2px at the moment it is being looked at. The pop
-     is a scale, so it survives the aspect-ratio the frame is given at render time. */
-  .chPPframe.found{border-color:var(--mint);
-    box-shadow:0 0 0 3px rgba(95,230,164,.34),0 0 34px rgba(95,230,164,.26);
-    animation:foundPop .5s cubic-bezier(.3,1.5,.5,1);}
+  /* FOUND — a real 3px green ring, floated just off the image, over a mint bloom.
+     `outline`, not a border and not a fake ring made of box-shadow. An outline is drawn
+     outside the border box and NEVER participates in layout, so it can be as thick as it
+     deserves to be without moving the picture by a pixel — which is the whole reason the
+     first version settled for a box-shadow. It follows border-radius, so it hugs the frame's
+     18px corners. The box-shadows are left doing what they are actually good at: a soft outer
+     bloom and a wide, faint halo, so the ring reads as lit rather than drawn. */
+  .chPPframe.found{border-color:rgba(95,230,164,.55);
+    outline:3px solid var(--mint);outline-offset:3px;
+    box-shadow:0 0 0 10px rgba(95,230,164,.09),0 0 44px rgba(95,230,164,.4);
+    animation:foundPop .52s cubic-bezier(.3,1.5,.5,1);}
   @keyframes foundPop{0%{transform:scale(1)}40%{transform:scale(1.028)}100%{transform:scale(1)}}
-  @media (prefers-reduced-motion:reduce){ .chPPframe.found{animation:none;} }
+  /* REDUCED MOTION LOSES THE MOVEMENT, NOT THE MOMENT. This is a switch the user turns on
+     themselves in iOS Accessibility, and honouring it is not optional — but "honour it" means
+     stop moving things, not stop celebrating. The ring and the bloom are colour, so they stay
+     exactly as they are; only the scale bounce goes, replaced by a fade so the ring still
+     arrives rather than blinking into place. confettiBurst() does the same thing: a still
+     bloom instead of flying particles. */
+  @media (prefers-reduced-motion:reduce){
+    .chPPframe.found{animation:foundFade .3s ease-out;}
+    @keyframes foundFade{from{outline-color:transparent;box-shadow:none}to{}}
+  }
   .chPPbar{height:5px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
   .chPPbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#8ef0bd);
     transition:width 1s linear,background .3s;}
@@ -4595,10 +4609,26 @@ function chPrevRender(){
  * piece dies rather than on a timer that could be wrong. */
 function confettiBurst(originEl){
   try{
-    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const r = originEl && originEl.getBoundingClientRect ? originEl.getBoundingClientRect() : null;
     const ox = r ? r.left + r.width/2 : window.innerWidth/2;
     const oy = r ? r.top + r.height/2 : window.innerHeight/2;
+    /* REDUCED MOTION GETS A CELEBRATION TOO, just not a moving one. Returning early left those
+       users with a screen that said "Found you" and did nothing — the setting asks for less
+       movement, not for less feedback. A mint bloom that fades up and out is pure opacity: no
+       travel, no parallax, nothing the setting is about. It carries the same class, so the
+       test that proves the layer always leaves still covers this path. */
+    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      const b=document.createElement("div"); b.className="kConfetti";
+      b.style.cssText="position:fixed;left:"+Math.round(ox-160)+"px;top:"+Math.round(oy-160)+"px;"
+        +"width:320px;height:320px;border-radius:50%;pointer-events:none;z-index:95;opacity:0;"
+        +"background:radial-gradient(circle,rgba(95,230,164,.42),rgba(95,230,164,.14) 45%,transparent 70%);"
+        +"transition:opacity .28s ease-out";
+      document.body.appendChild(b);
+      requestAnimationFrame(()=>{ b.style.opacity="1";
+        setTimeout(()=>{ b.style.transitionDuration=".5s"; b.style.opacity="0";
+          setTimeout(()=>b.remove(),560); },300); });
+      return;
+    }
     const dpr=Math.min(2,window.devicePixelRatio||1);
     const c=document.createElement("canvas");
     c.className="kConfetti";   // named so the pre-push test can assert it appears AND that it leaves
@@ -5952,14 +5982,15 @@ function chSeek(){
        align-self:center keeps it off the cross-axis stretch, and the image caps on the viewport
        height so a tall phone still fills it. */
     +".chFrame{position:relative;align-self:center;max-width:100%;min-height:0;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;transition:border-color .25s,box-shadow .25s;}"
-    /* FOUND — the same green frame the sender saw in their own preview. This screen already
-       had a hit marker and eight sparks at the tap point; what it never had was any change to
-       the PHOTO, which is the thing they were staring at. A box-shadow ring rather than a
-       thicker border: the frame is centred with a max-width, so growing it by 2px nudges the
-       whole layout at the exact moment of the win. */
-    +".chFrame.found{border-color:var(--mint);box-shadow:0 0 0 3px rgba(95,230,164,.34),0 0 40px rgba(95,230,164,.26),0 18px 60px rgba(0,0,0,.6);animation:foundPop .5s cubic-bezier(.3,1.5,.5,1);}"
+    /* FOUND — the same green ring the sender saw in their own preview. This screen already had
+       a hit marker and eight sparks at the tap point; what it never had was any change to the
+       PHOTO, which is the thing they were staring at. `outline` so the ring can be 3px without
+       touching layout — this frame is centred under a max-width, and a thicker border would
+       nudge the picture sideways at the exact moment of the win. */
+    +".chFrame.found{border-color:rgba(95,230,164,.55);outline:3px solid var(--mint);outline-offset:3px;box-shadow:0 0 0 10px rgba(95,230,164,.09),0 0 46px rgba(95,230,164,.4),0 18px 60px rgba(0,0,0,.6);animation:foundPop .52s cubic-bezier(.3,1.5,.5,1);}"
     +"@keyframes foundPop{0%{transform:scale(1)}40%{transform:scale(1.02)}100%{transform:scale(1)}}"
-    +"@media (prefers-reduced-motion:reduce){.chFrame.found{animation:none}}"
+    /* The ring and the bloom are colour, so they survive; only the bounce is replaced. */
+    +"@media (prefers-reduced-motion:reduce){.chFrame.found{animation:foundFade .3s ease-out}@keyframes foundFade{from{outline-color:transparent}to{}}}"
     /* object-fit:contain inside a flexed frame: the box never exceeds the space left,
        and the tap coordinates stay honest because the frame shrink-wraps the pixels. */
     +".chFrame img{display:block;max-width:100%;max-height:56dvh;width:auto;height:auto;touch-action:manipulation;}"
