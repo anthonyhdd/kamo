@@ -47,6 +47,18 @@ const html = real.slice(0, at)
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
   + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
+  /* chGeom() needs a hider projected from the 3D scene, and this harness has no camera — so
+     the preview would bail on its first line for a reason that has nothing to do with what is
+     being tested. Stubbed to a hider dead centre. chGeom is a function DECLARATION, so it is
+     assignable from inside the module; nothing in the shipped file is touched. */
+  + 'preview(){chGeom=()=>({cx:.5,cy:.5,r:.15});document.getElementById("chPrev").click();'
+  + 'return !!document.getElementById("chPP");},'
+  + 'win(){const img=document.querySelector("#chPPframe canvas");if(!img)return null;'
+  + 'const r=img.getBoundingClientRect();'
+  + 'img.dispatchEvent(new MouseEvent("click",{clientX:r.left+r.width/2,clientY:r.top+r.height/2,bubbles:true}));'
+  + 'return{found:!!document.querySelector("#chPPframe.found"),confetti:document.querySelectorAll(".kConfetti").length,'
+  + 'sub:!!document.querySelector(".chPPsub"),head:(document.getElementById("chPPh")||{}).textContent};},'
+  + 'litter(){return document.querySelectorAll(".kConfetti").length;},'
   + 'row(){const b=(s)=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();'
   + 'return{d:getComputedStyle(e).display,x:r.left,y:r.top,w:r.width,h:r.height};};'
   /* Every infinite animation inside the card, pseudo-elements included — that is where the
@@ -420,6 +432,46 @@ console.log('\nTHE SHEET RESIZES, IN BOTH DIRECTIONS');
     ? ok('a tap outside the card puts the long sheet back to short')
     : bad(`a tap outside left it at "${out.state}" — dismissShareSheet is still unreachable`);
   await settle();
+}
+
+/* THE CARD OPENS THE PREVIEW, AND WINNING LOOKS LIKE WINNING.
+   Driven from a click on the ROW, not on the thumbnail — the thumbnail always worked, and the
+   whole point of the change is that the title, the chips and the space between them were dead
+   surface in front of the only way to see the challenge. */
+console.log('\nTHE CARD OPENS THE PREVIEW');
+{
+  await page.evaluate(() => window.__t.present());
+  const opened = await page.evaluate(() => window.__t.preview());
+  opened
+    ? ok('a tap anywhere on the card opens the preview')
+    : bad('tapping the card did nothing — only the 46px thumbnail is live');
+
+  if (opened) {
+    const won = await page.evaluate(() => window.__t.win());
+    won && won.head === 'Found you'
+      ? ok(`finding the hider ends the round ("${won.head}")`)
+      : bad(`the win did not land — headline is ${JSON.stringify(won && won.head)}`);
+    won && won.found
+      ? ok('the frame goes green')
+      : bad('#chPPframe never got the .found class — no green outline on the image');
+    won && won.confetti === 1
+      ? ok('one confetti layer is thrown')
+      : bad(`${won && won.confetti} confetti layers — expected exactly 1`);
+    /* THE COPY IS GONE. "That is the screen they get" described the screen to someone looking
+       straight at it. The green frame and the burst are the ending now. */
+    won && !won.sub
+      ? ok('and it says nothing — the frame and the confetti are the ending')
+      : bad('the win still renders a .chPPsub caption');
+
+    /* IT HAS TO LEAVE. The canvas sits at z-index 95, above the share sheet and above the
+       preview's own CTA. One left behind is a screen nobody can tap. */
+    await page.waitForTimeout(3000);
+    const left = await page.evaluate(() => window.__t.litter());
+    left === 0
+      ? ok('the confetti canvas removes itself when the last piece dies')
+      : bad(`${left} confetti canvas(es) still in the DOM — at z-index 95 that is an invisible `
+          + 'sheet over every control on the screen');
+  }
 }
 
 /* THE PAYWALL'S PROMISES, RENDERED. check.mjs proves no number is TYPED into the copy; this

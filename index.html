@@ -1032,6 +1032,14 @@
   .chPPframe{position:relative;width:100%;border-radius:18px;overflow:hidden;
     border:1px solid rgba(255,255,255,.14);background:#080c0a;display:block;}
   .chPPframe canvas{width:100%;height:100%;display:block;object-fit:cover;cursor:pointer;}
+  /* FOUND. The border turns mint and gains a ring — a box-shadow ring rather than a thicker
+     border, so the frame does not resize by 2px at the moment it is being looked at. The pop
+     is a scale, so it survives the aspect-ratio the frame is given at render time. */
+  .chPPframe.found{border-color:var(--mint);
+    box-shadow:0 0 0 3px rgba(95,230,164,.34),0 0 34px rgba(95,230,164,.26);
+    animation:foundPop .5s cubic-bezier(.3,1.5,.5,1);}
+  @keyframes foundPop{0%{transform:scale(1)}40%{transform:scale(1.028)}100%{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){ .chPPframe.found{animation:none;} }
   .chPPbar{height:5px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
   .chPPbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#8ef0bd);
     transition:width 1s linear,background .3s;}
@@ -1073,6 +1081,10 @@
   .chPrev{display:none;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:10px 11px;
     background:rgba(255,255,255,.05);border:1px solid var(--stroke);border-radius:16px;text-align:left;}
   .chPrev.on{display:flex;}
+  /* The whole row is the tap target for the preview (chPrevRender binds it), so it has to say
+     so — and press like the things it contains. */
+  .chPrev{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+  .chPrev:active{transform:scale(.985);}
   .chPrevShot{flex:0 0 auto;width:46px;height:60px;border-radius:10px;overflow:hidden;position:relative;
     border:1px solid rgba(255,255,255,.18);background:#0a0f0d;padding:0;cursor:pointer;
     -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
@@ -4536,6 +4548,12 @@ function chPrevRender(){
        runs again on every share sheet open, and a listener would stack a duplicate each
        time, so the preview would open twice, then three times. */
     shot.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevPlay(); };
+    /* THE WHOLE ROW OPENS IT, not just the 46px thumbnail. The card is one object that says
+       "here is what they get", and only the picture answered to a tap — so the title, the two
+       chips and all the space between them were dead, and the tap target for the only way to
+       SEE the challenge was the smallest thing on the card. The gear stops propagation, so
+       settings still win on their own corner. */
+    row.onclick=()=>{ haptic(10); chPrevPlay(); };
     const gear=document.getElementById("chPrevGear");
     if(gear) gear.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevSettings(); };
     /* `ready` records that the thumbnail is actually drawn, so syncShareMode() can put the
@@ -4557,6 +4575,76 @@ function chPrevRender(){
  * the pips are here so they see the frame their friend gets, not to test them. That is why
  * the ending button is "Challenge a friend" and not "Try again": the detour has to come back
  * to the send, or it is just a toy inside the one sheet whose job is to produce a share. */
+/* CONFETTI, ON A CANVAS, THAT REMOVES ITSELF.
+ * One burst shared by both success screens — the sender's preview and the receiver's real
+ * find — because they are the same moment seen from two sides and they should feel the same.
+ *
+ * A canvas rather than N absolutely-positioned divs: this is ~100 pieces for a second and a
+ * half, and a hundred elements each carrying their own animation is a hundred entries in the
+ * style/animation system, on the one frame budget that also has to run the reveal. The seeker's
+ * existing chCelebrate() sparks stay as they are — eight elements is cheap and it is a
+ * different effect (a hit marker at the tap point, not a celebration of the screen).
+ *
+ * FIXED TO THE VIEWPORT, so callers do not have to be positioned or to know where they sit.
+ * The origin is read off an element instead of being passed as coordinates, for the same
+ * reason: the burst should come from the thing that was found.
+ *
+ * IT MUST NOT OUTLIVE ITS SCREEN. The preview's ending card mounts immediately after this,
+ * and an effect layer left behind would sit over the CTA — pointer-events:none keeps it from
+ * eating a tap even during the burst, and the loop removes the canvas the moment the last
+ * piece dies rather than on a timer that could be wrong. */
+function confettiBurst(originEl){
+  try{
+    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const r = originEl && originEl.getBoundingClientRect ? originEl.getBoundingClientRect() : null;
+    const ox = r ? r.left + r.width/2 : window.innerWidth/2;
+    const oy = r ? r.top + r.height/2 : window.innerHeight/2;
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const c=document.createElement("canvas");
+    c.className="kConfetti";   // named so the pre-push test can assert it appears AND that it leaves
+    c.width=Math.round(window.innerWidth*dpr); c.height=Math.round(window.innerHeight*dpr);
+    /* Above .chPP (90) and the share sheet (58) — it has to read over whatever it is
+       celebrating, and it is the only thing in the app that sits this high. */
+    c.style.cssText="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:95";
+    document.body.appendChild(c);
+    const g=c.getContext("2d");
+    /* The app's own mint twice, then white and a warm gold for the sparkle a single hue never
+       gets. No brand-foreign colours: this is KAMO celebrating, not a party emoji. */
+    const COLORS=["#5fe6a4","#8ef0bd","#ffffff","#ffd66e","#c9ffe4"];
+    const N = window.innerWidth<420 ? 80 : 120;
+    const P=Array.from({length:N},()=>{
+      /* A fan upward, not a sphere: gravity pulls everything back down through the frame, so
+         an even circle spends half its pieces on a downward streak nobody reads as confetti. */
+      const a=(-Math.PI/2)+(Math.random()-0.5)*(Math.PI*0.95);
+      const sp=(5.5+Math.random()*9.5)*dpr;
+      return{ x:ox*dpr, y:oy*dpr, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        w:(4.5+Math.random()*5)*dpr, h:(7+Math.random()*7)*dpr,
+        rot:Math.random()*Math.PI, vr:(Math.random()-0.5)*0.42,
+        col:COLORS[(Math.random()*COLORS.length)|0], life:0 };
+    });
+    const GRAV=0.30*dpr, DRAG=0.991, LIFE=105, FADE=LIFE*0.62;
+    (function tick(){
+      g.clearRect(0,0,c.width,c.height);
+      let alive=0;
+      for(const p of P){
+        if(p.life>LIFE) continue;
+        p.life++; alive++;
+        p.vy+=GRAV; p.vx*=DRAG; p.vy*=DRAG;
+        p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+        g.save();
+        g.globalAlpha=Math.max(0,Math.min(1,1-(p.life-FADE)/(LIFE-FADE)));
+        g.translate(p.x,p.y); g.rotate(p.rot);
+        g.fillStyle=p.col;
+        /* Scaled on one axis by the rotation so each piece reads as a tumbling rectangle
+           rather than a flat sticker — the cheapest possible stand-in for 3D. */
+        g.scale(1,Math.max(0.15,Math.abs(Math.cos(p.rot*1.7))));
+        g.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+        g.restore();
+      }
+      if(alive) requestAnimationFrame(tick); else c.remove();
+    })();
+  }catch(e){}
+}
 function chPrevPlay(){
   try{
     const g=chGeom(); if(!g) return;
@@ -4615,11 +4703,17 @@ function chPrevPlay(){
     clock(); pips();
     const iv=setInterval(()=>{ if(over) return; left--; clock(); if(left<=0) end("Out of time","They never found you."); },1000);
 
-    function end(head,sub){
+    function end(head,sub,won){
       if(over) return; over=true; clearInterval(iv);
       document.getElementById("chPPh").textContent=head;
+      /* The frame goes green and the screen celebrates. Both hang off the same flag rather
+         than off the headline text, so a reworded ending cannot silently stop celebrating. */
+      if(won){ frame.classList.add("found"); confettiBurst(frame); }
       document.getElementById("chPPfoot").innerHTML=
-        '<div class="chPPsub">'+sub+'</div>'
+        /* `sub` is optional now. The win used to caption itself — "That is the screen they get"
+           described the screen to someone looking straight at it, which is the same mistake
+           the kicker above was moved to fix. The green frame and the confetti say it. */
+        (sub ? '<div class="chPPsub">'+sub+'</div>' : '')
         +'<button class="pwBuy" id="chPPgo"><span class="pwBuyTxt">Challenge a friend</span></button>'
         +'<button class="chPPclose" id="chPPx">Back</button>';
       document.getElementById("chPPgo").onclick=send;
@@ -4644,7 +4738,7 @@ function chPrevPlay(){
       const r=img.getBoundingClientRect();
       const x=(ev.clientX-r.left)/r.width, y=(ev.clientY-r.top)/r.height;
       const d=Math.hypot(x-g.cx,y-g.cy);
-      if(d<=g.r){ haptic(18); end("Found you","That is the screen they get."); return; }
+      if(d<=g.r){ haptic(18); end("Found you","",true); return; }
       tries++; pips(); haptic(8);
       img.classList.remove("chPPshake"); void img.offsetWidth; img.classList.add("chPPshake");
       if(tries>=e.taps) end("Out of taps","They never found you.");
@@ -5852,7 +5946,15 @@ function chSeek(){
        the picture pinned left and black filling the rest. The frame is now sized BY the image:
        align-self:center keeps it off the cross-axis stretch, and the image caps on the viewport
        height so a tall phone still fills it. */
-    +".chFrame{position:relative;align-self:center;max-width:100%;min-height:0;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;}"
+    +".chFrame{position:relative;align-self:center;max-width:100%;min-height:0;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;transition:border-color .25s,box-shadow .25s;}"
+    /* FOUND — the same green frame the sender saw in their own preview. This screen already
+       had a hit marker and eight sparks at the tap point; what it never had was any change to
+       the PHOTO, which is the thing they were staring at. A box-shadow ring rather than a
+       thicker border: the frame is centred with a max-width, so growing it by 2px nudges the
+       whole layout at the exact moment of the win. */
+    +".chFrame.found{border-color:var(--mint);box-shadow:0 0 0 3px rgba(95,230,164,.34),0 0 40px rgba(95,230,164,.26),0 18px 60px rgba(0,0,0,.6);animation:foundPop .5s cubic-bezier(.3,1.5,.5,1);}"
+    +"@keyframes foundPop{0%{transform:scale(1)}40%{transform:scale(1.02)}100%{transform:scale(1)}}"
+    +"@media (prefers-reduced-motion:reduce){.chFrame.found{animation:none}}"
     /* object-fit:contain inside a flexed frame: the box never exceeds the space left,
        and the tap coordinates stay honest because the frame shrink-wraps the pixels. */
     +".chFrame img{display:block;max-width:100%;max-height:56dvh;width:auto;height:auto;touch-action:manipulation;}"
@@ -6024,6 +6126,11 @@ function chSeek(){
            the player sees what they were looking for. */
         mk.className="chMark hit stay"; clearTimeout(mk._t);
         chCelebrate($$("chFrame"), (e.clientX-r.left), (e.clientY-r.top));
+        /* The sparks mark WHERE it was; these two say THAT they won. Same green frame and the
+           same burst the sender got in their preview, so the two sides of one challenge share
+           a vocabulary instead of each having their own idea of a win. */
+        $$("chFrame").classList.add("found");
+        confettiBurst($$("chFrame"));
         track("seek_found",{tries:tries,ms:Date.now()-t0});
         /* MY OWN MISSES ARE NOT OTHER PEOPLE. res.missed is every failed attempt ever
            recorded on this hide, which includes the ones I just made — so a player who
