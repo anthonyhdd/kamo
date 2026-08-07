@@ -3801,9 +3801,32 @@ function trackCarried(kind,props){
   const name = caps && caps.eventsV2 ? kind : CARRIER_102[kind];
   track(name, Object.assign({carrier_for:kind},props||{}));
 }
+/* EVENTS THE WRAPPER CANNOT CARRY, SENT THE OTHER WAY INSTEAD OF BEING DROPPED.
+   postNative() hands the event to kamo-app, which filters it through a COMPILED WEB_EVENTS
+   set and silently discards anything not on it. track() returns as soon as postNative
+   succeeds — so inside the app, every name the wrapper does not know is simply lost, while a
+   direct path that works sits on the next line, used only when there is no wrapper at all.
+   That is why `hide_published` read as 6 a day: it is not in WEB_EVENTS, on main or anywhere,
+   so the only ones visible came from plain browsers. How many challenge cards actually get
+   published was unmeasurable — a bad thing not to know about a growth loop.
+   Kept deliberately SHORT rather than "everything the list is missing". Each of these answers
+   a question nothing else can: did the hide reach the server, did it fail, and which
+   mechanism actually sent the invite. The seek_* events are already fine — they fire on the
+   seeker screen, which is a plain browser, so postNative fails there and they take this path
+   on their own.
+
+   ⚠️ THE COST, because it is real. chWebTrack posts with chDeviceId() — a web id, not the
+   native Amplitude device id, and no user_id (native sets the RevenueCat id; the web is never
+   told it). So these land under a SEPARATE user from the app's native events. Daily counts
+   are right, and counting is what they are for. A funnel that mixes one of these with a
+   native event is NOT, and will under-report in silence. Stitching needs the RC id injected
+   into the web, which needs a build.
+   It also means one extra Amplitude user per install, because the WebView had no reason to
+   mint a web id before. Watch the user totals for a step change. */
+const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied"]);
 function track(event,props){
   const p={...(props||{}),trial_arm:trialArm};
-  if(postNative({type:"track",event:event,props:p})) return;
+  if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
 /* Survives a reload so a seeker's miss and their eventual find are one user, not two.
