@@ -3760,31 +3760,38 @@ function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWe
    not get made again on purpose.
    Direct HTTP to Amplitude, no SDK: one fetch, the same client key kamo-app already
    embeds. Native still wins when the bridge is there — one event, one path, never both. */
-/* TWO ALLOW-LISTS, ONE CALL SITE. 1.0.2 passes camera_requested / paint_started /
-   reveal_previewed and drops the real event names. 1.0.5 — the build now in the expedited
-   queue — dropped all three of those AND still carries none of the real names, so the day it
-   ships every carrier goes dark at once and the round funnel, the invite taps and the Buy
-   taps all disappear together.
-   torch_toggled is on BOTH lists and is dead in practice on iOS: the button only appears
-   when getCapabilities().torch is true, which WebKit never reports on iPhone. That makes it
-   the 1.0.5 carrier without displacing a live signal.
-   WHICH LIST ARE WE BEHIND? 1.0.2 never calls setNativeCaps; every build from 1.0.4 does. A
-   populated nativeCaps means the newer list, and it arrives on webview load — long before a
-   round can finish or a Buy can be tapped.
+/* ONE ALLOW-LIST THAT MATTERS, ONE CALL SITE. The wrapper filters web events through a
+   compiled WEB_EVENTS set and silently drops anything not on it, so the round funnel, the
+   invite taps and the Buy taps have to ride names that shipped binaries already accept.
+   1.0.2 passes camera_requested / paint_started / reveal_previewed and drops the real names.
+
+   THE FLEET, MEASURED 2026-08-07 rather than assumed (daily uniques, Aug 6):
+     1.0.2  532   ·   web/seeker (no version)  61   ·   1.0.9  2   ·   1.0.5  1
+   So "the build in the queue" is one device, and 1.0.2 is 89% of everything.
+
+   TWO PREMISES HERE WERE WRONG AND COST AN HOUR OF DIAGNOSIS THIS MORNING.
+   1. "1.0.2 never calls setNativeCaps." It does — App.js injects setNativeCaps on every
+      webview load. So EVERY 1.0.2 user had a populated nativeCaps, took the middle branch,
+      and rode torch_toggled. reveal_previewed went to zero per hour from 14:00 UTC on Aug 6
+      and round_finished stayed in the tens, which reads exactly like the reveal breaking for
+      the whole fleet. It had not: 1 413 rounds finished that day, under torch_toggled.
+   2. "torch_toggled is dead in practice on iOS." It is not — line ~4808 emits it for real
+      when the torch is toggled, and Amplitude shows hundreds a day with no carrier_for. The
+      carrier was displacing a live signal and burying the round funnel inside it.
+
+   So the middle branch is gone. Anything without eventsV2 rides CARRIER_102: three names
+   that are emitted NOWHERE else in this file, so the count is the funnel and nothing else.
+   check.mjs enforces that — a carrier that doubles as a real event is what created this.
+   1.0.5 loses these three (it drops the 1.0.2 carriers): one device, knowingly, and the
+   whole carrier era retires the moment 1.0.9 is the only build left.
    Exactly one name goes out per launch, never both, so nothing is double counted. Segment on
    carrier_for either way; the event name it rides under stops mattering. */
 const CARRIER_102={round_finished:"reveal_previewed",invite_tapped:"camera_requested",purchase_initiated:"paint_started"};
-/* THREE POPULATIONS NOW, ONE CALL SITE.
-   - `eventsV2` (1.0.9 and later): the wrapper allow-lists the real names, so send them. The
-     carrier era ends the moment that build is the only one left.
-   - caps without eventsV2: a build that announces itself but still filters the real names.
-     Rides torch_toggled, which is on that list and dead on iOS.
-   - no caps at all (1.0.2, the only public build): the original three carriers.
-   `carrier_for` is stamped in every case, so a single Amplitude segment spans all three and
-   the migration needs no chart rewrite. */
 function trackCarried(kind,props){
   const caps=nativeCaps&&Object.keys(nativeCaps).length?nativeCaps:null;
-  const name = caps && caps.eventsV2 ? kind : (caps ? "torch_toggled" : CARRIER_102[kind]);
+  /* eventsV2 (1.0.9+): the wrapper allow-lists the real names, so send them. Everything else
+     — with or without caps — is a build that filters them, and takes the dedicated carrier. */
+  const name = caps && caps.eventsV2 ? kind : CARRIER_102[kind];
   track(name, Object.assign({carrier_for:kind},props||{}));
 }
 function track(event,props){

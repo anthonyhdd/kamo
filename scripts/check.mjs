@@ -299,6 +299,35 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5c-bis. A carrier may not double as a real event --------------------------------------
+   The wrapper drops any web event not on its compiled allow-list, so three funnel events ride
+   names shipped binaries already accept. That only works while the carrier name means ONE
+   thing. It stopped meaning one thing: the middle branch routed everything through
+   torch_toggled, which line ~4808 also emits for real, so the round funnel was buried inside
+   a live signal — and because the branch it replaced was chosen on a false premise (that
+   1.0.2 does not call setNativeCaps; it does), reveal_previewed read as zero and the reveal
+   looked broken for the entire fleet. It was not. 1 413 rounds finished that day.
+   The rule that prevents the repeat: a carrier target must be emitted NOWHERE else. Then its
+   count is the funnel and nothing else, and no property filter is needed to read it. */
+{
+  const carriers = html.match(/const CARRIER_102=\{[^}]*\}/);
+  if (!carriers) bad('CARRIER_102 not found — how are funnel events reaching the wrapper?');
+  else {
+    const targets = [...carriers[0].matchAll(/:"([a-z_]+)"/g)].map((m) => m[1]);
+    const routed = [...html.matchAll(/const name\s*=[^;]*/g)].map((m) => m[0]).join('\n');
+    /* Any string literal the router can choose, not just the CARRIER_102 map — the bad branch
+       was an inline "torch_toggled" that never appeared in the map at all. */
+    const inline = [...routed.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+    const all = [...new Set([...targets, ...inline])];
+    const collide = all.filter((n) => new RegExp(`track\\("${n}"`).test(html));
+    collide.length
+      ? bad(`carrier name(s) ${collide.join(', ')} are ALSO emitted directly by track() — the `
+          + 'funnel is being counted inside a live signal, and reading it needs a property '
+          + 'filter nobody will remember to apply')
+      : ok(`carriers are dedicated (${all.join(', ')} — emitted only by trackCarried)`);
+  }
+}
+
 /* ---- 5d. Defined is not wired ------------------------------------------------------------
    Three bugs tonight had the same shape: a function that exists, is correct, and is called
    from nowhere that matters. chPrevRender() only ran after a share had already completed, so
