@@ -714,22 +714,40 @@
      three cards land left to right on a 90ms stagger while their values count up. Three
      things moving in sequence reads as a scoreboard filling in; the same three appearing
      together read as a static table. */
-  .kpStats{display:flex;gap:9px;justify-content:center;margin:0 0 20px;}
-  .kpStat{flex:1 1 0;min-width:0;padding:14px 6px 12px;border-radius:16px;position:relative;overflow:hidden;
-    background:linear-gradient(180deg,rgba(95,230,164,.09),rgba(255,255,255,.04));border:1px solid rgba(95,230,164,.20);
-    opacity:0;animation:kpStatIn .5s cubic-bezier(.2,.9,.3,1) forwards;}
-  .kpStat:nth-child(1){animation-delay:.16s;} .kpStat:nth-child(2){animation-delay:.25s;} .kpStat:nth-child(3){animation-delay:.34s;}
-  @keyframes kpStatIn{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
-  /* One slow pass of light across the row, once each, after they have landed. Staggered with
-     the cards so it reads as the same gesture continuing rather than a second effect. */
-  .kpStat::after{content:"";position:absolute;top:0;left:-70%;width:45%;height:100%;pointer-events:none;
-    background:linear-gradient(100deg,transparent,rgba(180,255,220,.16),transparent);transform:skewX(-18deg);
-    animation:pwBuySheen 3.8s ease-in-out infinite;}
-  .kpStat:nth-child(2)::after{animation-delay:.18s;} .kpStat:nth-child(3)::after{animation-delay:.36s;}
-  .kpStat b{display:block;font-family:var(--display);font-size:27px;font-weight:900;color:#fff;line-height:1;font-variant-numeric:tabular-nums;
-    text-shadow:0 2px 14px rgba(95,230,164,.28);}
-  .kpStat span{display:block;margin-top:5px;font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.55);}
-  /* Quiet exit under the CTA — the sheet is a place you visit, not a modal you must clear. */
+  /* THE HANDLE FIELD. Sized and weighted like the .kpStat tiles it replaces, so the card
+     keeps its centre of gravity — this is the one thing on it the user owns, and it has to
+     look like the subject rather than like a settings row.
+     16px on the input is not a style choice: anything smaller makes iOS zoom the whole page
+     on focus, and a card that jumps when you tap its only field reads as broken.
+     -webkit-user-select is re-enabled because the global *{user-select:none} in this file
+     makes a field untypeable in WKWebView — the same trap the passphrase prompt hit. */
+  .khName{display:flex;align-items:center;justify-content:center;gap:2px;width:100%;
+    margin:0 auto 20px;max-width:320px;padding:12px 14px;border-radius:16px;
+    background:rgba(255,255,255,.06);border:1px solid var(--stroke);
+    transition:border-color .18s,background .18s;}
+  .khName:focus-within{border-color:rgba(95,230,164,.55);background:rgba(95,230,164,.09);}
+  .khAt{font-family:var(--display);font-size:22px;font-weight:900;color:rgba(95,230,164,.75);line-height:1;}
+  #khHandle{flex:0 1 auto;min-width:0;width:100%;max-width:220px;background:none;border:none;outline:none;
+    font-family:var(--display);font-size:22px;font-weight:900;color:#fff;line-height:1;padding:0;
+    -webkit-user-select:text;user-select:text;}
+  #khHandle::placeholder{color:rgba(255,255,255,.28);font-weight:800;}
+  /* The perk chips are shown to everyone now, so for a non-member they have to read as
+     "what's behind the door" rather than as "what you have". Dimmed, not hidden: an empty
+     card sells nothing, and the upsell row directly under them is the door. */
+  .kpChip.off{opacity:.42;}
+  /* Its own rule rather than borrowing .ssBtn.ssPlus from the share sheet: that class is
+     scoped to a flex ROW there and carries the row's height and flex share, so reusing it
+     here rendered an unstyled browser button. Same colours — the mint tint, the mint border,
+     the pale mint label — because it is the same offer in the same voice, but the geometry
+     belongs to this card. Deliberately quieter than the Discord slab above it: the community
+     is the thing this card is for, the upsell is the thing it also happens to sell. */
+  .kpPlus{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;height:48px;
+    margin-top:11px;border-radius:16px;cursor:pointer;
+    background:rgba(95,230,164,.13);border:1px solid rgba(95,230,164,.34);color:#c9ffe4;
+    font-family:var(--font);font-size:14.5px;font-weight:800;
+    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+  .kpPlus:active{transform:scale(.97);}
+  .kpPlus .ic{font-size:13px;color:var(--mint);}
   .kpClose{display:block;width:100%;margin-top:11px;background:none;border:none;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px;}
   @keyframes pwFade{from{opacity:0}to{opacity:1}}
   .pwCard{position:relative;width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
@@ -1439,36 +1457,41 @@
      from the same tap. Deliberately the same object as the welcome above at a later moment:
      same badge, same card, same chips. What changes is that it leads with YOUR numbers,
      because after the purchase the interesting thing is no longer the offer. -->
+<!-- THE PLAYER'S CARD, AND IT OPENS FOR EVERYONE.
+     It used to be the KAMO+ member home, reachable only by a paying user tapping the
+     wordmark, and it showed three numbers: Hides, Time hidden, Best cover. Nothing on it
+     could be acted on. It was a receipt, not a home — the one screen that opens for someone
+     who has already paid, and it asked them for nothing and offered them nowhere to go.
+     What replaces the numbers is the two things a player can actually do with this app
+     outside a round: sign their hides, and find the other players. -->
 <div id="kamoHome" data-blocks-timer>
   <div class="kpCard pwCard">
-    <div class="kpBadge">KAMO<span class="kPlus">+</span></div>
-    <div class="kpTitle" id="khTitle">Your hides</div>
+    <!-- The + is conditional. Wearing "KAMO+" on a free user's own card would be the app
+         telling them they have something they do not. khSetPlus() decides. -->
+    <div class="kpBadge">KAMO<span class="kPlus" id="khPlus">+</span></div>
+    <div class="kpTitle" id="khTitle">Sign your hides</div>
     <div class="kpSub" id="khSub"></div>
-    <div class="kpStats">
-      <div class="kpStat"><b id="khHides">0</b><span id="khHidesLbl">Hides</span></div>
-      <!-- Fastest moved out of the tiles and into the subtext, which already says "Your
-           best vanish took Xs". It was the one number whose zero LIES: a fastest of 0s is
-           not a fresh scoreboard, it is nonsense. Hides and Time hidden are cumulative and
-           Best cover is a percentage, so all three have a truthful 0 and never show a dash
-           on a paying user's own home. -->
-      <div class="kpStat"><b id="khTime">0</b><span>Time hidden</span></div>
-      <div class="kpStat"><b id="khCov">0</b><span>Best cover</span></div>
+    <!-- The @ is furniture, so it lives in the markup and never in the value. Storing it
+         would put a second @ in every message the first time someone typed one. -->
+    <div class="khName">
+      <span class="khAt">@</span>
+      <input id="khHandle" type="text" inputmode="text" autocomplete="off" autocapitalize="none"
+             autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname"
+             aria-label="Your handle">
     </div>
-    <!-- THREE chips, not four. Four wrapped to a second row on narrow screens, and
-         "75s rounds" was the one to go: the member home now tiles Time hidden right
-         above it, and Clean export has to stay because it is the only perk here with
-         no free substitute. Both sheets keep the same row - see TWO SHEETS, ONE LOOK. -->
     <div class="kpChips">
       <span class="kpChip">Every color</span>
       <span class="kpChip">Fine brush</span>
       <span class="kpChip">Clean export</span>
     </div>
-    <!-- THE CTA POINTS OUTWARD. "Back to hiding" was a dismiss button wearing the primary
-         slab: it did the same thing as Close, in the loudest style on the card. A member
-         opening this is looking at their own numbers, which is the one moment a brag costs
-         them nothing — so the primary action is now sharing them, and going back to the
-         camera is the quiet one under it. -->
-    <button class="kpGo" id="khShare">Share my stats</button>
+    <!-- THE PRIMARY POINTS OUT OF THE APP, and that is the point. "Share my stats" was the
+         primary before, and it shared the three numbers that were already the weakest thing
+         on the card. This is the only door in the product to other players. -->
+    <button class="kpGo" id="khDiscord">Join the Discord</button>
+    <!-- Free users only — see khSetPlus(). Tagged `home`, not `brand`, so the 9 paywall views
+         a day the wordmark used to send can be told apart from the ones this line sends and
+         we can see whether repurposing the wordmark cost anything. -->
+    <button class="kpPlus" id="khUpsell" style="display:none"><span class="ic">✦</span>Unlock every tool</button>
     <button class="kpClose" id="khClose">Back</button>
   </div>
 </div>
@@ -3460,91 +3483,56 @@ function recordHide(sec,cov){
     localStorage.setItem(STATS_KEY,JSON.stringify(s));
   }catch(e){}   // storage full or blocked → the scoreboard is stale, the round still counts
 }
-/* Numbers roll up on open. It is the only motion the sheet needs — the card already rises
-   and the badge already breathes — and it makes a personal best feel like an achievement
-   rather than a table cell. ~600ms, eased, and it lands EXACTLY on the target value
-   (the final frame assigns `to` directly rather than trusting the interpolation). */
-function countUp(el,to,suffix){
-  if(!el) return;
-  if(!to && to!==0){ el.textContent="—"; return; }
-  const dur=600, t0=performance.now();
-  const step=now=>{
-    const k=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-k,3);
-    el.textContent = (k>=1 ? to : Math.round(to*e)) + (suffix||"");
-    if(k<1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+/* THE HANDLE.
+ * Local, unverified, and not an account — there is no login in KAMO and this does not add
+ * one. It is the name that goes out with a challenge, nothing more.
+ *
+ * IT HAD TO GO SOMEWHERE OR IT WOULD BE DECORATION. A field that only ever shows itself back
+ * to the person who filled it is exactly the failure the three stat tiles above it were: a
+ * thing to look at with nothing behind it. So the handle rides on the invite text — the
+ * message a friend receives now says who is hiding instead of arriving from nobody. That is
+ * also the loop that is flat: 71 shares a day and roughly one in eight ever played, and an
+ * anonymous dare is a weaker ask than a signed one.
+ *
+ * SANITISED ON THE WAY IN, NOT ON THE WAY OUT. It is interpolated into a share message and
+ * read back by whoever receives it, so the value is narrowed to a handle-shaped string at the
+ * only point where a person types it, and every later reader gets something already safe.
+ * The @ is markup, never stored — keeping it in the value would double it the first time
+ * someone typed one themselves. */
+const HANDLE_KEY="kamo_handle";
+function cleanHandle(v){
+  return String(v||"").trim().replace(/^@+/,"").replace(/[^A-Za-z0-9_.]/g,"").slice(0,16);
+}
+function getHandle(){ try{ return cleanHandle(localStorage.getItem(HANDLE_KEY)); }catch(e){ return ""; } }
+function setHandle(v){
+  const h=cleanHandle(v);
+  try{ h ? localStorage.setItem(HANDLE_KEY,h) : localStorage.removeItem(HANDLE_KEY); }catch(e){}
+  return h;
+}
+/* THE ONE PLACE THAT DECIDES WHAT THIS CARD CLAIMS. It opens for everyone now, so every
+   membership signal on it — the +, the perk chips, the upsell — has to be able to say no. */
+function khSetPlus(){
+  const plus=$("#khPlus"); if(plus) plus.style.display = isPro ? "" : "none";
+  const up=$("#khUpsell"); if(up) up.style.display = isPro ? "none" : "";
+  document.querySelectorAll("#kamoHome .kpChip").forEach(c=>c.classList.toggle("off",!isPro));
 }
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
-  const s=readStats(), n=s.n||0;
-  const t=$("#khTitle"), sub=$("#khSub");
-  /* The headline is the achievement, not the screen's name. "Ready when you are" was a
-     label on an empty state; a member with 12 hides should be met with the 12. */
-  /* The zero state is not an empty state here. This sheet only opens for someone who has
-     PAID, so leading with what they have not done ("Nothing hidden yet") greets a new
-     member with their own inactivity. It is their home, so the headline is the standing
-     fact - the subscription is live and everything is open - until they have hides to
-     lead with instead. */
-  if(t) t.textContent = n ? (n===1 ? "First one down" : n+" people hidden") : "Everything's unlocked";
-  /* TWO LINES, by explicit break rather than by luck of the wrap. The stat and the dare
-     are different sentences doing different jobs, and letting them reflow into one
-     another at whatever width the phone happens to be buries the dare — which is the
-     only half of it that asks for anything. Built from text nodes, not innerHTML: the
-     numbers are our own but this string is rebuilt on every open and one <br> is not
-     worth an HTML sink. */
-  if(sub){
-    sub.textContent="";
-    const lines = n
-      ? (s.bestSec ? ["Your best vanish took "+s.bestSec+"s.","Think anyone can beat it?"]
-                   : ["Every tool is yours.","Now go beat your own time."])
-      /* One line for the zero state. "Go make someone disappear." was a nudge to go and use
-         the app, on the one screen that exists to confirm what you already own. The lines
-         array is kept so the two-line cases below still work unchanged. */
-      : ["Every tool is yours."];
-    lines.forEach((line,i)=>{ if(i) sub.appendChild(document.createElement("br")); sub.appendChild(document.createTextNode(line)); });
-  }
+  const t=$("#khTitle"), sub=$("#khSub"), inp=$("#khHandle");
+  const h=getHandle();
+  /* The headline states what the field is FOR, and changes once it is filled — before, it is
+     an instruction; after, it is a fact about the app. Neither is a label on the furniture,
+     which is what "Your hides" was. */
+  if(t) t.textContent = h ? "You're @"+h : "Sign your hides";
+  if(sub) sub.textContent = h
+    ? "That's the name on every challenge you send."
+    : "Pick a name. It goes out with every challenge, so people know who to beat.";
+  if(inp) inp.value=h;
+  khSetPlus();
   el.classList.add("show"); haptic(12);
-  /* `|| 0`, never null: countUp() renders "—" for a nullish value, and a dash on the
-     scoreboard of someone who is paying for this reads as broken, not as empty. */
-  const hl=$("#khHidesLbl"); if(hl) hl.textContent = n===1 ? "Hide" : "Hides";   // "1 Hides" reads as a bug
-  const tot=s.totalSec||0, big=tot>=60;
-  countUp($("#khHides"),n);
-  countUp($("#khTime"),big?Math.round(tot/60):tot,big?"m":"s");
-  countUp($("#khCov"),s.bestCov||0,"%");
-  track("member_home_opened",{hides:n});
+  track("home_opened",{has_handle:!!h,pro:isPro});
 }
 function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show"); }
-/* The brag, built from the same stats the card is showing. Text + link only — there is no
-   image here, so this rides the invite path (the one native branch that takes a message
-   with no attachment) rather than the share-target one. */
-function shareStats(){
-  const s=readStats(), n=s.n||0;
-  const bits=[n===1?"1 hide":n+" hides"];
-  if(s.bestSec) bits.push("fastest "+s.bestSec+"s");
-  if(s.bestCov) bits.push(s.bestCov+"% covered");
-  const text="KAMO+ · "+bits.join(" · ")+"\n\nI hide people in plain sight. Beat me → "+shareUrl();
-  track("stats_shared",{hides:n});
-  /* NO BLIND RETURN INTO THE BRIDGE. This posted `invite` and returned, so if the native
-     side ignored the message the button was simply dead — no sheet, no error, no hint.
-     That is what it does today: `invite` IS handled in build 29, yet neither invite_opened
-     nor invite_cancelled (both INSIDE that handler) has fired since Jul 28, so on the
-     binaries people are actually running the message goes nowhere. The web ships in
-     minutes and the wrapper ships in App Review weeks; anything the web hands to native
-     and cannot see the result of needs a floor under it.
-     Copying is that floor, and the hint stays TRUE either way: we really did copy. If the
-     native sheet does open it covers the hint and nothing is lost — the cost of the
-     belt is one clipboard write, the cost of no belt is a button that does nothing. */
-  /* The write is SYNCHRONOUS, inside the tap. WKWebView only honours a clipboard write
-     while the user gesture is still live, so deferring it by even a few hundred ms is
-     how you get a fallback that silently fails too. Only the HINT is delayed, so that a
-     working native sheet gets to be the thing the user sees first. */
-  let copied=false; try{ navigator.clipboard.writeText(text); copied=true; }catch(e){}
-  const sayCopied=()=>{ if(copied) showHint("Stats copied — paste them anywhere",3000); };
-  if(window.ReactNativeWebView){ postNative({type:"invite",message:text,score:Math.round(s.bestCov||0)}); setTimeout(sayCopied,700); return; }
-  if(navigator.share){ navigator.share({title:"KAMO",text:text}).catch(sayCopied); return; }
-  sayCopied();
-}
 /* THE SWITCH LIVES HERE NOW, on the KAMO+ badge inside this card.
  * The wordmark gesture was reported dead three times, and the third report carried the
  * detail that settled it: a short tap on the wordmark DOES open this modal. So the element
@@ -3603,10 +3591,31 @@ function shareStats(){
                          : "KAMO+ restored", 4200);
     });
   } }
-{ const g=$("#khShare"), c=$("#khClose");
-  /* closeKamoHome() AFTER shareStats(), and shareStats() does its clipboard write
-     synchronously — so the modal teardown can never land between the tap and the write. */
-  if(g) g.onclick=()=>{ haptic(12); shareStats(); closeKamoHome(); };
+{ const c=$("#khClose");
+  /* SAVED ON EVERY KEYSTROKE, not behind a Save button and not on close. No Save button
+     because there is nothing to confirm — one field, no wrong answer — and waiting for close
+     would lose the value to a backdrop tap, an app switch, or the phone locking.
+     The input is NOT rewritten while typing: reassigning .value moves the caret to the end,
+     which makes editing the middle of a name impossible. cleanHandle() still runs on the way
+     into storage, so what is stored is always handle-shaped; the field is normalised on blur,
+     when nobody has a caret in it. */
+  const inp=$("#khHandle");
+  if(inp){
+    inp.addEventListener("input",()=>{ setHandle(inp.value); });
+    inp.addEventListener("blur",()=>{ inp.value=setHandle(inp.value); });
+    /* Enter dismisses the keyboard instead of doing nothing — on iOS there is otherwise no
+       way off this field except tapping away, and tapping away closes the card. */
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.keyCode===13) inp.blur(); });
+  }
+  /* The only door in the product to other players. openURL() goes through the native bridge
+     when there is one, so it opens the Discord app rather than a web view of it. */
+  const d=$("#khDiscord");
+  if(d) d.onclick=()=>{ haptic(12); track("discord_opened",{}); openURL(DISCORD_URL); };
+  /* `home`, not `brand`. The wordmark used to send ~9 paywall views a day tagged `brand`;
+     this row replaces them, and a separate tag is the only way to see whether repurposing the
+     wordmark cost anything or whether these convert better. */
+  const up=$("#khUpsell");
+  if(up) up.onclick=()=>{ haptic(10); closeKamoHome(); openPaywall("home",true); };
   if(c) c.onclick=()=>{ closeKamoHome(); haptic(8); };
   /* Tapping the backdrop closes too — the card is the sheet, everything outside it is not. */
   const el=$("#kamoHome"); if(el) el.onclick=e=>{ if(e.target===el) closeKamoHome(); }; }
@@ -3661,7 +3670,13 @@ async function forceFreeAuthorized(){
    tapping the logo is curiosity, not a refusal, so it keeps the generic copy. */
 { const b=document.querySelector(".brand");
   if(b) b.onclick=()=>{ if(brandLongPressed){ brandLongPressed=false; return; }   // the long-press already acted
-    if(isPro) openKamoHome(); else openPaywall("brand"); };
+    /* ONE DESTINATION, NOT TWO. This used to fork: members got their home, everyone else got
+       the paywall. That fork cost the free user the only screen with their own name on it,
+       and it bought 65 paywall views in seven days — 1.1% of 5,834, the lowest-intent entry
+       in the funnel, since tapping a logo is curiosity rather than running into a lock. The
+       card carries an upsell row for non-members (tagged `home`), so the path is not gone,
+       it is just no longer the whole destination. */
+    openKamoHome(); };
   /* ONE 6-SECOND PRESS = toggle the free-user preview. FOUNDER TOOL, not a feature.
      History, because three earlier shapes were each wrong in their own way:
        - ONE 1.5s press: a thumb resting on the logo cleared it, and KAMO+ silently switched
@@ -4940,8 +4955,16 @@ $("#ssInvite").onclick=async()=>{
      link and finding no game. Without a hide there is no round to describe, so it invites
      instead of challenging. */
   const link=chLink();
+  /* SIGNED, WHEN THERE IS A NAME TO SIGN IT WITH. An anonymous dare is a weaker ask than one
+     with a person behind it, and this is the loop that is flat — 71 shares a day, roughly one
+     in eight ever played. It is also what stops the handle from being decoration: without
+     this line the field on the home card would only ever show itself back to the person who
+     filled it, which is exactly the flaw that got the three stat tiles deleted.
+     Empty when unset — no placeholder, no "someone". A blank name silently falls back to the
+     line that has always shipped. */
+  const who=getHandle();
   const text = link
-    ? "🫥 There's a body hidden in this photo."
+    ? (who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.")
       +"\nYou get "+lim+" sec and "+taps+(taps===1?" tap":" taps")+" to find it."
       +"\n\n"+link
     : "🫥 KAMO — paint yourself into the background until nobody can find you."
@@ -5920,6 +5943,11 @@ async function chUpload(){
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
 }
 function chLink(){ return chId?(KAMO_HOST+"?h="+chId):""; }
+/* The community door, in one place. It is an invite link, so it can be rotated or revoked
+   from Discord without a push — but it is also the only URL in this app that points at a
+   place rather than at the app itself, and burying it in a click handler is how it ends up
+   duplicated the second time someone links it. */
+const DISCORD_URL="https://discord.gg/ET9PYFt8M";
 
 /* THE DEVICE FORGOT EVERY HIDE IT EVER MADE. chId is a module-level let, reset each round
    and never persisted — close the app and only the server knows your hide exists. So the

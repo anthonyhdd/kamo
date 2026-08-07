@@ -613,5 +613,18 @@ try {
   bad('THE CREATOR PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 11. The player card ---------------------------------------------------------------
+   It opens for EVERYONE now, so every membership signal on it has to be able to say no — and
+   the handle it holds is interpolated into a share message a stranger reads, which is the one
+   value in this app that goes from a text field into somebody else's phone. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-home-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · PLAYER-CARD TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the player card keeps a clean handle and claims only what is true (node scripts/test-home-dom.mjs)');
+} catch (e) {
+  bad('THE PLAYER CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);

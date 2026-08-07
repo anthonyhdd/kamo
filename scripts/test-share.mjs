@@ -39,7 +39,7 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  * Run the handler in one simulated environment.
  * `share` describes what navigator.share does: 'ok' | 'abort' | 'throw' | null (absent).
  */
-async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {} }) {
+async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '' }) {
   const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0 };
   const btn = { innerHTML: 'Challenge a friend', onclick: null };
 
@@ -60,6 +60,9 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
     /* Stamps the hide as actually sent. Counted rather than stubbed silently: it runs on the
        send path, so a version of it that threw would take the share down with it. */
     chMarkSent: () => { calls.markedSent++; },
+    /* The handle signs the invite. Stubbed rather than reading localStorage so the two cases
+       that matter — signed and unsigned — are both reachable in one process. */
+    getHandle: () => handle,
     showHint: () => {},
     $: (sel) => (sel === '#ssInvite' ? btn : null),
     setTimeout: () => 0,
@@ -232,6 +235,36 @@ console.log('\nCHANGING TAPS OR THE CLOCK REPUBLISHES THE HIDE');
   r.chId === 'old1'
     ? ok('republish failed → the previous link is restored rather than lost')
     : bad(`a failed republish left the sender with no link: ${JSON.stringify(r)}`);
+}
+
+/* THE CHALLENGE IS SIGNED, AND ONLY WHEN THERE IS A NAME.
+   This is the whole reason the handle is not decoration: a field that only ever shows itself
+   back to the person who filled it is the flaw that got the three stat tiles deleted. And the
+   unsigned case has to keep working exactly as it always did — most people will never set a
+   handle, and a placeholder like "someone" in their message would be a regression they never
+   asked for. */
+console.log('\nTHE INVITE CARRIES THE HANDLE');
+{
+  const { calls } = await run({ nativeInvite: true, share: null, handle: 'tony' });
+  /@tony is hidden in this photo/.test(calls.text || '')
+    ? ok('a set handle signs the challenge')
+    : bad(`the handle did not reach the message: ${JSON.stringify(calls.text)}`);
+  !/@@|@undefined|@null/.test(calls.text || '')
+    ? ok('and the @ is not doubled')
+    : bad(`the @ prefix is duplicated or the value leaked: ${JSON.stringify(calls.text)}`);
+}
+{
+  const { calls } = await run({ nativeInvite: true, share: null, handle: '' });
+  /There's a body hidden in this photo/.test(calls.text || '') && !/@/.test((calls.text || '').split('\n')[0])
+    ? ok('no handle → the line that has always shipped, with no placeholder')
+    : bad(`the unsigned invite changed: ${JSON.stringify(calls.text)}`);
+}
+{
+  /* Still the terms and still the link — signing must not have displaced either. */
+  const { calls } = await run({ nativeInvite: true, share: null, handle: 'tony', settings: { limit: 30, taps: 3 } });
+  /30 sec and 3 taps/.test(calls.text || '') && /\?h=abc123/.test(calls.text || '')
+    ? ok('the terms and the link survive the signature')
+    : bad(`signing displaced the round or the link: ${JSON.stringify(calls.text)}`);
 }
 
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ share paths behave');
