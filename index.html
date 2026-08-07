@@ -988,10 +988,11 @@
   .ssBtn.tiktok{background:#000;color:#fff;border-color:rgba(255,255,255,.26);}
   .ssRow2{display:flex;gap:9px;}
   .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;}
-  /* The sheen from the paywall CTA, on the one destination we most want tapped. Same
-     keyframes, same timing — it is the shared vocabulary, not a second effect. */
-  .ssBtn.ig{position:relative;overflow:hidden;}
-  .ssBtn.ig::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}
+  /* NO SHEEN ON INSTAGRAM. It carried the paywall CTA's pwBuySheen — added when it was "the one
+     destination we most want tapped", which is no longer true: the sheet leads with the send,
+     and Instagram is second on purpose. Two moving highlights side by side made the sheet
+     twitchy and, worse, the brighter of the two was on the button we do NOT want tapped first.
+     One animation on this card, and it is the ring around "Challenge a friend". */
   .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
   .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
   .ssBtn.snap{background:#fffc00;color:#111;border:none;}
@@ -1167,12 +1168,14 @@
      draws it too, so by the time this row appears the user has been looking at the mark on
      their own hide. The row and the mark ship together on purpose; neither is worth much
      alone, and `paywall_viewed.source="mark"` measures the pair. */
-  .ssPlus{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:10px 0 2px;
-    background:none;border:none;padding:6px;color:var(--mint);font-size:13.5px;font-weight:800;
-    /* No underline. It is a button, not a link, and the only underlined text in the sheet
-       read as a footnote sitting under the real actions. The mint already marks it. */
-    letter-spacing:.1px;cursor:pointer;}
-  .ssPlus:active{opacity:.6;}
+  /* A SLAB IN THE MORE ROW, not a line of its own. Everything about the geometry now comes from
+     .ssBtn and .ssRow2 — width, height, radius, the flex share of the line — so the only thing
+     left here is the colour that says "offer, not destination": the same mint the chips and the
+     CTA's ring use, at slab weight. 14.5px because "Remove mark" is three times the width of
+     "More" and this cell is half a 390px screen minus the gutters. */
+  .ssBtn.ssPlus{background:rgba(95,230,164,.13);border-color:rgba(95,230,164,.34);
+    color:#c9ffe4;font-size:14.5px;gap:7px;}
+  .ssBtn.ssPlus .ic{width:auto;font-size:13px;color:var(--mint);}
 </style>
 </head>
 <body><div id="app">
@@ -1512,14 +1515,18 @@
 
     <!-- More and Save share this line — see .ssRow2. On native, JS moves #btnSave in here;
          on the web it stays on the action row and More spans the width alone. -->
+    <!-- THE UPSELL SHARES THIS LINE NOW. It was a borderless mint text link on its own row
+         under everything else — the only underline-shaped thing in the sheet, in the position
+         people scroll past on the way to Cancel. As half of this row it is a real target
+         without becoming a third slab, and it costs no extra height at all: Save is dead on
+         native (see the `if(false &&` below), so More was spanning the width alone.
+         Same id, same handler, same isPro gating — only its weight and its place changed. And
+         it stays TINTED rather than white or brand-coloured: it is an offer, not a
+         destination, and it must not out-rank the send or Instagram above it. -->
     <div class="ssRow2" id="ssRow2">
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
+      <button class="ssBtn ssPlus" id="ssPlus" style="display:none"><span class="ic">✦</span>Remove mark</button>
     </div>
-    <!-- THE PITCH IS A LINE, NOT A BUTTON. It is an offer, not a destination, and giving it
-         the same slab as Instagram made it compete with the thing the sheet exists to do.
-         Same id and same handler, so the paywall trigger and the isPro gating are untouched:
-         only its weight changed. -->
-    <button class="ssPlus" id="ssPlus" style="display:none">✦ Remove the KAMO mark</button>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
     <button class="ssClose" id="ssClose">Not now</button>
   </div>
