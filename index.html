@@ -2866,18 +2866,22 @@ const canPro=()=>isPro;
 function refreshProUI(){ buildSwatches(); if(typeof renderSizeBar==="function") renderSizeBar();
   // nothing left to sell once they're KAMO+ → drop the top-left entry point
   const p=$("#btnPlus"); if(p && isPro) p.style.display="none";
-  /* The wordmark becomes KAMO+ for a member. isPro and canPro() are identical now that the
-     free round is gone, but this stays on isPro deliberately: the + is a statement of
-     membership, and any temporary unlock reintroduced later must not stamp the logo. */
-  const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
+  /* THE + IS SHOWN TO EVERYONE NOW, and it used to be members-only — which was backwards.
+     The wordmark is the one upsell entry that exists on EVERY screen, including the reveal,
+     where the top-left ✦ is hidden and the size bar is gone. For a free user it rendered as
+     the plain word KAMO: a logo, with nothing to say it opens anything. It took 20 taps a
+     day against the ✦'s 113, and the ✦ is not even on that screen.
+     Same glyph, two destinations, both correct: a member taps it and lands on their home, a
+     free user lands on the paywall. What it stops being is a membership badge — a mint mark
+     beside the wordmark now reads as "KAMO+ exists", which is the job it should have had. */
+  const bp=$("#brandPlus"); if(bp) bp.style.display="inline"; }
 buildSwatches();   // safe here: past the isPro declaration canPro() reads
 /* The + set directly, NOT via refreshProUI(). refreshProUI() calls renderSizeBar(), which
    reads the `sizeBar` const declared much further down — calling it here would hit exactly
    the temporal dead zone that already forced buildSwatches() to move to this line. This is
-   one style write and it covers the cold start: a returning subscriber whose isPro came
-   from localStorage sees the + on the first frame, without waiting for the native pro-sync
-   to call setPro(). */
-{ const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
+   one style write and it covers the cold start: the mark is on the first frame for everyone,
+   without waiting for the native pro-sync to call setPro(). */
+{ const bp=$("#brandPlus"); if(bp) bp.style.display="inline"; }
 
 const paywallEl=$("#paywall");
 /* ANSWER THE TAP. Four different locks opened the same generic sheet, so someone who
@@ -2933,7 +2937,7 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    Same bet and same downside as the per-source caps: fewer paywalls could mean fewer
    trials rather than more. `nth_interruption` on paywall_viewed is what settles it — if
    conversion past the 3rd interruption is not flat, this number is too low. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand","chset"]);
+const PW_USER_INITIATED=new Set(["plus","mark","brand","chset","size_star"]);
 
 const PW_GLOBAL_CAP=3;
 let pwInterruptions=0;         // non-user-initiated opens this launch
@@ -3014,6 +3018,9 @@ const PW_PITCH={
 /* The generic pitch, for entry points that are not a specific locked tool. Built here rather
    than typed into the markup for the same reason as the rest — it carried "75s to paint
    instead of 40s" as literal text sitting in HTML, where nothing could ever check it. */
+/* The star answers the same question as the size lock, so it gets the same words. Assigned
+   rather than duplicated: two copies of one pitch is how they drift apart. */
+PW_PITCH.size_star=PW_PITCH.size;
 const pwGenericSub=()=>`Any brush and color · no clock to line it up · ${PRO_PAINT_SECONDS}s to paint instead of ${PAINT_SECONDS}s`;
 /* Resolves either shape. Copy that needs no number stays a plain string; copy that does is a
    function. Both arrive here. */
@@ -5193,9 +5200,18 @@ sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener
    Members fall through deliberately (no preventDefault, no stop): they already own this, so
    for them the tap should do what a tap at the bottom of the bar does — select the finest
    brush — not open a paywall for something they have bought. */
+/* ITS OWN SOURCE, NOT "size". This tap and a tap on the locked part of the bar were both
+   reported as `size`, and they are opposites: one is "show me what this costs", the other is
+   the app refusing someone mid-round. 534 views a day arrived under that one name, so the
+   only deliberate buying signal the paint screen produces was invisible inside the largest
+   interruption in the app — and I read that number as pure interruption this morning.
+   It also stopped the budget being spent correctly: `size` is not in PW_USER_INITIATED, so
+   every star tap counted as an interruption and ate the per-launch budget meant for the
+   paywalls the user did NOT ask for. force=true already bypassed the caps; this makes the
+   accounting agree with the intent. */
 sizeStar.addEventListener("pointerdown",e=>{
   if(canPro()) return;
-  e.preventDefault(); e.stopPropagation(); haptic(10); openPaywall("size",true);
+  e.preventDefault(); e.stopPropagation(); haptic(10); openPaywall("size_star",true);
 });
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
