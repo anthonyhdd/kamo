@@ -40,7 +40,7 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  * `share` describes what navigator.share does: 'ok' | 'abort' | 'throw' | null (absent).
  */
 async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {} }) {
-  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null };
+  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0 };
   const btn = { innerHTML: 'Challenge a friend', onclick: null };
 
   const env = {
@@ -57,6 +57,9 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
     inviteUrl: () => 'https://anthonyhdd.github.io/kamo/?i=1',
     chCopy: async (t) => { calls.clipboard++; calls.text = t; return clipboardOk; },
     invitePreview: () => {},
+    /* Stamps the hide as actually sent. Counted rather than stubbed silently: it runs on the
+       send path, so a version of it that threw would take the share down with it. */
+    chMarkSent: () => { calls.markedSent++; },
     showHint: () => {},
     $: (sel) => (sel === '#ssInvite' ? btn : null),
     setTimeout: () => 0,
@@ -104,6 +107,29 @@ console.log('\nEXACTLY ONE share mechanism per tap');
   calls.webShare === 1 && calls.clipboard === 1
     ? ok(`sheet refuses to open → falls through to the clipboard (${label(calls)})`)
     : bad(`broken web share did not reach the clipboard — ${label(calls)}`);
+}
+/* THE HIDE IS STAMPED SENT ON EVERY PATH, EXACTLY ONCE.
+   `sent_at` is what separates the 62 hides someone actually sent from the 456 that were
+   published by touching the sheet and abandoned — the whole reason the column exists. It is
+   called before the branch on purpose: a native sheet, a web sheet and a clipboard copy are
+   three ways of sending the same link, and iOS never reports back which of them succeeded.
+   Guarded because "move it into the branch you are editing" is the natural refactor, and it
+   would silently stop counting two thirds of the sends. */
+{
+  const paths = [
+    ['native sheet', { nativeInvite: true, share: 'ok' }],
+    ['web sheet', { nativeInvite: false, share: 'ok' }],
+    ['web sheet cancelled', { nativeInvite: false, share: 'abort' }],
+    ['clipboard fallback', { nativeInvite: false, share: null }],
+  ];
+  const wrong = [];
+  for (const [name, args] of paths) {
+    const { calls } = await run(args);
+    if (calls.markedSent !== 1) wrong.push(`${name}: ${calls.markedSent}`);
+  }
+  wrong.length
+    ? bad(`the hide is not stamped exactly once on every send path — ${wrong.join(', ')}`)
+    : ok(`the hide is stamped sent once on all ${paths.length} send paths`);
 }
 {
   const { calls } = await run({ nativeInvite: false, share: null });

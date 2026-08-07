@@ -542,5 +542,17 @@ try {
   bad('THE SHARE SHEET RENDERS WRONG:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 9. The results chip ---------------------------------------------------------------
+   Same reason as 8: localStorage, a network answer and a screen mode are runtime state, and
+   the chip is the only thing this app can show someone for coming back. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-mine-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · RESULTS-CHIP DOM TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the results chip behaves (node scripts/test-mine-dom.mjs for the detail)');
+} catch (e) {
+  bad('THE RESULTS CHIP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);

@@ -228,6 +228,17 @@
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
     font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);}
   #scoreChip b{color:var(--accent);font-weight:850;}
+  /* THE ONE PIECE OF NEWS THIS APP CAN GIVE SOMEONE FOR COMING BACK.
+     Same slot and same shape as #scoreChip — they can never be on screen together, because
+     scoreChip belongs to the reveal and this belongs to the camera screen someone lands on
+     when they reopen the app. Mint rather than accent: it is not a score, it is something
+     that happened while they were away. */
+  #mineChip{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
+    background:var(--panel);backdrop-filter:blur(14px);border:1px solid rgba(72,214,139,.45);padding:7px 15px;border-radius:999px;
+    font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);
+    cursor:pointer;-webkit-tap-highlight-color:transparent;animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
+  #mineChip b{color:var(--mint);font-weight:850;}
+  #mineChip:active{opacity:.6;}
   /* ---- Round timer ----------------------------------------------------------
      A hairline that drains along the very top edge, above everything, out of the way
      of both the shutter (aim phase) and the figure (paint phase) — one position that
@@ -1132,6 +1143,9 @@
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
     <div id="scoreChip"></div>
+    <!-- Filled and shown by chMyResults() only when a hide this device published has been
+         played. Declared here so the pre-push id check can see it. -->
+    <div id="mineChip"></div>
     <button id="btnBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Retake</button>
     <button id="btnDone" class="navbtn">Done</button>
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
@@ -2012,6 +2026,7 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
+  updateMineChip();   // the results chip belongs to this screen and to no other
   shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
@@ -2031,6 +2046,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
+  updateMineChip();
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid");
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
@@ -3823,7 +3839,7 @@ function trackCarried(kind,props){
    into the web, which needs a build.
    It also means one extra Amplitude user per install, because the WebView had no reason to
    mint a web id before. Watch the user totals for a step change. */
-const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied"]);
+const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","hide_result_shown","challenge_preview_opened"]);
 function track(event,props){
   const p={...(props||{}),trial_arm:trialArm};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
@@ -4540,6 +4556,12 @@ function invitePreview(){ chPrevRender(); }
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
+  /* STAMPED HERE, at the tap, not after the share reports back. iOS never tells the web
+     whether the sheet was sent or cancelled — invite_native is the last thing we see — so
+     waiting for confirmation means never stamping at all. This over-counts by whatever
+     share of people open the system sheet and back out, which is a known and bounded error;
+     counting nothing was the alternative. */
+  chMarkSent();
   track("share_target_tapped",{target:"invite",mode:shareMode,score:sc});
   /* CARRIER — see the round_finished note in enterFinished(). share_target_tapped is not on
      1.0.2's WEB_EVENTS list, so the tap would be invisible on every shipped binary.
@@ -5556,10 +5578,72 @@ async function chUpload(){
          p_coverage:Math.round(currentScore||0),p_limit_s:cs.limit,p_max_taps:cs.taps}
       : {p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,p_secs:roundSeconds(),
          p_coverage:Math.round(currentScore||0)});
+    chRemember(chId);
     track("hide_published",{});
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
 }
 function chLink(){ return chId?(KAMO_HOST+"?h="+chId):""; }
+
+/* THE DEVICE FORGOT EVERY HIDE IT EVER MADE. chId is a module-level let, reset each round
+   and never persisted — close the app and only the server knows your hide exists. So the
+   one thing that could pull someone back ("3 people tried, 1 found you") had nothing to
+   read. 518 hides in the table, none of them attributable to a device.
+   Ten ids, newest first. Ten because this is a re-engagement hook, not a gallery: nobody
+   returns for their ninth-oldest hide, and localStorage is not where a history belongs. */
+const CH_MINE_KEY="kamo_hides";
+function chMine(){ try{ const a=JSON.parse(localStorage.getItem(CH_MINE_KEY)||"[]"); return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }catch(e){ return []; } }
+function chRemember(id,drop){
+  if(!id) return;
+  try{ const a=chMine().filter(x=>x!==id&&x!==drop); a.unshift(id);
+       localStorage.setItem(CH_MINE_KEY,JSON.stringify(a.slice(0,10))); }catch(e){}
+}
+/* SENT IS NOT PUBLISHED, and the gap is most of the table: 518 hides, 456 with zero
+   attempts. We publish on the first touch of the share sheet — deliberately, so the link is
+   ready by the time someone taps Challenge — and only about one in four is ever sent.
+   Rather than move the upload later (which re-creates the empty-link bug this file has
+   already fixed once), the hide is STAMPED when the share actually goes out. Then published
+   and sent are two numbers instead of one guess, and unsent hides become identifiable
+   server-side.
+   Fire-and-forget, and idempotent server-side (coalesce keeps the first timestamp): this
+   runs on the send path and must never delay or fail it. */
+function chMarkSent(){
+  if(!chId) return;
+  try{ chRpc("mark_hide_sent",{p_id:chId}).catch(()=>{}); }catch(e){}
+}
+
+/* WHAT HAPPENED WHILE THEY WERE AWAY.
+ * 45 people found somebody's hide today and not one of the authors was ever told. That is
+ * the only news this app can give a returning user, and D1 is 17% — five in six never come
+ * back, and the ones who do are shown a camera and nothing else.
+ * This is the payoff surface, not the pull: a local notification cannot know a stranger tapped
+ * a link, and there is no push infrastructure (kamo-app registers no push token at all). So
+ * this rewards the return rather than causing it — and it is the prerequisite either way,
+ * because a notification has to point at something.
+ * Reads the NEWEST remembered hide only. get_hide already returns n_attempts / n_found, so
+ * no new RPC and no new round trip beyond this one. Silent on every failure: a chip that
+ * cannot load is a chip nobody notices is missing.
+ * Only speaks when there is something to say — n_attempts of 0 shows nothing rather than
+ * "0 tried", which would turn the reward into a reproach on the 88% of hides nobody opens. */
+let mineMsg="";
+function updateMineChip(){
+  const el=$("#mineChip"); if(!el) return;
+  el.style.display = (mineMsg && mode==="compose" && !finished) ? "block" : "none";
+}
+async function chMyResults(){
+  try{
+    const ids=chMine(); if(!ids.length) return;
+    const h=await chRpc("get_hide",{p_id:ids[0]});
+    const n=(h&&h.n_attempts)|0, f=(h&&h.n_found)|0;
+    if(n<1) return;
+    const tried = n===1 ? "1 person tried" : n+" people tried";
+    mineMsg = f>0 ? (tried+" · <b>"+f+" found you</b>") : (tried+" · <b>nobody found you</b>");
+    const el=$("#mineChip"); if(!el) return;
+    el.innerHTML=mineMsg;
+    el.onclick=()=>{ mineMsg=""; updateMineChip(); haptic(8); };
+    updateMineChip();
+    track("hide_result_shown",{attempts:n,found:f});
+  }catch(e){}
+}
 
 /* THE SETTINGS ARE READ AT UPLOAD TIME, AND THE UPLOAD USUALLY HAPPENS FIRST.
  * chUpload() publishes when the share sheet opens (or on the first touch of the peek) and
@@ -5579,7 +5663,11 @@ function chRepublish(){
   if(!CH_MAKE||!chId) return;   // nothing published yet: chUpload() will read the new values
   const prev=chId;
   chId="";
-  Promise.resolve(chUpload()).then(()=>{ if(!chId) chId=prev; }).catch(()=>{ if(!chId) chId=prev; });
+  /* The republished hide REPLACES the old one in the remembered list — the previous id is
+     still on the server but it is not the round this player is going to send, so leaving it
+     there would surface someone else's attempts against a hide they abandoned. */
+  Promise.resolve(chUpload()).then(()=>{ if(!chId) chId=prev; else chRemember(chId,prev); })
+    .catch(()=>{ if(!chId) chId=prev; });
 }
 
 /* THE SEEKER SCREEN =====================================================================
@@ -5911,6 +5999,11 @@ const CH_NOTIF={
 (function(){ try{ postNative({type:"notif-copy",copy:CH_NOTIF}); }catch(e){} })();
 
 /* debug bridge (?debug) */
+/* AFTER EVERYTHING, AND NEVER ON THE SEEKER SCREEN. A stranger opening a challenge link has
+   no hides of their own, and CH_SEEK is exactly that case. Delayed a beat so the launch path
+   — camera permission, first frame — never waits on this. */
+if(!CH_SEEK) setTimeout(()=>{ try{ chMyResults(); }catch(e){} },1200);
+
 if(location.search.includes("debug")){
   window.HIDEY={ charPos:()=>{ const c=sel(); return c?{x:+c.group.position.x.toFixed(2),y:+c.group.position.y.toFixed(2),tx:c._tx,ty:c._ty,svx:c._svx,sx:+c.charG.scale.x.toFixed(2),sy:+c.charG.scale.y.toFixed(2)}:null; },
     step:(n)=>{ for(let i=0;i<(n||1);i++){ characters.forEach(lerpChar); } renderer.render(scene,camera3); },
