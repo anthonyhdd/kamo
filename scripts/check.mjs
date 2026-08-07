@@ -599,5 +599,19 @@ try {
   bad('THE RESULTS CHIP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 10. The creator pass --------------------------------------------------------------
+   This one hands out KAMO+. Three of its four invariants fail silently: a broken comparison
+   gives it to anyone who holds the button, storing a flag instead of the hash makes a leaked
+   phrase permanent, and living in the wrong key means the wrapper's launch-time setPro(false)
+   erases it — which would reproduce the exact support ticket it was built to close. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-pass-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · CREATOR-PASS TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the creator pass unlocks, persists and can be revoked (node scripts/test-pass-dom.mjs)');
+} catch (e) {
+  bad('THE CREATOR PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);
