@@ -1744,6 +1744,31 @@ const trialArm=(()=>{
   return a;
 })();
 const trialOn=()=>trialArm==="trial";
+/* WHAT THE PAYWALL IS ALLOWED TO PROMISE, as opposed to which arm the user is in.
+   App Review rejected 1.0.9 (42) on guideline 2.1(b): "the paywall indicates a 3-day free
+   trial, but the payment dialog shows no trial period". They were right about the screen.
+   trialOn() is a ROLLOUT FLAG — at TRIAL.rollout 100 it is true for everyone, forever,
+   whatever StoreKit actually returns. So a user Apple's store considers ineligible (a
+   reinstall, someone who already consumed the introductory offer for this subscription
+   group, or a reviewer's recycled sandbox account) was still shown "3 days free", tapped a
+   button that said Try free, and met a sheet that said 2,99 €/week. That is the whole
+   rejection, and it is a web bug, not a binary one.
+   THE STORE'S ANSWER WINS WHEN WE HAVE IT. setPrices carries `trial` only when StoreKit
+   returned a real free introductory offer — App.js: `if (trial) prices.trial = trial`.
+   Absence is therefore meaningful... but only on builds that send it at all.
+   ⚠️ 1.0.2 IS 99.7% OF THE FLEET AND CANNOT REPORT. It never sets prices.trial (verified:
+   zero occurrences in its App.js), so on those devices absence means "not implemented",
+   not "no trial". Gating them on it would erase the trial wording for the entire live
+   population — including the 22 users who have started a trial since 3 August, i.e. people
+   for whom the offer demonstrably works. That would trade a real funnel for a cosmetic fix.
+   `eventsV2` is the marker that separates them: 1.0.2 sends {revealVideo, torch}; 1.0.9
+   sends it. Same signal CARRIER_102 already relies on, so it is not a new assumption. */
+let storeTrial=false;
+function trialAdvertised(){
+  if(!trialOn()) return false;
+  if(nativeCaps && nativeCaps.eventsV2 && storeAnswered) return storeTrial;
+  return true;   // build cannot report, or the store has not answered yet
+}
 
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
@@ -3297,7 +3322,7 @@ function openPaywall(source,force){
      GATED ON trialOn(), because the control arm has no trial to lead with, and on trialLabel
      rather than a typed number — check.mjs refuses a bare numeral in paywall copy, and it is
      right to: the store can report a different trial length than TRIAL.days. */
-  const leadTrial = pwOpens===1 && trialOn();
+  const leadTrial = pwOpens===1 && trialAdvertised();
   if(t) t.textContent = leadTrial ? `Try everything free for ${trialLabel}`
                       : pitch ? pwText(pitch.t) : (t.dataset.def || t.textContent);
   /* The generic line is REBUILT, not restored from a snapshot of the markup — the markup is
@@ -3315,6 +3340,9 @@ function openPaywall(source,force){
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
     source:src,
+    /* Which paywall they actually saw. After the 2.1(b) rejection this is the only way to
+       tell "nobody taps Buy" from "we stopped promising a trial to this population". */
+    trial_shown:trialAdvertised(),
     /* Which number interruption this is for the user, this launch. The whole saturation
        argument above is a prior, not a measurement — nothing in the data could show whether
        the 5th paywall of the day ever converted, because every view looked alike. Split
@@ -3363,6 +3391,13 @@ paywallEl.onclick=e=>{ if(e.target===paywallEl) dismissPaywall("backdrop"); };
    calls setPrices() with whatever it resolved — possibly {} — and this flips. */
 let storeReady=false;    // a real localized price arrived for at least one plan
 let storeAnswered=false; // native has told us SOMETHING, even if it was "nothing for sale"
+/* MOVED UP FROM ITS OLD HOME 1,000 LINES BELOW. applyTrialCopy() runs at module scope, and
+   it now consults trialAdvertised(), which reads nativeCaps — a `let` declared after that
+   call was a temporal-dead-zone ReferenceError that killed the entire script before
+   window.KAMO was ever created, i.e. a blank app for everyone. Note that `typeof` does not
+   rescue a TDZ binding the way it rescues an undeclared one, so the guard has to be
+   ordering, not a check. */
+let nativeCaps={};
 /* THE REASSURANCE LINE. It used to restate the offer — "Free for 3 days, then 2,99 EUR/week.
    Cancel anytime." — directly under a button that already said "Try free for 3 days" and a
    plan row that already showed "3 days free" and "2,99 EUR/week". Three copies of the same
@@ -3389,7 +3424,7 @@ let storeAnswered=false; // native has told us SOMETHING, even if it was "nothin
 function trialTermsLine(){
   const price=(($("#pwWeeklyPrice")||{}).textContent||"").trim();
   if(!price) return "";
-  return trialOn()
+  return trialAdvertised()
     ? (trialLabel+" free, then "+price+"/week. Renews automatically until cancelled.")
     : (price+"/week. Renews automatically until cancelled.");
 }
@@ -3431,7 +3466,7 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
        a $2.99 impulse rather than lowering it.
        Built from trialLabel, never a typed numeral — the store can report a trial length
        different from TRIAL.days, and check.mjs refuses a bare number in paywall copy. */
-    if(trialOn()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
+    if(trialAdvertised()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
     setTerms(trialTermsLine()); } }
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
    able to re-render it on its own once the store reports a real trial length, and because
@@ -3448,7 +3483,7 @@ function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
   const f=$("#pwFree"), fb=$("#pwFreeBadge");
   if(f) f.textContent=trialLabel+" free";
   const holder=fb||f;
-  if(holder) holder.style.display=trialOn()?(fb?"inline-flex":""):"none"; }
+  if(holder) holder.style.display=trialAdvertised()?(fb?"inline-flex":""):"none"; }
 applyTrialCopy();
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
 /* The native wrapper buys whatever product id we post — it resolves `msg.product` against
@@ -3635,7 +3670,7 @@ function khSetPlus(){
      screen Apple reads hardest. */
   const up=$("#khUpsell");
   if(up){ up.style.display = isPro ? "none" : "";
-    up.textContent = trialOn() ? "Try KAMO+ for free" : "Unlock everything"; }
+    up.textContent = trialAdvertised() ? "Try KAMO+ for free" : "Unlock everything"; }
 }
 /* One switch, because these two are never both right. Focus is deliberate on reveal: the
    button said "change name", so the next thing should be a caret, not a second tap. */
@@ -3972,7 +4007,7 @@ function applyPerDay(weeklyPrice){
   el.textContent = per ? ("less than "+per+" a day") : "";
   el.style.display = per ? "block" : "none";
 }
-window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; applyPerDay(p.weekly); } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
+window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeTrial=!!p.trial; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; applyPerDay(p.weekly); } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
 /* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
    sets prices.weekly / prices.lifetime when RevenueCat resolved that product).
    A plan we can't sell must never be shown: tapping it opens a purchase that
@@ -4384,7 +4419,7 @@ function composeShare(W,src){ src=src||board; const H=Math.round(W*16/9); const 
 let beforeBoard=null, shareMode="challenge";   // must match the .ssTab.active in the markup
 /* native capabilities (injected by the Expo wrapper on load). {revealVideo:true} once the
    native MP4 module ships. Absent on older builds → shares stay static (backward-safe). */
-let nativeCaps={};
+/* Declared with the other store state above — see the note there. */
 function roundRectFill(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); c.fill(); }
 function composeBeforeAfter(W){ const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
   const bb=beforeBoard||board; const s=Math.max(W/bb.width,H/bb.height), dw=bb.width*s, dh=bb.height*s, ox=(W-dw)/2, oy=(H-dh)/2;

@@ -689,5 +689,31 @@ try {
   else ok('the seeker CTA still routes through refLink(), not the bare listing');
 }
 
+/* ---- 15. The claim App Review rejected --------------------------------------------------
+   1.0.9 (42) was rejected on guideline 2.1(b): the paywall advertised a 3-day trial while
+   Apple's payment sheet showed none. The screen must never promise an offer the store did
+   not return — and, just as importantly, must keep promising it on 1.0.2, which cannot
+   report either way and is 99.7% of the fleet. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-trial-copy-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · TRIAL-COPY TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the paywall promises only what the store returned (node scripts/test-trial-copy-dom.mjs)');
+} catch (e) {
+  bad('THE TRIAL COPY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
+/* nativeCaps is read by trialAdvertised(), which applyTrialCopy() calls at module scope. A
+   `let` declared after that call is a temporal-dead-zone throw that kills the whole script
+   before window.KAMO exists — a blank app for every user, from one moved line. */
+{
+  const decl = html.indexOf('let nativeCaps={}');
+  const use = html.indexOf('\napplyTrialCopy();');
+  decl === -1 ? bad('let nativeCaps={} is gone — trialAdvertised() has nothing to read')
+    : use === -1 ? bad('the module-scope applyTrialCopy() call is gone')
+    : decl < use ? ok('nativeCaps is declared before the module-scope applyTrialCopy() call')
+    : bad('nativeCaps is declared AFTER applyTrialCopy() runs — TDZ ReferenceError, blank app for everyone');
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — DO NOT PUSH` : '\n✓ all checks passed');
 process.exit(failed ? 1 : 0);
