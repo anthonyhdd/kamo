@@ -1,2 +1,6 @@
 .DS_Store
 .claude/
+
+# Installed ad hoc to run the DOM suites (PW_CORE=. node scripts/check.mjs).
+# 60 MB of vendor code that must never reach a repo whose pushes deploy to users.
+node_modules/
