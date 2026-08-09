@@ -593,30 +593,43 @@
   /* ✦ = KAMO+, and it labels the WHOLE bar, not one end. Every ✦ in this app means the same
      thing (the all-colours swatch carries it too), so a second meaning here would cost more
      than the scale hint it was briefly used for.
-     MOVED TO THE BOTTOM, and made tappable. It used to sit at the top "because that is where
-     there is room — the thumb lives high on the bar for free users", which was true while
-     free rounds were pinned to a 44px roller. They are not any more: free is fixed at 24 and
-     the ENTIRE bar is now KAMO+ (t=0 is BRUSH_MIN, t=1 is BRUSH_MAX), so the bottom is no
-     longer "the locked end" so much as the end it was moved to when only the fine range was
-     locked. Kept there because it reads as detail work. Left at the top the ✦ badged the
-     64px roller — at the time the one part of the scale that was free — and
-     `pointer-events:none` meant a tap on it fell through to the bar and simply selected the
-     biggest brush. Exactly backwards.
+     AT THE BOTTOM, AND NOW IT MEANS SOMETHING AGAIN. The bottom was chosen when only the
+     fine range was locked, then kept through a spell where the ENTIRE bar was KAMO+ and the
+     position was admitted to be legacy. PRO_SIZES puts the locked stops back at the fine
+     end, so the ✦ is once more sitting directly under the thing it marks — it labels that
+     segment, and every ✦ in this app still means the one thing (the all-colours swatch
+     carries it too). Left at the top it badged the 64px roller, at the time the one part of
+     the scale that was free, and `pointer-events:none` meant a tap fell through and selected
+     the biggest brush. Exactly backwards.
      Padding, not a bigger glyph: 19px of text is a poor tap target, and the box is invisible. */
   /* NO GLOW ON THE BAR ITSELF. #sizeBar has no border-radius — it is an invisible 34x212 box
      whose children draw the visible track — so a box-shadow spread on it painted a
      hard-edged green RECTANGLE around nothing. The ✦ is already the premium marker and it
      is a glyph, so it can be pulsed without inventing a shape. */
   #sizeBar.lockPulse #sizeStar{animation:tickPop .55s ease-out;color:var(--mint);}
-  /* THE THREE FREE STOPS, MARKED. A tap-to-pick control nobody can see is a control nobody
-     uses — the preset dots existed before, were removed with the free sizes, and come back
-     with them. Members never see them: the bar is continuous for them and three dots on it
-     would only suggest a limit they do not have. */
+  /* EVERY STOP, MARKED — INCLUDING THE ONES YOU CANNOT HAVE. A tap-to-pick control nobody
+     can see is a control nobody uses, and that went double for the locked half: only the dot
+     under your thumb was drawn, so the paid range was invisible and the bar read as a
+     continuous rail that mysteriously refused its own bottom. Members never see any of them:
+     the bar is genuinely continuous for them and dots would only suggest a limit.
+     WIDTH AND HEIGHT ARE SET IN JS, per stop, from the brush it selects — the dot is a
+     preview of the stroke, which is the whole reason a size picker shows circles rather than
+     numbers. The values here are the fallback if that ever fails to run. */
   .sizeDot{position:absolute;left:50%;width:12px;height:12px;margin-left:-6px;margin-top:-6px;border-radius:50%;
     background:rgba(255,255,255,.28);border:1.5px solid rgba(255,255,255,.5);pointer-events:none;
-    box-shadow:0 1px 4px rgba(0,0,0,.5);transition:background .15s,transform .15s;}
+    box-shadow:0 1px 4px rgba(0,0,0,.5);transition:background .15s,transform .15s,opacity .15s;}
   .sizeDot.on{background:var(--mint);border-color:var(--mint);transform:scale(1.15);}
-  #sizeStar{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
+  /* HOLLOW AND DASHED, NOT DIMMED-TO-NOTHING. It has to be legible enough that a stranger
+     reads "that size exists and I do not have it" at a glance, and different enough that
+     they never mistake it for something a tap will select. A dashed outline says both. */
+  .sizeDot.locked{background:transparent;border-style:dashed;border-color:rgba(255,255,255,.55);opacity:.85;}
+  .sizeDot.locked.on{background:transparent;transform:none;}
+  /* INSIDE THE BAR, NOT HANGING OFF IT. bottom:-6px put the only paywall entry point on the
+     paint screen six pixels BELOW the rail it belongs to — a 19px glyph floating over a
+     photo, unlabelled, at the end of a 212px invisible column. It now sits on the rail,
+     under the locked stops it marks, so it reads as the label for that segment.
+     Padding, not a bigger glyph: 19px of text is a poor tap target and the box is invisible. */
+  #sizeStar{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
     color:#fff;opacity:.9;padding:8px 12px;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
@@ -2628,8 +2641,31 @@ const FREE_SIZES=[14,26,46];
    is a number that will one day disagree with itself. extractPalette() reads this. */
 const FREE_SHADES=3;
 const FREE_BRUSH=FREE_SIZES[1];   // the default a free round starts on
+/* THE LOCKED SIZES, DRAWN. A free user could not previously learn that a paid range existed:
+   only the dot they were standing on was rendered, the thumb was hidden for them, and the
+   bar looked like a continuous rail whose bottom half silently snapped back up. Nothing on
+   the paint screen said "there is more of this, and it costs money" — and the trial rate
+   went from 3.19% of new customers on 4 August to 0.77% on the 6th, the two days either
+   side of the change that made this control silent.
+   TWO STOPS, AT THE FINE END, NOT THE FAT END. 46 already sits at t=0.86, so a locked stop
+   above it would land a few pixels from a free one and would be selling "slightly wider",
+   which is nothing. The fine brush is what the pitch actually promises ("down to fine
+   detail"), it is what a hider reaches for to trace an edge, and the whole bottom half of
+   the bar is empty and available to show it in. */
+const PRO_SIZES=[8,4];
+/* Biggest first, so the array reads top-of-bar down. Every consumer positions through
+   tFromBrush(), so the order is for reading rather than for geometry. */
+const SIZE_STOPS=[...FREE_SIZES,...PRO_SIZES].sort((a,b)=>b-a);
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
+/* How big a stop is drawn. Deliberately narrow (11px → 17px across a 4→46 range): the bar is
+   34px wide and the stops are 21px apart at their tightest, so a faithful ratio would have
+   the big ones swallowing their neighbours. Position carries the scale; the diameter
+   confirms it. Every value is distinct after rounding — 11/12/13/15/17 — which is the
+   property that matters, since two stops the same size are one stop with a gap.
+   A FUNCTION, because the fill has to end exactly at a dot's edge and a second copy of this
+   arithmetic is a second copy that will one day disagree. */
+const dotDia=size=>Math.round(9+tFromBrush(size)*9);
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
    (maskCanvas = the three.js render captured at shutter time), so paint can NEVER
    spill outside the silhouette — a sloppy finger still produces a clean camo.
@@ -3198,7 +3234,13 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    Same bet and same downside as the per-source caps: fewer paywalls could mean fewer
    trials rather than more. `nth_interruption` on paywall_viewed is what settles it — if
    conversion past the 3rd interruption is not flat, this number is too low. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand","chset","size_star"]);
+/* `size` JOINS THE LIST, because the thing it now reports is a tap on a stop drawn as
+   locked. It was excluded for the right reason at the time — a drag past an invisible floor
+   is not a request — and that reason stopped applying the moment the locked stops were
+   drawn. It keeps its own PW_CAP of one per launch, so exempting it from the GLOBAL budget
+   cannot flood anything; what it fixes is the accounting, which was charging a paywall the
+   user asked for against the budget reserved for the ones they did not. */
+const PW_USER_INITIATED=new Set(["plus","mark","brand","chset","size_star","size"]);
 
 const PW_GLOBAL_CAP=3;
 let pwInterruptions=0;         // non-user-initiated opens this launch
@@ -3230,7 +3272,10 @@ const PW_LOCK_HINT={
 function flashSizeLock(){
   const b=document.getElementById("sizeBar"); if(!b) return;
   b.classList.remove("lockPulse"); void b.offsetWidth; b.classList.add("lockPulse");
-  haptic(8);
+  /* NO HAPTIC HERE ANY MORE. The only caller is the size bar's own locked branch, which
+     already fires haptic(10) at the moment of the touch — the tick belongs to the tap, not
+     to whether the cap happened to be spent. Two impacts a frame apart read as one mushy
+     one, which is worse than either. */
   clearTimeout(flashSizeLock._t);
   flashSizeLock._t=setTimeout(()=>b.classList.remove("lockPulse"),700);
 }
@@ -5786,8 +5831,19 @@ const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill"),
 const SB_PAD=24;
 function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
+  const free=!canPro();
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
-  sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
+  /* THE FILL STOPS WHERE THE FREE RANGE STOPS. Running it to the foot of the bar drew a
+     solid white line straight through the locked stops, which said the opposite of what
+     they mean: it read as "you already have all of this". For a member there is no locked
+     segment, so it runs the whole way as before.
+     It stops at that stop's EDGE, not its centre: a 4px white line dying in the middle of a
+     circle reads as a rendering fault rather than as a boundary. */
+  sizeFill.style.top=y+"px";
+  const lowFree=Math.min(...FREE_SIZES);
+  sizeFill.style.bottom=(free
+    ? (sizeBar.clientHeight-(SB_PAD+(1-tFromBrush(lowFree))*h)+dotDia(lowFree)/2)
+    : SB_PAD)+"px";
   /* ALWAYS SHOWN, including for members. Hiding it once you own KAMO+ was my call and it
      was wrong: the ✦ is what identifies the bar as the premium tool, and a member who has
      just paid for it is precisely the person who should still see it marked. It also made
@@ -5802,22 +5858,24 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   /* The dots are positioned from the SAME tFromBrush()/SB_PAD geometry the thumb uses, so a
      dot always sits exactly where tapping it lands. Built once, then only repositioned —
      renderSizeBar runs on every capture and on every pro change. */
-  const free=!canPro();
   let dots=sizeBar._dots;
   if(!dots){
-    dots=sizeBar._dots=FREE_SIZES.map(()=>{ const d=document.createElement("div"); d.className="sizeDot"; sizeBar.appendChild(d); return d; });
+    dots=sizeBar._dots=SIZE_STOPS.map(()=>{ const d=document.createElement("div"); d.className="sizeDot"; sizeBar.appendChild(d); return d; });
   }
-  /* ONE DOT, NOT THREE. Three marks turned a size control into a diagram of one — and beside
-     the thumb it read as a scale with four stops. The bar shows WHERE YOU ARE; tapping
-     anywhere still snaps to the nearest of the three, so the choice is unchanged and only the
-     furniture is gone. */
-  const at=FREE_SIZES.indexOf(brush);
+  /* ALL FIVE, NOT ONE. Showing only the stop under your thumb turned a five-position control
+     into a dot that moved, and there is no way to learn from a moving dot that four other
+     positions exist or that two of them are for sale. The diameter previews the stroke, so
+     the locked pair reads as "finer than anything you have" without a word of copy.
+     The diameter comes from dotDia(), which the fill also reads so the two cannot drift. */
   dots.forEach((d,i)=>{
-    const showing = free && i===(at<0?1:at);
-    d.style.display=showing?"block":"none";
-    if(!showing) return;
-    d.style.top=(SB_PAD+(1-tFromBrush(FREE_SIZES[i]))*h)+"px";
-    d.classList.add("on");
+    d.style.display=free?"block":"none";
+    if(!free) return;
+    const size=SIZE_STOPS[i], st=tFromBrush(size), dd=dotDia(size);
+    d.style.width=d.style.height=dd+"px";
+    d.style.marginLeft=d.style.marginTop=(-dd/2)+"px";
+    d.style.top=(SB_PAD+(1-st)*h)+"px";
+    d.classList.toggle("locked",PRO_SIZES.indexOf(size)>=0);
+    d.classList.toggle("on",size===brush);
   }); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
@@ -5851,36 +5909,48 @@ let sizing=false;
        FREE_BRUSH is 24, a size you can actually work an outline with. That is the whole
        difference between this and the version that failed, and it is why FREE_BRUSH must
        not drift back up.
-   The ✦ still sits at the bottom of the bar (see its CSS note): it was placed at the locked
-   fine end, and the whole bar is locked now, so the position is legacy rather than wrong. */
+/* WHERE IT LANDED, AND WHY THE PENDULUM STOPPED HERE. Read the four notes above as a
+   pendulum: every touch sells → nothing sells → every touch sells → nothing sells. Both ends
+   were wrong for the same reason, which none of those notes names: the locked range was
+   never DRAWN. When it sold, it sold on an invisible boundary, so people adjusting a tool
+   got a full screen — 824 views, one tap. When it stopped selling, the offer vanished with
+   it, and nothing on the paint screen said the paid range existed at all.
+   The measurement of the second half is now in: trials per new customer went 3.19% (4 Aug,
+   the tool visible and capped) → 0.77% (6 Aug, the tool silent) and have not recovered.
+   Five drawn stops end the pendulum. Three select, two are dashed and open the sheet, and a
+   tap can only reach the one it is nearest — so "adjusting" and "asking" are different
+   gestures at different pixels instead of the same gesture read two ways. */
 sizeBar.addEventListener("pointerdown",e=>{
   /* Free users never enter `sizing`, which is what keeps pointermove from doing anything:
-     no setPointerCapture, no sizeFromEvent, so `brush` cannot move off FREE_BRUSH. Not
-     forced — `size` is uncapped and exempt from the interruption budget, so a plain call
-     opens every time, and leaving force off means a future cap can still reach it. */
-  /* FREE USERS NOW GET A CHOICE INSTEAD OF A WALL. A tap snaps to the nearest of the three
-     free sizes — the same control, no full-screen interruption. Dragging stays a member
-     tool: `sizing` is never entered, so the continuous range cannot be reached by holding.
-     The paywall is kept for the one gesture that IS about the locked tool — reaching below
-     the smallest free size, which is the fine brush and nothing else. That is a fraction of
-     the 260 daily opens this control was producing, and it is the fraction that was actually
-     asking for something. */
+     no setPointerCapture, no sizeFromEvent, so `brush` cannot leave the five stops. Not
+     forced: `size` keeps its PW_CAP of one sheet per launch, and force would throw that
+     away. The ✦ is the forced path, for the person who is explicitly asking the price. */
   if(!canPro()){
     e.preventDefault();
     const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2;
     let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
-    /* NEAREST DOT BY POSITION, AND NO PAYWALL FROM THIS CONTROL AT ALL.
+    /* NEAREST STOP BY POSITION, AND THE LOCKED ONES SELL AGAIN.
        Snapping by SIZE instead of position looked equivalent and was not: BRUSH_CURVE bends
-       the bar, so the three free sizes sit at t=0.51/0.65/0.80 and the whole bottom half maps
-       below 16 — 47% of the bar would still have opened the paywall. That is most of the 260
-       daily opens this control was producing at a 0.9% view-to-sheet rate, which is the thing
-       being fixed. Now every tap on the bar picks a brush and nothing interrupts.
-       The upsell did not disappear, it moved to where it already converts: round_end (9.4%
-       against this control's 2.5%) and the challenge gear, both of which are people reaching
-       for something rather than adjusting a tool. */
-    const dotT=FREE_SIZES.map(tFromBrush);
-    let best=0; for(let i=1;i<dotT.length;i++) if(Math.abs(dotT[i]-t)<Math.abs(dotT[best]-t)) best=i;
-    brush=FREE_SIZES[best];
+       the bar, so a size-space midpoint puts the boundary in the wrong place entirely. Every
+       stop, free or locked, is matched the same way — by where it is drawn — so a tap always
+       resolves to the dot the thumb is nearest, which is the dot the user was aiming at.
+       WHY THIS IS NOT THE 824-VIEWS-ONE-TAP ARRANGEMENT AGAIN. That version opened the sheet
+       on an INVISIBLE boundary: nothing was drawn below the free floor, so 47% of the bar was
+       a trapdoor and most of those 260 daily opens were people adjusting a tool, not asking
+       for one. Here the locked stops are drawn, dashed, and 21px apart from their free
+       neighbours — hitting one is aiming at one. And it is still capped: PW_CAP.size allows a
+       single sheet per launch, after which flashSizeLock() answers on the control instead.
+       The uncapped path is the ✦, which is what an explicit "show me the price" costs.
+       If `source:"size"` climbs back to a third of all views at ~1% view-to-sheet, this was
+       the wrong call and the evidence will say so in a day. */
+    const stopT=SIZE_STOPS.map(tFromBrush);
+    let best=0; for(let i=1;i<stopT.length;i++) if(Math.abs(stopT[i]-t)<Math.abs(stopT[best]-t)) best=i;
+    const picked=SIZE_STOPS[best];
+    /* haptic() not paintHaptic(): the wrapper turns a styleless tick into selectionAsync(),
+       which is the faintest feedback iOS has and is right for "you moved a slider". Being
+       refused is not that, and it was reading as nothing at all. */
+    if(PRO_SIZES.indexOf(picked)>=0){ haptic(10); openPaywall("size"); return; }
+    brush=picked;
     renderSizeBar(); paintHaptic();
     return;
   }
