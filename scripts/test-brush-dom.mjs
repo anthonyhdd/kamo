@@ -63,7 +63,7 @@ const html = real.slice(0, at)
   /* Per-launch state, reset between blocks. PW_CAP.size allows one sheet per launch by
      design, so without this every block after the first measures the capped path and the
      uncapped assertions fail for the wrong reason. */
-  + 'reset(){pwOpens=0;pwInterruptions=0;for(const k in pwSourceOpens)delete pwSourceOpens[k];'
+  + 'reset(){pwOpens=0;pwInterruptions=0;for(const k in pwSourceOpens)delete pwSourceOpens[k];sizeBar._askedFloor=0;sizeBar.classList.remove("floorBounce");'
   + 'closePaywall();sizeBar.classList.remove("lockPulse");},'
   + 'sweep(n){const r=sizeBar.getBoundingClientRect(),out=[];'
   + 'for(let i=0;i<=n;i++){const y=r.top+24+(r.height-48)*(i/n);'
@@ -82,7 +82,8 @@ const html = real.slice(0, at)
   + 'shown:getComputedStyle(d).display!=="none",locked:d.classList.contains("locked"),'
   + 'top:parseFloat(d.style.top)||0,dia:parseFloat(d.style.height)||0}));},'
   + 'pw(){return{open:paywallEl.classList.contains("show"),src:pwLastSource,opens:pwOpens,'
-  + 'sizeOpens:pwSourceOpens.size||0,pulsing:sizeBar.classList.contains("lockPulse")};},'
+  + 'sizeOpens:pwSourceOpens.size||0,pulsing:sizeBar.classList.contains("lockPulse"),'
+  + 'bouncing:sizeBar.classList.contains("floorBounce")};},'
   + 'closePw(){closePaywall();sizeBar.classList.remove("lockPulse");},'
   /* Tap exactly where a stop is drawn, using the same geometry renderSizeBar used, so the
      test exercises the real hit-testing instead of asserting on the arrays. */
@@ -91,6 +92,15 @@ const html = real.slice(0, at)
   + 'const o={clientY:y,clientX:r.left+5,bubbles:true,pointerId:1};'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));return brush;},'
+  + 'tapFoot(){const r=sizeBar.getBoundingClientRect(),h=r.height-48;'
+  + 'const y=r.top+24+starZoneY(h)+6;'
+  + 'const o={clientY:y,clientX:r.left+5,bubbles:true,pointerId:1};'
+  + 'sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
+  + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));return brush;},'
+  + 'starShown(){return getComputedStyle(sizeStar).display!=="none";},'
+  + 'thumb(){return{shown:getComputedStyle(sizeThumb).display!=="none",dia:parseFloat(sizeThumb.style.width)||0};},'
+  + 'setBrush(b){brush=b;renderSizeBar();return{dia:parseFloat(sizeThumb.style.width)||0};},'
+  + 'floorPct(){return parseFloat(sizeBar.style.getPropertyValue("--floorPct"))||0;},'
   + 'star(){return sizeStar.getBoundingClientRect();},'
   + 'barBox(){return sizeBar.getBoundingClientRect();},'
   + 'tapStar(){sizeStar.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,pointerId:1}));},'
@@ -188,128 +198,69 @@ console.log('\nTHE THREE FREE SIZES READ AS THREE');
    thumb was hidden, and the bar never opened the paywall at all. Trials per new customer
    went 3.19% → 0.77% across that change. These are the assertions that would have caught it.
 */
-console.log('\nA FREE USER CAN SEE WHAT THEY DO NOT HAVE');
+console.log('\nNOTHING IS DRAWN THAT A FREE USER CANNOT HAVE');
 {
-  const STOPS = await page.evaluate(() => window.__b.stops());
-  const LOCKED = await page.evaluate(() => window.__b.locked());
-  const dots = await page.evaluate(() => { window.__b.reset(); window.__b.setPro(false); return window.__b.dots(); });
-  const shown = dots.filter((d) => d.shown);
+  await page.evaluate(() => { window.__b.reset(); window.__b.setPro(false); });
+  const dots = (await page.evaluate(() => window.__b.dots())).filter((d) => d.shown);
+  dots.length === 0
+    ? ok('no stops are rendered — four designs died drawing sizes the control would refuse')
+    : bad(`${dots.length} stops are drawn (${dots.map((d) => d.size).join(', ')}) — a size picker `
+        + 'that shows what it refuses is a frustration machine, whatever it is styled like');
 
-  shown.length === STOPS.length
-    ? ok(`all ${STOPS.length} stops are drawn (${shown.map((d) => d.size).join(', ')})`)
-    : bad(`only ${shown.length} of ${STOPS.length} stops are drawn — a control that shows one `
-        + 'position cannot teach anyone that the other four exist');
+  const st = await page.evaluate(() => window.__b.starShown());
+  st ? bad('the ✦ is still on the paint screen — the fading rail already says "there is more", '
+        + 'and a second signal is the last piece of furniture left on the photo')
+     : ok('and the ✦ is gone with them');
 
-  const lockedShown = shown.filter((d) => d.locked).map((d) => d.size).sort((a, b) => b - a);
-  lockedShown.join() === LOCKED.slice().sort((a, b) => b - a).join()
-    ? ok(`the locked sizes are visible and marked locked (${lockedShown.join(', ')})`)
-    : bad(`locked stops rendered: ${lockedShown.join(', ') || 'none'}, expected ${LOCKED.join(', ')} — `
-        + 'an invisible paid range is a paid range nobody buys');
-
-  /* Two stops that overlap are one stop with a smear, and the user cannot aim at either. */
-  const ordered = [...shown].sort((a, b) => a.top - b.top);
-  const gaps = ordered.slice(1).map((d, i) => d.top - ordered[i].top);
-  Math.max(...gaps) - Math.min(...gaps) < 1.5
-    ? ok(`evenly spaced (${gaps[0].toFixed(0)}px apart) — the five stops read as five choices`)
-    : bad(`spacing runs ${Math.min(...gaps).toFixed(0)}–${Math.max(...gaps).toFixed(0)}px — uneven `
-        + 'spacing crowds the fine end, which is what forced the diameters flat in the first place');
-  const clearance = ordered.slice(1).map((d, i) =>
-    (d.top - ordered[i].top) - (d.dia / 2) - (ordered[i].dia / 2));
-  Math.min(...clearance) > 8
-    ? ok(`and never touch (tightest gap ${Math.min(...clearance).toFixed(0)}px)`)
-    : bad(`two stops are ${Math.min(...clearance).toFixed(1)}px apart edge to edge`);
-
-  /* THE SCALE MUST NOT INVERT. The version before this drew locked stops as outlines, which
-     need ~4.5px of height to stay legible — so the two finest brushes rendered THICKER than
-     the free one above them. The picture then lied about the tool it was selling. */
-  const th = ordered.map((d) => d.dia);
-  new Set(th).size === th.length && th.every((v, i) => i === 0 || v < th[i - 1])
-    ? ok(`each bar is drawn at its own stroke weight (${th.join(' → ')}px, strictly decreasing)`)
-    : bad(`stroke weights are ${th.join(', ')} down the bar — they must strictly decrease, or the `
-        + 'control shows a size order the brush does not have');
-  Math.min(...th) <= 2.5 && Math.max(...th) >= 11
-    ? ok(`and the range is visible at a glance (${Math.max(...th)}px → ${Math.min(...th)}px)`)
-    : bad(`the weights only span ${Math.min(...th)}–${Math.max(...th)}px — too flat to read as sizes`);
+  const t = await page.evaluate(() => window.__b.thumb());
+  t.shown ? ok(`the thumb is the only object, and it is visible to free users (${t.dia}px)`)
+          : bad('the thumb is hidden from free users — that was the 6 August bug, where the '
+              + 'control showed a free user nothing at all');
 }
 
-console.log('\nTAPPING A LOCKED SIZE ASKS TO BUY IT');
+console.log('\nTHE THUMB IS THE PREVIEW');
 {
-  const LOCKED = await page.evaluate(() => window.__b.locked());
-  const FREE_MID = FREE[1];
-
-  const before = await page.evaluate((s) => { window.__b.reset(); window.__b.setPro(false); return window.__b.tap(s); }, FREE_MID);
-  const afterFree = await page.evaluate(() => window.__b.pw());
-  before === FREE_MID && !afterFree.open
-    ? ok(`tapping a free stop selects it (${before}) and does not interrupt`)
-    : bad(`tapping the free stop ${FREE_MID} gave brush ${before}, paywall open=${afterFree.open} — `
-        + 'a free size must never cost a full screen');
-
-  const held = await page.evaluate((s) => window.__b.tap(s), LOCKED[0]);
-  const afterLock = await page.evaluate(() => window.__b.pw());
-  afterLock.open && afterLock.src === 'size'
-    ? ok(`tapping the locked ${LOCKED[0]} opens the paywall as source "${afterLock.src}"`)
-    : bad(`tapping the locked stop ${LOCKED[0]} left the paywall open=${afterLock.open} src=${afterLock.src} — `
-        + 'this is the regression that took the paint screen out of the funnel entirely');
-  held === FREE_MID
-    ? ok(`and does not hand the locked size over (brush still ${held})`)
-    : bad(`the brush moved to ${held} on a locked tap — the paid tool is being given away`);
+  const sizes = [];
+  for (const b of FREE) sizes.push(await page.evaluate((x) => window.__b.setBrush(x), b));
+  sizes.every((v, i) => i === 0 || v.dia > sizes[i - 1].dia)
+    ? ok(`its diameter follows the brush (${sizes.map((v) => v.dia).join(' → ')}px for ${FREE.join(', ')})`)
+    : bad(`diameters ${sizes.map((v) => v.dia).join(', ')} do not follow ${FREE.join(', ')} — the one `
+        + 'object left has to carry the size, or the control says nothing at all');
 }
 
-console.log('\nAND IT CANNOT FLOOD: ONE SHEET PER LAUNCH, THEN THE BAR ANSWERS');
+console.log('\nTHE RAIL SAYS THE SCALE CONTINUES, WITHOUT OFFERING IT');
 {
-  const LOCKED = await page.evaluate(() => window.__b.locked());
-  /* NOT a reset: the cap must already be spent, because that is the state being tested. */
-  await page.evaluate(() => window.__b.closePw());
-  const second = await page.evaluate((s) => { window.__b.tap(s); return window.__b.pw(); }, LOCKED[1]);
-  !second.open && second.pulsing
-    ? ok('a second locked tap pulses the bar instead of opening a second sheet')
-    : bad(`the second locked tap left open=${second.open} pulsing=${second.pulsing} — either it `
-        + 'floods (824 views, one tap) or it refuses in total silence, and both have shipped before');
-  second.sizeOpens === 1
-    ? ok(`and "size" is charged exactly once (${second.sizeOpens})`)
-    : bad(`"size" opened ${second.sizeOpens} times — PW_CAP.size is not holding`);
+  const f = await page.evaluate(() => { window.__b.setPro(false); return window.__b.floorPct(); });
+  const m = await page.evaluate(() => { window.__b.setPro(true); return window.__b.floorPct(); });
+  f > 20 && f < 85
+    ? ok(`a free user's rail runs solid to ${f.toFixed(0)}% and fades below it`)
+    : bad(`--floorPct is ${f} for a free user — the fade has to sit where their travel actually ends`);
+  m >= 99
+    ? ok('a member\'s rail is uniform — nothing below is locked, so nothing suggests it')
+    : bad(`a member's rail fades at ${m}% — that is a lie about a range they own`);
+  await page.evaluate(() => window.__b.setPro(false));
 }
 
-console.log('\nTHE ✦ IS ON THE BAR, NOT HANGING OFF IT');
+console.log('\nREACHING UNDER THE FLOOR STILL ASKS TO BUY');
 {
-  /* Clear the pulse FIRST. The block above deliberately leaves lockPulse on, and tickPop
-     scales the ✦ — measuring mid-animation reported a 51x45 box for a 34x30 element and
-     failed the containment check for a reason that has nothing to do with the layout. */
-  await page.evaluate(() => window.__b.closePw());
-  await page.waitForTimeout(250);
-  const box = await page.evaluate(() => window.__b.star());
-  const bar = await page.evaluate(() => window.__b.barBox());
-  box.bottom <= bar.bottom + 0.5 && box.top >= bar.top
-    ? ok(`it sits inside the bar (${(bar.bottom - box.bottom).toFixed(0)}px clear of the foot)`)
-    : bad(`the ✦ runs from ${box.top.toFixed(0)} to ${box.bottom.toFixed(0)} against a bar of `
-        + `${bar.top.toFixed(0)}–${bar.bottom.toFixed(0)} — the only paywall entry on this screen `
-        + 'is floating over the photo, unattached to the control it marks');
-  box.height >= 30 && box.width >= 30
-    ? ok(`and is a real tap target (${box.width.toFixed(0)}×${box.height.toFixed(0)}px)`)
-    : bad(`the ✦ tap target is ${box.width.toFixed(0)}×${box.height.toFixed(0)}px — under 30px it is `
-        + 'a decoration, not a button');
+  await page.evaluate((b) => { window.__b.reset(); window.__b.setBrush(b); }, FREE[1]);
+  const held = await page.evaluate(() => window.__b.tapFoot());
+  const first = await page.evaluate(() => window.__b.pw());
+  first.open && first.src === 'size_star'
+    ? ok(`the first reach opens the sheet as "${first.src}", uncapped`)
+    : bad(`the first reach left open=${first.open} src=${first.src} — the paint screen is out of `
+        + 'the funnel again, which is the regression this whole thread started from');
+  held === FREE[1]
+    ? ok(`and the brush does not move (still ${held})`)
+    : bad(`the brush jumped to ${held} — the foot is not a stop`);
 
   await page.evaluate(() => window.__b.closePw());
-  const starPw = await page.evaluate(() => { window.__b.tapStar(); return window.__b.pw(); });
-  starPw.open && starPw.src === 'size_star'
-    ? ok('and tapping it still opens the sheet, uncapped, as "size_star"')
-    : bad(`the ✦ left the paywall open=${starPw.open} src=${starPw.src} — the one deliberate `
-        + 'buying signal on the paint screen must always be answered');
+  const second = await page.evaluate(() => { window.__b.tapFoot(); return window.__b.pw(); });
+  !second.open && second.bouncing
+    ? ok('and asking again bounces the thumb instead of a second full screen mid-round')
+    : bad(`the second reach left open=${second.open} bouncing=${second.bouncing} — it either floods `
+        + '(824 views, one tap) or refuses in silence, and both have shipped before');
 }
-
-console.log('\nTHE CONTINUOUS CONTROL\'S FURNITURE GOES WITH IT');
-{
-  const f = await page.evaluate(() => { window.__b.setPro(false); return { fill: window.__b.fillShown(), rail: window.__b.railShown() }; });
-  const m = await page.evaluate(() => { window.__b.setPro(true); return { fill: window.__b.fillShown(), rail: window.__b.railShown() }; });
-  !f.fill && !f.rail
-    ? ok('a free user gets the five bars alone — no rail, no fill behind them')
-    : bad(`free user still shows rail=${f.rail} fill=${f.fill} — both belong to the continuous `
-        + 'control and only add noise behind five drawn stops');
-  m.fill && m.rail
-    ? ok('and a member keeps both, because for them the bar really is continuous')
-    : bad(`a member lost rail=${m.rail} fill=${m.fill} — their control is the slider, not the stops`);
-}
-await page.evaluate(() => window.__b.setPro(false));
 
 await browser.close();
 server.close();

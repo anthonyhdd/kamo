@@ -587,7 +587,12 @@
   .lkico{width:12px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.72;vertical-align:-2px;margin-left:2px;}
   /* vertical brush-size slider — just the bar (no panel, no lock) */
   #sizeBar{position:absolute;right:16px;top:32%;z-index:16;width:34px;height:212px;display:none;touch-action:none;}
-  #sizeBar::before{content:"";position:absolute;left:50%;top:16px;bottom:16px;transform:translateX(-50%);width:8px;border-radius:4px;background:rgba(10,12,16,.42);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.16);box-shadow:0 2px 12px rgba(0,0,0,.45);}
+  /* TWO OPACITIES, ONE SHAPE. The rail really does run to BRUSH_MIN; a free user's travel just
+     stops partway down it. Fading the remainder says "the scale continues" without drawing a
+     single stop nobody can pick — which is what three rejected designs were doing. --floorPct
+     is set by renderSizeBar and is 100% for members, because for them nothing is locked and a
+     faded tail would be a lie. */
+  #sizeBar::before{content:"";position:absolute;left:50%;top:16px;bottom:16px;transform:translateX(-50%);width:8px;border-radius:4px;background:linear-gradient(to bottom,rgba(10,12,16,.42) 0,rgba(10,12,16,.42) calc(var(--floorPct,100%) - 4%),rgba(10,12,16,.15) calc(var(--floorPct,100%) + 5%),rgba(10,12,16,.15) 100%);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.16);box-shadow:0 2px 12px rgba(0,0,0,.45);}
   #sizeFill{position:absolute;left:50%;transform:translateX(-50%);width:4px;border-radius:2px;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);}
   #sizeThumb{position:absolute;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.6);border:1.5px solid rgba(0,0,0,.06);pointer-events:none;}
   /* ✦ = KAMO+, and it labels the WHOLE bar, not one end. Every ✦ in this app means the same
@@ -606,7 +611,13 @@
      whose children draw the visible track — so a box-shadow spread on it painted a
      hard-edged green RECTANGLE around nothing. The ✦ is already the premium marker and it
      is a glyph, so it can be pulsed without inventing a shape. */
-  #sizeBar.lockPulse #sizeStar{animation:tickPop .55s ease-out;color:var(--mint);}
+  #sizeBar.lockPulse ~ #sizeStar{animation:tickPop .55s ease-out;color:var(--mint);}
+  /* The thumb dips toward the floor and springs back — "there is more, and it is not yours"
+     said with motion instead of an object. The ✦ pulses with it so the two read as one event. */
+  @keyframes floorDip{0%{transform:translate(-50%,-50%)}38%{transform:translate(-50%,calc(-50% + 7px))}100%{transform:translate(-50%,-50%)}}
+  #sizeBar.floorBounce #sizeThumb{animation:floorDip .40s cubic-bezier(.34,1.56,.64,1);}
+  #sizeBar.floorBounce ~ #sizeStar{animation:tickPop .55s ease-out;}
+  @media (prefers-reduced-motion:reduce){#sizeBar.floorBounce #sizeThumb{animation:none}}
   /* EVERY STOP, MARKED — INCLUDING THE ONES YOU CANNOT HAVE. A tap-to-pick control nobody
      can see is a control nobody uses, and that went double for the locked half: only the dot
      under your thumb was drawn, so the paid range was invisible and the bar read as a
@@ -630,8 +641,6 @@
      above them and identical to each other, inverting the one thing the scale exists to say.
      Colour carries the meaning instead: mint is KAMO+ everywhere in this app (the ✦, the
      all-colours swatch), so a 2px mint bar is unambiguous and still honest about the size. */
-  .sizeDot.locked{background:var(--mint);box-shadow:0 1px 5px rgba(0,0,0,.75);}
-  .sizeDot.locked.on{box-shadow:0 1px 5px rgba(0,0,0,.75);}
   /* The rail belongs to the continuous control. Behind five drawn bars it is furniture. */
   #sizeBar.stops::before{display:none;}
   /* INSIDE THE BAR, NOT HANGING OFF IT. bottom:-6px put the only paywall entry point on the
@@ -643,8 +652,13 @@
      runs ~2x its font-size, so a padded inline box measured 47px tall and hung off the foot of
      the control no matter what `bottom` said — the exact defect this was moved to fix. A fixed
      34x30 flex box is deterministic and is its own 34x30 tap target. */
-  #sizeStar{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:15px;line-height:1;
-    width:34px;height:30px;align-items:center;justify-content:center;
+/* OUT OF THE BAR, UNDER IT. It was a child of #sizeBar and therefore sat ON the 8px rail —
+     a glyph lying across the track. "Inside the bar" was a constraint I invented to fix a
+     different defect (bottom:-6px left it floating in the middle of the photo, attached to
+     nothing); a caption 10px under the control, on its axis, is attached without being debris.
+     Same right offset and width as #sizeBar, so it is centred on the rail's own axis. */
+  #sizeStar{position:absolute;right:16px;top:calc(32% + 222px);font-size:17px;line-height:1;
+    width:34px;height:34px;align-items:center;justify-content:center;
     color:var(--mint);opacity:.95;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
@@ -1326,7 +1340,7 @@
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
 
     <!-- vertical brush-size slider (free) -->
-    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div><div id="sizeStar">✦</div></div>
+    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div></div><div id="sizeStar">✦</div>
     <!-- before/after reveal (finished view) -->
     <canvas id="revealC"></canvas>
     <div id="revealHandle"><div class="rhKnob">‹ ›</div></div>
@@ -2670,7 +2684,14 @@ const FREE_BRUSH=FREE_SIZES[1];   // the default a free round starts on
 const PRO_SIZES=[8,4];
 /* Biggest first, so the array reads top-of-bar down. Every consumer positions through
    tFromBrush(), so the order is for reading rather than for geometry. */
-const SIZE_STOPS=[...FREE_SIZES,...PRO_SIZES].sort((a,b)=>b-a);
+/* ONLY THE THREE YOU CAN HAVE. Drawing the locked pair was the mistake behind two rejected
+   designs: a size picker that renders sizes it will refuse is a frustration machine, and no
+   amount of styling fixes that. Worse, it says "the finer you want to be, the more you pay",
+   which is word for word the complaint the TikTok ad comments made.
+   PRO_SIZES survives as the definition of what KAMO+ opens — the pitch still names it — but
+   nothing on the bar draws it. The lower third of the control is the ✦'s, and empty space
+   under three stops says "there is more" without pretending to offer it. */
+const SIZE_STOPS=FREE_SIZES.slice().sort((a,b)=>b-a);
 const brushFromT=t=>Math.round(BRUSH_MIN+(BRUSH_MAX-BRUSH_MIN)*Math.pow(Math.max(0,Math.min(1,t)),BRUSH_CURVE));
 const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUSH_MIN))),1/BRUSH_CURVE);
 /* How big a stop is drawn. Deliberately narrow (11px → 17px across a 4→46 range): the bar is
@@ -2693,12 +2714,15 @@ const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUS
 /* The ✦ lives under the last stop and labels the locked pair, so the stops cannot use the
    whole rail — they stop short and leave it the foot. Without this the glyph's box overhangs
    the control and it is back to floating over the photo, which is the bug it was moved for. */
-const STAR_RESERVE=34;
-const STOP_GAP=h=>(h-STAR_RESERVE)/(SIZE_STOPS.length-1);
+/* The stops take the top half; the rest is the ✦'s, target included. */
+const STAR_RESERVE=h=>h*0.46;
+const STOP_GAP=h=>(h-STAR_RESERVE(h))/(SIZE_STOPS.length-1);
 const stopY=(i,h)=>SB_PAD+i*STOP_GAP(h);
+/* Below this the touch belongs to the ✦, not to a stop. */
+const starZoneY=h=>stopY(SIZE_STOPS.length-1,h)+STOP_GAP(h)*0.55;
 /* 2px at the finest, 13px at the fattest, linear in the brush itself so the picture does not
    lie about the tool. 13px is the ceiling the 41px spacing allows without two bars touching. */
-const stopTh=size=>Math.round((2+((size-Math.min(...SIZE_STOPS))/(Math.max(...SIZE_STOPS)-Math.min(...SIZE_STOPS)))*11)*2)/2;
+const stopTh=size=>Math.round((4+((size-Math.min(...FREE_SIZES))/(Math.max(...FREE_SIZES)-Math.min(...FREE_SIZES)))*9)*2)/2;
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
    (maskCanvas = the three.js render captured at shutter time), so paint can NEVER
    spill outside the silhouette — a sloppy finger still produces a clean camo.
@@ -5875,20 +5899,43 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   /* The fill and the rail are the continuous control's furniture. With five drawn bars they
      are noise behind the thing that carries the meaning, and the fill drew a white line
      through stops the user does not own. Both go for free users; members keep them. */
-  sizeFill.style.display=free?"none":"block";
-  sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
-  sizeBar.classList.toggle("stops",free);
+  /* NO FILL, for anyone. It encodes "how much", which the thumb's POSITION already says and
+     its DIAMETER says again — a third copy of one fact, drawn in the purest white on screen,
+     over the photo the whole product exists to make you look at. */
+  sizeFill.style.display="none";
+  /* Where the free travel ends, as a percentage of the control, for the rail gradient and
+     for the ✦ that marks the junction. Members get 100%: nothing below is locked. */
+  const floorY=free?stopY(SIZE_STOPS.length-1,h):sizeBar.clientHeight;
+  sizeBar.style.setProperty("--floorPct",(100*floorY/sizeBar.clientHeight).toFixed(1)+"%");
+  sizeBar.classList.remove("stops");
   /* ALWAYS SHOWN, including for members. Hiding it once you own KAMO+ was my call and it
      was wrong: the ✦ is what identifies the bar as the premium tool, and a member who has
      just paid for it is precisely the person who should still see it marked. It also made
      the star silently vanish the moment someone subscribed, which reads as a feature being
      taken away rather than unlocked. */
-  if(sizeStar) sizeStar.style.display="flex";   // flex, not block: the glyph is centred in a fixed box
+  /* AT THE JUNCTION, AND ONLY FOR THE PEOPLE IT IS TRUE FOR. It used to sit at the foot and
+     be shown to members too, on the argument that "the ✦ is what identifies the bar as the
+     premium tool, and someone who has just paid should still see it marked". That was right
+     while it meant THIS BAR IS PREMIUM. It now means BELOW HERE IS KAMO+, which is false for
+     a member — so they no longer see it. Reversing that note deliberately, not by accident. */
+  /* THE ✦ LEAVES THE PAINT SCREEN. With the rail fading below the free floor, the glyph was
+     a SECOND signal for the one thing the rail already says — and the only piece of furniture
+     left standing on the photo. The entry it guarded is not lost: reaching under the floor
+     still opens the sheet on `size_star`, uncapped, which is the gesture that meant "show me
+     more sizes" all along. The button is gone; the question it answered is still asked. */
+  if(sizeStar) sizeStar.style.display="none";   // its box is 34px tall, so this centres it ON the junction
   /* FOUR CIRCLES, NOT THREE. The thumb is a circle too, so beside the three preset dots it
      read as a fourth stop that behaves differently from the others. A free user picks from a
      fixed set — the active dot IS the indicator — so the thumb belongs to the continuous
      control and hides with it. */
-  sizeThumb.style.display = canPro() ? "block" : "none";
+  /* THE THUMB IS THE PREVIEW, AND IT IS THE ONLY THING DRAWN. Three designs died trying to
+     render the stops as objects — circles, strokes, locked marks — and every one of them
+     was furniture stacked on a control that already says everything with one moving dot
+     whose DIAMETER IS THE BRUSH. Free users see it now too: they pick from three sizes and
+     the dot is those three sizes, so the choice is visible in the only place it matters.
+     Nothing is drawn that the user cannot have, which is what all three rejections were
+     actually about. */
+  sizeThumb.style.display="block";
   /* The dots are positioned from the SAME tFromBrush()/SB_PAD geometry the thumb uses, so a
      dot always sits exactly where tapping it lands. Built once, then only repositioned —
      renderSizeBar runs on every capture and on every pro change. */
@@ -5902,12 +5949,11 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      the locked pair reads as "finer than anything you have" without a word of copy.
      The diameter comes from dotDia(), which the fill also reads so the two cannot drift. */
   dots.forEach((d,i)=>{
-    d.style.display=free?"block":"none";
-    if(!free) return;
+    d.style.display="none";
+    if(true) return;
     const size=SIZE_STOPS[i], th=stopTh(size);
     d.style.height=th+"px"; d.style.marginTop=(-th/2)+"px";
     d.style.top=stopY(i,h)+"px";
-    d.classList.toggle("locked",PRO_SIZES.indexOf(size)>=0);
     d.classList.toggle("on",size===brush);
   }); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
@@ -5978,15 +6024,27 @@ sizeBar.addEventListener("pointerdown",e=>{
        the wrong call and the evidence will say so in a day. */
     /* Matched against where the bars are DRAWN, evenly, so a tap always resolves to the one
        the thumb is nearest — which is the one it was aimed at. */
-    const span=(h-STAR_RESERVE)/h;                     // stops end short of the ✦
+    /* THE LOWER ZONE IS THE ✦'s, and reaching into it is the one gesture on this screen that
+       means "show me more sizes". It is not a refusal — nothing was drawn there to refuse —
+       so it takes the ✦'s own forced, uncapped path, exactly like tapping the glyph. */
+    const yLocal=(e.clientY-r.top);
+    if(yLocal>=starZoneY(h)){
+      haptic(10);
+      /* THE FIRST REACH GETS THE ANSWER, THE REST GET THE FEEL. Someone stretching past the
+         floor is asking what is down there, and the first time per launch they get told in
+         full. Asking again is not a new question, so it gets the thumb springing back off the
+         floor and the ✦ pulsing — the tactile version of the same sentence, with nothing to
+         dismiss mid-round. */
+      if(!sizeBar._askedFloor){ sizeBar._askedFloor=1; openPaywall("size_star",true); return; }
+      sizeBar.classList.remove("floorBounce"); void sizeBar.offsetWidth;
+      sizeBar.classList.add("floorBounce");
+      clearTimeout(sizeBar._bt);
+      sizeBar._bt=setTimeout(()=>sizeBar.classList.remove("floorBounce"),420);
+      return; }
+    const span=(h-STAR_RESERVE(h))/h;
     let best=Math.round(((1-t)/span)*(SIZE_STOPS.length-1));
     best=Math.max(0,Math.min(SIZE_STOPS.length-1,best));
-    const picked=SIZE_STOPS[best];
-    /* haptic() not paintHaptic(): the wrapper turns a styleless tick into selectionAsync(),
-       which is the faintest feedback iOS has and is right for "you moved a slider". Being
-       refused is not that, and it was reading as nothing at all. */
-    if(PRO_SIZES.indexOf(picked)>=0){ haptic(10); openPaywall("size"); return; }
-    brush=picked;
+    brush=SIZE_STOPS[best];
     renderSizeBar(); paintHaptic();
     return;
   }
