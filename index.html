@@ -615,22 +615,37 @@
      WIDTH AND HEIGHT ARE SET IN JS, per stop, from the brush it selects — the dot is a
      preview of the stroke, which is the whole reason a size picker shows circles rather than
      numbers. The values here are the fallback if that ever fails to run. */
-  .sizeDot{position:absolute;left:50%;width:12px;height:12px;margin-left:-6px;margin-top:-6px;border-radius:50%;
-    background:rgba(255,255,255,.28);border:1.5px solid rgba(255,255,255,.5);pointer-events:none;
-    box-shadow:0 1px 4px rgba(0,0,0,.5);transition:background .15s,transform .15s,opacity .15s;}
-  .sizeDot.on{background:var(--mint);border-color:var(--mint);transform:scale(1.15);}
+  .sizeDot{position:absolute;left:50%;width:26px;height:6px;margin-left:-13px;margin-top:-3px;border-radius:99px;
+    background:rgba(255,255,255,.95);pointer-events:none;
+    box-shadow:0 1px 6px rgba(0,0,0,.75);transition:box-shadow .15s,background .15s;}
+  /* A RING, NOT A FILL. The selected stop stays white — it is one of yours — and the mint
+     says "this is the one". Filling it mint made the loudest thing on the screen a green
+     blob, and it collided with the mint that means KAMO+ two stops below. */
+  .sizeDot.on{background:#fff;box-shadow:0 0 0 1.5px var(--mint),0 1px 6px rgba(0,0,0,.7);}   /* 1.5px, not 2: a thicker ring adds to the bar's apparent weight and blunts the scale */
   /* HOLLOW AND DASHED, NOT DIMMED-TO-NOTHING. It has to be legible enough that a stranger
      reads "that size exists and I do not have it" at a glance, and different enough that
      they never mistake it for something a tap will select. A dashed outline says both. */
-  .sizeDot.locked{background:transparent;border-style:dashed;border-color:rgba(255,255,255,.55);opacity:.85;}
-  .sizeDot.locked.on{background:transparent;transform:none;}
+  /* SOLID MINT AT ITS TRUE THICKNESS. Dashed read as "loading", and an outline needs ~4.5px
+     of height to stay legible — which made the two locked stops THICKER than the free one
+     above them and identical to each other, inverting the one thing the scale exists to say.
+     Colour carries the meaning instead: mint is KAMO+ everywhere in this app (the ✦, the
+     all-colours swatch), so a 2px mint bar is unambiguous and still honest about the size. */
+  .sizeDot.locked{background:var(--mint);box-shadow:0 1px 5px rgba(0,0,0,.75);}
+  .sizeDot.locked.on{box-shadow:0 1px 5px rgba(0,0,0,.75);}
+  /* The rail belongs to the continuous control. Behind five drawn bars it is furniture. */
+  #sizeBar.stops::before{display:none;}
   /* INSIDE THE BAR, NOT HANGING OFF IT. bottom:-6px put the only paywall entry point on the
      paint screen six pixels BELOW the rail it belongs to — a 19px glyph floating over a
      photo, unlabelled, at the end of a 212px invisible column. It now sits on the rail,
      under the locked stops it marks, so it reads as the label for that segment.
      Padding, not a bigger glyph: 19px of text is a poor tap target and the box is invisible. */
-  #sizeStar{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-size:19px;line-height:1;
-    color:#fff;opacity:.9;padding:8px 12px;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
+  /* AN EXPLICIT BOX, not padding around a glyph. The ✦ sits in a fallback font whose line box
+     runs ~2x its font-size, so a padded inline box measured 47px tall and hung off the foot of
+     the control no matter what `bottom` said — the exact defect this was moved to fix. A fixed
+     34x30 flex box is deterministic and is its own 34x30 tap target. */
+  #sizeStar{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:15px;line-height:1;
+    width:34px;height:30px;align-items:center;justify-content:center;
+    color:var(--mint);opacity:.95;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
   #revealHandle{position:absolute;top:0;bottom:0;width:46px;z-index:15;transform:translateX(-50%);display:none;touch-action:none;align-items:center;justify-content:center;}
@@ -2665,7 +2680,25 @@ const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUS
    property that matters, since two stops the same size are one stop with a gap.
    A FUNCTION, because the fill has to end exactly at a dot's edge and a second copy of this
    arithmetic is a second copy that will one day disagree. */
-const dotDia=size=>Math.round(9+tFromBrush(size)*9);
+/* HOW A STOP IS DRAWN, and the whole reason this is a bar and not a dot.
+   A circle encodes size in its DIAMETER, which spends the vertical axis — the same axis the
+   stop's position already uses. The two fought, so the diameters had to be squashed into
+   11-17px to stop them colliding, and five near-identical circles read as loading pips, not
+   as sizes. A bar spends the horizontal axis on a constant length and the vertical on
+   thickness alone, so the scale is legible at 2px and the position stays free.
+   STOPS ARE EVENLY SPACED, not placed at tFromBrush(). For a free user this is a
+   five-position selector, not a continuous scale — putting 8 and 4 at their true place on
+   the curve crowded them under 14 for no benefit to anyone. Members still get the real
+   continuous mapping; they see the thumb, never these. */
+/* The ✦ lives under the last stop and labels the locked pair, so the stops cannot use the
+   whole rail — they stop short and leave it the foot. Without this the glyph's box overhangs
+   the control and it is back to floating over the photo, which is the bug it was moved for. */
+const STAR_RESERVE=34;
+const STOP_GAP=h=>(h-STAR_RESERVE)/(SIZE_STOPS.length-1);
+const stopY=(i,h)=>SB_PAD+i*STOP_GAP(h);
+/* 2px at the finest, 13px at the fattest, linear in the brush itself so the picture does not
+   lie about the tool. 13px is the ceiling the 41px spacing allows without two bars touching. */
+const stopTh=size=>Math.round((2+((size-Math.min(...SIZE_STOPS))/(Math.max(...SIZE_STOPS)-Math.min(...SIZE_STOPS)))*11)*2)/2;
 /* Strokes land on their own layer, then get clipped to the figure's alpha mask
    (maskCanvas = the three.js render captured at shutter time), so paint can NEVER
    spill outside the silhouette — a sloppy finger still produces a clean camo.
@@ -5839,17 +5872,18 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      segment, so it runs the whole way as before.
      It stops at that stop's EDGE, not its centre: a 4px white line dying in the middle of a
      circle reads as a rendering fault rather than as a boundary. */
-  sizeFill.style.top=y+"px";
-  const lowFree=Math.min(...FREE_SIZES);
-  sizeFill.style.bottom=(free
-    ? (sizeBar.clientHeight-(SB_PAD+(1-tFromBrush(lowFree))*h)+dotDia(lowFree)/2)
-    : SB_PAD)+"px";
+  /* The fill and the rail are the continuous control's furniture. With five drawn bars they
+     are noise behind the thing that carries the meaning, and the fill drew a white line
+     through stops the user does not own. Both go for free users; members keep them. */
+  sizeFill.style.display=free?"none":"block";
+  sizeFill.style.top=y+"px"; sizeFill.style.bottom=SB_PAD+"px";
+  sizeBar.classList.toggle("stops",free);
   /* ALWAYS SHOWN, including for members. Hiding it once you own KAMO+ was my call and it
      was wrong: the ✦ is what identifies the bar as the premium tool, and a member who has
      just paid for it is precisely the person who should still see it marked. It also made
      the star silently vanish the moment someone subscribed, which reads as a feature being
      taken away rather than unlocked. */
-  if(sizeStar) sizeStar.style.display="block";
+  if(sizeStar) sizeStar.style.display="flex";   // flex, not block: the glyph is centred in a fixed box
   /* FOUR CIRCLES, NOT THREE. The thumb is a circle too, so beside the three preset dots it
      read as a fourth stop that behaves differently from the others. A free user picks from a
      fixed set — the active dot IS the indicator — so the thumb belongs to the continuous
@@ -5870,10 +5904,9 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   dots.forEach((d,i)=>{
     d.style.display=free?"block":"none";
     if(!free) return;
-    const size=SIZE_STOPS[i], st=tFromBrush(size), dd=dotDia(size);
-    d.style.width=d.style.height=dd+"px";
-    d.style.marginLeft=d.style.marginTop=(-dd/2)+"px";
-    d.style.top=(SB_PAD+(1-st)*h)+"px";
+    const size=SIZE_STOPS[i], th=stopTh(size);
+    d.style.height=th+"px"; d.style.marginTop=(-th/2)+"px";
+    d.style.top=stopY(i,h)+"px";
     d.classList.toggle("locked",PRO_SIZES.indexOf(size)>=0);
     d.classList.toggle("on",size===brush);
   }); }
@@ -5943,8 +5976,11 @@ sizeBar.addEventListener("pointerdown",e=>{
        The uncapped path is the ✦, which is what an explicit "show me the price" costs.
        If `source:"size"` climbs back to a third of all views at ~1% view-to-sheet, this was
        the wrong call and the evidence will say so in a day. */
-    const stopT=SIZE_STOPS.map(tFromBrush);
-    let best=0; for(let i=1;i<stopT.length;i++) if(Math.abs(stopT[i]-t)<Math.abs(stopT[best]-t)) best=i;
+    /* Matched against where the bars are DRAWN, evenly, so a tap always resolves to the one
+       the thumb is nearest — which is the one it was aimed at. */
+    const span=(h-STAR_RESERVE)/h;                     // stops end short of the ✦
+    let best=Math.round(((1-t)/span)*(SIZE_STOPS.length-1));
+    best=Math.max(0,Math.min(SIZE_STOPS.length-1,best));
     const picked=SIZE_STOPS[best];
     /* haptic() not paintHaptic(): the wrapper turns a styleless tick into selectionAsync(),
        which is the faintest feedback iOS has and is right for "you moved a slider". Being
