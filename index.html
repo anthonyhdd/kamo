@@ -3830,6 +3830,11 @@ function openKamoHome(){
      if there is anything to say, and never moves anything the user is already reaching for —
      it sits above the buttons, not between them. */
   try{ khResults(); }catch(_){}
+  /* THEY CAME TO LOOK, SO THE REMINDER TO LOOK IS SPENT. Opening this card IS reading the
+     results — the unread dot goes out here for exactly that reason — and a ping that later
+     tells them to check something they already checked is how an app gets its notifications
+     switched off, which iOS never re-asks about. Cheap, keyed, and a no-op if none is armed. */
+  if(nativeCaps && nativeCaps.notifSchedule) postNative({type:"notif-cancel",key:"results"});
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
@@ -4419,7 +4424,7 @@ function trackCarried(kind,props){
    different Amplitude user than anything in this set. Dividing one by the other is exactly
    the mixed funnel the note above warns about. So the success is routed the same way as the
    failure: same device id, same path, and the ratio means something. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok","web_notif_armed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -6470,8 +6475,37 @@ async function chUpload(){
     }
     chRemember(chId);
     track("hide_published",{});
+    armResultsPing();
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
 }
+/* THE ONE THING THIS APP CAN SAY THAT ISN'T GENERIC.
+   The daily reminder is built a fortnight ahead, so it can only ever talk about hiding in
+   the abstract. The reason to come BACK is different and specific: you sent a hide and you
+   do not know whether anyone opened it. chTally answers that — it feeds the dot on the
+   wordmark and the row on the player card — but nothing ever tells you to go look, so the
+   answer sits there unread and the app reads as "nobody played".
+   Local, not push: there is no server to notice the actual attempt, so this is a timer, and
+   the copy has to stay honest about that. "See if anyone found it" is a prompt to check, not
+   a claim that somebody did.
+   KEYED so it replaces: saving challenge settings republishes the hide, and a creator who
+   nudges the timer three times must not collect three identical pings.
+   Gated on nativeCaps.notifSchedule — no released binary sets it, so this is inert until the
+   build that added the handler reaches users, and silently does nothing in a browser. */
+function armResultsPing(){
+  if(!(nativeCaps && nativeCaps.notifSchedule)) return;
+  postNative({type:"notif-schedule",notif:{
+    key:"results",
+    delayMinutes:180,
+    subtitle:"Your hide is out there",
+    body:"See if anyone found it.",
+  }});
+}
+/* ANSWERED EITHER WAY, and that is the point of the callback rather than fire-and-forget.
+   A one-shot is dropped silently when permission was never granted or the per-install cap is
+   full, and those are the cases where the honest UI is to promise nothing. Without this the
+   page could not tell "armed" from "swallowed", and the opt-in rate would look like a
+   scheduling rate. openKamoHome cancels it — see there. */
+window.__kamoNotifResult=function(r){ try{ track("web_notif_armed",{key:(r&&r.key)||"",ok:!!(r&&r.ok)}); }catch(e){} };
 function chLink(){ return chId?(KAMO_HOST+"?h="+chId):""; }
 /* The community door, in one place. It is an invite link, so it can be rotated or revoked
    from Discord without a push — but it is also the only URL in this app that points at a
