@@ -1916,7 +1916,13 @@ function fullPose(i){ const o=JSON.parse(JSON.stringify(REST)); const p=POSES[i]
 /* NO NAME PILL ON POSE CHANGE. Tapping the figure cycles the pose and the figure itself is
    the feedback — it visibly changes shape. Announcing "Stand" over it labelled something the
    user was already looking at, once per tap, on the screen where they are framing a shot. */
-function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); haptic(); updatePoseBar(); }
+/* NOBODY KNOWS IF ANYONE USES THIS. The poses are 122 lines of this file and have never been
+   instrumented — setPose() has run since launch without a single track(). "Do people change
+   pose" was unanswerable, not because the answer was bad but because the question was never
+   wired. One line makes it a number: how many do it, how often, and whether the ones who do
+   go on to share. */
+function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); haptic(); updatePoseBar();
+  track("pose_changed",{pose:char.poseIdx,of:POSES.length}); }
 function setPoseInstant(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); for(const k in REST){ if(k==="rootDY"){ char.charG.position.y=char.target.rootDY; continue;} char.parts[k].rotation.set(char.target[k][0],char.target[k][1],char.target[k][2]); } }
 function lerpChar(char){ const s=0.18; const g=char.group;
   // position spring — momentum + elastic settle on release (weight feel; stays where you leave it)
@@ -4394,7 +4400,10 @@ function trackCarried(kind,props){
    into the web, which needs a build.
    It also means one extra Amplitude user per install, because the WebView had no reason to
    mint a web id before. Watch the user totals for a step change. */
-const WEB_ONLY=new Set(["hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened"]);
+/* `pose_changed` and `sheet_presented` are NEW NAMES, and 1.0.2's WEB_EVENTS allow-list is
+   compiled into the binary — an unknown name is dropped silently. 1.0.2 is 99.7% of the
+   fleet, so a new event that is not routed direct measures nothing at all. */
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened"]);
 function track(event,props){
   /* `emit` STAMPS EVERY EVENT THIS FILE SENDS, and it exists because of a question the data
      could not answer. 21 of 29 purchase_initiated over three days arrived carrying NOTHING —
@@ -4731,6 +4740,14 @@ function peekShareSheet(){
   chPrevRender();
   shareSheetEl.classList.add("peek");
   haptic(8);
+  /* THE SHEET THAT COMES TO THEM WAS INVISIBLE TO THE FUNNEL. `share_opened` fires only from
+     openShareSheet(), which this state deliberately does not go through — so since 6 August,
+     when the sheet started presenting itself on the reveal, the most common way anyone meets
+     it has not been counted. That made 388 publishers against 71 sheet-openers look like an
+     82% abandonment when it is at least partly an instrumentation asymmetry, and it nearly
+     bought a redesign of something that may not be broken. Its own name, not share_opened:
+     arriving and asking are different acts and merging them would repeat the mistake. */
+  track("sheet_presented",{score:Math.round(currentScore||0)});
 }
 function expandShareSheet(){
   /* THE PEEK CLASS IS NOT DROPPED HERE. It used to be, one line before openShareSheet(), and
