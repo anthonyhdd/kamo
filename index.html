@@ -4403,7 +4403,24 @@ function trackCarried(kind,props){
 /* `pose_changed` and `sheet_presented` are NEW NAMES, and 1.0.2's WEB_EVENTS allow-list is
    compiled into the binary — an unknown name is dropped silently. 1.0.2 is 99.7% of the
    fleet, so a new event that is not routed direct measures nothing at all. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened"]);
+/* `save_no_ack` / `save_ok` ARE A PAIR, AND THEY HAVE TO TRAVEL TOGETHER.
+   save_no_ack has existed for days and Amplitude has never heard of the name: it is in
+   neither allow-list, so every firing was dropped. The one question nobody could answer —
+   does the Save button actually write to the camera roll — had no data behind it at all.
+   Routing only the failure would not fix that, because the natural denominator
+   (share_target_tapped, target:"save") goes through the WRAPPER and therefore lands under a
+   different Amplitude user than anything in this set. Dividing one by the other is exactly
+   the mixed funnel the note above warns about. So the success is routed the same way as the
+   failure: same device id, same path, and the ratio means something. */
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok"]);
+/* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
+   property the native SDK sets on ITS user, and these land on the web one. So the build has
+   to be stamped by hand, off the only thing this page can see: `settings` is a capability
+   1.0.8 started advertising, so true means ≥1.0.8 and therefore has the camera-roll fix
+   (landed in 1.0.3). False means ≤1.0.7 — in practice 1.0.2, which is ~91% of the fleet and
+   the version whose save is known broken. Not exact, and not pretending to be: it separates
+   "the new build" from "the old one", which is the comparison being made. */
+function saveWrapperTag(){ return (nativeCaps && nativeCaps.settings) ? "1.0.8+" : "pre-1.0.8"; }
 function track(event,props){
   /* `emit` STAMPS EVERY EVENT THIS FILE SENDS, and it exists because of a question the data
      could not answer. 21 of 29 purchase_initiated over three days arrived carrying NOTHING —
@@ -4462,11 +4479,13 @@ let saveAckTimer=null;
 function saveAwaitAck(){
   clearTimeout(saveAckTimer);
   saveAckTimer=setTimeout(()=>{
-    track("save_no_ack",{});
+    track("save_no_ack",{wrapper:saveWrapperTag()});
     showHint("Couldn't save — press and hold the photo to save it",4200);
   },2500);
 }
-function showSavedAck(){ clearTimeout(saveAckTimer); showSaved(); }
+/* Counted, not just shown. showSaved() also runs on the browser path (no wrapper, no ack to
+   wait for), so the event goes HERE — only where native confirmed a real write. */
+function showSavedAck(){ clearTimeout(saveAckTimer); track("save_ok",{wrapper:saveWrapperTag()}); showSaved(); }
 window.__kamoSaved=showSavedAck;   // native injects this on a CONFIRMED camera-roll write
 /* shareBlob(), not staticBlob(): Save now lives inside the share sheet, directly under the
    Challenge / Before-After tabs, so it has to respect the tab that is selected. Saving the
