@@ -80,21 +80,22 @@ const html = real.slice(0, at)
      is invisible to the user no matter what the model says. */
   + 'dots(){return (sizeBar._dots||[]).map((d,i)=>({size:SIZE_STOPS[i],'
   + 'shown:getComputedStyle(d).display!=="none",locked:d.classList.contains("locked"),'
-  + 'top:parseFloat(d.style.top)||0,dia:parseFloat(d.style.width)||0}));},'
+  + 'top:parseFloat(d.style.top)||0,dia:parseFloat(d.style.height)||0}));},'
   + 'pw(){return{open:paywallEl.classList.contains("show"),src:pwLastSource,opens:pwOpens,'
   + 'sizeOpens:pwSourceOpens.size||0,pulsing:sizeBar.classList.contains("lockPulse")};},'
   + 'closePw(){closePaywall();sizeBar.classList.remove("lockPulse");},'
   /* Tap exactly where a stop is drawn, using the same geometry renderSizeBar used, so the
      test exercises the real hit-testing instead of asserting on the arrays. */
   + 'tap(size){const r=sizeBar.getBoundingClientRect(),h=r.height-48;'
-  + 'const y=r.top+24+(1-tFromBrush(size))*h;'
+  + 'const y=r.top+stopY(SIZE_STOPS.indexOf(size),h);'
   + 'const o={clientY:y,clientX:r.left+5,bubbles:true,pointerId:1};'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));return brush;},'
   + 'star(){return sizeStar.getBoundingClientRect();},'
   + 'barBox(){return sizeBar.getBoundingClientRect();},'
   + 'tapStar(){sizeStar.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,pointerId:1}));},'
-  + 'fillBottom(){return parseFloat(sizeFill.style.bottom)||0;},'
+  + 'fillShown(){return getComputedStyle(sizeFill).display!=="none";},'
+  + 'railShown(){return !sizeBar.classList.contains("stops");},'
   + 'barH(){return sizeBar.clientHeight;}};\n'
   + real.slice(at);
 
@@ -207,18 +208,28 @@ console.log('\nA FREE USER CAN SEE WHAT THEY DO NOT HAVE');
 
   /* Two stops that overlap are one stop with a smear, and the user cannot aim at either. */
   const ordered = [...shown].sort((a, b) => a.top - b.top);
+  const gaps = ordered.slice(1).map((d, i) => d.top - ordered[i].top);
+  Math.max(...gaps) - Math.min(...gaps) < 1.5
+    ? ok(`evenly spaced (${gaps[0].toFixed(0)}px apart) — the five stops read as five choices`)
+    : bad(`spacing runs ${Math.min(...gaps).toFixed(0)}–${Math.max(...gaps).toFixed(0)}px — uneven `
+        + 'spacing crowds the fine end, which is what forced the diameters flat in the first place');
   const clearance = ordered.slice(1).map((d, i) =>
     (d.top - ordered[i].top) - (d.dia / 2) - (ordered[i].dia / 2));
-  Math.min(...clearance) > 4
-    ? ok(`and none of them collide (tightest gap ${Math.min(...clearance).toFixed(1)}px)`)
-    : bad(`two stops are ${Math.min(...clearance).toFixed(1)}px apart edge to edge — they read as `
-        + 'one blob and cannot be aimed at separately');
+  Math.min(...clearance) > 8
+    ? ok(`and never touch (tightest gap ${Math.min(...clearance).toFixed(0)}px)`)
+    : bad(`two stops are ${Math.min(...clearance).toFixed(1)}px apart edge to edge`);
 
-  const dias = ordered.map((d) => d.dia);
-  new Set(dias).size === dias.length && dias.every((v, i) => i === 0 || v <= dias[i - 1])
-    ? ok(`each dot previews its stroke (${[...dias].reverse().join(' → ')}px, all distinct)`)
-    : bad(`dot diameters are ${dias.join(', ')} — they must be distinct and shrink down the bar, `
-        + 'or the dots stop meaning "size" and become decoration');
+  /* THE SCALE MUST NOT INVERT. The version before this drew locked stops as outlines, which
+     need ~4.5px of height to stay legible — so the two finest brushes rendered THICKER than
+     the free one above them. The picture then lied about the tool it was selling. */
+  const th = ordered.map((d) => d.dia);
+  new Set(th).size === th.length && th.every((v, i) => i === 0 || v < th[i - 1])
+    ? ok(`each bar is drawn at its own stroke weight (${th.join(' → ')}px, strictly decreasing)`)
+    : bad(`stroke weights are ${th.join(', ')} down the bar — they must strictly decrease, or the `
+        + 'control shows a size order the brush does not have');
+  Math.min(...th) <= 2.5 && Math.max(...th) >= 11
+    ? ok(`and the range is visible at a glance (${Math.max(...th)}px → ${Math.min(...th)}px)`)
+    : bad(`the weights only span ${Math.min(...th)}–${Math.max(...th)}px — too flat to read as sizes`);
 }
 
 console.log('\nTAPPING A LOCKED SIZE ASKS TO BUY IT');
@@ -261,6 +272,11 @@ console.log('\nAND IT CANNOT FLOOD: ONE SHEET PER LAUNCH, THEN THE BAR ANSWERS')
 
 console.log('\nTHE ✦ IS ON THE BAR, NOT HANGING OFF IT');
 {
+  /* Clear the pulse FIRST. The block above deliberately leaves lockPulse on, and tickPop
+     scales the ✦ — measuring mid-animation reported a 51x45 box for a 34x30 element and
+     failed the containment check for a reason that has nothing to do with the layout. */
+  await page.evaluate(() => window.__b.closePw());
+  await page.waitForTimeout(250);
   const box = await page.evaluate(() => window.__b.star());
   const bar = await page.evaluate(() => window.__b.barBox());
   box.bottom <= bar.bottom + 0.5 && box.top >= bar.top
@@ -281,17 +297,17 @@ console.log('\nTHE ✦ IS ON THE BAR, NOT HANGING OFF IT');
         + 'buying signal on the paint screen must always be answered');
 }
 
-console.log('\nTHE FILL STOPS WHERE THE FREE RANGE STOPS');
+console.log('\nTHE CONTINUOUS CONTROL\'S FURNITURE GOES WITH IT');
 {
-  const r = await page.evaluate(() => {
-    window.__b.setPro(false);
-    return { free: window.__b.fillBottom(), h: window.__b.barH() };
-  });
-  const m = await page.evaluate(() => { window.__b.setPro(true); return window.__b.fillBottom(); });
-  r.free > m
-    ? ok(`a free user's fill ends ${(r.free - m).toFixed(0)}px above the foot, clear of the locked stops`)
-    : bad(`the free fill ends at ${r.free}px like a member's (${m}px) — a solid line drawn through `
-        + 'the locked stops says "you already have these"');
+  const f = await page.evaluate(() => { window.__b.setPro(false); return { fill: window.__b.fillShown(), rail: window.__b.railShown() }; });
+  const m = await page.evaluate(() => { window.__b.setPro(true); return { fill: window.__b.fillShown(), rail: window.__b.railShown() }; });
+  !f.fill && !f.rail
+    ? ok('a free user gets the five bars alone — no rail, no fill behind them')
+    : bad(`free user still shows rail=${f.rail} fill=${f.fill} — both belong to the continuous `
+        + 'control and only add noise behind five drawn stops');
+  m.fill && m.rail
+    ? ok('and a member keeps both, because for them the bar really is continuous')
+    : bad(`a member lost rail=${m.rail} fill=${m.fill} — their control is the slider, not the stops`);
 }
 await page.evaluate(() => window.__b.setPro(false));
 
