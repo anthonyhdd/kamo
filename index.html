@@ -2664,7 +2664,12 @@ const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
    and moving it would change the default round for everyone to answer a spacing complaint.
    The small end is held back deliberately too: BRUSH_MIN is 2, and "down to fine detail" is
    what the paywall sells. 14 widens the choice without handing over the tool. */
-const FREE_SIZES=[14,26,46];
+/* FINER, ACROSS THE BOARD. 14/26/46 left the smallest free brush thicker than most edges a
+   hider needs to trace, and "the brush was so thick" is a complaint the ad comments actually
+   made. FREE_BRUSH is the middle one and is now 20 — the note below warns it must never
+   DRIFT BACK UP, and this moves it the safe way. The paid range keeps a reason to exist at
+   both ends: 2-9 for real detail, 37-64 for filling fast. */
+const FREE_SIZES=[10,20,36];
 /* How many colours are sampled off the scene for a free row. Named because the PAYWALL makes
    a claim about it ("Free gets N shades off the photo") and a number that lives in two places
    is a number that will one day disagree with itself. extractPalette() reads this. */
@@ -6045,7 +6050,13 @@ sizeBar.addEventListener("pointerdown",e=>{
     let best=Math.round(((1-t)/span)*(SIZE_STOPS.length-1));
     best=Math.max(0,Math.min(SIZE_STOPS.length-1,best));
     brush=SIZE_STOPS[best];
-    renderSizeBar(); paintHaptic();
+    /* haptic(), NOT paintHaptic(). paintHaptic posts {type:"haptic"} with NO style, and the
+       wrapper turns a styleless tick into Haptics.selectionAsync() — the faintest thing iOS
+       has, which through a case is nothing at all. That is why the bar has felt dead. Picking
+       a size is a discrete choice and gets the impact tick. impactAsync(Light) is the
+       strongest the 1.0.2 bridge knows, and 1.0.2 is the whole fleet, so this is the ceiling
+       until a build ships. */
+    renderSizeBar(); haptic(10);
     return;
   }
   e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
