@@ -1824,6 +1824,13 @@ function trialAdvertised(){
    Status and error hints are NOT routed through this — "KAMO+ unlocked", "Restoring…",
    "Stats copied", "Couldn't turn the light on" and friends still call showHint() directly,
    because those answer an action rather than teach a control. */
+/* ⚠️ PARKED, AND IT WILL READ 0 THE DAY IT IS UNPARKED. "kamo_hides" is not this
+   function's key any more — CH_MINE_KEY took the same name and writes a JSON ARRAY of hide
+   ids to it. `+"[\"abc\"]"` is NaN, `||0` turns that into 0, and nothing anywhere writes the
+   numeric form, so the counter this reads is not merely stale: it does not exist.
+   Harmless only because the teaching hints that called this are off. Turning them back on
+   without giving this its own key would silently disable the "stop after the second hide"
+   guard — the hints would run forever and look like a design choice. Rename first. */
 function hidesDone(){ try{ return +localStorage.getItem("kamo_hides")||0; }catch(e){ return 0; } }
 /* THE TEACHING HINTS ARE OFF. Kept as a no-op rather than deleted from a dozen call sites:
    the call sites are where the app WOULD explain itself, and that list is worth keeping
