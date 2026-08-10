@@ -4907,7 +4907,16 @@ async function nativeShare(target){
   /* "Tap to reveal" was a promise nothing could keep — there is no backend, the shared
      photo isn't hosted anywhere, so no link could ever reveal it. The ask is now the one
      thing a link CAN deliver: go hide one yourself. */
-  const message=(shareMode==="ba")
+  /* INSTAGRAM ALWAYS GETS THE REVEAL, whatever tab is showing. Stories is a video surface and
+     a still frame is the weakest thing that can be posted to it; the reveal is the clip people
+     actually watch. Challenge stays the default tab for everything else on purpose — that is
+     the send-to-one-person path, and its static card is what carries the invite loop.
+     Gated on the capability AND on beforeBoard, so when either is absent this collapses to
+     exactly today's behaviour instead of promising a video that cannot be encoded. Every build
+     before 1.1.0 lands in that branch, since none of them advertise revealVideo. */
+  const forceReveal = target==="instagram" && nativeCaps.revealVideo && !!beforeBoard;
+  const asReveal = shareMode==="ba" || forceReveal;
+  const message=asReveal
     ? ("Now you see him. Now you don't! Painted with Kamo — your turn → "+link)
     : ("I hid someone in this photo 👀 Can you find them?\n\nYour turn — hide one for me → "+link);
   /* THE MEDIA SHARE CARRIES NO LINK, AND NEVER HAS. The web posts {ig-stories, data, score}
@@ -4925,9 +4934,10 @@ async function nativeShare(target){
   let linkCopied=false;
   try{ navigator.clipboard.writeText(message); linkCopied=true; }catch(e){}
   if(linkCopied) setTimeout(()=>showHint("Link copied — paste it with your post",3200),700);
-  // Before/After mode → animated reveal MP4 (native module). Falls back to the static image
-  // when the wrapper doesn't advertise the capability (older build) or has no before frame.
-  if(shareMode==="ba" && nativeCaps.revealVideo && beforeBoard){
+  // Before/After mode — or any Instagram share — → animated reveal MP4 (native module). Falls
+  // back to the static image when the wrapper doesn't advertise the capability (older build)
+  // or has no before frame; `asReveal` already folds both of those conditions in for Instagram.
+  if(asReveal && nativeCaps.revealVideo && beforeBoard){
     const hidden=composeShare(1080, board).toDataURL("image/jpeg",0.85);      // camouflaged (shown first)
     const revealed=composeShare(1080, beforeBoard).toDataURL("image/jpeg",0.85); // figure visible (wiped in)
     showBusy(true);  // "Creating your reveal…" while native encodes the MP4 (self-clears after 25s)
