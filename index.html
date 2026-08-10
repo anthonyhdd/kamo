@@ -3208,7 +3208,7 @@ let brandLongPressed=false;   // swallows the click that follows a long-press
  * leaks, people get KAMO+ free until it is rotated. That is a deliberate trade for a tool
  * that is handed out by hand, a few people at a time, and can be killed in one push. */
 const PASS_KEY="kamo_pass";
-const PASS_HASH="3e841173f002cbe58668659973bef81ed5fac401da53e91b5394045c51d19bb9";
+const PASS_HASH="094fa64c857fd817fa292ac509a81c82e11b6127548a7893eec57011ec046223";
 let hasPass=false; try{ hasPass=localStorage.getItem(PASS_KEY)===PASS_HASH; }catch(e){}
 /* ONE PLACE DECIDES WHAT PRO MEANS. It was computed inline in four places — the initial read,
    setPro(), and both free-preview toggles — and adding a third input to that expression four
@@ -4192,7 +4192,10 @@ function applyPlanAvailability(p){
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
 window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
-window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn(); };
+window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn();
+  /* The boot camera decision is waiting on exactly this. Resolving it here rather than on
+     the 700ms timer means a returning user reaches compose as fast as they always did. */
+  if(typeof bootCamera==="function" && bootCamera.decide) bootCamera.decide(); };
 /* This web build deploys to GitHub Pages on its own schedule, so it can end up running
    inside an OLDER App Store wrapper that has no `invite` message handler — the button
    would post into the void and look broken. Show it only when the wrapper says it can
@@ -7038,8 +7041,45 @@ function chSeek(){
    find: no permission sheet, no hero, no three.js scene — just the photo and a tap. The
    branch is here rather than inside startCamera() so nothing downstream of the camera can
    fire at all, which is also what keeps a broken seek from taking the normal boot with it. */
+/* THE BOOT PROBE IS THE PROMPT. getUserMedia does not ASK whether permission exists, it
+   REQUESTS it — so on a genuine first launch startCamera(true) puts the OS sheet on screen
+   before the user has tapped anything, and the hero they are supposed to read first arrives
+   600ms later, behind it.
+   That cost was accepted deliberately and its expiry date was written down: "the bit of
+   priming we give up UNTIL A BUILD CAN TELL THE WEB WHETHER THIS IS A GENUINE FIRST LAUNCH".
+   1.0.2 ran the WebView with `incognito`, so every kamo_* key died on close and camEverAsked()
+   was false for everyone forever — storage could not answer. 1.1.0 dropped `incognito`
+   (published 2026-08-10), so storage answers truthfully again and the probe is no longer the
+   only way to ask.
+
+   WHY THIS WAITS. setNativeCaps() arrives AFTER this file runs, so at boot the page cannot
+   yet tell a persistent wrapper from 1.0.2. Deciding immediately on camEverAsked() alone
+   would bring back the exact bug that probe was written to kill: on 1.0.2 the key is always
+   empty, so the hero would become a toll gate in front of the camera on EVERY launch, for
+   most of the fleet. So it waits briefly for the caps, and falls back to today's behaviour
+   if they never come — an old wrapper loses nothing it had.
+   700ms is chosen against the 600ms hero timer above: whichever way this resolves, the hero
+   is already on screen, so the wait is never visible as a blank splash. */
+function bootCamera(){
+  /* Storage says the sheet has already been in front of this user. The probe cannot raise
+     it, and resolves in ~200ms straight to compose — the fast path this exists for. */
+  if(camEverAsked()){ startCamera(true); return; }
+  /* Plain browser: localStorage has always persisted here, so camEverAsked() being false is
+     the truth and not an artefact. Let them read the hero and tap Start playing. */
+  if(!window.ReactNativeWebView){ revealHero("first_launch"); return; }
+  let settled=false;
+  bootCamera.decide=()=>{
+    if(settled) return; settled=true;
+    /* `notifSchedule` ships in the same wrapper commit that dropped `incognito`, so it is
+       the signal for "this build's localStorage survives a close" — which is what makes
+       camEverAsked() worth believing. Anything older keeps the probe. */
+    if(nativeCaps && nativeCaps.notifSchedule) revealHero("first_launch");
+    else startCamera(true);
+  };
+  setTimeout(()=>bootCamera.decide(),700);
+}
 if(CH_SEEK){ chSeek(); }
-else startCamera(true);
+else bootCamera();
 /* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone
    wrong"; at 600ms this also covers the ordinary first-launch case — the permission sheet
    is up, nothing will settle until it is answered, and the user should be reading the hero
