@@ -4452,7 +4452,7 @@ function trackCarried(kind,props){
    different Amplitude user than anything in this set. Dividing one by the other is exactly
    the mixed funnel the note above warns about. So the success is routed the same way as the
    failure: same device id, same path, and the ratio means something. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
