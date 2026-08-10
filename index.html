@@ -3795,6 +3795,20 @@ function setHandle(v){
    native is the only case it acts on — precisely the case this exists for: a launch where
    the WebView's storage came up blank. */
 window.KAMO=window.KAMO||{};
+/* THE ADDRESS A HIDE CAN BE NOTIFIED AT.
+ *
+ * Handed over by the wrapper on every sync, "" when there is none — which is the normal state
+ * before the notification opt-in, and stays that way forever if the user declines. An empty
+ * value is not a failure: it means this hide gets no push, exactly as every hide before this
+ * shipped. Nothing on screen depends on it, so there is nothing to re-render here.
+ *
+ * Held in a variable rather than localStorage on purpose. iOS rotates push tokens and a
+ * reinstall invalidates them; the wrapper is the only thing that knows the current one, and a
+ * cached copy would outlive it and start stamping new hides with a dead address. */
+let pushToken="";
+window.KAMO.setPushToken=function(t){
+  try{ pushToken=(typeof t==="string"&&/^ExponentPushToken\[[A-Za-z0-9_-]{1,64}\]$/.test(t))?t:""; }catch(e){ pushToken=""; }
+};
 window.KAMO.setStoredHandle=function(h){
   try{
     const inc=cleanHandle(h); if(!inc) return;
@@ -6544,8 +6558,31 @@ async function chUpload(){
     }
     chRemember(chId);
     track("hide_published",{});
+    chAttachPush();
     armResultsPing();
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
+}
+/* THE OTHER HALF OF armResultsPing, and the half that is actually about something.
+   armResultsPing is a blind three-hour timer that says "go look" — it cannot know whether
+   anyone came, and on the 88% of hides nobody opens it sends the creator to an empty card.
+   This attaches the device's push address to the hide, so the server can say the one thing
+   the app has never been able to: somebody opened it, somebody found you.
+   A SEPARATE CALL, deliberately, rather than a tenth argument on create_hide. That function
+   already exists at 6, 8 and 9 arguments and PostgREST resolves by the exact key set, so a
+   new signature would mean the page and the database have to deploy together — which they
+   never do. Failing here costs nothing: the hide is already published and simply gets no
+   push, which is how every hide behaved before this.
+   The offset is minutes EAST of UTC, from this device's own clock, and it is what lets the
+   server tell 22:00 from 06:00 for this particular person. A toy that wakes someone at 4am
+   gets its notifications switched off, and iOS never asks a second time. */
+function chAttachPush(){
+  if(!chId||!pushToken) return;
+  try{
+    chRpc("attach_push_token",{p_id:chId,p_token:pushToken,
+                               p_tz_offset:-(new Date().getTimezoneOffset())})
+      .then(()=>track("push_attached",{}))
+      .catch(()=>{});
+  }catch(e){}
 }
 /* THE ONE THING THIS APP CAN SAY THAT ISN'T GENERIC.
    The daily reminder is built a fortnight ahead, so it can only ever talk about hiding in
