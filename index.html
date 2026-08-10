@@ -3773,8 +3773,36 @@ function getHandle(){ try{ return cleanHandle(localStorage.getItem(HANDLE_KEY));
 function setHandle(v){
   const h=cleanHandle(v);
   try{ h ? localStorage.setItem(HANDLE_KEY,h) : localStorage.removeItem(HANDLE_KEY); }catch(e){}
+  /* AND OUT OF THE WEBVIEW, because this store has already lost this value once for real.
+     1.0.2 ran the WebView with `incognito` — a non-persistent data store — so every kamo_*
+     key died on close and the name had to be retyped every launch. That flag is gone and
+     the same thing is still reported on the new build, while the page itself passes: driven
+     through these very listeners it writes, survives a fresh document, and refills the field
+     (scripts/test-handle-dom.mjs). So the page stops being the only copy. localStorage stays
+     the fast path — read synchronously everywhere a hide is signed — and native is the one
+     that survives. Capability-gated, so this is inert in a browser and in every wrapper that
+     has no handler. */
+  if(nativeCaps && nativeCaps.handleStore) postNative({type:"handle",value:h});
   return h;
 }
+/* THE NAME COMING BACK FROM NATIVE, and it only ever fills a hole.
+   Called on every syncWeb, which also runs on a plain reload, so it must never overwrite a
+   name the user just typed with the one that happened to be on disk. Empty page + non-empty
+   native is the only case it acts on — precisely the case this exists for: a launch where
+   the WebView's storage came up blank. */
+window.KAMO=window.KAMO||{};
+window.KAMO.setStoredHandle=function(h){
+  try{
+    const inc=cleanHandle(h); if(!inc) return;
+    if(getHandle()) return;
+    localStorage.setItem(HANDLE_KEY,inc);
+    /* The card may already be open and reading "Sign your hides" at this moment. */
+    if(typeof khRenderName==="function") khRenderName();
+    const f=$("#khHandle"); if(f && !f.value) f.value=inc;
+    if(typeof khShowField==="function") khShowField(false);
+    track("handle_restored",{});
+  }catch(e){}
+};
 /* THE ONE PLACE THAT DECIDES WHAT THIS CARD CLAIMS. It opens for everyone now, so every
    membership signal on it — the +, the perk chips, the upsell — has to be able to say no. */
 function khSetPlus(){
@@ -4424,7 +4452,7 @@ function trackCarried(kind,props){
    different Amplitude user than anything in this set. Dividing one by the other is exactly
    the mixed funnel the note above warns about. So the success is routed the same way as the
    failure: same device id, same path, and the ratio means something. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok","web_notif_armed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
