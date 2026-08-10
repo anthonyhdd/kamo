@@ -67,9 +67,10 @@ typo costs you one value, never the feature.
   asked at all required coming back a second day, from an audience that arrives on a TikTok ad
   and does not return: 99 of 106 asks died on `not_eligible_yet` and `daily_reminder_scheduled`
   had **never** been ingested by Amplitude. Now 1.
-- **`review.json` is inert until the build after 1.0.9** — the code that reads it is not in any
-  released binary. Landed first so the config is already serving when that build arrives, rather
-  than shipping a build that 404s and quietly runs on defaults.
+- **`review.json` went live with 1.1.0** (published 2026-08-10). It was inert before that — the
+  code that reads it was in no released binary — and it landed first on purpose, so the config
+  was already serving when the build arrived rather than shipping a build that 404s and quietly
+  runs on defaults. Rating thresholds are now tunable without a review.
 - Changing notification COPY needs both this file **and** `CH_NOTIF_REV` bumped in `index.html`
   (the page pushes copy over the bridge too). A rev the wrapper has already stored is ignored,
   and the queue runs a fortnight ahead, so an un-bumped edit looks like it never deployed.
@@ -79,9 +80,15 @@ here** — check them in a browser after a push.
 
 ## The wrapper is a version behind, always
 
-App Review takes days; this file takes minutes. As of 2026-08-07 the fleet is **937 users on
-1.0.2** and 3 on 1.0.9. Anything the web hands to native must therefore assume the handler may
-not exist.
+App Review takes days; this file takes minutes. Anything the web hands to native must therefore
+assume the handler may not exist.
+
+**1.1.0 was published 2026-08-10** and is the first build in months to move any of this. The
+fleet does not turn over on release day, though — on 2026-08-07 it was 937 users on 1.0.2
+against 3 on 1.0.9, and a migration takes days — so every capability gate below still earns its
+keep. What changed is that the gates now open for a growing share of users instead of nobody:
+`revealVideo`, `handleStore`, `notifSchedule`, the Photos permission and `review.json` all
+arrive with it. Read the live split from Amplitude rather than from this paragraph.
 
 - `nativeCaps` is a capability flag set by the wrapper. Gate on the capability, never on
   `window.ReactNativeWebView` — that is true in *every* wrapper, including the ones that do not
