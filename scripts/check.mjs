@@ -626,6 +626,21 @@ try {
   bad('THE PLAYER CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 11b. The name has to survive the next launch ---------------------------------------
+   Reported twice from the field — "d'une session à l'autre on doit toujours entrer le nom" —
+   and on BOTH builds, which killed the obvious explanation (1.0.2's `incognito` WebView store)
+   because the new build does not set that flag. Every other DOM suite here builds one page and
+   stays on it, so nothing anywhere crossed the one line that matters: a second document
+   against the same origin. That is what a relaunch is. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-handle-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · HANDLE TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the name is typed once and survives the next launch (node scripts/test-handle-dom.mjs)');
+} catch (e) {
+  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-seek-dom.mjs')], { stdio: 'pipe' }).toString();
