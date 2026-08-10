@@ -135,7 +135,7 @@ Neither is a leak. Do not gate them behind `__DEV__` and do not delete them.
 
 | | |
 |---|---|
-| Amplitude | EU project `100038458`, `app_variant: kamo` |
+| Amplitude | EU project `100038458` — do **not** filter on `gp:app_variant`, see below |
 | RevenueCat | project `proj337c4356`, entitlement `Kamo Pro` |
 | Supabase | `qpztlobbnjyjbxqyuzgg` |
 | AppsFlyer | app `id6789639784` |
@@ -146,12 +146,44 @@ Neither is a leak. Do not gate them behind `__DEV__` and do not delete them.
 Versions, fleet split and spend numbers go stale within days. Read them from Amplitude,
 RevenueCat and the TikTok API rather than trusting anything written here or in a commit message.
 
+## Reading the analytics without fooling yourself
+
+Four ways this project has produced a confident, wrong number. Each one cost real hours and
+one of them nearly bought a redesign of something that was not broken.
+
+- **Never filter on `gp:app_variant`.** It is a GROUP property and web users do not carry it,
+  so it silently zeroes every `WEB_ONLY` event — `hide_published`, `invite_shared`,
+  `sheet_presented`, `pose_changed`, `home_opened`, `save_ok`, `handle_restored`, `hide_signed`.
+  Use `segments: [{conditions: []}]`. A zero here means "wrong filter", not "nobody did it".
+
+- **Never read one event of the invite/share family alone.** On 2026-08-10 `invite_shared` went
+  180 → 22 over the same hourly window, which reads as the loop collapsing by 88%. It was not:
+  `invite_native` + `invite_tapped` went 0 → 45 over the same window, taking the volume through
+  a newer path. Summed, 180 → 67 — in line with the ~43% Sunday-to-Monday fall across every
+  other event, and `share_completed` actually ROSE, 25 → 30. Sum the family before concluding.
+
+- **An event reading zero before a date is usually an event that did not exist.** Check when it
+  first appears in `git log` before calling it a drop. `sheet_presented` and `pose_changed` were
+  born in commit `6ff7896`, 2026-08-09 17:03 — every zero before that hour is the absence of the
+  event, not the absence of the behaviour.
+
+- **`home_opened` is a tap on the wordmark, not an app open.** Its only caller is `brandTap()`.
+  Dozens a day against hundreds of publishes is correct and expected; it is not a broken event
+  and it does not belong in a funnel next to loop volumes.
+
+`purchase_completed` is wrong in Amplitude (1.0.2 classification bug) — revenue is read from
+RevenueCat, never from Amplitude. RevenueCat's own Paywall analytics are empty because the SDK
+predates the 5.51.1 requirement, so they cannot arbitrate anything either.
+
 ## Where the product actually leaks
 
 Measured 2026-08-07, and worth re-measuring before acting on:
 
-- **The send is the flat number.** ~300 hides published a day, ~71 shares, and roughly one in
-  eight challenges is ever played. Every change to the share sheet is judged against this.
+- **The send is the flat number.** ~300-600 hides published a day against ~200-300 shares
+  actually sent. The "~71 shares" that stood here until 2026-08-10 was `share_opened`, which
+  fires only from `openShareSheet()` — the sheet that presents itself on the reveal never went
+  through it, so the most common way anyone meets the sheet was uncounted. Judging share-sheet
+  changes against that number was judging them against an instrumentation gap.
 - **Paid acquisition loses money per install.** TikTok CPI ~$0.28 against an ARPU of ~$0.084.
 - **There is no revenue signal anywhere.** `af_purchase` has never fired, because the live build
   classifies every purchase as a trial. Fixed on `kamo-app` main, unshipped as of this writing.
