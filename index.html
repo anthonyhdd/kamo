@@ -4928,11 +4928,13 @@ async function nativeShare(target){
      for Instagram Stories, Share.open({url}) for the fallback. So every completed share
      since launch has gone out with nothing to click. That is not a mis-attributed link,
      it is the absence of one, and it is the likeliest reason ~40 shares a day return
-     nobody. (`reveal-video` below does pass `message`, but it only runs when the wrapper
-     advertises revealVideo — which no released build does.)
+     nobody. (`reveal-video` below does pass `message`. No released build advertised
+     revealVideo until 1.1.0 shipped on 2026-08-10, so that branch was dead and every share
+     took the link-less path. 1.1.0 advertises it, so the branch is live for whatever share
+     of the fleet has upgraded — near none on release day, growing daily.)
      Instagram Stories cannot render a caption at all, so this is not fixable by sending
      better text: the link has to travel beside the post, not inside it. The clipboard is
-     the only channel that works on a binary frozen since July.
+     still the only channel that reaches everyone left on the older binary.
      Synchronous and BEFORE any await — a clipboard write outside the user gesture is
      refused. The hint waits 700ms so the share sheet is what they see first. */
   let linkCopied=false;
