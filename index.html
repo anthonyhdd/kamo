@@ -4192,7 +4192,7 @@ function applyPlanAvailability(p){
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
 window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
-window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); };
+window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn(); };
 /* This web build deploys to GitHub Pages on its own schedule, so it can end up running
    inside an OLDER App Store wrapper that has no `invite` message handler — the button
    would post into the void and look broken. Show it only when the wrapper says it can
@@ -4968,20 +4968,42 @@ async function nativeShare(target){
    on the web it goes straight to navigator.share and the sheet never appears. Moving Save
    in there unconditionally would make it unreachable in Safari, so the web build keeps it
    on the action row exactly as it was. */
-/* SAVE IS HIDDEN IN THE APP, because it has never once worked there. photo_saved is
+/* SAVE WAS HIDDEN IN THE APP, because it had never once worked there. photo_saved is
    emitted by native on a CONFIRMED camera-roll write and native events are not filtered by
    WEB_EVENTS — share_completed rides the same path and reports 20-97 a day. photo_saved:
    ZERO, every day, for seven days.
-   The cause is one missing line in the wrapper: 1.0.2 calls
+   The cause was one missing line in the wrapper: 1.0.2 calls
    MediaLibrary.saveToLibraryAsync without ever requesting the Photos permission, so iOS
-   throws and the failure is swallowed. Until a build carries that request, this button can
-   only ever disappoint, and the app already has a rule about that — a blocked camera must
-   not leave a button that cannot work.
-   Hidden, not deleted: the web keeps it (there Save is a real download and works), and the
-   day the permission ships this is one condition to remove. */
+   throws and the failure is swallowed. A button that can only disappoint has to go, and the
+   app already has that rule — a blocked camera must not leave a button that cannot work.
+
+   1.1.0 CARRIES THE REQUEST, published 2026-08-10, so the button works there and comes back
+   — for those users and no others. A fleet does not turn over on release day; most of it is
+   still on 1.0.2 tonight, and showing them a Save that silently fails would re-create the
+   exact problem this hid.
+
+   THE GATE IS `notifSchedule`, WHICH IS NOT A TYPO. There is no `photos` capability to test:
+   the wrapper never advertised one, and adding it now would need another build, which is the
+   two-week loop this whole config-server arrangement exists to avoid. `notifSchedule` ships
+   in commit a075a4d — the SAME commit that added the permission request — so a wrapper that
+   advertises it is, exactly and not approximately, a wrapper that asks for Photos access.
+   They cannot drift apart, because they arrived together. Give Save its own capability in the
+   next build and delete this paragraph.
+
+   A FUNCTION, NOT A MODULE-SCOPE `if`, for the reason updateInviteBtn() is one: native calls
+   setNativeCaps() AFTER the page loads, so anything deciding on a capability at load time
+   reads an empty object and hides the button forever. Called in both places — once at load
+   for the plain browser, again when the caps arrive. */
+function updateSaveBtn(){
+  const saveBtn=$("#btnSave"); if(!saveBtn) return;
+  /* Not in a wrapper → the web's Save is a real download and has always worked. The gate is
+     only ever about what the NATIVE side can honour. */
+  const canSave = !window.ReactNativeWebView || !!(nativeCaps && nativeCaps.notifSchedule);
+  saveBtn.style.display = canSave ? "" : "none";
+}
+updateSaveBtn();   // plain browser → visible immediately; native → re-run on setNativeCaps
 if(window.ReactNativeWebView){
   const saveBtn=$("#btnSave"), invite=$("#ssInvite");
-  if(saveBtn) saveBtn.style.display="none";
   if(false && saveBtn&&invite&&invite.parentNode){
     saveBtn.classList.remove("b","icon"); saveBtn.classList.add("ssBtn","ssSave");
     saveBtn.removeAttribute("title");
