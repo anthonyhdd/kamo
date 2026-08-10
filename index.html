@@ -3376,8 +3376,12 @@ function showLockHint(src){
    CH_TAPS exist, so evaluating the numbers here would be a TDZ throw at load. Deferring to
    call time also means a constant changed at runtime is reflected. */
 const PW_PITCH={
+  /* The "Free paints at N fixed sizes." opener is gone deliberately. Leading with what free
+     withholds argues the free tier's case in the same breath as the ask; the pitch reads
+     better naming only what KAMO+ gives. The template machinery below still applies to the
+     rest — this line simply no longer quotes a count. */
   size:  { t:"Paint the details, not just the shape",
-           s:()=>`Free paints at ${FREE_SIZES.length} fixed sizes. KAMO+ unlocks the whole range, down to fine detail.` },
+           s:()=>"KAMO+ unlocks the whole range, down to fine detail." },
   /* The title used to end "not just the three" — the same claim as the body, spelled out, and
      the one word a template cannot fix without printing a digit in a headline. It says nothing
      numeric now; the body carries the figure. */
