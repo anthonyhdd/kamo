@@ -47,6 +47,36 @@ that differs — its `og:image` points at `kamo.bliss-coach.com`, not `anthonyhd
 `localStorage` is per-origin, so a user's handle, entitlement cache and hide list do not travel
 between the two. The app only ever loads the first.
 
+## This repo is also the app's config server
+
+Two JSON files here are fetched by the **binary**, not the page, from the same GitHub Pages
+host. They are how native behaviour gets corrected without an App Store review — which is the
+difference between a tuning loop of minutes and one of two weeks.
+
+| File | Read by | Effect lands |
+|---|---|---|
+| `notif.json` | `kamo-app/notifications.js` | next launch of each device |
+| `review.json` | `kamo-app/storeReview.js` | next launch of each device |
+
+Both share the same posture, and it matters: every value is **clamped field by field**, anything
+wrong (offline, 404, malformed, out of range) falls back to the constant compiled into the
+binary, and `enabled: false` is a kill switch. The worst case is the behaviour that shipped. A
+typo costs you one value, never the feature.
+
+- **`sessionsBeforeAsk` in `notif.json` was the notification feature's off switch.** At 2, being
+  asked at all required coming back a second day, from an audience that arrives on a TikTok ad
+  and does not return: 99 of 106 asks died on `not_eligible_yet` and `daily_reminder_scheduled`
+  had **never** been ingested by Amplitude. Now 1.
+- **`review.json` is inert until the build after 1.0.9** — the code that reads it is not in any
+  released binary. Landed first so the config is already serving when that build arrives, rather
+  than shipping a build that 404s and quietly runs on defaults.
+- Changing notification COPY needs both this file **and** `CH_NOTIF_REV` bumped in `index.html`
+  (the page pushes copy over the bridge too). A rev the wrapper has already stored is ignored,
+  and the queue runs a fortnight ahead, so an un-bumped edit looks like it never deployed.
+
+Egress is blocked from the agent container, so **neither file can be verified as served from
+here** — check them in a browser after a push.
+
 ## The wrapper is a version behind, always
 
 App Review takes days; this file takes minutes. As of 2026-08-07 the fleet is **937 users on
