@@ -635,10 +635,22 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-handle-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · HANDLE TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? console.log('  \u00b7 HANDLE TEST SKIPPED \u2014 ' + out.trim().split('\n').pop())
     : ok('the name is typed once and survives the next launch (node scripts/test-handle-dom.mjs)');
 } catch (e) {
-  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+}
+
+/* ---- 11c. The full-bleed paywall arm ---------------------------------------------------- */
+/* Half of a 50/50 revenue experiment. Every other DOM test boots pinned to the sheet arm
+   (navigator.webdriver), so without this one the arm real users see would ship untested. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-pwfull-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  \u00b7 FULL-ARM PAYWALL TEST SKIPPED \u2014 ' + out.trim().split('\n').pop())
+    : ok('the full-bleed paywall arm renders and sells only real prices (node scripts/test-pwfull-dom.mjs)');
+} catch (e) {
+  bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
