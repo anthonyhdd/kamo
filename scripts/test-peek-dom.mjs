@@ -46,7 +46,7 @@ const html = real.slice(0, at)
   + 'copy(){return{generic:pwGenericSub(),'
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
-  + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
+  + 'facts:{paint:PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
   /* chGeom() needs a hider projected from the 3D scene, and this harness has no camera — so
      the preview would bail on its first line for a reason that has nothing to do with what is
      being tested. Stubbed to a hider dead centre. chGeom is a function DECLARATION, so it is
@@ -575,8 +575,14 @@ const says = (key, needles) => {
     ? bad(`the "${key}" pitch does not state ${miss.join(', ')} — it reads: ${JSON.stringify(line)}`)
     : ok(`"${key}" states ${needles.join(', ')}`);
 };
-says('generic', [`${f.pro}s`, `${f.paint}s`]);
-says('time', [`${f.pro} seconds`, `instead of ${f.paint}`]);
+/* KAMO+ has no clocks since 2026-08-11, so the generic line and the time pitch sell the
+   ABSENCE of a figure — the only number left is the free clock, quoted as the thing you
+   escape. The generic line must quote nothing at all. */
+const genericLine = (all.find(([k]) => k === 'generic') || [])[1] || '';
+!/\d/.test(genericLine) && /no clock/.test(genericLine)
+  ? ok('"generic" sells no-clock without quoting a figure')
+  : bad(`the generic pitch reads: ${JSON.stringify(genericLine)}`);
+says('time', [`${f.paint} seconds`, 'no clock']);
 /* The size pitch is the one that states NO figure, on purpose: "Free paints at 3 fixed sizes"
    was cut because it sells the limitation instead of the range. So it is asserted the other way
    round — it must not quote a count — which still catches a hardcoded number creeping back in,
