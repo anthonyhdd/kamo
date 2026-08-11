@@ -192,6 +192,19 @@ Measured 2026-08-07, and worth re-measuring before acting on:
   through it, so the most common way anyone meets the sheet was uncounted. Judging share-sheet
   changes against that number was judging them against an instrumentation gap.
 - **Paid acquisition loses money per install.** TikTok CPI ~$0.28 against an ARPU of ~$0.084.
-- **There is no revenue signal anywhere.** `af_purchase` has never fired, because the live build
-  classifies every purchase as a trial. Fixed on `kamo-app` main, unshipped as of this writing.
-  Until it ships, no decision about ad optimisation can be made on evidence.
+- **The revenue signal exists now, and it is young.** `af_purchase` had never fired, because the
+  live build classified every purchase as a trial (`isTrialPurchase` read `willRenew`, which is
+  always false for a non-consumable). Fixed in `kamo-app` `5aca567`, and that commit first
+  reached users with **1.1.0, published 2026-08-11**. TikTok's `ACTIVE_PAY` is off zero — 3
+  conversions against 38 `SUBSCRIBE` — so money is finally distinguishable from trials. It will
+  only fill in as the fleet leaves 1.0.2, so treat any paid-vs-trial ratio before ~mid-August as
+  measuring adoption of the new binary, not user behaviour.
+- **Subscription and lifetime are NOT confounded, in any of the three systems** — checked
+  2026-08-11, because the question keeps coming back. RevenueCat reports the 4 one-time
+  purchases in its own Non-subscription Purchases chart and keeps them out of MRR (which
+  matches 3 weeklies at $2.99); TikTok carries `SUBSCRIBE`, `IN_APP_ORDER` and `ACTIVE_PAY` as
+  distinct events with distinct counts. The `Type: Subscription` label on
+  `com.blisscoach.kamo.pro`'s RevenueCat product page is cosmetic — its transactions are
+  recorded `ONE TIME` — and it has 4 paying customers behind it, so **do not "fix" it by
+  detaching it from the entitlement or changing its type.** The open question is which event the
+  ad groups optimise on, not whether the events are separable.
