@@ -828,6 +828,38 @@
     font-size:14px;color:rgba(255,255,255,.66);line-height:1.5;}
   .khScore b{font-family:var(--display);font-weight:900;color:var(--mint);font-size:16px;}
   .khScore .khNone{color:rgba(255,255,255,.5);}
+  /* IT HAS TO LOOK LIKE IT OPENS. This box was a report for its whole life, so nothing about
+     it invited a tap — a tap target that reads as a paragraph is a tap target nobody finds.
+     The affordance is a word, not a chevron: "Send it again" says what happens, which a
+     rotating arrow does not. */
+  .khScore{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .khScore:active{transform:scale(.985);}
+  .khMore{display:block;margin-top:7px;color:var(--mint);font-size:12.5px;font-weight:700;}
+  /* One line per hide, the state on the left and the one action on the right. Bordered rows
+     rather than a list with bullets: each row is its own object because each row sends its
+     own challenge. */
+  .khRow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--stroke);}
+  .khRow:first-child{border-top:none;padding-top:4px;}
+  .khRowTxt{flex:1;min-width:0;font-size:13px;line-height:1.35;display:block;}
+  .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:13px;color:inherit;}
+  /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
+     .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
+     rather than a canvas, because these hides are on the server, not in this session's memory.
+     No ::after play glyph: that one opens a preview, this one is a label. */
+  .khShot{flex:0 0 auto;width:40px;height:52px;border-radius:9px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.18);background:#0a0f0d;display:block;}
+  .khShot img{width:100%;height:100%;object-fit:cover;display:block;}
+  .khRowChips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
+  /* Reuses .chChip so the terms are typeset identically to the card that sent them. */
+  .khRowChips .chChip{font-size:10.5px;padding:2px 7px;}
+  /* Mint on the outcome that flatters the hider, white on the one that does not — the two
+     read at a glance without either of them needing the word "you" underlined. */
+  .khScore .khWin{color:var(--mint);font-weight:700;}
+  .khScore .khHit{color:rgba(255,255,255,.9);font-weight:700;}
+  .khSend{flex:none;background:rgba(95,230,164,.14);border:1px solid rgba(95,230,164,.45);
+    color:#eafff5;border-radius:999px;padding:6px 13px;font-family:var(--display);
+    font-size:12.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .khSend:active{transform:scale(.95);}
   .kpQuiet{display:block;width:100%;margin-top:10px;background:none;border:none;
     color:rgba(255,255,255,.5);font-size:13px;font-weight:700;cursor:pointer;padding:8px;
     -webkit-tap-highlight-color:transparent;}
@@ -1502,7 +1534,14 @@
           <span class="pwPlanMeta" id="pwPerDay" style="display:none"></span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
-      <button class="pwPlan" data-plan="lifetime">
+      <!-- Lifetime starts hidden too, for the same reason and one more: on 2026-08-11 this
+           product (com.blisscoach.kamo.pro) was attached to the Kamo Pro entitlement while
+           RevenueCat's live App Store lookup returned not_found and its type was subscription
+           with a null duration — a plan that never expires. It has been detached and pulled
+           from the offering, so no lifetime price arrives and applyPlanAvailability() keeps
+           this hidden. If one ever arrives again, the plan is sellable again ON PURPOSE, not
+           because the markup defaulted to visible. -->
+      <button class="pwPlan" data-plan="lifetime" style="display:none">
         <div class="pwPlanTxt"><span class="pwPlanName">Lifetime</span><span class="pwPlanMeta">One-time · yours forever</span></div>
         <div class="pwPlanPrice"><b id="pwLifetimePrice">$14.99</b></div>
       </button>
@@ -3236,24 +3275,32 @@ const canPro=()=>isPro;
    Safe to call repeatedly: buildSwatches() removes the previous #allColSw before
    re-inserting it, and it keeps the currently-painted colour selected. */
 function refreshProUI(){ buildSwatches(); if(typeof renderSizeBar==="function") renderSizeBar();
-  // nothing left to sell once they're KAMO+ → drop the top-left entry point
-  const p=$("#btnPlus"); if(p && isPro) p.style.display="none";
-  /* THE + IS SHOWN TO EVERYONE NOW, and it used to be members-only — which was backwards.
-     The wordmark is the one upsell entry that exists on EVERY screen, including the reveal,
-     where the top-left ✦ is hidden and the size bar is gone. For a free user it rendered as
-     the plain word KAMO: a logo, with nothing to say it opens anything. It took 20 taps a
-     day against the ✦'s 113, and the ✦ is not even on that screen.
-     Same glyph, two destinations, both correct: a member taps it and lands on their home, a
-     free user lands on the paywall. What it stops being is a membership badge — a mint mark
-     beside the wordmark now reads as "KAMO+ exists", which is the job it should have had. */
-  const bp=$("#brandPlus"); if(bp) bp.style.display="inline"; }
+  /* Nothing left to sell once they're KAMO+ → drop the top-left entry point. Written both
+     ways: this used to only ever hide it, so a member who lapsed — or who opens the free-user
+     preview — kept the ✦ gone and lost the one entry point they now need again. */
+  const p=$("#btnPlus"); if(p) p.style.display = isPro ? "none" : "";
+  /* THE + IS A MEMBERSHIP BADGE AGAIN — members only. It was shown to everyone for a while,
+     as an upsell: the wordmark is the one entry point present on EVERY screen, including the
+     reveal where the top-left ✦ is hidden, and for a free user it otherwise renders as the
+     plain word KAMO with nothing to say it opens anything. That earned ~20 taps a day.
+     It was reverted anyway, on the founder's call and for a better reason: a mint + next to
+     the wordmark is read as "you are KAMO+", not as "KAMO+ exists". Someone on the free tier
+     looks at their own screen and concludes they are a member — which is exactly the
+     confusion that cost an hour of debugging on 2026-08-11, chasing an entitlement bug that
+     turned out to be this mark plus a creator pass.
+     The TAP is untouched: the wordmark still opens the paywall for a free user and the
+     player card for a member. The affordance stays, it just stops being advertised — so if
+     the tap count collapses, that is the cost, and it was known. */
+  const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 buildSwatches();   // safe here: past the isPro declaration canPro() reads
 /* The + set directly, NOT via refreshProUI(). refreshProUI() calls renderSizeBar(), which
    reads the `sizeBar` const declared much further down — calling it here would hit exactly
    the temporal dead zone that already forced buildSwatches() to move to this line. This is
-   one style write and it covers the cold start: the mark is on the first frame for everyone,
-   without waiting for the native pro-sync to call setPro(). */
-{ const bp=$("#brandPlus"); if(bp) bp.style.display="inline"; }
+   one style write and it covers the cold start, off the entitlement cached from the last
+   launch, without waiting for the native pro-sync to call setPro(). Written both ways rather
+   than only on: a member who lapses must lose the mark on the first frame too, and the CSS
+   default cannot do that once a previous launch set it inline. */
+{ const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 
 const paywallEl=$("#paywall");
 /* ANSWER THE TAP. Four different locks opened the same generic sheet, so someone who
@@ -4473,7 +4520,13 @@ function trackCarried(kind,props){
    different Amplitude user than anything in this set. Dividing one by the other is exactly
    the mixed funnel the note above warns about. So the success is routed the same way as the
    failure: same device id, same path, and the ratio means something. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+/* THE RESEND SET TRAVELS TOGETHER, AND IT TRAVELS WITH home_results_shown.
+   The question the card now exists to answer is "does a dead challenge come back to life when
+   you offer to re-send it" — and that is a RATIO: expanded over shown, sent over expanded.
+   home_results_shown is already routed direct, so routing the other four anywhere else would
+   put the numerator and the denominator on different Amplitude users and make the division
+   meaningless. Same device id, same path, all five. */
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -5438,6 +5491,28 @@ function chPrevSettings(){
    The old body is deleted rather than left behind a flag: dead code that cannot run is the
    drift this file keeps paying for elsewhere. */
 function invitePreview(){ chPrevRender(); }
+/* WAIT FOR THE ID THE SHARE IS ABOUT TO NEED — bounded, and never on the web path.
+   chUpload() is fire-and-forget: it encodes a full-size JPEG, uploads it, then calls
+   create_hide. Seconds, on a phone network. That was harmless while the sheet only opened
+   on a TAP, because the human delay between the reveal and the gesture covered it. Since
+   2026-08-06 the sheet PRESENTS ITSELF on the reveal, and that delay is gone: tap Challenge
+   a friend inside the first couple of seconds and chLink() is still "", so the message falls
+   through to the invite text and a ?i=1 link with no hide in it. The friend opens the app
+   and finds no game.
+   Nothing recorded it. hide_publish_failed stayed at 0-2 a day because the upload does not
+   fail, it merely finishes late, and the fallback was built for a real failure so it
+   absorbed a timing bug in silence.
+   Resolves the moment chId lands, gives up after `ms` and lets the caller send the honest
+   invite rather than hanging on the share. */
+function chAwaitId(ms){
+  if(chId||!CH_MAKE) return Promise.resolve(chId);
+  return new Promise((done)=>{
+    const t0=Date.now();
+    const tick=()=>{ if(chId||Date.now()-t0>=ms) return done(chId);
+      setTimeout(tick,100); };
+    tick();
+  });
+}
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
@@ -5487,6 +5562,13 @@ $("#ssInvite").onclick=async()=>{
      a photo, so a dropped upload turned the best share in the app into a friend tapping a
      link and finding no game. Without a hide there is no round to describe, so it invites
      instead of challenging. */
+  /* THE BRANCH IS DECIDED HERE, not at the send, because only one of the two can afford to
+     wait. postNative() carries no user-activation debt, so the native path can hold for the
+     upload. navigator.share CANNOT: the first await spends the activation this tap granted
+     and WebKit refuses the sheet — the rule already stated further down this file. So the
+     web path keeps today's behaviour exactly, and only the native path waits. */
+  const useNative = !!(nativeCaps && nativeCaps.invite);
+  if(useNative) await chAwaitId(2500);
   const link=chLink();
   /* SIGNED, WHEN THERE IS A NAME TO SIGN IT WITH. An anonymous dare is a weaker ask than one
      with a person behind it, and this is the loop that is flat — 71 shares a day, roughly one
@@ -5519,13 +5601,17 @@ $("#ssInvite").onclick=async()=>{
 
      1.0.2 never calls setNativeCaps, so it lands in the second branch and behaves exactly
      as it does today. */
-  if(nativeCaps && nativeCaps.invite){
+  if(useNative){
     postNative({type:"invite",message:text,score:sc});
     /* Native owns the outcome from here — it tracks invite_sent/invite_cancelled itself,
        and the web gets no callback either way. So no optimistic "Sent": the sheet the user
        is looking at is the feedback. The KAMO sheet stays open underneath for a second
        send, which is the one share people repeat. */
-    track("invite_native",{score:sc});
+    /* `link` is the property that was missing when this went wrong: nothing recorded whether
+       a send carried a playable challenge or the empty ?i=1 invite, so a share that reached
+       a friend with no game in it looked identical to one that worked. With it, the share
+       that produces no challenge_preview_opened is finally separable from the one that does. */
+    track("invite_native",{score:sc,link:!!link});
     return;
   }
   /* THE ANSWER LANDS ON THE BUTTON, not in a toast 700ms after the sheet closed. The thumb
@@ -5545,7 +5631,7 @@ $("#ssInvite").onclick=async()=>{
     if(navigator.share){ await navigator.share({text:text}); shared=true; }
   }catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
   if(shared||cancelled){
-    track("invite_shared",{ok:shared,cancelled:cancelled});
+    track("invite_shared",{ok:shared,cancelled:cancelled,link:!!link});
     if(b){
       b.innerHTML = shared ? '<span class="ic">✅</span>Sent' : original;
       if(shared){ invitePreview(); setTimeout(()=>{ if(b) b.innerHTML=original; },1500); }
@@ -6663,13 +6749,67 @@ function chMarkSent(){
    question — "did anything happen to the hides I sent" — and answering it twice with two
    copies of the same loop is how the two end up disagreeing about a number the user can see
    in both places within one tap of each other. */
+/* THE ID TRAVELS WITH THE ROW. get_hide does not return the id it was asked about, and the
+   rows are what the card now renders one line each — a line that offers to re-send a hide
+   has to know WHICH hide. Attached here rather than zipped back onto the ids array later:
+   a failed fetch is dropped from `rows`, so the two lists stop lining up by index. */
 async function chTally(){
   const ids=chMine(); if(!ids.length) return null;
-  const rows=(await Promise.all(ids.map(id=>chRpc("get_hide",{p_id:id}).catch(()=>null)))).filter(Boolean);
+  const rows=(await Promise.all(ids.map(id=>
+    chRpc("get_hide",{p_id:id}).then(r=>r?Object.assign({id:id},r):null).catch(()=>null)
+  ))).filter(Boolean);
   if(!rows.length) return null;
   return { hides:rows.length,
     tried:rows.reduce((a,h)=>a+((h&&h.n_attempts)|0),0),
-    found:rows.reduce((a,h)=>a+((h&&h.n_found)|0),0) };
+    found:rows.reduce((a,h)=>a+((h&&h.n_found)|0),0),
+    rows:rows };
+}
+/* WHAT HAPPENED TO ONE HIDE, IN THE FEWEST WORDS THAT ARE TRUE.
+   found_tap and burned come from get_hide and are derived server-side from the ordered
+   `attempts` rows — see the migration. The order below is the order of interest: being found
+   instantly is the most interesting thing that can happen to a hide, and "nobody yet" is the
+   least, which is also the most common (2347 published, 197 ever played). */
+function chStateLine(h){
+  const taps=(h&&h.max_taps)||CH_TAPS;
+  if(h&&h.found_tap===1) return '<span class="khHit">found you on the first tap</span>';
+  if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>';
+  if(h&&h.burned)        return '<span class="khWin">burned all '+taps+' taps</span>';
+  if(h&&h.n_attempts>0)  return h.n_attempts+" tried · "+'<span class="khNone">nobody found you</span>';
+  return '<span class="khNone">nobody has played yet</span>';
+}
+/* SEND A HIDE THAT IS ALREADY PUBLISHED, from the card rather than from the share sheet.
+ * 2347 hides published, 197 ever played. Nearly nine in ten die unopened, and the card was
+ * the one place that said so without offering anything to do about it. The row is now the
+ * action: one tap re-sends that exact challenge to somebody else.
+ *
+ * NO chAwaitId AND NO chUpload HERE. The whole race this file fixed on 2026-08-11 exists
+ * because the share sheet fires while the upload is still in flight. These hides landed days
+ * ago — the id is known, so chLink is valid on the first frame and the web path can call
+ * navigator.share inside the tap without spending its activation on an await.
+ *
+ * IT QUOTES THE ROUND ONLY WHEN IT KNOWS IT. limit_s and max_taps are null on almost every
+ * published hide (195 of 197), and the seeker derives them from the hide instead. Quoting a
+ * derived number here would promise a deal the round may not honour — the exact bug the
+ * share message already carries a comment about — so a hide without both values gets a
+ * message with no numbers in it rather than a plausible guess. */
+async function chShareHide(h,btn){
+  const id=h&&h.id; if(!id) return;
+  haptic(10);
+  const link=KAMO_HOST+"?h="+id, who=(h&&h.name)||getHandle();
+  const lim=h&&h.limit_s, taps=h&&h.max_taps;
+  const head = who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.";
+  const stake = (lim && taps) ? "\nYou get "+lim+" sec and "+taps+(taps===1?" tap":" taps")+" to find it."
+                              : "\nCan you find them?";
+  const text = head+stake+"\n\n"+link;
+  track("resend_tapped",{played:((h&&h.n_attempts)|0)>0});
+  if(nativeCaps && nativeCaps.invite){ postNative({type:"invite",message:text,score:0}); return; }
+  let shared=false, cancelled=false;
+  try{ if(navigator.share){ await navigator.share({text:text}); shared=true; } }
+  catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
+  if(shared||cancelled){ track("resend_shared",{ok:shared,cancelled:cancelled}); return; }
+  const ok=await chCopy(text);
+  track("resend_copied",{ok:ok});
+  if(btn){ const o=btn.textContent; btn.textContent = ok?"Copied":"Send"; setTimeout(()=>{ btn.textContent=o; },1500); }
 }
 /* HOW MUCH OF IT HAS ALREADY BEEN READ. Storing the count rather than a flag is what makes the
    dot mean "something NEW", not "you have results" — it comes back on the next person who
@@ -6677,33 +6817,80 @@ async function chTally(){
 const SEEN_KEY="kamo_seen_tries";
 function seenTries(){ try{ return parseInt(localStorage.getItem(SEEN_KEY)||"0",10)||0; }catch(e){ return 0; } }
 function markSeen(n){ try{ localStorage.setItem(SEEN_KEY,String(n|0)); }catch(e){} }
+/* HOW MANY HIDES ONE PERSON ACTUALLY HAS, measured rather than assumed: median 1, p90 3,
+   maximum 4 observed, and nobody with 5 or more (56 signed authors, 2026-08-11). That is why
+   this expands IN PLACE instead of opening a list screen — at four rows an accordion is the
+   whole feature, and a selector would turn a tap into a decision. chMine() caps at ten, so
+   the worst case is bounded even if the distribution moves. */
+let khOpen=false;
+/* THE SAME OBJECT THE SHARE SHEET SHOWS, because it IS the same object. A row that only said
+   "found you on tap 2" made the author guess WHICH of their hides that was — and the one thing
+   that identifies a hide to the person who made it is the picture. img_path already comes back
+   from get_hide, and the public storage URL is the one the seeker screen loads, so this costs a
+   thumbnail request and no new plumbing.
+   encodeURIComponent, not raw: img_path is written by the client that published the hide, so it
+   crosses the same trust boundary the handle does and lands inside an HTML attribute here. */
+function khRowHtml(h,i){
+  const shot = h && h.img_path
+    ? '<span class="khShot"><img src="'+CH_URL+'/storage/v1/object/public/hides/'
+      + encodeURIComponent(h.img_path)+'" alt="" loading="lazy"></span>'
+    : '<span class="khShot"></span>';
+  /* PLAY COUNTS ONLY — the round's terms (limit_s / max_taps) were chips here for a few hours
+     on 2026-08-11 and came straight back out, on the founder's call: four badges under a bold
+     state line is a dashboard, not a card. The terms are also the least interesting facts on
+     the row — they restate what the SENDER chose, while tried/found report what OTHER PEOPLE
+     did, which is the only news this surface exists to deliver. The share message still quotes
+     the terms when the hide stores them (inventing them would promise a deal the round does
+     not honour — that rule is unchanged). */
+  const chips=[];
+  if(h&&h.n_attempts>0) chips.push('<span class="chChip">'+h.n_attempts+' tried</span>');
+  if(h&&h.n_found>0)    chips.push('<span class="chChip">'+h.n_found+' found</span>');
+  return '<div class="khRow">'+shot
+    + '<span class="khRowTxt"><b>'+chStateLine(h)+'</b>'
+    + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
+    + '</span><button class="khSend" data-i="'+i+'">Send</button></div>';
+}
+function khRenderRows(el,rows){
+  el.innerHTML = '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
+  el.querySelectorAll(".khSend").forEach((b)=>{
+    b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
+  });
+}
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
-  el.style.display="none";
+  el.style.display="none"; khOpen=false;
   try{
     const t=await chTally(); if(!t) return;
-    const {tried,found}=t, rows={length:t.hides};
+    const {tried,found}=t, rows=t.rows;
     /* NOTHING PLAYED IS NOT NOTHING TO SAY. This used to return here, and an absent row is
        ambiguous in exactly the wrong direction: someone who sent three challenges and sees
        no row cannot tell "nobody has opened them" from "this is broken". They DID act — they
        sent — so the honest answer is the count they earned plus the truth about it. The rule
        that still holds is the original one: someone who has never sent anything gets no row,
        because that row would be about their inactivity rather than about other people. */
-    if(tried<1){
-      markSeen(0); brandDot(false);
-      el.innerHTML="<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")
-        +' sent · <span class="khNone">nobody has played yet</span>';
-      el.style.display="block";
-      track("home_results_shown",{hides:t.hides,tried:0,found:0});
-      return;
-    }
-    /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
-    markSeen(tried); brandDot(false);
     /* Two facts and a divider, not a sentence. "12 people have played your hides. 3 found
        you." wrapped to two lines on a 390px card, and the numbers — the only part anyone
        reads — ended up at opposite ends of it. */
-    el.innerHTML = "<b>"+tried+"</b> "+(tried===1?"played":"played")+" your hide"+(rows.length===1?"":"s")+" · "
-      + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>');
+    const head = tried<1
+      ? "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")+' sent · <span class="khNone">nobody has played yet</span>'
+      : "<b>"+tried+"</b> played your hide"+(rows.length===1?"":"s")+" · "
+        + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>');
+    /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
+    markSeen(tried<1?0:tried); brandDot(false);
+    /* THE SUMMARY IS THE CLOSED STATE, ALWAYS — including for a single hide. Sending straight
+       from the tap was the first design and it is wrong for the same reason the gear is not on
+       the reveal: a share sheet that opens without being asked for is indistinguishable from a
+       misfire. One hide expands to one row; the extra tap buys the user the chance to see WHAT
+       they are about to re-send. */
+    const paint=()=>{
+      if(khOpen){ khRenderRows(el,rows); return; }
+      el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+    };
+    paint();
+    el.onclick=()=>{
+      khOpen=!khOpen; paint();
+      if(khOpen) track("home_results_expanded",{hides:rows.length,tried:tried});
+    };
     el.style.display="block";
     track("home_results_shown",{hides:rows.length,tried:tried,found:found});
   }catch(e){}

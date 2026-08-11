@@ -64,9 +64,9 @@
   "minDaysBetweenAsks": 7,
   "settleMs": 2600,
 
-  "askTitle": "Want one of these tomorrow?",
-  "askBody": "\"⚠️ Time to KAMO ⚠️\" — one a day, at an hour you can't predict. Nothing else, ever.",
-  "askYes": "Yes, remind me",
+  "askTitle": "Know when they try to find you",
+  "askBody": "We'll tell you the moment someone opens your challenge, and nudge you once a day to hide another.",
+  "askYes": "Turn it on",
   "askNo": "Not now",
 
   "settingsRecovery": true,

@@ -51,6 +51,18 @@ const html = real.slice(0, at)
   + 'text:(document.getElementById("khScore")||{}).textContent||"",'
   + 'shown:(document.getElementById("khScore")||{}).style.display};},'
   + 'dot(){const b=document.querySelector(".brand");return !!b&&b.classList.contains("hasNews");},'
+  /* The accordion is driven through a real click on the box rather than by calling the paint
+     function: the whole point of the change is that the summary IS the tap target, and a test
+     that calls the renderer directly would pass with the handler unwired. */
+  + 'expand(){const e=document.getElementById("khScore");e.click();'
+  + 'return[...e.querySelectorAll(".khRow")].map(r=>({txt:(r.querySelector(".khRowTxt")||{}).textContent||"",'
+  + 'send:!!r.querySelector(".khSend"),'
+  + 'shot:((r.querySelector(".khShot img")||{}).getAttribute?r.querySelector(".khShot img").getAttribute("src"):null)}));},'
+  /* navigator.share is undefined in headless Chromium, so this stubs the branch the shipped
+     web path actually takes and captures the exact message that would leave the phone. */
+  + 'send(i){window.__sent=null;navigator.share=(o)=>{window.__sent=o.text;return Promise.resolve();};'
+  + 'const b=document.querySelectorAll("#khScore .khSend")[i];if(!b)return Promise.resolve(null);'
+  + 'b.click();return new Promise(r=>setTimeout(()=>r(window.__sent),80));},'
   /* The TEXT rect, not the element's. A block in normal flow is full-width, so its box centre
      lands on the viewport centre whether or not the word inside it does — which is exactly how
      a wordmark pinned to the left edge measured as perfectly centred. */
@@ -135,6 +147,80 @@ console.log('\nREADING IT CLEARS IT, AND ONLY NEW PLAY BRINGS IT BACK');
   (await page.evaluate(() => window.__m.check())) === true
     ? ok('one more person plays → it comes back')
     : bad('a new attempt did not raise the dot — it only ever fires once');
+}
+
+/* EACH HIDE, AND WHAT HAPPENED TO IT.
+   The card could only ever say "N played · N found you" — two counters that say something
+   happened, not what. found_tap and burned come back from get_hide derived from the ordered
+   attempts rows, and this is where the four states are held to their wording: being found on
+   the first tap and burning every tap are opposite outcomes and must never render the same
+   phrase, because the whole point of the row is which one it was. */
+console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
+{
+  await page.evaluate(() => window.__m.seed(['a', 'b', 'c', 'd'], {
+    a: { n_attempts: 1, n_found: 1, found_tap: 1, burned: false, name: 'tony', limit_s: 30, max_taps: 5, img_path: 'aaa.jpg' },
+    b: { n_attempts: 5, n_found: 0, found_tap: null, burned: true, max_taps: 5, img_path: 'bbb.jpg' },
+    c: { n_attempts: 4, n_found: 1, found_tap: 4, burned: false, img_path: 'ccc.jpg' },
+    d: { n_attempts: 0, n_found: 0, found_tap: null, burned: false },
+  }, null));
+  await page.evaluate(() => window.__m.openCard());
+
+  const rows = await page.evaluate(() => window.__m.expand());
+  rows.length === 4
+    ? ok('the summary opens into one row per hide (4)')
+    : bad(`expanding gave ${rows.length} rows for 4 hides — the accordion is the feature`);
+  rows.every((r) => r.send)
+    ? ok('and every row carries its own send')
+    : bad('a row has no send button, so a dead challenge stays dead');
+
+  /* THE PICTURE IS THE ONLY THING THAT TELLS AN AUTHOR WHICH HIDE A ROW IS ABOUT. Asserted per
+     row rather than "some img exists": the failure that matters is every row showing the same
+     thumbnail, which looks fine in a screenshot and is useless on a phone. */
+  const shots = rows.map((r) => r.shot);
+  /\/storage\/v1\/object\/public\/hides\/aaa\.jpg$/.test(shots[0] || '')
+    && /bbb\.jpg$/.test(shots[1] || '') && /ccc\.jpg$/.test(shots[2] || '')
+    ? ok('each row shows its OWN hide, from the public storage URL the seeker screen uses')
+    : bad(`the thumbnails are ${JSON.stringify(shots)} — a row must picture the hide it sends`);
+  shots[3] === null
+    ? ok('and a hide with no stored image degrades to an empty frame rather than a broken one')
+    : bad(`a hide with no img_path rendered ${JSON.stringify(shots[3])}`);
+
+  const t = rows.map((r) => r.txt);
+  /first tap/.test(t[0] || '')
+    ? ok(`found on tap 1 reads as the humiliation it is ("${(t[0] || '').trim()}")`)
+    : bad(`a hide found on the first tap reads: ${JSON.stringify(t[0])}`);
+  /burned all 5 taps/.test(t[1] || '')
+    ? ok(`burning every tap reads as the trophy it is ("${(t[1] || '').trim()}")`)
+    : bad(`a hide nobody found in 5 taps reads: ${JSON.stringify(t[1])}`);
+  /tap 4/.test(t[2] || '')
+    ? ok('a later find names the tap it happened on')
+    : bad(`found on tap 4 reads: ${JSON.stringify(t[2])}`);
+  /nobody has played yet/.test(t[3] || '')
+    ? ok('and an unopened one still says so, rather than showing nothing')
+    : bad(`an unplayed hide reads: ${JSON.stringify(t[3])}`);
+
+  /* THE LINK IS THE WHOLE POINT OF THE ROW. These hides landed days ago, so their id is
+     known and chLink cannot be empty — the race that produced ?i=1 sends cannot reach here.
+     A row that shared the invite URL instead would look identical and send no game. */
+  const sent = await page.evaluate(() => window.__m.send(3));
+  /\?h=d(\s|$)/.test(String(sent || ''))
+    ? ok('sending a row shares THAT hide, by id')
+    : bad(`the row sent: ${JSON.stringify(sent)} — it must carry ?h=<that hide>`);
+  !/i=1/.test(String(sent || ''))
+    ? ok('and never falls through to the empty invite link')
+    : bad('the row sent the ?i=1 invite — the friend opens the app and finds no game');
+
+  /* A hide with no stored limit must not invent one: 195 of 197 published hides carry null
+     limit_s and max_taps, and the seeker derives them instead. Quoting a number here would
+     promise a deal the round does not honour. */
+  const bare = await page.evaluate(() => window.__m.send(2));
+  !/\d+ sec/.test(String(bare || ''))
+    ? ok('a hide with no stored round quotes no clock')
+    : bad(`the message invented a round for a hide that has none: ${JSON.stringify(bare)}`);
+  const full = await page.evaluate(() => window.__m.send(0));
+  /30 sec and 5 taps/.test(String(full || ''))
+    ? ok('and one that has both states them exactly')
+    : bad(`a hide with limit_s 30 / max_taps 5 sent: ${JSON.stringify(full)}`);
 }
 
 /* THE DOT MUST NOT MOVE THE WORDMARK IT SITS ON, and it did.
