@@ -616,7 +616,14 @@ const says = (key, needles) => {
 };
 says('generic', [`${f.pro}s`, `${f.paint}s`]);
 says('time', [`${f.pro} seconds`, `instead of ${f.paint}`]);
-says('size', [`${f.sizes} fixed sizes`]);
+/* The size pitch is the one that states NO figure, on purpose: "Free paints at 3 fixed sizes"
+   was cut because it sells the limitation instead of the range. So it is asserted the other way
+   round — it must not quote a count — which still catches a hardcoded number creeping back in,
+   the thing this block exists to prevent. */
+const sizeLine = (all.find(([k]) => k === 'size') || [])[1] || '';
+/\d/.test(sizeLine)
+  ? bad(`the "size" pitch quotes a figure again — it reads: ${JSON.stringify(sizeLine)}`)
+  : ok('"size" sells the range without quoting a count');
 says('color', [`${f.shades} shades`]);
 says('chset', [`${f.taps} taps`, `${f.lo}-${f.hi}s`]);
 
