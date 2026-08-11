@@ -3243,24 +3243,32 @@ const canPro=()=>isPro;
    Safe to call repeatedly: buildSwatches() removes the previous #allColSw before
    re-inserting it, and it keeps the currently-painted colour selected. */
 function refreshProUI(){ buildSwatches(); if(typeof renderSizeBar==="function") renderSizeBar();
-  // nothing left to sell once they're KAMO+ → drop the top-left entry point
-  const p=$("#btnPlus"); if(p && isPro) p.style.display="none";
-  /* THE + IS SHOWN TO EVERYONE NOW, and it used to be members-only — which was backwards.
-     The wordmark is the one upsell entry that exists on EVERY screen, including the reveal,
-     where the top-left ✦ is hidden and the size bar is gone. For a free user it rendered as
-     the plain word KAMO: a logo, with nothing to say it opens anything. It took 20 taps a
-     day against the ✦'s 113, and the ✦ is not even on that screen.
-     Same glyph, two destinations, both correct: a member taps it and lands on their home, a
-     free user lands on the paywall. What it stops being is a membership badge — a mint mark
-     beside the wordmark now reads as "KAMO+ exists", which is the job it should have had. */
-  const bp=$("#brandPlus"); if(bp) bp.style.display="inline"; }
+  /* Nothing left to sell once they're KAMO+ → drop the top-left entry point. Written both
+     ways: this used to only ever hide it, so a member who lapsed — or who opens the free-user
+     preview — kept the ✦ gone and lost the one entry point they now need again. */
+  const p=$("#btnPlus"); if(p) p.style.display = isPro ? "none" : "";
+  /* THE + IS A MEMBERSHIP BADGE AGAIN — members only. It was shown to everyone for a while,
+     as an upsell: the wordmark is the one entry point present on EVERY screen, including the
+     reveal where the top-left ✦ is hidden, and for a free user it otherwise renders as the
+     plain word KAMO with nothing to say it opens anything. That earned ~20 taps a day.
+     It was reverted anyway, on the founder's call and for a better reason: a mint + next to
+     the wordmark is read as "you are KAMO+", not as "KAMO+ exists". Someone on the free tier
+     looks at their own screen and concludes they are a member — which is exactly the
+     confusion that cost an hour of debugging on 2026-08-11, chasing an entitlement bug that
+     turned out to be this mark plus a creator pass.
+     The TAP is untouched: the wordmark still opens the paywall for a free user and the
+     player card for a member. The affordance stays, it just stops being advertised — so if
+     the tap count collapses, that is the cost, and it was known. */
+  const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 buildSwatches();   // safe here: past the isPro declaration canPro() reads
 /* The + set directly, NOT via refreshProUI(). refreshProUI() calls renderSizeBar(), which
    reads the `sizeBar` const declared much further down — calling it here would hit exactly
    the temporal dead zone that already forced buildSwatches() to move to this line. This is
-   one style write and it covers the cold start: the mark is on the first frame for everyone,
-   without waiting for the native pro-sync to call setPro(). */
-{ const bp=$("#brandPlus"); if(bp) bp.style.display="inline"; }
+   one style write and it covers the cold start, off the entitlement cached from the last
+   launch, without waiting for the native pro-sync to call setPro(). Written both ways rather
+   than only on: a member who lapses must lose the mark on the first frame too, and the CSS
+   default cannot do that once a previous launch set it inline. */
+{ const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 
 const paywallEl=$("#paywall");
 /* ANSWER THE TAP. Four different locks opened the same generic sheet, so someone who
