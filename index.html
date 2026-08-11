@@ -1502,7 +1502,14 @@
           <span class="pwPlanMeta" id="pwPerDay" style="display:none"></span></div>
         <div class="pwPlanPrice"><b id="pwWeeklyPrice">$2.99</b><span>/week</span></div>
       </button>
-      <button class="pwPlan" data-plan="lifetime">
+      <!-- Lifetime starts hidden too, for the same reason and one more: on 2026-08-11 this
+           product (com.blisscoach.kamo.pro) was attached to the Kamo Pro entitlement while
+           RevenueCat's live App Store lookup returned not_found and its type was subscription
+           with a null duration — a plan that never expires. It has been detached and pulled
+           from the offering, so no lifetime price arrives and applyPlanAvailability() keeps
+           this hidden. If one ever arrives again, the plan is sellable again ON PURPOSE, not
+           because the markup defaulted to visible. -->
+      <button class="pwPlan" data-plan="lifetime" style="display:none">
         <div class="pwPlanTxt"><span class="pwPlanName">Lifetime</span><span class="pwPlanMeta">One-time · yours forever</span></div>
         <div class="pwPlanPrice"><b id="pwLifetimePrice">$14.99</b></div>
       </button>
