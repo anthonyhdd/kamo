@@ -56,7 +56,8 @@ const html = real.slice(0, at)
      that calls the renderer directly would pass with the handler unwired. */
   + 'expand(){const e=document.getElementById("khScore");e.click();'
   + 'return[...e.querySelectorAll(".khRow")].map(r=>({txt:(r.querySelector(".khRowTxt")||{}).textContent||"",'
-  + 'send:!!r.querySelector(".khSend")}));},'
+  + 'send:!!r.querySelector(".khSend"),'
+  + 'shot:((r.querySelector(".khShot img")||{}).getAttribute?r.querySelector(".khShot img").getAttribute("src"):null)}));},'
   /* navigator.share is undefined in headless Chromium, so this stubs the branch the shipped
      web path actually takes and captures the exact message that would leave the phone. */
   + 'send(i){window.__sent=null;navigator.share=(o)=>{window.__sent=o.text;return Promise.resolve();};'
@@ -157,9 +158,9 @@ console.log('\nREADING IT CLEARS IT, AND ONLY NEW PLAY BRINGS IT BACK');
 console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
 {
   await page.evaluate(() => window.__m.seed(['a', 'b', 'c', 'd'], {
-    a: { n_attempts: 1, n_found: 1, found_tap: 1, burned: false, name: 'tony', limit_s: 30, max_taps: 5 },
-    b: { n_attempts: 5, n_found: 0, found_tap: null, burned: true, max_taps: 5 },
-    c: { n_attempts: 4, n_found: 1, found_tap: 4, burned: false },
+    a: { n_attempts: 1, n_found: 1, found_tap: 1, burned: false, name: 'tony', limit_s: 30, max_taps: 5, img_path: 'aaa.jpg' },
+    b: { n_attempts: 5, n_found: 0, found_tap: null, burned: true, max_taps: 5, img_path: 'bbb.jpg' },
+    c: { n_attempts: 4, n_found: 1, found_tap: 4, burned: false, img_path: 'ccc.jpg' },
     d: { n_attempts: 0, n_found: 0, found_tap: null, burned: false },
   }, null));
   await page.evaluate(() => window.__m.openCard());
@@ -171,6 +172,18 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
   rows.every((r) => r.send)
     ? ok('and every row carries its own send')
     : bad('a row has no send button, so a dead challenge stays dead');
+
+  /* THE PICTURE IS THE ONLY THING THAT TELLS AN AUTHOR WHICH HIDE A ROW IS ABOUT. Asserted per
+     row rather than "some img exists": the failure that matters is every row showing the same
+     thumbnail, which looks fine in a screenshot and is useless on a phone. */
+  const shots = rows.map((r) => r.shot);
+  /\/storage\/v1\/object\/public\/hides\/aaa\.jpg$/.test(shots[0] || '')
+    && /bbb\.jpg$/.test(shots[1] || '') && /ccc\.jpg$/.test(shots[2] || '')
+    ? ok('each row shows its OWN hide, from the public storage URL the seeker screen uses')
+    : bad(`the thumbnails are ${JSON.stringify(shots)} — a row must picture the hide it sends`);
+  shots[3] === null
+    ? ok('and a hide with no stored image degrades to an empty frame rather than a broken one')
+    : bad(`a hide with no img_path rendered ${JSON.stringify(shots[3])}`);
 
   const t = rows.map((r) => r.txt);
   /first tap/.test(t[0] || '')
