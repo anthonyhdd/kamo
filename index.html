@@ -1253,12 +1253,6 @@
      as part of the app rather than as a system label. */
   .chPrevTxt b{font-family:var(--display);font-weight:700;font-size:15.5px;letter-spacing:-.2px;color:#fff;}
   .chPrevChips{display:flex;gap:6px;flex-wrap:wrap;}
-  /* The signature reads as one of the terms, because it is one: it is part of what the friend
-     receives. Unsigned it goes grey and dashed — an empty slot asking to be filled rather than
-     a value claiming to be set. */
-  .chChip.chSign{cursor:pointer;font-family:var(--display);-webkit-tap-highlight-color:transparent;}
-  .chChip.chSign.unsigned{color:rgba(255,255,255,.5);background:rgba(255,255,255,.05);
-    border:1px dashed rgba(255,255,255,.28);}
   /* The two numbers are the DEAL being offered, so they stop being grey run-on text and
      become the only coloured thing in the row. "no app needed" is gone: it answered a
      question nobody was asking here and diluted the two that matter. */
@@ -1684,7 +1678,7 @@
       <button class="chPrevShot" id="chPrevShot" aria-label="Preview what they receive"></button>
       <div class="chPrevTxt">
         <b>My challenge</b>
-        <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span><button class="chChip chSign" id="chChipN"></button></div>
+        <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span></div>
       </div>
       <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
     </div>
@@ -4005,7 +3999,17 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
        a field repeating it is the duplicate this collapse exists to remove. If they cleared
        it, the field stays — there is nothing to collapse to. */
     inp.addEventListener("blur",()=>{
+      /* THE REPUBLISH LIVES HERE NOW. The share sheet's name chip owned it until 2026-08-11;
+         with the chip gone, this card is the only place a name is set — and setHandle() alone
+         would change the share message while the published hide's seeker screen still said
+         "Find the body". Same guard the chip's dialog had: only when the name actually
+         changed, and chRepublish() itself bails when nothing is published yet. */
+      const before=getHandle();
       inp.value=setHandle(inp.value);
+      if(getHandle()!==before){
+        track("hide_signed",{had_name:!!before,named:!!getHandle()});
+        chRepublish(); chPrevRender();
+      }
       khRenderName();
       khShowField(!inp.value);
     });
@@ -5171,22 +5175,12 @@ function chPrevRender(){
    screen — the two chips ARE the deal the friend gets, so they read like terms. */
     document.getElementById("chChipS").textContent=e.limit+"s";
     document.getElementById("chChipT").textContent=e.taps+(e.taps===1?" tap":" taps");
-    /* THE ASK LIVES HERE, AND NOT IN FRONT OF THE SEND.
-       Only about 3% of hide-makers ever tap the wordmark (9 logo taps a day against ~300
-       hides), so a handle that can only be set on the player card is a handle almost nobody
-       will set — and an unsigned challenge is the thing the whole feature exists to stop.
-       But the send is the one number this app is trying to move and it is flat at 71 a day, so
-       putting a prompt in FRONT of it is the fastest way to make it worse. This is the middle:
-       a third chip on the card the sender is already reading to see what goes out, next to the
-       two numbers that are also part of what goes out. It costs no height and blocks nothing.
-       Signed, it stops being an ask and becomes the answer to "what will they see". */
-    const nChip=document.getElementById("chChipN");
-    if(nChip){
-      const who=getHandle();
-      nChip.textContent = who ? "@"+who : "+ your name";
-      nChip.classList.toggle("unsigned",!who);
-      nChip.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chSignAsk(); };
-    }
+    /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
+       an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
+       because a third chip made the card read as clutter. What survives it: the share MESSAGE
+       still signs itself when a handle exists, the seeker screen still names the sender, and
+       the player card is the one place to set the name — whose blur handler now owns the
+       republish this chip's dialog used to do. Do not re-add a prompt in front of the send. */
     const shot=document.getElementById("chPrevShot");
     shot.querySelector("canvas")?.remove();
     /* COVER-CROP, NOT FIT — this is what made the thumbnail look broken. `board` is the whole
@@ -6891,49 +6885,6 @@ async function chNewsCheck(){
  * — that friend accepted the deal that was advertised when they got it.
  * The previous id is restored if the new upload fails, because a link with stale settings
  * is a playable round and no link at all is a dead share. */
-/* SIGNING FROM THE SHARE SHEET.
- * Its own small overlay rather than opening the player card: that card is a second full sheet
- * and stacking one on top of the share sheet is how you lose both — the file already learned
- * that with the paywall.
- *
- * REPUBLISHES IF THE HIDE IS ALREADY OUT. chUpload() runs on the first touch of the sheet, so
- * by the time anyone taps this chip the row usually exists on the server WITHOUT a name, and
- * setHandle() alone would change the message text while the seeker screen still said "Find the
- * body". chRepublish() is exactly the machinery the gear already uses when taps or the clock
- * change, and it keeps the remembered-id list straight. */
-function chSignAsk(){
-  const w=document.createElement("div");
-  w.style.cssText="position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px";
-  w.innerHTML='<div style="width:min(88vw,340px);background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border:1px solid rgba(255,255,255,.22);border-radius:22px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:20px">'
-    +'<div style="font-family:var(--display);font-size:20px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px">Who is hiding?</div>'
-    +'<div style="font-size:13.5px;color:rgba(255,255,255,.6);text-align:center;margin-bottom:14px">They will see this on your challenge.</div>'
-    +'<div style="display:flex;align-items:center;justify-content:center;gap:2px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid var(--stroke)">'
-    +'<span style="font-family:var(--display);font-size:22px;font-weight:900;color:rgba(95,230,164,.75);line-height:1">@</span>'
-    +'<input id="csIn" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname" '
-    +'style="width:100%;max-width:220px;background:none;border:none;outline:none;font-family:var(--display);font-size:22px;font-weight:900;color:#fff;line-height:1;padding:0;-webkit-user-select:text;user-select:text;caret-color:var(--mint)">'
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-top:14px">'
-    +'<button id="csNo" style="flex:1;height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:none;color:rgba(255,255,255,.6);font-size:15px;font-weight:700">Not now</button>'
-    +'<button id="csOk" style="flex:1;height:44px;border-radius:12px;border:none;background:#fff;color:#04120c;font-size:15px;font-weight:800">Save</button>'
-    +'</div></div>';
-  document.body.appendChild(w);
-  const inp=w.querySelector("#csIn");
-  inp.value=getHandle();
-  setTimeout(()=>{ try{ inp.focus(); }catch(e){} },60);
-  const close=()=>{ try{ w.remove(); }catch(e){} };
-  const save=()=>{
-    const before=getHandle(), after=setHandle(inp.value);
-    close();
-    chPrevRender();
-    track("hide_signed",{had_name:!!before,named:!!after});
-    /* Only when it actually changed, and only when there is something published to change. */
-    if(after!==before) chRepublish();
-  };
-  w.querySelector("#csNo").onclick=close;
-  w.querySelector("#csOk").onclick=save;
-  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.keyCode===13) save(); });
-  w.onclick=e=>{ if(e.target===w) close(); };
-}
 function chRepublish(){
   if(!CH_MAKE||!chId) return;   // nothing published yet: chUpload() will read the new values
   const prev=chId;
