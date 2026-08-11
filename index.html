@@ -6798,13 +6798,16 @@ function khRowHtml(h,i){
     ? '<span class="khShot"><img src="'+CH_URL+'/storage/v1/object/public/hides/'
       + encodeURIComponent(h.img_path)+'" alt="" loading="lazy"></span>'
     : '<span class="khShot"></span>';
-  /* The round's terms only when the hide stores them — same rule as the share message. A chip
-     reading "5 taps" on a hide whose taps were never pinned would be inventing the deal. */
+  /* PLAY COUNTS ONLY — the round's terms (limit_s / max_taps) were chips here for a few hours
+     on 2026-08-11 and came straight back out, on the founder's call: four badges under a bold
+     state line is a dashboard, not a card. The terms are also the least interesting facts on
+     the row — they restate what the SENDER chose, while tried/found report what OTHER PEOPLE
+     did, which is the only news this surface exists to deliver. The share message still quotes
+     the terms when the hide stores them (inventing them would promise a deal the round does
+     not honour — that rule is unchanged). */
   const chips=[];
   if(h&&h.n_attempts>0) chips.push('<span class="chChip">'+h.n_attempts+' tried</span>');
   if(h&&h.n_found>0)    chips.push('<span class="chChip">'+h.n_found+' found</span>');
-  if(h&&h.limit_s)      chips.push('<span class="chChip">'+h.limit_s+'s</span>');
-  if(h&&h.max_taps)     chips.push('<span class="chChip">'+h.max_taps+' taps</span>');
   return '<div class="khRow">'+shot
     + '<span class="khRowTxt"><b>'+chStateLine(h)+'</b>'
     + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
