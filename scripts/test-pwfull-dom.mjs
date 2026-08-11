@@ -47,7 +47,7 @@ const html = real.slice(0, at)
   + 'return{show:el.style.display!=="none",text:el.textContent,'
   + 'buy:(document.getElementById("pwBuy")||{}).textContent||"",plan:pwPlan};},'
   + 'toggle(){document.getElementById("pwLifeLine").click();return this.lifeline();},'
-  + 'facts(){return{pro:PRO_PAINT_SECONDS,paint:PAINT_SECONDS};}};\n'
+  + 'facts(){return{paint:PAINT_SECONDS};}};\n'
   + real.slice(at);
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
@@ -104,13 +104,13 @@ await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
   t.lit.length === 1 && t.lit[0] === 'time'
     ? ok('the clock lock lights MORE TIME and nothing else')
     : bad(`from the time lock, lit = ${JSON.stringify(t.lit)}`);
-  t.ctx.includes(`${f.pro} seconds instead of ${f.paint}`) && /waiting/.test(t.ctx)
-    ? ok(`and the context quotes the real clocks ("${t.ctx}")`)
+  t.ctx.includes(`${f.paint} seconds`) && /All the time you want/.test(t.ctx) && /waiting/.test(t.ctx)
+    ? ok(`and the context sells unlimited against the real free clock ("${t.ctx}")`)
     : bad(`the time context reads: ${JSON.stringify(t.ctx)}`);
 
   const re = await page.evaluate(() => window.__f.open('round_end'));
-  !/waiting/.test(re.ctx) && re.ctx.includes(`${f.pro} seconds`)
-    ? ok('round_end keeps the numbers but drops "this round is waiting" — the round is over')
+  !/waiting/.test(re.ctx) && re.ctx.includes(`${f.paint} seconds`)
+    ? ok('round_end keeps the free clock but drops "this round is waiting" — the round is over')
     : bad(`round_end context reads: ${JSON.stringify(re.ctx)}`);
 
   const m = await page.evaluate(() => window.__f.open('mark'));

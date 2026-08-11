@@ -739,6 +739,13 @@
   #pwHeroCtx{margin-top:12px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.8);text-shadow:0 2px 10px rgba(0,0,0,.8);}
   #pwLifeLine{display:none;background:none;border:none;color:var(--mint);font-weight:700;font-size:13px;font-family:inherit;
     padding:8px;margin:0 auto;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  /* The X was invisible on the full arm: rgba(255,255,255,.42) glyph with no plate, sitting
+     on a live camera feed that is often bright. Same treatment as the camera's .topbtn — a
+     dark translucent circle with a rim — and a brighter glyph. Sheet arm keeps its quiet X:
+     there the card background already separates it. */
+  #paywall.pwFull .pwClose{top:calc(14px + var(--safe-t));right:14px;width:38px;height:38px;
+    background:rgba(15,18,22,.5);border:1px solid rgba(255,255,255,.28);border-radius:50%;
+    color:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
   /* KAMO+ celebration (post-purchase, plan-aware) */
   /* TWO SHEETS, ONE LOOK. #kamoPlus is the one-time welcome after a purchase; #kamoHome is
      what tapping the wordmark opens for a member, every time. They are the same object at
@@ -1502,8 +1509,8 @@
          locks), and interpolated from the constants like every other paywall figure.
          The struck-through WATERMARK is the one line that sells by deletion. -->
     <div id="pwHero">
-      <div class="pwHeroLn" data-hero="time">MORE TIME.</div>
-      <div class="pwHeroLn" data-hero="size">EVERY BRUSH SIZE.</div>
+      <div class="pwHeroLn" data-hero="time">NO CLOCK.</div>
+      <div class="pwHeroLn" data-hero="size">EVERY DETAIL.</div>
       <div class="pwHeroLn" data-hero="mark"><s>WATERMARK</s>.</div>
       <div id="pwHeroCtx"></div>
     </div>
@@ -1536,7 +1543,7 @@
          four things a free user cannot reach by using the app differently: a clean export,
          a clock that stops taking the round away, colours that are not in the photo, and a
          brush fine enough to work an edge.
-         ⚠️ Numbers appear here AND in PAINT_SECONDS/PRO_PAINT_SECONDS. Change them together.
+         ⚠️ The free clock also lives in PAINT_SECONDS. Change them together. KAMO+ has no clocks.
          Keep in sync with the share-sheet line (#ssPlus). -->
     <!-- Generic copy is no longer the feature list: the rows below are, and printing both
          would say the same four things twice. The per-lock pitches in PW_PITCH still
@@ -1546,7 +1553,7 @@
          the "Challenge a friend" invite, and the inbound referral hint — all of which are
          FREE. Printing it next to a price would be selling a feature that does not exist. -->
     <!-- NO NUMBERS IN THE MARKUP. This line is always written by openPaywall() from
-         pwGenericSub(), which interpolates PAINT_SECONDS / PRO_PAINT_SECONDS. The text below
+         pwGenericSub(). The text below
          is only what sits in the DOM before the sheet is ever opened — and it is never shown,
          because opening the sheet is what replaces it. Typing the clocks here once put
          "75s instead of 40s" in a file where nothing could check it. -->
@@ -2385,7 +2392,11 @@ function enterCompose(){
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   clearCharacters(); spawnHider();
-  startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
+  /* KAMO+ COMPOSES AND PAINTS WITH NO CLOCK — founder's call, 2026-08-11. The copy had
+     claimed "no aim clock" since the round_end pitch shipped while aimSeconds() only granted
+     a bonus; the code now matches the words. stopTimer(), not just a skipped start: entering
+     compose must never inherit a running clock from the previous phase. */
+  if(canPro()) stopTimer(); else startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
@@ -2406,7 +2417,11 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
   resumeCamera();   // paused for the whole hide by capture()
-  startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
+  /* KAMO+ COMPOSES AND PAINTS WITH NO CLOCK — founder's call, 2026-08-11. The copy had
+     claimed "no aim clock" since the round_end pitch shipped while aimSeconds() only granted
+     a bonus; the code now matches the words. stopTimer(), not just a skipped start: entering
+     compose must never inherit a running clock from the previous phase. */
+  if(canPro()) stopTimer(); else startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   teachHint("Reposition, then recapture");
 }
 
@@ -2621,7 +2636,11 @@ function capture(){
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
-  startTimer("paint",paintSeconds(),()=>runExpire(()=>{ if(mode==="paint"&&!finished) enterFinished(true); }));
+  /* KAMO+ paints with no clock (was PRO_PAINT_SECONDS=75 until 2026-08-11). The round ends
+     at Done, which was always the other way out of paint mode; the reveal's time chip reads
+     roundStartedAt, not the timer, so timing still reports. Free keeps PAINT_SECONDS and the
+     auto-finish on expiry unchanged. */
+  if(canPro()) stopTimer(); else startTimer("paint",PAINT_SECONDS,()=>runExpire(()=>{ if(mode==="paint"&&!finished) enterFinished(true); }));
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
   maybeOnboardPaint();
 }
@@ -3447,9 +3466,9 @@ const pwSourceOpens={};
 const PW_LOCK_HINT={
   color: "Every colour is KAMO+ — tap to unlock",
   round_end:"No aim clock, more paint time, every tool — tap for KAMO+",
-  /* Same rule as PW_PITCH: a function, because PRO_PAINT_SECONDS is declared later, and
+  /* Same rule as PW_PITCH: a function when it quotes a constant declared later, and
      because a hint that quotes a stale clock is a promise the round will not keep. */
-  time:  ()=>`${PRO_PAINT_SECONDS} seconds to paint — tap for KAMO+`,
+  time:  "No paint clock at all — tap for KAMO+",
 };
 /* THE LOCK ANSWERS ON THE CONTROL, NOT IN A SENTENCE. Past its cap, touching the size bar
    pulses the bar and its ✦ mint for 600ms and says nothing. The user gets an unmistakable
@@ -3479,7 +3498,7 @@ function showLockHint(src){
    does. Two had already drifted by the time anyone looked: "Free paints at one size" survived
    the day free got THREE fixed sizes, and "a fixed clock" describes a clock that is derived
    from the round length and clamped to a range. Both were live, on a paywall, next to a price.
-   So the copy interpolates PAINT_SECONDS, PRO_PAINT_SECONDS, FREE_SIZES, FREE_SHADES, CH_TAPS
+   So the copy interpolates PAINT_SECONDS, FREE_SIZES, FREE_SHADES, CH_TAPS
    and the CH_LIMIT bounds instead of quoting them, and check.mjs refuses a push if a bare
    numeral reappears in any of these strings. The value drifting can no longer make the
    sentence false, because there is no longer a sentence to be false — only a template.
@@ -3509,7 +3528,7 @@ const PW_PITCH={
   chset: { t:"Set the challenge yourself",
            s:()=>`Free sends ${CH_TAPS} taps and a clock it picks for you (${CH_LIMIT_MIN}-${CH_LIMIT_MAX}s). KAMO+ lets you choose both — make it easy, or make it impossible.` },
   time:  { t:"Stop losing hides to the clock",
-           s:()=>`Line up your shot with no clock at all, then ${PRO_PAINT_SECONDS} seconds to paint instead of ${PAINT_SECONDS}.` },
+           s:()=>`No clock to line it up, no clock to paint — free gets ${PAINT_SECONDS} seconds.` },
 };
 /* The generic pitch, for entry points that are not a specific locked tool. Built here rather
    than typed into the markup for the same reason as the rest — it carried "75s to paint
@@ -3517,7 +3536,7 @@ const PW_PITCH={
 /* The star answers the same question as the size lock, so it gets the same words. Assigned
    rather than duplicated: two copies of one pitch is how they drift apart. */
 PW_PITCH.size_star=PW_PITCH.size;
-const pwGenericSub=()=>`Any brush and color · no clock to line it up · ${PRO_PAINT_SECONDS}s to paint instead of ${PAINT_SECONDS}s`;
+const pwGenericSub=()=>`Any brush and color · no clock to line it up · no clock to paint`;
 /* THE HERO'S CONTEXT LINE, per SOURCE — not per highlighted line, because the same line can
    be reached from two different moments that deserve different sentences: `time` fires
    mid-round (the clock just took the round, which is frozen behind the paywall) and
@@ -3526,8 +3545,8 @@ const pwGenericSub=()=>`Any brush and color · no clock to line it up · ${PRO_P
    Functions for the same TDZ reason as PW_PITCH, and no typed numerals — check.mjs. */
 const PW_HERO_LINE={ time:"time", round_end:"time", size:"size", size_star:"size", mark:"mark" };
 const PW_HERO_CTX={
-  time:      ()=>`${PRO_PAINT_SECONDS} seconds instead of ${PAINT_SECONDS} — this round is waiting.`,
-  round_end: ()=>`${PRO_PAINT_SECONDS} seconds instead of ${PAINT_SECONDS}, every round.`,
+  time:      ()=>`All the time you want — free gets ${PAINT_SECONDS} seconds. This round is waiting.`,
+  round_end: ()=>`All the time you want — free gets ${PAINT_SECONDS} seconds.`,
   size:      ()=>"Down to the fine one — paint the details, not just the shape.",
   size_star: ()=>"Down to the fine one — paint the details, not just the shape.",
   mark:      ()=>"Your exports, clean.",
@@ -3898,8 +3917,8 @@ function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
   /* "Every camo brush" outlived the brushes by two releases. What was actually bought is
      the colour picker, the fine brush and the clock. */
   const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
-    ? "Every color, the fine brush, no aim clock and 75-second rounds — yours forever. Now go disappear."
-    : "Every color, the fine brush, no aim clock and 75-second rounds — cancel anytime.";
+    ? "Every color, the fine brush, and no clocks anywhere — yours forever. Now go disappear."
+    : "Every color, the fine brush, and no clocks anywhere — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
 
@@ -5866,7 +5885,7 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    window it is documented to be, it was 3s shorter than a standard aim.
    Previous pass, for the record: aim 10 -> 8 (band 7-18 -> 6-14), paint 30 -> 22.
    ⚠️ A "the paint clock feels far too long" report was once acted on and had to be reverted:
-   it came from a KAMO+ account, which is on PRO_PAINT_SECONDS=75, not this number. Before
+   it came from a KAMO+ account, which has no paint clock at all, not this number. Before
    touching PAINT_SECONDS again, confirm the report is from a FREE round.
    ⚠️ These numbers are PRINTED at three copy sites — #pwSub, PW_PITCH.time.s and the
    PW_LOCK_HINT line. A silent change here makes the paywall state a false number, which is
@@ -5882,8 +5901,7 @@ const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=40;
    away. What does change is coverage: a 40s auto-Done can end a hide mid-paint, so Pro
    hides will trend better-covered. Accepted deliberately — that IS the perk, though at
    40 vs 75 the gap is 1.9x, down from 2.3x at 32s and 3.4x at 22s. */
-const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
-function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
+const PRO_AIM_BONUS=8, PRO_AIM_MAX=30;   // aim-clock tuning for the FREE path history model; KAMO+ has no clocks at all
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
 /* HIDE ONE ONLY. maybeOnboard() spends 7.2s on two hints; this leaves ~18s of aiming after
    they clear, which is a normal round. It replaces "no clock at all on the first hide" —
