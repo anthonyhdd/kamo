@@ -3854,7 +3854,20 @@ window.KAMO=window.KAMO||{};
  * cached copy would outlive it and start stamping new hides with a dead address. */
 let pushToken="";
 window.KAMO.setPushToken=function(t){
-  try{ pushToken=(typeof t==="string"&&/^ExponentPushToken\[[A-Za-z0-9_-]{1,64}\]$/.test(t))?t:""; }catch(e){ pushToken=""; }
+  try{
+    const was=pushToken;
+    pushToken=(typeof t==="string"&&/^ExponentPushToken\[[A-Za-z0-9_-]{1,64}\]$/.test(t))?t:"";
+    /* AND CATCH UP THE HIDE THAT IS ALREADY OUT.
+       The token is minted the moment the notification opt-in is granted, and the wrapper now
+       spends that opt-in after a challenge has been SENT — which is strictly after chUpload()
+       published the hide and ran chAttachPush() with nothing to attach. So on the one hide
+       that matters most, the first one, the address would arrive seconds too late and only
+       the NEXT hide would ever carry one.
+       chId still points at that hide here, and attach_push_token is an idempotent update, so
+       the fix is to simply try again. Only on a token we did not have a moment ago: a repeat
+       sync of the same value must not re-post on every wrapper refresh. */
+    if(pushToken&&pushToken!==was&&chId) chAttachPush();
+  }catch(e){ pushToken=""; }
 };
 window.KAMO.setStoredHandle=function(h){
   try{
