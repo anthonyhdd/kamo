@@ -828,6 +828,27 @@
     font-size:14px;color:rgba(255,255,255,.66);line-height:1.5;}
   .khScore b{font-family:var(--display);font-weight:900;color:var(--mint);font-size:16px;}
   .khScore .khNone{color:rgba(255,255,255,.5);}
+  /* IT HAS TO LOOK LIKE IT OPENS. This box was a report for its whole life, so nothing about
+     it invited a tap — a tap target that reads as a paragraph is a tap target nobody finds.
+     The affordance is a word, not a chevron: "Send it again" says what happens, which a
+     rotating arrow does not. */
+  .khScore{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .khScore:active{transform:scale(.985);}
+  .khMore{display:block;margin-top:7px;color:var(--mint);font-size:12.5px;font-weight:700;}
+  /* One line per hide, the state on the left and the one action on the right. Bordered rows
+     rather than a list with bullets: each row is its own object because each row sends its
+     own challenge. */
+  .khRow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--stroke);}
+  .khRow:first-child{border-top:none;padding-top:2px;}
+  .khRowTxt{flex:1;min-width:0;font-size:13px;line-height:1.35;}
+  /* Mint on the outcome that flatters the hider, white on the one that does not — the two
+     read at a glance without either of them needing the word "you" underlined. */
+  .khScore .khWin{color:var(--mint);font-weight:700;}
+  .khScore .khHit{color:rgba(255,255,255,.9);font-weight:700;}
+  .khSend{flex:none;background:rgba(95,230,164,.14);border:1px solid rgba(95,230,164,.45);
+    color:#eafff5;border-radius:999px;padding:6px 13px;font-family:var(--display);
+    font-size:12.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .khSend:active{transform:scale(.95);}
   .kpQuiet{display:block;width:100%;margin-top:10px;background:none;border:none;
     color:rgba(255,255,255,.5);font-size:13px;font-weight:700;cursor:pointer;padding:8px;
     -webkit-tap-highlight-color:transparent;}
@@ -4474,7 +4495,13 @@ function trackCarried(kind,props){
    different Amplitude user than anything in this set. Dividing one by the other is exactly
    the mixed funnel the note above warns about. So the success is routed the same way as the
    failure: same device id, same path, and the ratio means something. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+/* THE RESEND SET TRAVELS TOGETHER, AND IT TRAVELS WITH home_results_shown.
+   The question the card now exists to answer is "does a dead challenge come back to life when
+   you offer to re-send it" — and that is a RATIO: expanded over shown, sent over expanded.
+   home_results_shown is already routed direct, so routing the other four anywhere else would
+   put the numerator and the denominator on different Amplitude users and make the division
+   meaningless. Same device id, same path, all five. */
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -6674,13 +6701,67 @@ function chMarkSent(){
    question — "did anything happen to the hides I sent" — and answering it twice with two
    copies of the same loop is how the two end up disagreeing about a number the user can see
    in both places within one tap of each other. */
+/* THE ID TRAVELS WITH THE ROW. get_hide does not return the id it was asked about, and the
+   rows are what the card now renders one line each — a line that offers to re-send a hide
+   has to know WHICH hide. Attached here rather than zipped back onto the ids array later:
+   a failed fetch is dropped from `rows`, so the two lists stop lining up by index. */
 async function chTally(){
   const ids=chMine(); if(!ids.length) return null;
-  const rows=(await Promise.all(ids.map(id=>chRpc("get_hide",{p_id:id}).catch(()=>null)))).filter(Boolean);
+  const rows=(await Promise.all(ids.map(id=>
+    chRpc("get_hide",{p_id:id}).then(r=>r?Object.assign({id:id},r):null).catch(()=>null)
+  ))).filter(Boolean);
   if(!rows.length) return null;
   return { hides:rows.length,
     tried:rows.reduce((a,h)=>a+((h&&h.n_attempts)|0),0),
-    found:rows.reduce((a,h)=>a+((h&&h.n_found)|0),0) };
+    found:rows.reduce((a,h)=>a+((h&&h.n_found)|0),0),
+    rows:rows };
+}
+/* WHAT HAPPENED TO ONE HIDE, IN THE FEWEST WORDS THAT ARE TRUE.
+   found_tap and burned come from get_hide and are derived server-side from the ordered
+   `attempts` rows — see the migration. The order below is the order of interest: being found
+   instantly is the most interesting thing that can happen to a hide, and "nobody yet" is the
+   least, which is also the most common (2347 published, 197 ever played). */
+function chStateLine(h){
+  const taps=(h&&h.max_taps)||CH_TAPS;
+  if(h&&h.found_tap===1) return '<span class="khHit">found you on the first tap</span>';
+  if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>';
+  if(h&&h.burned)        return '<span class="khWin">burned all '+taps+' taps</span>';
+  if(h&&h.n_attempts>0)  return h.n_attempts+" tried · "+'<span class="khNone">nobody found you</span>';
+  return '<span class="khNone">nobody has played yet</span>';
+}
+/* SEND A HIDE THAT IS ALREADY PUBLISHED, from the card rather than from the share sheet.
+ * 2347 hides published, 197 ever played. Nearly nine in ten die unopened, and the card was
+ * the one place that said so without offering anything to do about it. The row is now the
+ * action: one tap re-sends that exact challenge to somebody else.
+ *
+ * NO chAwaitId AND NO chUpload HERE. The whole race this file fixed on 2026-08-11 exists
+ * because the share sheet fires while the upload is still in flight. These hides landed days
+ * ago — the id is known, so chLink is valid on the first frame and the web path can call
+ * navigator.share inside the tap without spending its activation on an await.
+ *
+ * IT QUOTES THE ROUND ONLY WHEN IT KNOWS IT. limit_s and max_taps are null on almost every
+ * published hide (195 of 197), and the seeker derives them from the hide instead. Quoting a
+ * derived number here would promise a deal the round may not honour — the exact bug the
+ * share message already carries a comment about — so a hide without both values gets a
+ * message with no numbers in it rather than a plausible guess. */
+async function chShareHide(h,btn){
+  const id=h&&h.id; if(!id) return;
+  haptic(10);
+  const link=KAMO_HOST+"?h="+id, who=(h&&h.name)||getHandle();
+  const lim=h&&h.limit_s, taps=h&&h.max_taps;
+  const head = who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.";
+  const stake = (lim && taps) ? "\nYou get "+lim+" sec and "+taps+(taps===1?" tap":" taps")+" to find it."
+                              : "\nCan you find them?";
+  const text = head+stake+"\n\n"+link;
+  track("resend_tapped",{played:((h&&h.n_attempts)|0)>0});
+  if(nativeCaps && nativeCaps.invite){ postNative({type:"invite",message:text,score:0}); return; }
+  let shared=false, cancelled=false;
+  try{ if(navigator.share){ await navigator.share({text:text}); shared=true; } }
+  catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
+  if(shared||cancelled){ track("resend_shared",{ok:shared,cancelled:cancelled}); return; }
+  const ok=await chCopy(text);
+  track("resend_copied",{ok:ok});
+  if(btn){ const o=btn.textContent; btn.textContent = ok?"Copied":"Send"; setTimeout(()=>{ btn.textContent=o; },1500); }
 }
 /* HOW MUCH OF IT HAS ALREADY BEEN READ. Storing the count rather than a flag is what makes the
    dot mean "something NEW", not "you have results" — it comes back on the next person who
@@ -6688,33 +6769,55 @@ async function chTally(){
 const SEEN_KEY="kamo_seen_tries";
 function seenTries(){ try{ return parseInt(localStorage.getItem(SEEN_KEY)||"0",10)||0; }catch(e){ return 0; } }
 function markSeen(n){ try{ localStorage.setItem(SEEN_KEY,String(n|0)); }catch(e){} }
+/* HOW MANY HIDES ONE PERSON ACTUALLY HAS, measured rather than assumed: median 1, p90 3,
+   maximum 4 observed, and nobody with 5 or more (56 signed authors, 2026-08-11). That is why
+   this expands IN PLACE instead of opening a list screen — at four rows an accordion is the
+   whole feature, and a selector would turn a tap into a decision. chMine() caps at ten, so
+   the worst case is bounded even if the distribution moves. */
+let khOpen=false;
+function khRenderRows(el,rows){
+  el.innerHTML = '<div class="khRows">'+rows.map((h,i)=>
+      '<div class="khRow"><span class="khRowTxt">'+chStateLine(h)+'</span>'
+    + '<button class="khSend" data-i="'+i+'">Send</button></div>').join("")+'</div>';
+  el.querySelectorAll(".khSend").forEach((b)=>{
+    b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
+  });
+}
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
-  el.style.display="none";
+  el.style.display="none"; khOpen=false;
   try{
     const t=await chTally(); if(!t) return;
-    const {tried,found}=t, rows={length:t.hides};
+    const {tried,found}=t, rows=t.rows;
     /* NOTHING PLAYED IS NOT NOTHING TO SAY. This used to return here, and an absent row is
        ambiguous in exactly the wrong direction: someone who sent three challenges and sees
        no row cannot tell "nobody has opened them" from "this is broken". They DID act — they
        sent — so the honest answer is the count they earned plus the truth about it. The rule
        that still holds is the original one: someone who has never sent anything gets no row,
        because that row would be about their inactivity rather than about other people. */
-    if(tried<1){
-      markSeen(0); brandDot(false);
-      el.innerHTML="<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")
-        +' sent · <span class="khNone">nobody has played yet</span>';
-      el.style.display="block";
-      track("home_results_shown",{hides:t.hides,tried:0,found:0});
-      return;
-    }
-    /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
-    markSeen(tried); brandDot(false);
     /* Two facts and a divider, not a sentence. "12 people have played your hides. 3 found
        you." wrapped to two lines on a 390px card, and the numbers — the only part anyone
        reads — ended up at opposite ends of it. */
-    el.innerHTML = "<b>"+tried+"</b> "+(tried===1?"played":"played")+" your hide"+(rows.length===1?"":"s")+" · "
-      + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>');
+    const head = tried<1
+      ? "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")+' sent · <span class="khNone">nobody has played yet</span>'
+      : "<b>"+tried+"</b> played your hide"+(rows.length===1?"":"s")+" · "
+        + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>');
+    /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
+    markSeen(tried<1?0:tried); brandDot(false);
+    /* THE SUMMARY IS THE CLOSED STATE, ALWAYS — including for a single hide. Sending straight
+       from the tap was the first design and it is wrong for the same reason the gear is not on
+       the reveal: a share sheet that opens without being asked for is indistinguishable from a
+       misfire. One hide expands to one row; the extra tap buys the user the chance to see WHAT
+       they are about to re-send. */
+    const paint=()=>{
+      if(khOpen){ khRenderRows(el,rows); return; }
+      el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+    };
+    paint();
+    el.onclick=()=>{
+      khOpen=!khOpen; paint();
+      if(khOpen) track("home_results_expanded",{hides:rows.length,tried:tried});
+    };
     el.style.display="block";
     track("home_results_shown",{hides:rows.length,tried:tried,found:found});
   }catch(e){}
