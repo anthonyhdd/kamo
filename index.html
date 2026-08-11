@@ -838,9 +838,20 @@
   /* One line per hide, the state on the left and the one action on the right. Bordered rows
      rather than a list with bullets: each row is its own object because each row sends its
      own challenge. */
-  .khRow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--stroke);}
-  .khRow:first-child{border-top:none;padding-top:2px;}
-  .khRowTxt{flex:1;min-width:0;font-size:13px;line-height:1.35;}
+  .khRow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--stroke);}
+  .khRow:first-child{border-top:none;padding-top:4px;}
+  .khRowTxt{flex:1;min-width:0;font-size:13px;line-height:1.35;display:block;}
+  .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:13px;color:inherit;}
+  /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
+     .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
+     rather than a canvas, because these hides are on the server, not in this session's memory.
+     No ::after play glyph: that one opens a preview, this one is a label. */
+  .khShot{flex:0 0 auto;width:40px;height:52px;border-radius:9px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.18);background:#0a0f0d;display:block;}
+  .khShot img{width:100%;height:100%;object-fit:cover;display:block;}
+  .khRowChips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
+  /* Reuses .chChip so the terms are typeset identically to the card that sent them. */
+  .khRowChips .chChip{font-size:10.5px;padding:2px 7px;}
   /* Mint on the outcome that flatters the hider, white on the one that does not — the two
      read at a glance without either of them needing the word "you" underlined. */
   .khScore .khWin{color:var(--mint);font-weight:700;}
@@ -6775,10 +6786,32 @@ function markSeen(n){ try{ localStorage.setItem(SEEN_KEY,String(n|0)); }catch(e)
    whole feature, and a selector would turn a tap into a decision. chMine() caps at ten, so
    the worst case is bounded even if the distribution moves. */
 let khOpen=false;
+/* THE SAME OBJECT THE SHARE SHEET SHOWS, because it IS the same object. A row that only said
+   "found you on tap 2" made the author guess WHICH of their hides that was — and the one thing
+   that identifies a hide to the person who made it is the picture. img_path already comes back
+   from get_hide, and the public storage URL is the one the seeker screen loads, so this costs a
+   thumbnail request and no new plumbing.
+   encodeURIComponent, not raw: img_path is written by the client that published the hide, so it
+   crosses the same trust boundary the handle does and lands inside an HTML attribute here. */
+function khRowHtml(h,i){
+  const shot = h && h.img_path
+    ? '<span class="khShot"><img src="'+CH_URL+'/storage/v1/object/public/hides/'
+      + encodeURIComponent(h.img_path)+'" alt="" loading="lazy"></span>'
+    : '<span class="khShot"></span>';
+  /* The round's terms only when the hide stores them — same rule as the share message. A chip
+     reading "5 taps" on a hide whose taps were never pinned would be inventing the deal. */
+  const chips=[];
+  if(h&&h.n_attempts>0) chips.push('<span class="chChip">'+h.n_attempts+' tried</span>');
+  if(h&&h.n_found>0)    chips.push('<span class="chChip">'+h.n_found+' found</span>');
+  if(h&&h.limit_s)      chips.push('<span class="chChip">'+h.limit_s+'s</span>');
+  if(h&&h.max_taps)     chips.push('<span class="chChip">'+h.max_taps+' taps</span>');
+  return '<div class="khRow">'+shot
+    + '<span class="khRowTxt"><b>'+chStateLine(h)+'</b>'
+    + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
+    + '</span><button class="khSend" data-i="'+i+'">Send</button></div>';
+}
 function khRenderRows(el,rows){
-  el.innerHTML = '<div class="khRows">'+rows.map((h,i)=>
-      '<div class="khRow"><span class="khRowTxt">'+chStateLine(h)+'</span>'
-    + '<button class="khSend" data-i="'+i+'">Send</button></div>').join("")+'</div>';
+  el.innerHTML = '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
   el.querySelectorAll(".khSend").forEach((b)=>{
     b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
   });
