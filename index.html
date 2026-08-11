@@ -5165,6 +5165,28 @@ function chPrevSettings(){
    The old body is deleted rather than left behind a flag: dead code that cannot run is the
    drift this file keeps paying for elsewhere. */
 function invitePreview(){ chPrevRender(); }
+/* WAIT FOR THE ID THE SHARE IS ABOUT TO NEED — bounded, and never on the web path.
+   chUpload() is fire-and-forget: it encodes a full-size JPEG, uploads it, then calls
+   create_hide. Seconds, on a phone network. That was harmless while the sheet only opened
+   on a TAP, because the human delay between the reveal and the gesture covered it. Since
+   2026-08-06 the sheet PRESENTS ITSELF on the reveal, and that delay is gone: tap Challenge
+   a friend inside the first couple of seconds and chLink() is still "", so the message falls
+   through to the invite text and a ?i=1 link with no hide in it. The friend opens the app
+   and finds no game.
+   Nothing recorded it. hide_publish_failed stayed at 0-2 a day because the upload does not
+   fail, it merely finishes late, and the fallback was built for a real failure so it
+   absorbed a timing bug in silence.
+   Resolves the moment chId lands, gives up after `ms` and lets the caller send the honest
+   invite rather than hanging on the share. */
+function chAwaitId(ms){
+  if(chId||!CH_MAKE) return Promise.resolve(chId);
+  return new Promise((done)=>{
+    const t0=Date.now();
+    const tick=()=>{ if(chId||Date.now()-t0>=ms) return done(chId);
+      setTimeout(tick,100); };
+    tick();
+  });
+}
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
@@ -5214,6 +5236,13 @@ $("#ssInvite").onclick=async()=>{
      a photo, so a dropped upload turned the best share in the app into a friend tapping a
      link and finding no game. Without a hide there is no round to describe, so it invites
      instead of challenging. */
+  /* THE BRANCH IS DECIDED HERE, not at the send, because only one of the two can afford to
+     wait. postNative() carries no user-activation debt, so the native path can hold for the
+     upload. navigator.share CANNOT: the first await spends the activation this tap granted
+     and WebKit refuses the sheet — the rule already stated further down this file. So the
+     web path keeps today's behaviour exactly, and only the native path waits. */
+  const useNative = !!(nativeCaps && nativeCaps.invite);
+  if(useNative) await chAwaitId(2500);
   const link=chLink();
   /* SIGNED, WHEN THERE IS A NAME TO SIGN IT WITH. An anonymous dare is a weaker ask than one
      with a person behind it, and this is the loop that is flat — 71 shares a day, roughly one
@@ -5246,13 +5275,17 @@ $("#ssInvite").onclick=async()=>{
 
      1.0.2 never calls setNativeCaps, so it lands in the second branch and behaves exactly
      as it does today. */
-  if(nativeCaps && nativeCaps.invite){
+  if(useNative){
     postNative({type:"invite",message:text,score:sc});
     /* Native owns the outcome from here — it tracks invite_sent/invite_cancelled itself,
        and the web gets no callback either way. So no optimistic "Sent": the sheet the user
        is looking at is the feedback. The KAMO sheet stays open underneath for a second
        send, which is the one share people repeat. */
-    track("invite_native",{score:sc});
+    /* `link` is the property that was missing when this went wrong: nothing recorded whether
+       a send carried a playable challenge or the empty ?i=1 invite, so a share that reached
+       a friend with no game in it looked identical to one that worked. With it, the share
+       that produces no challenge_preview_opened is finally separable from the one that does. */
+    track("invite_native",{score:sc,link:!!link});
     return;
   }
   /* THE ANSWER LANDS ON THE BUTTON, not in a toast 700ms after the sheet closed. The thumb
@@ -5272,7 +5305,7 @@ $("#ssInvite").onclick=async()=>{
     if(navigator.share){ await navigator.share({text:text}); shared=true; }
   }catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
   if(shared||cancelled){
-    track("invite_shared",{ok:shared,cancelled:cancelled});
+    track("invite_shared",{ok:shared,cancelled:cancelled,link:!!link});
     if(b){
       b.innerHTML = shared ? '<span class="ic">✅</span>Sent' : original;
       if(shared){ invitePreview(); setTimeout(()=>{ if(b) b.innerHTML=original; },1500); }

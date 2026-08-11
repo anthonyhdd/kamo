@@ -40,7 +40,7 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  * `share` describes what navigator.share does: 'ok' | 'abort' | 'throw' | null (absent).
  */
 async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '' }) {
-  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0 };
+  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0 };
   const btn = { innerHTML: 'Challenge a friend', onclick: null };
 
   const env = {
@@ -54,6 +54,12 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
     postNative: (o) => { calls.native++; calls.text = o.message; return true; },
     chEffective: () => ({ limit: settings.limit || 20, taps: settings.taps || 5, custom: false }),
     chLink: () => (chId ? 'https://anthonyhdd.github.io/kamo/?h=' + chId : ''),
+    /* The upload wait. Counted, not silently stubbed: which path is allowed to await is the
+       whole point of it. The native sheet goes through postNative and carries no
+       user-activation debt, so it CAN hold for the id. navigator.share cannot — the first
+       await spends the activation the tap granted and WebKit refuses the sheet. A version
+       of this that waited on the web path would kill the share for everyone on 1.0.2. */
+    chAwaitId: async () => { calls.waited++; return chId; },
     inviteUrl: () => 'https://anthonyhdd.github.io/kamo/?i=1',
     chCopy: async (t) => { calls.clipboard++; calls.text = t; return clipboardOk; },
     invitePreview: () => {},
@@ -168,6 +174,28 @@ console.log('\nTHE MESSAGE MATCHES THE ROUND THE RECEIVER WILL PLAY');
   !t.includes('hidden in this photo') && !t.includes('to find it') && t.includes('?i=1')
     ? ok('upload failed → invites instead of promising a puzzle that does not exist')
     : bad(`no-hide message still promises a challenge: ${JSON.stringify(t)}`);
+}
+
+/* ONLY THE NATIVE PATH MAY WAIT FOR THE UPLOAD.
+   chUpload() is fire-and-forget and takes seconds on a phone network. That was invisible
+   while the sheet only opened on a tap; since it presents itself on the reveal, a fast
+   tapper reached the send before chId existed and the message fell through to the ?i=1
+   invite — a link with no game in it. Nothing recorded it, because the upload never failed.
+   The fix waits for the id, but it MUST NOT wait on the web path: navigator.share needs the
+   user activation this tap granted and the first await spends it. Both halves are pinned
+   here, because getting either one wrong is silent in production. */
+console.log('\nONLY THE NATIVE PATH WAITS FOR THE UPLOAD');
+{
+  const { calls } = await run({ nativeInvite: true, share: 'ok' });
+  calls.waited === 1
+    ? ok('native path waits for chId before building the message')
+    : bad(`native path did not wait (waited:${calls.waited}) — fast taps will send ?i=1 again`);
+}
+{
+  const { calls } = await run({ nativeInvite: false, share: 'ok' });
+  calls.waited === 0
+    ? ok('web path does NOT wait — the activation navigator.share needs survives')
+    : bad(`web path awaited (waited:${calls.waited}) — this spends the user activation and WebKit refuses the sheet`);
 }
 
 console.log('\nTHE LINK IS ALWAYS ON ITS OWN LINE (messaging apps only linkify it there)');
