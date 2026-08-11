@@ -711,6 +711,34 @@
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
+  /* THE FULL-BLEED ARM. Same element, same machinery — openPaywall, the caps, the store-fed
+     prices, the buy wiring, the timer pause (timerBlocked reads #paywall.show) all come for
+     free because this is a PRESENTATION variant, not a second paywall. The card loses its
+     sheet chrome and takes the whole screen over whatever is behind it: the live camera
+     before a capture, the frozen round mid-paint, the reveal at the end. The backdrop stays
+     translucent for exactly that reason — the context IS the pitch.
+     The blur is dropped, not inherited: a 6px blur over a full screen is a GPU cost on every
+     frame of the open animation, and the full arm dims instead. */
+  #paywall.pwFull{align-items:stretch;background:rgba(5,6,10,.44);backdrop-filter:none;-webkit-backdrop-filter:none;}
+  #paywall.pwFull .pwCard{max-width:none;width:100%;border-radius:0;border:none;box-shadow:none;
+    background:linear-gradient(180deg,transparent 46%,rgba(5,6,10,.88) 80%,rgba(5,6,10,.97));
+    display:flex;flex-direction:column;justify-content:flex-end;}
+  /* The sheet's copy block and plan rows are the sheet arm's furniture. The rows stay in the
+     DOM — applyPlanAvailability() still writes their display per store answer and
+     updatePwLifeLine() READS it as the sellability source — they are just never shown here. */
+  #paywall.pwFull .pwKick,#paywall.pwFull .pwTitle,#paywall.pwFull .pwSub,#paywall.pwFull #pwPlans{display:none!important;}
+  #pwHero{display:none;}
+  #paywall.pwFull #pwHero{display:block;position:absolute;left:0;right:0;top:16%;text-align:center;padding:0 12px;pointer-events:none;}
+  .pwHeroLn{font-family:var(--display);font-weight:900;font-size:clamp(30px,10.5vw,44px);line-height:1.07;letter-spacing:-1.3px;
+    color:rgba(255,255,255,.94);text-shadow:0 4px 22px rgba(0,0,0,.8);}
+  .pwHeroLn.on{color:var(--mint);}
+  /* The strike is mint on white and inverts when the line lights: two colours must always
+     separate the word from its deletion, or the strike disappears into its own line. */
+  .pwHeroLn s{text-decoration-thickness:.09em;text-decoration-color:var(--mint);}
+  .pwHeroLn.on s{text-decoration-color:rgba(255,255,255,.94);}
+  #pwHeroCtx{margin-top:12px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.8);text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  #pwLifeLine{display:none;background:none;border:none;color:var(--mint);font-weight:700;font-size:13px;font-family:inherit;
+    padding:8px;margin:0 auto;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   /* KAMO+ celebration (post-purchase, plan-aware) */
   /* TWO SHEETS, ONE LOOK. #kamoPlus is the one-time welcome after a purchase; #kamoHome is
      what tapping the wordmark opens for a member, every time. They are the same object at
@@ -1473,6 +1501,18 @@
     <button id="pwClose" class="pwClose" aria-label="Close" title="Close">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
+    <!-- THE FULL-BLEED HERO — arm "full" only, hidden entirely on the sheet arm. Three
+         benefit lines, no figures: "75 SECONDS" was the first draft and it means nothing to
+         someone who has not yet lived the shorter clock. The number moves to #pwHeroCtx,
+         written by pwHeroApply() ONLY for the sources where it has a referent (the clock
+         locks), and interpolated from the constants like every other paywall figure.
+         The struck-through WATERMARK is the one line that sells by deletion. -->
+    <div id="pwHero">
+      <div class="pwHeroLn" data-hero="time">MORE TIME.</div>
+      <div class="pwHeroLn" data-hero="size">EVERY BRUSH SIZE.</div>
+      <div class="pwHeroLn" data-hero="mark"><s>WATERMARK</s>.</div>
+      <div id="pwHeroCtx"></div>
+    </div>
     <div class="pwKick">KAMO<span class="kPlus">+</span></div>
     <!-- Sell the OUTCOME, not the toolbox. The old copy ("Unlock every camo brush / Every
          Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider") was a
@@ -1547,6 +1587,12 @@
       </button>
     </div>
     <button id="pwBuy" class="pwBuy">Get KAMO+</button>
+    <!-- The OTHER plan, as one quiet line — full arm only. The sheet arm shows both plans as
+         rows; the full arm shows one CTA and offers the alternative here. Lifetime outsold
+         the weekly 4:3 with zero promotion (2026-08-11), so it must stay reachable — but as
+         a line, not a second CTA competing with the trial. Written by updatePwLifeLine()
+         from the SAME store-fed price nodes the rows use; never a typed price. -->
+    <button id="pwLifeLine" style="display:none"></button>
     <div id="pwTerms">Renews automatically until cancelled.</div>
     <div class="pwFine">
       <button id="pwRestore">Restore</button>
@@ -1850,6 +1896,27 @@ function trialAdvertised(){
   if(nativeCaps && nativeCaps.eventsV2 && storeAnswered) return storeTrial;
   return true;   // build cannot report, or the store has not answered yet
 }
+
+/* THE PAYWALL DESIGN EXPERIMENT — sheet vs full-bleed. Same shape as the trial arm above:
+   sticky per device, assigned once, stamped on every web event as `design_arm` so the
+   funnels can split paywall_viewed → purchase_initiated → trial by arm without a join.
+   NO assignment event is fired: track() references WEB_ONLY, a const declared much further
+   down, so a track() call during module evaluation is a TDZ crash that takes the whole app
+   with it. The property on the events IS the assignment record.
+   navigator.webdriver pins the harness to "sheet": every DOM test in scripts/ boots this
+   page in headless Chromium, and a coin flipped at load would make the paywall assertions
+   flaky — the exact poison the gate exists to keep out. A harness that wants the full arm
+   seeds localStorage kamo_pw_design="full" before load. */
+const PW_FULL_ROLLOUT=50;
+let pwArm="sheet";
+try{
+  const s=localStorage.getItem("kamo_pw_design");
+  if(s==="sheet"||s==="full") pwArm=s;
+  else if(!navigator.webdriver){
+    pwArm=(Math.random()*100<PW_FULL_ROLLOUT)?"full":"sheet";
+    localStorage.setItem("kamo_pw_design",pwArm);
+  }
+}catch(e){}
 
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
@@ -3303,6 +3370,9 @@ buildSwatches();   // safe here: past the isPro declaration canPro() reads
 { const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 
 const paywallEl=$("#paywall");
+/* The arm is a class, decided once at load — see the assignment next to trialArm. Everything
+   else about the paywall is shared; this line is the entire divergence point. */
+if(pwArm==="full") paywallEl.classList.add("pwFull");
 /* ANSWER THE TAP. Four different locks opened the same generic sheet, so someone who
    reached for the fine brush was told about the watermark and the clock and had to go find
    their own reason in the list. The sheet now leads with the thing they just tried to use
@@ -3454,6 +3524,27 @@ const PW_PITCH={
    rather than duplicated: two copies of one pitch is how they drift apart. */
 PW_PITCH.size_star=PW_PITCH.size;
 const pwGenericSub=()=>`Any brush and color · no clock to line it up · ${PRO_PAINT_SECONDS}s to paint instead of ${PAINT_SECONDS}s`;
+/* THE HERO'S CONTEXT LINE, per SOURCE — not per highlighted line, because the same line can
+   be reached from two different moments that deserve different sentences: `time` fires
+   mid-round (the clock just took the round, which is frozen behind the paywall) and
+   `round_end` fires after it, when "this round is waiting" would be a lie. Sources with no
+   entry here fall through to their PW_PITCH body, so nothing ever renders an empty line.
+   Functions for the same TDZ reason as PW_PITCH, and no typed numerals — check.mjs. */
+const PW_HERO_LINE={ time:"time", round_end:"time", size:"size", size_star:"size", mark:"mark" };
+const PW_HERO_CTX={
+  time:      ()=>`${PRO_PAINT_SECONDS} seconds instead of ${PAINT_SECONDS} — this round is waiting.`,
+  round_end: ()=>`${PRO_PAINT_SECONDS} seconds instead of ${PAINT_SECONDS}, every round.`,
+  size:      ()=>"Down to the fine one — paint the details, not just the shape.",
+  size_star: ()=>"Down to the fine one — paint the details, not just the shape.",
+  mark:      ()=>"Your exports, clean.",
+};
+function pwHeroApply(src){
+  const hero=$("#pwHero"); if(!hero) return;
+  const key=PW_HERO_LINE[src]||"";
+  hero.querySelectorAll(".pwHeroLn").forEach(l=>l.classList.toggle("on",!!key&&l.dataset.hero===key));
+  const ctx=$("#pwHeroCtx");
+  if(ctx) ctx.textContent=pwText(PW_HERO_CTX[src]||(PW_PITCH[src]||{}).s)||pwGenericSub();
+}
 /* Resolves either shape. Copy that needs no number stays a plain string; copy that does is a
    function. Both arrive here. */
 const pwText=(v)=>(typeof v==="function"?v():v);/* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
@@ -3508,6 +3599,10 @@ function openPaywall(source,force){
      event NAMES are dropped by the WEB_EVENTS allow-list but properties on an allowed event
      are not. So this answers the question today rather than after the next release. */
   const plansEl=$("#pwPlans");
+  /* The full arm's headline state — which line lights, what the context says. Harmless on
+     the sheet arm (#pwHero is display:none there), and run unconditionally on purpose: a
+     device that switches arm mid-session must never open a stale hero. */
+  pwHeroApply(src);
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
     source:src,
@@ -3638,7 +3733,27 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
        Built from trialLabel, never a typed numeral — the store can report a trial length
        different from TRIAL.days, and check.mjs refuses a bare number in paywall copy. */
     if(trialAdvertised()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
-    setTerms(trialTermsLine()); } }
+    setTerms(trialTermsLine()); }
+  updatePwLifeLine(); }
+/* THE OTHER PLAN, AS ONE LINE — full arm only. The sheet shows both plans as rows; the full
+   arm shows one CTA and offers whichever plan is NOT selected here, as a quiet toggle. Every
+   price is read from the same store-fed nodes the rows use (#pwLifetimePrice/#pwWeeklyPrice,
+   written by setPrices), and sellability from the rows' display — which applyPlanAvailability
+   still writes even though the full arm never shows the rows. So a plan the store cannot
+   sell can never be offered by this line either, and no price is ever typed.
+   trialAdvertised(), not trialOn(): the "try N free" prefix on this line is the same promise
+   as the CTA's, so it obeys the same rule — only claimed when the build can confirm the
+   store actually returned a trial. */
+function updatePwLifeLine(){
+  const el=$("#pwLifeLine"); if(!el) return;
+  if(pwArm!=="full"||!storeReady){ el.style.display="none"; return; }
+  const sellable=(plan)=>{ const r=document.querySelector('#pwPlans .pwPlan[data-plan="'+plan+'"]'); return !!r&&r.style.display!=="none"; };
+  const life=($("#pwLifetimePrice")||{}).textContent||"", wk=($("#pwWeeklyPrice")||{}).textContent||"";
+  if(pwPlan!=="lifetime"&&sellable("lifetime")&&life){ el.textContent="or "+life+" once — yours forever"; el.style.display=""; }
+  else if(pwPlan==="lifetime"&&sellable("weekly")&&wk){
+    el.textContent="or "+(trialAdvertised()?("try "+trialLabel+" free · "):"")+wk+"/week"; el.style.display=""; }
+  else el.style.display="none";
+}
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
    able to re-render it on its own once the store reports a real trial length, and because
    updatePwBuy() bails early while the store is still loading — the plan row is on screen
@@ -3657,6 +3772,14 @@ function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
   if(holder) holder.style.display=trialAdvertised()?(fb?"inline-flex":""):"none"; }
 applyTrialCopy();
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
+/* The full arm's plan toggle. Mirrors the row handler above — including keeping the hidden
+   rows' .active in sync, because updatePwBuy() and the purchase path read pwPlan but the
+   rows are still the record a returning sheet arm would render from. */
+$("#pwLifeLine").onclick=()=>{
+  pwPlan = pwPlan==="lifetime" ? "weekly" : "lifetime";
+  document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x.dataset.plan===pwPlan));
+  updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan});
+};
 /* The native wrapper buys whatever product id we post — it resolves `msg.product` against
    the RevenueCat offering (App.js: `const wanted = msg.product || PRODUCT_ID`). That is
    what lets the trial arm sell a different weekly SKU with no new App Store build. */
@@ -4534,7 +4657,7 @@ function track(event,props){
      WITHOUT emit="web" is provably not from this page, and the split shows up within hours
      instead of after another day of reasoning about it.
      Cheap on purpose — one short string on an event that already carries five. */
-  const p={...(props||{}),trial_arm:trialArm,emit:"web"};
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
