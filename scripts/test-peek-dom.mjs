@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { pwBases, chromeExe, PW_SETUP } from './lib/pw.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 /* playwright-core is not a dependency of this repo — the app ships one HTML file and adding a
@@ -26,11 +27,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
    be installed; if it is not, this test skips loudly rather than failing the push. */
 const req = createRequire(import.meta.url);
 let chromium;
-for (const base of [process.env.PW_CORE || '', ROOT, process.cwd()]) {
+for (const base of pwBases(ROOT)) {
   try { ({ chromium } = req(base ? join(base, 'node_modules/playwright-core') : 'playwright-core')); break; } catch {}
 }
 if (!chromium) {
-  console.log('· playwright-core not installed — skipping the DOM test (set PW_CORE=<dir with node_modules>)');
+  console.log('· playwright-core not installed — skipping the DOM test — run: ' + PW_SETUP);
   process.exit(0);
 }
 
@@ -143,8 +144,8 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 /* The browser is pre-installed under a versioned directory (chromium-1194/...), and the
    version moves. Found rather than hardcoded, so a bumped image does not silently skip. */
 const { globSync } = await import('node:fs');
-const exe = (globSync('/opt/pw-browsers/chromium-*/chrome-linux/chrome') || [])[0];
-if (!exe) { console.log('· no chromium under /opt/pw-browsers — skipping'); server.close(); process.exit(0); }
+const exe = chromeExe();
+if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const pageErrors = [];
