@@ -3828,7 +3828,13 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    user asked for against the budget reserved for the ones they did not. */
 const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size"]);
 
-const PW_GLOBAL_CAP=3;
+/* 3 -> 1. The note above asked for `nth_interruption` to settle whether 3 was too low; the
+   revenue settled it from the other side first. ~11000 views over 14 days bought 4 active
+   subscriptions, so the marginal interruption is worth approximately nothing, while the cost
+   of it — a toy that stops you five times a session — is paid every round by everyone. One
+   uninvited ask per launch. Every user-initiated door (✦, watermark row, wordmark) is still
+   exempt and still opens on demand. */
+const PW_GLOBAL_CAP=1;
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
 /* Which trigger opened the sheet the user is currently looking at. purchase_initiated needs
@@ -6544,7 +6550,19 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    ⚠️ These numbers are PRINTED at three copy sites — #pwSub, PW_PITCH.time.s and the
    PW_LOCK_HINT line. A silent change here makes the paywall state a false number, which is
    a pricing-adjacent claim. Change them together. */
-const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=40;
+/* 2026-08-12, +50s on paint and +12s on aim, from the first measurement of what the clock
+   actually does: over 14 days, 1399 of 3403 rounds — 41% — ended with auto=true, i.e. the
+   clock took them. Four hides in ten were amputated, not finished. Over the same window the
+   paywall was shown ~11000 times for 4 active subscriptions, so the clock was buying nothing
+   with the rounds it was spending.
+   Paint stops at 90, not higher, because of the seeker: only 25.3% of buzzes find the figure
+   (358 of 1413 attempts). The recipient already loses three times in four, and coverage is
+   what they play against — the argument below about not letting every hide trend to 100% is
+   real, it just did not justify forty seconds. 90 is meant to let a round FINISH, not to let
+   it grow: most of the amputated rounds were seconds from done.
+   ⚠️ Both numbers are the guardrail pair for the next read: round_finished{auto} should fall
+   under 10%, and pct_found must NOT fall. If found-rate drops, this is why. */
+const AIM_DEFAULT=30, AIM_MIN=25, AIM_MAX=40, PAINT_SECONDS=90;
 /* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
    what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
    round, unlike a brush that has a free substitute sitting next to it.
@@ -6555,7 +6573,11 @@ const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=40;
    away. What does change is coverage: a 40s auto-Done can end a hide mid-paint, so Pro
    hides will trend better-covered. Accepted deliberately — that IS the perk, though at
    40 vs 75 the gap is 1.9x, down from 2.3x at 32s and 3.4x at 22s. */
-const PRO_AIM_BONUS=8, PRO_AIM_MAX=30;   // aim-clock tuning for the FREE path history model; KAMO+ has no clocks at all
+const PRO_AIM_BONUS=8, PRO_AIM_MAX=45;   // aim-clock tuning for the FREE path history model; KAMO+ has no clocks at all
+/* PRO_AIM_MAX moved 30 -> 45 with the free ceiling: at 30 against a free AIM_MAX of 40 the
+   "bonus" ceiling was BELOW the free one, which inverts the perk on paper. It is vestigial
+   either way — timerArmed() means a member never runs an aim clock at all — but a constant
+   that reads backwards is a trap for whoever revives this path. */
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
 /* HIDE ONE ONLY. maybeOnboard() spends 7.2s on two hints; this leaves ~18s of aiming after
    they clear, which is a normal round. It replaces "no clock at all on the first hide" —
@@ -6565,7 +6587,7 @@ function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||
    branch would hand back the standard aim and put the tutorial in a race it loses.
    MUST STAY ABOVE AIM_DEFAULT. At 15 against the new 18s default this was the shorter
    window, which inverts the whole point of it. Moved 15 -> 25 with the +10s pass. */
-const FIRST_AIM_SECONDS=25;
+const FIRST_AIM_SECONDS=40;
 function aimSeconds(){
   if(firstRun()) return FIRST_AIM_SECONDS;
   /* Pro gets the bonus AND a raised ceiling. Adding the bonus alone would do almost
@@ -7318,9 +7340,16 @@ function maybeOfferPlus(score){
        clock and then had them taken away. Every other trigger asks them to imagine the
        difference. This one is the only one where they remember it.
        Fires once per install by construction — the grant itself is once per install. */
-    const src = lastRoundAuto ? "time" : "round_end";
-    /* let backToCompose() finish tearing the reveal down first */
-    setTimeout(()=>{ if(!isPro) openPaywall(src); },900);
+    /* THE RETAKE PAYWALL IS OFF. It was the single biggest interruption in the product:
+       round_end (2082) + time (1661) = 3743 of the ~11000 paywall views in 14 days, a third
+       of them, and the whole ~11000 produced 4 active subscriptions. It also fired at the
+       worst possible beat — the user just tapped "retake", which means they are ON THEIR WAY
+       back to painting, and we stopped them to sell a clock we have now largely given away.
+       Everything above is left standing, so restoring it is one line:
+         const src = lastRoundAuto ? "time" : "round_end";
+         setTimeout(()=>{ if(!isPro) openPaywall(src); },900);
+       Bring it back only against a measured lift, not a hunch — that is what put it here. */
+    return;
   }catch(_){}
 }
 $("#cfYes").onclick=()=>{ const wasFinished=finished, sc=Math.round(currentScore||0); closeConfirm(); if(finished) exitFinished(); backToCompose();
