@@ -1,0 +1,74 @@
+# Push what lands on main to the mirror, automatically.
+#
+# WHY. kamo.bliss-coach.com is not served by this repo — it is served by kamo-mirror, and it
+# is the origin the installed app loads and every share link points at. So a merge here
+# reaches nobody until the mirror is synced, and the failure is invisible: CI is green, the
+# PR is merged, github.io is correct, and production is weeks behind.
+#
+# That is not hypothetical. On 2026-08-12 a full day of work — per-hide link previews, the
+# push token, the playkamo share host — sat on main while users kept getting the old page
+# with a generic app-icon card. scripts/sync-mirror.sh existed the whole time and its own
+# header warned that "the cost of two repos is drift, and drift is silent". A human forgot.
+# So it stops being a habit and becomes a step.
+#
+# The script is still the source of truth for HOW to sync — its gate, its one intentional
+# og:image divergence, and its CNAME check all run here unchanged. This file only guarantees
+# that it runs.
+name: Sync mirror
+
+on:
+  push:
+    branches: [main]
+    # Only the files the mirror actually serves. A README or workflow edit should not push a
+    # commit to another repo.
+    paths:
+      - 'index.html'
+      - 'privacy.html'
+      - 'terms.html'
+      - 'icon.png'
+      - 'vendor/**'
+  workflow_dispatch:
+
+# One at a time. Two runs racing would push conflicting trees to the mirror, and the second
+# would fail on a stale ref — cancel-in-progress instead would leave the mirror on whichever
+# run happened to survive, which is worse than a queue.
+concurrency:
+  group: sync-mirror
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout kamo
+        uses: actions/checkout@v4
+        with:
+          path: kamo
+
+      # The script resolves the mirror as a SIBLING directory (../kamo-mirror), so the
+      # checkout paths below are load-bearing, not cosmetic.
+      - name: Checkout kamo-mirror
+        uses: actions/checkout@v4
+        with:
+          repository: anthonyhdd/kamo-mirror
+          path: kamo-mirror
+          token: ${{ secrets.MIRROR_TOKEN }}
+          # Full history: the script commits and pushes, and a shallow clone cannot push.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync
+        working-directory: kamo
+        env:
+          GIT_AUTHOR_NAME: kamo-sync
+          GIT_AUTHOR_EMAIL: noreply@github.com
+          GIT_COMMITTER_NAME: kamo-sync
+          GIT_COMMITTER_EMAIL: noreply@github.com
+        run: |
+          git config --global user.name "kamo-sync"
+          git config --global user.email "noreply@github.com"
+          bash scripts/sync-mirror.sh "Sync from kamo@${GITHUB_SHA::7}"
