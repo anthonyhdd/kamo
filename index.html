@@ -1897,7 +1897,7 @@
       <button class="chPrevShot" id="chPrevShot" aria-label="Preview what they receive"></button>
       <div class="chPrevTxt">
         <b>My challenge</b>
-        <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span></div>
+        <div class="chPrevChips"><span class="chChip" id="chChipS">1 buzz</span><span class="chChip" id="chChipT">no clock</span></div>
       </div>
       <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
     </div>
@@ -3612,7 +3612,7 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    drawn. It keeps its own PW_CAP of one per launch, so exempting it from the GLOBAL budget
    cannot flood anything; what it fixes is the accounting, which was charging a paywall the
    user asked for against the budget reserved for the ones they did not. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand","chset","size_star","size"]);
+const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size"]);
 
 const PW_GLOBAL_CAP=3;
 let pwInterruptions=0;         // non-user-initiated opens this launch
@@ -3686,14 +3686,8 @@ const PW_PITCH={
            s:()=>`Free gets ${FREE_SHADES} shades off the photo. KAMO+ opens them all.` },
   mark:  { t:"Your hide, without our name on it",
            s:()=>"No mark on the image or the reveal clip." },
-  /* THE GEAR IS THE ONLY PLACE IN THE APP WHERE SOMEONE ASKS TO CHANGE THE GAME THEY ARE
-     SENDING. Answering that with the generic sheet wastes the clearest intent signal the
-     paywall ever gets — they did not stumble into it, they reached for a control. So the
-     copy names the thing they just tried to touch, and nothing else.
-     "a fixed clock" was wrong: chDerivedLimit() gives twice the round, clamped. Saying so is
-     also a better pitch — it names the thing KAMO+ takes away, which is not being asked. */
-  chset: { t:"Set the challenge yourself",
-           s:()=>`Free sends ${CH_TAPS} taps and a clock it picks for you (${CH_LIMIT_MIN}-${CH_LIMIT_MAX}s). KAMO+ lets you choose both — make it easy, or make it impossible.` },
+  /* The chset pitch is deleted with the gear that opened it: the seeker plays one buzz on
+     no clock, so "set the challenge yourself" would sell a control that changes nothing. */
   time:  { t:"Stop losing hides to the clock",
            s:()=>`No clock to line it up, no clock to paint — free gets ${PAINT_SECONDS} seconds.` },
 };
@@ -5672,50 +5666,22 @@ function chCopy(text){
   });
 }
 
-/* Built from the board that is already on screen, so there is no second render path to keep
-   in sync and no network round trip: a 168px canvas drawn from the composited hide. The
-   numbers are the same ones the seeker will actually get — LIMIT is derived from the round
-   time exactly as chSeek() derives it, so this cannot promise 28s and then hand over 20. */
 /* ===== chPreview =========================================================================
  * The card under "Challenge a friend" that shows the recipient's side of the deal.
  *
- * BEHIND ?new=1 UNTIL IT IS APPROVED. Pushing this repo IS deploying it — Pages serves the
- * file to every live user within minutes and the WebView refetches on every launch — so a
- * new component cannot be tried on a few people the way a native build can. The flag is the
- * substitute for a staging environment: the code ships dormant, it is opened by hand at
- * ?new=1, and turning it on for everyone later is deleting one condition, not deploying
- * anything new. Without the flag the old 4.2s toast still runs, unchanged.
- */
-
-/* The hider's chosen clock and tap budget. null on both = derive them, which is what every
- * hide did before this existed and what the server still stores for them. Kept in
- * localStorage rather than in a variable because the choice should outlive the round. */
-const CH_LIM_KEY="kamo_ch_limit", CH_TAP_KEY="kamo_ch_taps";
-/* The clock a FREE hide gives the seeker: twice the round, clamped. Named because the paywall
-   describes this range, and a range described in prose drifts away from the range in code. */
-const CH_LIMIT_MIN=20, CH_LIMIT_MAX=45;
-function chDerivedLimit(){ const secs=roundSeconds(); return Math.max(CH_LIMIT_MIN,Math.min(CH_LIMIT_MAX,(secs||10)*2)); }
-function chSettings(){
-  let l=null,t=null;
-  try{ const a=parseInt(localStorage.getItem(CH_LIM_KEY),10); if(a>=10&&a<=120) l=a;
-       const b=parseInt(localStorage.getItem(CH_TAP_KEY),10); if(b>=1&&b<=20) t=b; }catch(e){}
-  return {limit:l, taps:t};
-}
-/* What the seeker will ACTUALLY get, custom or derived — one function so the chips, the
- * preview and the row can never disagree with each other or with the published hide. */
-function chEffective(){
-  const st=chSettings();
-  return { limit: st.limit||chDerivedLimit(), taps: st.taps||CH_TAPS, custom: !!(st.limit||st.taps) };
-}
-
+ * THE SETTINGS ERA IS OVER. chSettings/chEffective/chDerivedLimit and the kamo_ch_* keys
+ * used to let KAMO+ choose the seeker's clock and tap budget. The seeker plays one buzz
+ * on no clock now — difficulty comes from the paint, never from a knob — so the whole
+ * apparatus is deleted rather than parked: a paid control that changes nothing is a
+ * refund waiting to be asked for. Old rows keep their limit_s/max_taps values; nothing
+ * reads them. */
 function chPrevRender(){
   try{
     const row=document.getElementById("chPrev"); if(!row) return;
-    const e=chEffective();
-    /* Just the number. "on the clock" was the label of a setting, and this is not a settings
-   screen — the two chips ARE the deal the friend gets, so they read like terms. */
-    document.getElementById("chChipS").textContent=e.limit+"s";
-    document.getElementById("chChipT").textContent=e.taps+(e.taps===1?" tap":" taps");
+    /* The two chips ARE the deal the friend gets, and the deal is fixed now: one buzz,
+       no clock. Constants, so the card can never disagree with the seeker screen. */
+    document.getElementById("chChipS").textContent="1 buzz";
+    document.getElementById("chChipT").textContent="no clock";
     /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
        an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
        because a third chip made the card read as clutter. What survives it: the share MESSAGE
@@ -5754,8 +5720,12 @@ function chPrevRender(){
        SEE the challenge was the smallest thing on the card. The gear stops propagation, so
        settings still win on their own corner. */
     row.onclick=()=>{ haptic(10); chPrevPlay(); };
+    /* The gear set seconds and taps. Nothing consumes them any more — the deal is one buzz
+       on no clock, and difficulty comes from the paint, never from a knob — so the control
+       is hidden rather than left selling a setting the round ignores. Markup stays so the
+       row's layout and the static checks are untouched. */
     const gear=document.getElementById("chPrevGear");
-    if(gear) gear.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevSettings(); };
+    if(gear) gear.style.display="none";
     /* `ready` records that the thumbnail is actually drawn, so syncShareMode() can put the
        card back when the user leaves the Before/After tab without ever showing an empty one. */
     row.dataset.ready="1";
@@ -5863,21 +5833,17 @@ function confettiBurst(originEl){
 function chPrevPlay(){
   try{
     const g=chGeom(); if(!g) return;
-    const e=chEffective();
-    track("challenge_preview_opened",{limit:e.limit,taps:e.taps,custom:e.custom});
+    track("challenge_preview_opened",{});
     document.getElementById("chPP")?.remove();
     const w=document.createElement("div"); w.id="chPP"; w.className="chPP";
     /* KICKER FIRST, THEN A CLAIM. "What they see" was a caption — it described the screen to
        someone already looking at it. The paywall never does that: it leads with an uppercase
-       kicker carrying the terms, then a line that asserts something. The terms belong at the
-       TOP here too, because they are the whole offer, and they were sitting in grey at the
-       bottom. */
+       kicker carrying the terms, then a line that asserts something. The terms are the whole
+       offer, and the offer is one line now: one buzz, no clock, no bar, no pips. */
     w.innerHTML='<div class="chPPin">'
-      +'<div class="pwKick">'+e.limit+'S · '+e.taps+(e.taps===1?' TAP':' TAPS')+'</div>'
+      +'<div class="pwKick">ONE BUZZ · NO CLOCK</div>'
       +'<div class="chPPh" id="chPPh">Good luck to them.</div>'
       +'<div class="chPPframe" id="chPPframe"></div>'
-      +'<div class="chPPbar" id="chPPbarEl"><i id="chPPfill"></i></div>'
-      +'<div class="chPPmeta"><span id="chPPclock"></span><span id="chPPpips"></span></div>'
       +'<div class="chPPfoot" id="chPPfoot">'
       /* THE SEND IS AVAILABLE FROM THE FIRST FRAME, not only after the round ends. Making
          someone finish — or lose — a preview before they can send is a toll on the one
@@ -5900,26 +5866,10 @@ function chPrevPlay(){
     img.getContext("2d").drawImage(board,0,0);
     frame.appendChild(img);
 
-    let left=e.limit, tries=0, over=false;
-    /* THE SAME ESCALATION THE RECEIVER GETS. The seeker screen turns its numbers amber under
-       40% and red under 5s; this preview showed a flat grey "17s" and five identical dots, so
-       the sender was watching a calmer round than the one they were about to send. Pips are
-       elements now rather than ●/○ text: what is left glows mint, what is spent is a hollow
-       ring, which reads at a glance instead of needing to be counted. */
-    const pips=()=>{ const n=Math.max(0,e.taps-tries);
-      document.getElementById("chPPpips").innerHTML=
-        Array.from({length:e.taps},(_,i)=>'<i class="chPPpip'+(i<n?'':' off')+'"></i>').join(""); };
-    const clock=()=>{ const c=document.getElementById("chPPclock");
-      c.textContent=left+"s";
-      c.className = left<=5 ? "crit" : (left<=e.limit*0.4 ? "warn" : "");
-      const bar=document.getElementById("chPPbarEl");
-      if(bar) bar.className="chPPbar"+(left<=5?" crit":(left<=e.limit*0.4?" warn":""));
-      document.getElementById("chPPfill").style.width=(100*left/e.limit)+"%"; };
-    clock(); pips();
-    const iv=setInterval(()=>{ if(over) return; left--; clock(); if(left<=0) end("Out of time","They never found you."); },1000);
+    let over=false;
 
     function end(head,sub,won){
-      if(over) return; over=true; clearInterval(iv);
+      if(over) return; over=true;
       document.getElementById("chPPh").textContent=head;
       /* The frame goes green and the screen celebrates. Both hang off the same flag rather
          than off the headline text, so a reworded ending cannot silently stop celebrating. */
@@ -5934,7 +5884,7 @@ function chPrevPlay(){
       document.getElementById("chPPgo").onclick=send;
       document.getElementById("chPPx").onclick=close;
     }
-    function close(){ over=true; clearInterval(iv); w.remove(); }
+    function close(){ over=true; w.remove(); }
     /* `send` lived in that same misplaced block, so end()'s "Challenge a friend" button was
        referencing an identifier that did not exist in this scope — a ReferenceError the
        moment a preview round finished. Defined where it is used. */
@@ -5959,52 +5909,18 @@ function chPrevPlay(){
          person they send it to will not have that. It is the argument for pressing the
          button underneath it. */
       if(d<=g.r){ haptic(18); end("Found you","You knew where it was. They won't.",true); return; }
-      tries++; pips(); haptic(8);
+      haptic(8);
       img.classList.remove("chPPshake"); void img.offsetWidth; img.classList.add("chPPshake");
-      if(tries>=e.taps) end("Out of taps","They never found you.");
+      /* One buzz is the whole game now — the first miss IS the round. */
+      end("That was their buzz","One shot. They just spent it.");
     };
     w.onclick=(ev)=>{ if(ev.target===w) close(); };
   }catch(e){}
 }
 
-/* KAMO+ ONLY, and the free tap is a paywall trigger rather than a dead control: a locked
- * button that does nothing teaches people the app is broken, one that opens the offer at the
- * moment they wanted the feature is the whole point of gating it here. */
-function chPrevSettings(){
-  if(!isPro){ track("plan_selected",{plan:"challenge_settings"}); openPaywall("chset"); return; }
-  try{
-    const e=chEffective();
-    document.getElementById("chSet")?.remove();
-    const w=document.createElement("div"); w.id="chSet"; w.className="chPP";
-    const row=(id,label,val,min,max,step)=>'<div class="chSetRow"><span>'+label+'</span>'
-      +'<div class="chSetCtl"><button data-a="-" data-t="'+id+'">−</button><b id="'+id+'">'+val+'</b>'
-      +'<button data-a="+" data-t="'+id+'">+</button></div></div>';
-    w.innerHTML='<div class="chPPin"><div class="pwKick">YOU DECIDE</div>'
-      +'<div class="chPPh" id="chSetH">Their challenge</div>'
-      +row("chSetS","Seconds on the clock",e.limit)
-      +row("chSetT","Taps they get",e.taps)
-      +'<div class="chPPsub">Anywhere from 10 to 120 seconds, and 1 to 20 taps. Fewer of either makes it harder.</div>'
-      +'<button class="pwBuy" id="chSetOk"><span class="pwBuyTxt">Done</span></button>'
-      +'<button class="chPPclose" id="chSetReset">Back to automatic</button></div>';
-    document.body.appendChild(w);
-    const clampS=(v)=>Math.max(10,Math.min(120,v)), clampT=(v)=>Math.max(1,Math.min(20,v));
-    w.querySelectorAll("[data-a]").forEach(b=>{ b.onclick=()=>{
-      const el=document.getElementById(b.dataset.t); const d=b.dataset.a==="+"?1:-1;
-      const isS=b.dataset.t==="chSetS";
-      el.textContent = isS ? clampS(parseInt(el.textContent,10)+d*5) : clampT(parseInt(el.textContent,10)+d);
-      haptic(6); }; });
-    document.getElementById("chSetOk").onclick=()=>{
-      try{ localStorage.setItem(CH_LIM_KEY,document.getElementById("chSetS").textContent);
-           localStorage.setItem(CH_TAP_KEY,document.getElementById("chSetT").textContent); }catch(e){}
-      track("challenge_settings_saved",{limit:parseInt(document.getElementById("chSetS").textContent,10),
-                                        taps:parseInt(document.getElementById("chSetT").textContent,10)});
-      w.remove(); chRepublish(); chPrevRender(); };
-    document.getElementById("chSetReset").onclick=()=>{
-      try{ localStorage.removeItem(CH_LIM_KEY); localStorage.removeItem(CH_TAP_KEY); }catch(e){}
-      track("challenge_settings_reset",{}); w.remove(); chRepublish(); chPrevRender(); };
-    w.onclick=(ev)=>{ if(ev.target===w) w.remove(); };
-  }catch(e){}
-}
+/* chPrevSettings IS GONE — the gear it answered to is hidden and the values it wrote are
+   read by nothing. See the note above chPrevRender. chRepublish() stays: the handle's blur
+   handler still republishes a signed hide. */
 
 /* THE TOAST IS GONE. It lived here for one reason — the card had not been seen by anyone
    yet — and it deleted itself after 4.2s, which is why it could never carry the settings
@@ -6060,23 +5976,10 @@ $("#ssInvite").onclick=async()=>{
      being the actual puzzle. */
   /* WRITTEN FOR THE RECEIVER'S TASK, NOT THE SENDER'S BRAG. The old line led with
      "I made someone vanish in 22s" and closed on "Beat that →", which asks the receiver to
-     beat a hiding time — except the receiver does not hide, they SEEK. Nothing in the
-     message said what they were being asked to do, or that there was a limit on it.
-     Now: what is hidden, what they get, and the link on its own line so every messaging app
-     renders it tappable. The tap budget is the stake, and it is read from the same
-     chEffective() the preview and the published hide use, so the message cannot promise a
-     number the round does not honour. */
-  /* Defensive: this is the share path, and a throw here costs the send. chEffective() reads
-     localStorage and a const declared further down the file — both fine at click time, but
-     the fallback is the shipped default rather than a broken message. */
-  /* `lim`, not `secs` — `secs` above is roundSeconds(), how long the HIDER took. Two
-     different numbers, and shadowing one with the other in the share message is how the
-     message ends up quoting the wrong clock. */
-  let taps=5, lim=20; try{ const e=chEffective(); taps=e.taps||5; lim=e.limit||20; }catch(_){}
-  /* THE STAKE IS BOTH NUMBERS, and the seeker screen already says so — "You get X sec and
-     Y taps". The message promised only the taps, so the clock was a surprise sprung on
-     someone who had accepted a different deal. Same two values, from the same
-     chEffective(), in the same order. */
+     beat a hiding time — except the receiver does not hide, they SEEK. Now: what is
+     hidden, the stake in one line ("One buzz to find them."), and the link on its own line
+     so every messaging app renders it tappable. Quoting seconds or taps again would
+     promise a deal the seeker screen no longer runs. */
   /* AND IT ONLY PROMISES A PUZZLE WHEN THERE IS ONE. chUpload() is fire-and-forget by
      design — a failed upload leaves chId empty and chLink() falls back to inviteUrl(),
      which opens the app with nothing hidden in it. The old text still announced a body in
@@ -6101,7 +6004,7 @@ $("#ssInvite").onclick=async()=>{
   const who=getHandle();
   const text = link
     ? (who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.")
-      +"\nYou get "+lim+" sec and "+taps+(taps===1?" tap":" taps")+" to find it."
+      +"\nOne buzz to find "+(who?"them":"it")+"."
       +"\n\n"+link
     : "🫥 KAMO — paint yourself into the background until nobody can find you."
       +"\n\n"+inviteUrl();
@@ -7160,14 +7063,51 @@ function chGeom(){
 /* The board is full retina — up to ~1290x2796, which is megabytes of JPEG for something
    that will be looked at on a phone. 1080 on the long side at q0.72 lands ~150-250 KB,
    inside the bucket's 400 KB ceiling with room to spare. */
-function chBlob(){
+function chBlob(src){
+  src=src||board;
   return new Promise(res=>{
-    const S=Math.min(1,1080/Math.max(board.width,board.height));
+    const S=Math.min(1,1080/Math.max(src.width,src.height));
     const c=document.createElement("canvas");
-    c.width=Math.round(board.width*S); c.height=Math.round(board.height*S);
-    c.getContext("2d").drawImage(board,0,0,c.width,c.height);
+    c.width=Math.round(src.width*S); c.height=Math.round(src.height*S);
+    c.getContext("2d").drawImage(src,0,0,c.width,c.height);
     c.toBlob(b=>res(b),"image/jpeg",0.72);
   });
+}
+
+/* THE REVEAL FRAMES — what the seeker's snap and A/B flip are made of (see chSeek).
+   Two more JPEGs beside the camouflaged one, at DERIVED names: …_b.jpg is the figure
+   visible exactly as captured (beforeBoard — scene + figure, pre-paint), …_w.jpg is the
+   same figure mid-wave, re-rendered off the live rig (poses are joint rotations only, so
+   position and scale stay put). Derived names mean no schema change, and a hide published
+   before this existed simply falls back to the answer marker on the seeker.
+   Fired AFTER create_hide, never awaited by the share path: the link must not wait on
+   two more uploads, and a missing frame costs a fallback, not a send. */
+async function chUploadReveal(name){
+  try{
+    if(!beforeBoard) return;
+    const put=async(sfx,blob)=>{ if(!blob) return;
+      await fetch(CH_URL+"/storage/v1/object/hides/"+name.replace(/\.jpg$/,sfx+".jpg"),{method:"POST",
+        headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob}); };
+    await put("_b",await chBlob(beforeBoard));
+    let wav=null;
+    try{
+      if(characters&&characters.length&&sceneCanvas){
+        const saved=characters.map(c=>c.poseIdx||0);
+        characters.forEach(c=>setPoseInstant(c,1));          // POSES[1] = Wave
+        renderer.render(scene,camera3);
+        const c2=document.createElement("canvas"); c2.width=board.width; c2.height=board.height;
+        const g2=c2.getContext("2d");
+        g2.drawImage(sceneCanvas,0,0);
+        g2.drawImage(glCanvas,0,0,board.width,board.height);
+        /* Put the rig back exactly as it was — glCanvas is display:none from capture(), so
+           the wave frame never flashes on screen, but the retake path re-shows it. */
+        characters.forEach((c,i)=>setPoseInstant(c,saved[i]));
+        renderer.render(scene,camera3);
+        wav=await chBlob(c2);
+      }
+    }catch(_){}
+    await put("_w",wav);
+  }catch(e){}
 }
 
 /* Fire-and-forget: the reveal must never wait on a network round trip. If this fails the
@@ -7181,32 +7121,32 @@ async function chUpload(){
     const up=await fetch(CH_URL+"/storage/v1/object/hides/"+name,{method:"POST",
       headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
     if(!up.ok) throw new Error("upload "+up.status);
-    /* WHICH OVERLOAD, AND WHY THERE ARE THREE. create_hide exists at 6, 8 and 9 arguments and
-       PostgREST resolves by the exact set of keys sent. The narrowest one that carries what
-       this hide actually has is used, so a hide with no settings and no signature still takes
-       the byte-for-byte path that has been running in production since launch, and only a
-       signed hide reaches the newest function.
+    /* WHICH OVERLOAD, AND WHY THERE ARE TWO LEFT. create_hide exists at 6, 8 and 9
+       arguments and PostgREST resolves by the exact set of keys sent. The 8-arg
+       (settings) form is retired product: the seeker plays one buzz on no clock, so
+       limit_s / max_taps are not sent any more — a signed hide takes the 9-arg form with
+       nulls, everything else the original 6-arg path.
        The 9-argument form is also the only one that can be MISSING: the database migration
        and this file do not deploy together, so if the page ships first every signed upload
        would 404 and publish nothing. Hence the fallback below rather than a bare await. */
-    const cs=chSettings(), who=getHandle();
+    const who=getHandle();
     const base={p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,p_secs:roundSeconds(),
                 p_coverage:Math.round(currentScore||0)};
-    const withSettings=(cs.limit||cs.taps) ? {...base,p_limit_s:cs.limit,p_max_taps:cs.taps} : base;
     if(who){
       try{
-        chId=await chRpc("create_hide",{...base,p_limit_s:cs.limit||null,p_max_taps:cs.taps||null,p_name:who});
+        chId=await chRpc("create_hide",{...base,p_limit_s:null,p_max_taps:null,p_name:who});
       }catch(_){
         /* A hide that goes out unsigned is a smaller loss than a hide that never goes out. */
-        chId=await chRpc("create_hide",withSettings);
+        chId=await chRpc("create_hide",base);
       }
     } else {
-      chId=await chRpc("create_hide",withSettings);
+      chId=await chRpc("create_hide",base);
     }
     chRemember(chId);
     track("hide_published",{});
     chAttachPush();
     armResultsPing();
+    chUploadReveal(name);   // fire-and-forget — the snap's frames; see chUploadReveal
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
 }
 /* THE OTHER HALF OF armResultsPing, and the half that is actually about something.
@@ -7377,20 +7317,17 @@ function chStateLine(h){
  * ago — the id is known, so chLink is valid on the first frame and the web path can call
  * navigator.share inside the tap without spending its activation on an await.
  *
- * IT QUOTES THE ROUND ONLY WHEN IT KNOWS IT. limit_s and max_taps are null on almost every
- * published hide (195 of 197), and the seeker derives them from the hide instead. Quoting a
- * derived number here would promise a deal the round may not honour — the exact bug the
- * share message already carries a comment about — so a hide without both values gets a
- * message with no numbers in it rather than a plausible guess. */
+ * IT QUOTES NO NUMBERS AT ALL. The seeker plays one buzz on no clock — limit_s and
+ * max_taps still sit on old rows but nothing honours them any more, so quoting them would
+ * promise a deal the round does not run. */
 async function chShareHide(h,btn){
   const id=h&&h.id; if(!id) return;
   haptic(10);
   const link=KAMO_HOST+"?h="+id, who=(h&&h.name)||getHandle();
-  const lim=h&&h.limit_s, taps=h&&h.max_taps;
   const head = who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.";
-  const stake = (lim && taps) ? "\nYou get "+lim+" sec and "+taps+(taps===1?" tap":" taps")+" to find it."
-                              : "\nCan you find them?";
-  const text = head+stake+"\n\n"+link;
+  /* One deal for every hide, old or new — the seeker plays one buzz on no clock, so the
+     message never quotes seconds or taps again, whatever the row still stores. */
+  const text = head+"\nOne buzz to find "+(who?"them":"it")+"."+"\n\n"+link;
   track("resend_tapped",{played:((h&&h.n_attempts)|0)>0});
   if(nativeCaps && nativeCaps.invite){ postNative({type:"invite",message:text,score:0}); return; }
   let shared=false, cancelled=false;
@@ -7546,20 +7483,14 @@ async function chNewsCheck(){
   }catch(e){}
 }
 
-/* THE SETTINGS ARE READ AT UPLOAD TIME, AND THE UPLOAD USUALLY HAPPENS FIRST.
- * chUpload() publishes when the share sheet opens (or on the first touch of the peek) and
- * then refuses to run again — `if(!CH_MAKE||chId) return`. The gear lives INSIDE that same
- * sheet, so the ordinary sequence is: publish with the automatic values, then change the
- * taps and the clock.
- * Everything the sender can see updates: the card's chips, and the share message, both read
- * chEffective(). The hide behind the link does not. So the card promised "35s · 3 taps",
- * the message said "You get 35 sec and 3 taps", and the friend opened a 20-second,
- * five-tap round — with nothing anywhere reporting a problem.
- * Republishing is the fix rather than an update_hide RPC: a hide is cheap, and the row that
- * was already published stays valid for any link ALREADY sent, which is the honest outcome
- * — that friend accepted the deal that was advertised when they got it.
- * The previous id is restored if the new upload fails, because a link with stale settings
- * is a playable round and no link at all is a dead share. */
+/* REPUBLISH WHEN WHAT THE HIDE CARRIES CHANGES AFTER PUBLISH. chUpload() publishes when
+ * the share sheet opens and then refuses to run again — `if(!CH_MAKE||chId) return`. The
+ * one thing still editable after that is the HANDLE (its blur handler calls this), and a
+ * signed name has to reach the row behind the link, not just the sender's copy.
+ * Republishing rather than an update_hide RPC: a hide is cheap, and the row already
+ * published stays valid for any link ALREADY sent.
+ * The previous id is restored if the new upload fails, because a stale hide is a playable
+ * round and no link at all is a dead share. */
 function chRepublish(){
   if(!CH_MAKE||!chId) return;   // nothing published yet: chUpload() will read the new values
   const prev=chId;
@@ -7572,80 +7503,79 @@ function chRepublish(){
 }
 
 /* THE SEEKER SCREEN =====================================================================
- * The only screen in KAMO a stranger ever sees, so it is the one that has to sell. Built in
- * JS rather than markup because it must not exist for the 99% of loads that are not a
- * challenge, and it borrows the app's own tokens rather than inventing a look: --display
- * (Space Grotesk) for headlines, the hero card's green gradient for the result panel, and
- * the existing pwBuyGlow/pwBuySheen clocks on the CTA so it breathes like every other
- * primary button in the product.
+ * The only screen in KAMO a stranger ever sees, so it is the one that has to sell.
+ * Second edition — the five-tap, fixed-clock game is gone. What replaced it, and why:
  *
- * FIVE TAPS, NOT INFINITE. Unlimited tapping is brute force: no stakes, no tension, and no
- * moment where the player has clearly lost. The losing moment is the whole point — it is
- * the only screen where someone has just FELT how hard this is, which is the argument for
- * the app. Success converts on reciprocity ("hide one back"), failure converts on respect.
+ *   THE PHOTO OWNS THE SCREEN. Pixels are the product: the 72dvh cap is gone, the words
+ *   float over the image, and pinch-zoom / two-finger pan are free — no cost, no penalty,
+ *   and no proximity feedback of any kind. The difficulty is the creator's paint, never a
+ *   friction this screen adds.
  *
- * THE TIMER RUNS FROM THE FIRST TAP, not from load. Starting on load punishes reading the
- * instructions, and the number has to be comparable to the hider's own round time — which
- * is also measured from when they started, not from when the app opened. */
-const CH_TAPS=5;
-function plural(n,one,many){ return n+" "+(Math.abs(n)===1?one:many); }
+ *   ONE BUZZ. Five taps was brute force with stakes bolted on. One aimed buzz is a
+ *   decision: finger down summons a reticle OFFSET ABOVE the finger (the aim point must
+ *   never sit under skin), dragging adjusts it, release commits. No confirm step, no
+ *   take-backs, no second chance — paid, earned, or otherwise. A second finger cancels
+ *   the aim and becomes the pinch, which is what makes zooming safe while armed.
+ *
+ *   THE CLOCK NOTES, IT DOES NOT ELIMINATE. No time limit, no amber escalation, and an
+ *   explicit "I give up" instead of a clock doing it for you. Time is the score: it
+ *   starts when the photo is decoded — the same rule for every player, which is what
+ *   makes the percentile honest — and freezes at the buzz. limit_s / max_taps on old
+ *   hides are deliberately ignored.
+ *
+ *   THE SNAP. Nothing ever de-camouflages on its own and there is no fade anywhere: at
+ *   the end — found, missed, or given up, the SAME ending all three ways, because the
+ *   reveal is the product and not a punishment — the figure goes from invisible to
+ *   visible in ONE FRAME, with a haptic hit, and then it MOVES (the wave frame uploaded
+ *   beside the hide; see chUploadReveal). Then the A/B flip: tap the photo and it snaps
+ *   between hidden and revealed at will. That is the double-take, and the double-take is
+ *   what gets filmed. The native kamo-reveal module renders this exact beat into the
+ *   creator's MP4; this is the same moment rebuilt for a stranger's browser, where no
+ *   native module can reach. Hides published before the frames existed fall back to the
+ *   answer marker, exactly as before.
+ *
+ *   THE ANSWER STILL NEVER SHIPS WITH THE PUZZLE. The reveal frames and reveal_hide are
+ *   fetched only after the round is over, never alongside it.
+ *
+ *   SEND ONE BACK, WITHOUT THE APP. The camouflaged JPEG is the same photo — the figure
+ *   already painted into it is invisible by construction — so the seeker can hide one
+ *   back INTO it, right here: the ending's primary action drops this overlay and enters
+ *   the normal compose flow with this photo as the background. No camera, no library,
+ *   no install. The loop turns between two people of whom only one has the app; the
+ *   install comes later, when they want their own photo. */
+const CH_TAPS=5;   // legacy: chStateLine still narrates pre-buzz hides in taps
 function chSeek(){
   const st=document.createElement("style");
   st.textContent=
-    /* MOBILE FIRST, and phone-shaped rather than desktop-shrunk. 100dvh not 100vh: on iOS
-       Safari the URL bar makes 100vh taller than the visible viewport, which would push
-       the CTA under the chrome on exactly the screens that matter. The photo takes the
-       space that is left (flex:1 + min-height:0) instead of a fixed vh, so a tall phone
-       gets a big target and a short one still shows the button without scrolling — and
-       nothing here scrolls, body is overflow:hidden. */
-    ".chS{position:fixed;inset:0;height:100dvh;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;"
-      +"justify-content:center;gap:clamp(6px,1.6vh,12px);padding:calc(10px + var(--safe-t)) 12px calc(12px + var(--safe-b));font-family:var(--font);color:var(--text);}"
-    +".chBrand{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.4px;color:#fff;opacity:.9;}"
-    +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(21px,6.2vw,27px);letter-spacing:-.4px;line-height:1.18;text-align:center;margin:0;max-width:18ch;}"
-    +".chSub{font-size:13.5px;opacity:.62;text-align:center;margin:0;}"
-    /* SHRINK-WRAPPED, NOT STRETCHED. flex:1 1 auto grew the frame to the full column while the
-       photo inside was portrait and sized by object-fit — so the border enclosed a wide box with
-       the picture pinned left and black filling the rest. The frame is now sized BY the image:
-       align-self:center keeps it off the cross-axis stretch, and the image caps on the viewport
-       height so a tall phone still fills it. */
-    +".chFrame{position:relative;align-self:center;max-width:100%;min-height:0;border-radius:18px;overflow:hidden;border:1px solid var(--stroke);box-shadow:0 18px 60px rgba(0,0,0,.6);line-height:0;transition:border-color .25s,box-shadow .25s;}"
-    /* FOUND — the same green ring the sender saw in their own preview. This screen already had
-       a hit marker and eight sparks at the tap point; what it never had was any change to the
-       PHOTO, which is the thing they were staring at. `outline` so the ring can be 3px without
-       touching layout — this frame is centred under a max-width, and a thicker border would
-       nudge the picture sideways at the exact moment of the win. */
-    +".chFrame.found{border-color:rgba(95,230,164,.55);outline:3px solid var(--mint);outline-offset:3px;box-shadow:0 0 0 10px rgba(95,230,164,.09),0 0 46px rgba(95,230,164,.4),0 18px 60px rgba(0,0,0,.6);animation:foundPop .52s cubic-bezier(.3,1.5,.5,1);}"
-    +"@keyframes foundPop{0%{transform:scale(1)}40%{transform:scale(1.02)}100%{transform:scale(1)}}"
-    /* The ring and the bloom are colour, so they survive; only the bounce is replaced. */
-    +"@media (prefers-reduced-motion:reduce){.chFrame.found{animation:foundFade .3s ease-out}@keyframes foundFade{from{outline-color:transparent}to{}}}"
-    /* object-fit:contain inside a flexed frame: the box never exceeds the space left,
-       and the tap coordinates stay honest because the frame shrink-wraps the pixels. */
-    +".chFrame img{display:block;max-width:100%;max-height:72dvh;width:auto;height:auto;touch-action:manipulation;}"
-    /* THE CAP IS STATE-DEPENDENT, and it has to be. 56dvh left a portrait photo floating in
-       black on a tall phone — this is a FIND-THE-FIGURE game, so pixels are the product and
-       the picture should own the screen. 72dvh while playing. The ending state mounts a card
-       with the install CTA under the frame, so it drops back to 46dvh there: a photo nobody
-       is playing any more must never push the one button this screen exists to show. */
-    +".chS.chEnd .chFrame img{max-height:46dvh;}"
-    /* Taps left, as pips rather than a number: readable at a glance mid-game, and an empty
-       row reads as "you are out" without anyone having to parse a zero. */
-    +".chPip{width:7px;height:7px;border-radius:50%;background:var(--mint);transition:background .2s,transform .2s;}"
-    +".chPip.off{background:rgba(255,255,255,.16);transform:scale(.8);}"
-    /* THE APP'S OWN CLOCK, not a new one. A bar that drains left to right, the same mint
-       -> amber -> red escalation as the paint timer, so a player who installs meets a
-       clock they have already read once. The number stays silent until the last five
-       seconds, same rule as #timerNum: a permanent countdown is noise, a late one is
-       pressure. */
-      +"box-shadow:0 0 12px rgba(95,230,164,.55);transition:transform .1s linear;}"
+    ".chS{position:fixed;inset:0;height:100dvh;z-index:9000;background:var(--bg);overflow:hidden;font-family:var(--font);color:var(--text);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}"
+    /* The stage is the viewport and the picture is capped only BY the viewport. It owns
+       every gesture (aim, pinch, pan), so touch-action:none — scoped HERE, while the
+       global user-scalable=no stays untouched: the creation screen's pinch already
+       drives the character, and a page that could browser-zoom would break it. */
+    +".chStage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;}"
+    +".chZoom{line-height:0;will-change:transform;}"
+    +".chFrame{position:relative;line-height:0;}"
+    +".chFrame img{display:block;max-width:100vw;max-height:100dvh;width:auto;height:auto;pointer-events:none;}"
+    +".chFrame.found{outline:3px solid var(--mint);outline-offset:-3px;box-shadow:0 0 46px rgba(95,230,164,.4);}"
+    /* Words float OVER the photo now, on a scrim that dies before mid-screen — the image
+       is the interface and everything else is a guest on it. pointer-events:none all the
+       way down so a hunt can start on the first pixel of the screen. */
+    +".chTop{position:absolute;top:0;left:0;right:0;z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;padding:calc(10px + var(--safe-t)) 14px 30px;background:linear-gradient(180deg,rgba(4,6,10,.68),rgba(4,6,10,0));pointer-events:none;}"
+    +".chBrand{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:-.4px;color:#fff;opacity:.85;}"
+    +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(20px,5.8vw,26px);letter-spacing:-.4px;line-height:1.16;text-align:center;margin:0;max-width:20ch;text-shadow:0 2px 12px rgba(0,0,0,.7);}"
+    +".chSub{font-size:13.5px;opacity:.8;text-align:center;margin:0;text-shadow:0 2px 8px rgba(0,0,0,.7);}"
+    /* The clock is a floating pill, mint like every score in the app, and it only ever
+       counts UP — urgency colours belonged to a clock that could kill the round. */
+    +".chClock{position:absolute;top:calc(12px + var(--safe-t));right:12px;z-index:5;font-family:var(--display);font-weight:700;font-size:15px;color:var(--mint);padding:7px 12px;border-radius:999px;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);pointer-events:none;font-variant-numeric:tabular-nums;}"
+    +".chQuit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--safe-b));z-index:5;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.72);font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
+    /* The reticle: a ring with a mint centre, held ABOVE the finger so the aim point is
+       always visible. pointer-events:none — it is a sight, not a control. */
+    +".chRet{position:fixed;z-index:6;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);pointer-events:none;}"
+    +".chRet i{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}"
     +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
     +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
     +".chMark.stay{animation:chHold 1.6s ease-in-out infinite;opacity:1;}"
-    /* THE MOMENT THE WHOLE SCREEN EXISTS FOR. Finding it used to be a border turning mint
-       and the card sliding up — the same amount of feedback as a miss, for the one event
-       that is supposed to feel like winning. Three cheap layers, no library, no images:
-       a ring that expands out of the tap point, a flash of the frame, and eight sparks.
-       All pure CSS on elements that remove themselves, so nothing here can leak or block
-       the ending card behind it. */
+    /* The win layers: ring, flash, sparks — unchanged, self-removing. */
     +".chWin{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:hidden;}"
     +".chRing{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;"
     +"border:3px solid var(--mint);animation:chRing .72s cubic-bezier(.2,.7,.3,1) forwards;}"
@@ -7661,44 +7591,48 @@ function chSeek(){
     +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
     +"@keyframes chShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}"
     +".chShake{animation:chShake .3s}"
-    /* The result panel is the hero card: same gradient, same radius, same border. A stranger
-       meeting KAMO here should be meeting the same object a new installer meets. */
-    +".chCard{width:min(92vw,420px);background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border:1px solid rgba(255,255,255,.22);"
-      +"border-radius:26px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:22px 20px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}"
-    +".chCta{position:relative;overflow:hidden;width:100%;max-width:340px;height:56px;margin-top:14px;border:none;border-radius:16px;cursor:pointer;"
+    /* The ending floats OVER the photo — the photo never shrinks for it. The flip button
+       rides above the card in the same column. */
+    +"#chFoot{position:absolute;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 12px calc(10px + var(--safe-b));pointer-events:none;}"
+    +"#chFoot>*{pointer-events:auto;}"
+    +".chFlipB{width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(4,6,10,.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-size:21px;line-height:1;display:flex;align-items:center;justify-content:center;}"
+    +".chFlipB:active{transform:scale(.92);}"
+    +".chCard{width:min(92vw,420px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(10,21,18,.96) 60%,rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.22);"
+      +"border-radius:26px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:16px 18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;animation:chUp .45s cubic-bezier(.2,.9,.3,1);}"
+    +"@keyframes chUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}"
+    +".chCta{position:relative;overflow:hidden;width:100%;max-width:340px;height:56px;border:none;border-radius:16px;cursor:pointer;"
       +"font-family:var(--display);font-size:17.5px;font-weight:700;letter-spacing:-.3px;color:#0a0b0e;background:#fff;"
       +"box-shadow:0 10px 28px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;}"
     +".chCta::after{content:\"\";position:absolute;top:0;left:-60%;width:42%;height:100%;background:linear-gradient(100deg,transparent,rgba(150,255,210,.55),transparent);transform:skewX(-18deg);animation:pwBuySheen 3.6s ease-in-out infinite;pointer-events:none;}"
     +".chCta:active{transform:scale(.98);}"
+    +".chCta2{width:100%;max-width:340px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.2px;}"
+    +".chCta2:active{transform:scale(.98);}"
     +".chNum{color:var(--mint);font-weight:800;}"
-    +".chNum.warn{color:#ffb648;}"
-    +".chNum.crit{color:#ff5f57;}"
     +".chR{background:none;border:none;color:rgba(255,255,255,.3);font-size:11px;text-decoration:underline;margin-top:2px;font-family:var(--font);}";
   document.head.appendChild(st);
 
   const w=document.createElement("div"); w.className="chS";
-  w.innerHTML='<div class="chBrand">KA<b>MO</b></div>'
+  w.innerHTML='<div class="chStage" id="chStage"><div class="chZoom" id="chZoom"><div class="chFrame" id="chFrame"></div></div></div>'
+    +'<div class="chTop"><div class="chBrand">KA<b>MO</b></div>'
     +'<h1 class="chHead" id="chHead">Loading…</h1>'
-    +'<p class="chSub" id="chSub"></p>'
-    +'<div class="chFrame" id="chFrame"></div>'
+    +'<p class="chSub" id="chSub"></p></div>'
+    +'<div class="chClock" id="chClock" style="display:none">0.0s</div>'
     +'<div id="chFoot"></div>';
   document.body.appendChild(w);
   const $$=(id)=>document.getElementById(id);
+  const buzzHaptic=(p)=>{ try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){} };
 
-  /* One ending, two readings. Both land on the same card and the same button shape, because
-     the ask is identical either way — the only thing that changes is why they should want
-     to. Won: reciprocity. Lost: respect for the tool that beat them. */
   /* Self-removing on purpose: the ending card mounts a moment later, and an effect layer
      that outlived it would sit over the CTA. 900ms covers the longest of the three. */
   function chCelebrate(host,x,y){
     try{
       if(!host) return;
-      const w=document.createElement("div"); w.className="chWin";
+      const fx=document.createElement("div"); fx.className="chWin";
       const flash=document.createElement("div"); flash.className="chFlash";
       flash.style.setProperty("--fx",x+"px"); flash.style.setProperty("--fy",y+"px");
-      w.appendChild(flash);
+      fx.appendChild(flash);
       const ring=document.createElement("div"); ring.className="chRing";
-      ring.style.left=x+"px"; ring.style.top=y+"px"; w.appendChild(ring);
+      ring.style.left=x+"px"; ring.style.top=y+"px"; fx.appendChild(ring);
       for(let i=0;i<8;i++){
         const a=(Math.PI*2*i)/8 + Math.random()*0.4, d=70+Math.random()*60;
         const sp=document.createElement("div"); sp.className="chSpark";
@@ -7706,153 +7640,285 @@ function chSeek(){
         sp.style.setProperty("--sx",Math.round(Math.cos(a)*d)+"px");
         sp.style.setProperty("--sy",Math.round(Math.sin(a)*d)+"px");
         sp.style.animationDelay=(Math.random()*0.06).toFixed(3)+"s";
-        w.appendChild(sp);
+        fx.appendChild(sp);
       }
-      host.appendChild(w);
-      setTimeout(()=>w.remove(),900);
-      try{ navigator.vibrate && navigator.vibrate([12,40,18]); }catch(_){}
+      host.appendChild(fx);
+      setTimeout(()=>fx.remove(),900);
+      buzzHaptic([12,40,18]);
     }catch(_){}
-  }
-
-  function ending(head,sub,label){
-    $$("chHead").textContent=head;
-    $$("chSub").textContent=sub||"";
-
-    /* The frame stops growing once the game is over, or on a short phone the card would
-       be pushed off the bottom by a photo nobody is playing any more. */
-    const fr=$$("chFrame"); if(fr) fr.style.flex="0 1 auto";
-    w.classList.add("chEnd");   // drops the picture's cap — see .chS.chEnd in the styles above
-    $$("chFoot").innerHTML='<div class="chCard"><button class="chCta" id="chGo">'+label+'</button>'
-      +'<button class="chR" id="chRep">Report this photo</button></div>';
-    /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
-       listing silently, and a silent degradation in the ONE measured link is exactly the
-       failure this change exists to end. Split seek_cta_tapped by tier and a template that
-       stopped resolving shows up as a column, not as a slow drift in "organic". */
-    $$("chGo").onclick=()=>{ const u=refLink("seek_cta",CH_SEEK);
-      track("seek_cta_tapped",{tier:u===appLink?"plain":"onelink"});
-      location.href=u; };
-    $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{}); track("seek_reported",{});
-      $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
   }
 
   (async()=>{
     let h; try{ h=await chRpc("get_hide",{p_id:CH_SEEK}); }catch(e){}
-    if(!h||!h.img_path){ track("seek_missing",{}); ending("This hide is gone.","Expired, or taken down.","Play KAMO"); return; }
+    if(!h||!h.img_path){ track("seek_missing",{}); ending("This hide is gone.","Expired, or taken down.",{}); return; }
     track("seek_opened",{});
 
+    const camoSrc=CH_URL+"/storage/v1/object/public/hides/"+h.img_path;
     const img=document.createElement("img");
-    img.src=CH_URL+"/storage/v1/object/public/hides/"+h.img_path;
+    img.draggable=false;
     img.alt="Find the hidden figure";
-    $$("chFrame").appendChild(img);
 
-    /* ONE INSTRUCTION, NOT A BRAG. "Someone vanished in 1s" told the seeker about the
-       HIDER's round — a number they cannot act on, on the screen where they have to act.
-       A NAME IS NOT A BRAG, THOUGH — it is who you are playing against, and it is the whole
-       reason the handle exists. "Find @tony" is a person to beat; "Find the body" is a
-       chore. Unsigned hides keep the original line exactly, and most will: the handle is
-       optional and every hide published before today has none.
-       textContent, never innerHTML — the value comes off another user's device and lands in
+    /* ===== round state + the ⑥ trace ====================================================
+       The trace is the creator's future spectator seat: the zoom path, every aim (kept or
+       abandoned — abandoned aims ARE the hesitations), and the buzz instant. Recorded
+       here, read later; sent once, fire-and-forget, at the end of the round. */
+    let t0=0, done=false, clock=null, flipN=0, revealedSrc="", flipped=false, traceSent=false;
+    const trace={v:1,vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
+    const clockEl=$$("chClock");
+    const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
+      clock=setInterval(()=>{ clockEl.textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100); };
+    /* THE CLOCK STARTS AT DECODE, not at the first touch. With one buzz there is no
+       "first tap" to start from, and every player must be measured from the same moment
+       or the percentile lies. The deal line is two words; nobody is punished for reading. */
+    img.onload=()=>{ startClock(); requestAnimationFrame(()=>{ trace.img={w:img.offsetWidth,h:img.offsetHeight}; }); };
+    img.src=camoSrc;
+    $$("chFrame").appendChild(img);
+    if(img.complete&&img.naturalWidth) img.onload();
+
+    /* textContent, never innerHTML — the value comes off another user's device and lands in
        front of a stranger. The page narrows it on the way in and the database narrows it
        again on insert, and this is the third place it cannot become markup. */
     $$("chHead").textContent = h.name ? "Find @"+h.name : "Find the body";
-    /* THE CLOCK IS DERIVED FROM THE HIDER'S OWN ROUND, which is what finally makes their
-       time mean something beyond a brag: a hide that took 14 seconds buys the seeker 28.
-       Bounded 20-45 so a one-second test hide still gives a playable round and a slow one
-       does not hand out a minute. */
-    /* The hider's choice wins when there is one; otherwise derive it exactly as before.
-       Null is what every hide published before custom limits existed carries, and what the
-       automatic path still stores, so this is the branch almost every round takes. */
-    const LIMIT=h.limit_s||Math.max(20,Math.min(45,(h.secs||10)*2));
-    const TAPS=h.max_taps||CH_TAPS;
-    /* ONE LIVE LINE INSTEAD OF THREE INDICATORS. A progress bar, a row of pips and a
-       countdown all said the same two things, none of them next to the words explaining
-       them, and all three sat below the photo where nobody looks while hunting. The
-       sentence that already states the rules now counts them down in place: the value and
-       its unit are highlighted together, because "18" alone is not information — "18 sec"
-       is. It warms to amber and then to red on the same thresholds the bar used, so the
-       urgency survives the elements that carried it. */
-    const subEl=$$("chSub");
-    const renderSub=(secLeft,tapsLeft)=>{
-      const sec=Math.max(0,Math.ceil(secLeft));
-      const cls=secLeft<=5?" crit":(secLeft<=LIMIT*0.4?" warn":"");
-      subEl.innerHTML='You get <b class="chNum'+cls+'">'+sec+' sec</b> and <b class="chNum">'
-        +tapsLeft+(tapsLeft===1?" tap":" taps")+"</b>.";
-    };
-    renderSub(LIMIT,TAPS);
+    $$("chSub").textContent="One buzz.";
 
-    let t0=0, tries=0, done=false, clock=null;
-    img.onclick=async(e)=>{
-      if(done) return;
+    const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit"; quit.textContent="I give up";
+    w.appendChild(quit);
+
+    /* ===== zoom + pan (free, unpenalised, scoped to this stage) ======================== */
+    const stage=$$("chStage"), zoomEl=$$("chZoom");
+    let k=1, tx=0, ty=0, lastS=0;
+    const K_MAX=6;
+    const recZoom=()=>{ const t=t0?Date.now()-t0:0;
+      if(t-lastS<120||trace.s.length>=500) return; lastS=t;
+      trace.s.push([t,Math.round(k*100)/100,Math.round(tx),Math.round(ty)]); };
+    const applyT=()=>{
+      const iw=img.offsetWidth||1, ih=img.offsetHeight||1;
+      const bx=Math.max(0,(k-1)*iw/2), by=Math.max(0,(k-1)*ih/2);
+      tx=Math.max(-bx,Math.min(bx,tx)); ty=Math.max(-by,Math.min(by,ty));
+      zoomEl.style.transform = k<=1.001 ? "" : "translate("+tx+"px,"+ty+"px) scale("+k+")";
+      recZoom(); };
+
+    /* ===== the buzz: aim with a reticle, release commits ================================ */
+    const pts=new Map();
+    const RET_OFF=70;
+    let ret=null, aimRec=null, aimId=-1, pinch=null, postDown=null;
+    const closeAim=(committed)=>{
+      if(aimRec){ aimRec.c=committed?1:0; aimRec.u=t0?Date.now()-t0:0;
+        if(trace.a.length<40) trace.a.push(aimRec); aimRec=null; }
+      if(ret){ ret.remove(); ret=null; } aimId=-1; };
+    const retMove=(x,y)=>{
+      if(!ret) return;
       const r=img.getBoundingClientRect();
-      const x=(e.clientX-r.left)/r.width, y=(e.clientY-r.top)/r.height;
-      /* STARTS ON THE FIRST TAP, not on load: starting on load punishes reading the dare,
-         and the elapsed number has to compare to the hider's own round time, which is
-         measured the same way. */
-      if(!t0){ t0=Date.now();
-        clock=setInterval(()=>{
-          if(done) return;
-          const left=LIMIT-(Date.now()-t0)/1000;
-          renderSub(left,TAPS-tries);
-          if(left<=0) timeUp();
-        },100); }
-      tries++; renderSub(t0?LIMIT-(Date.now()-t0)/1000:LIMIT, TAPS-tries);
-      const mk=document.createElement("div"); mk.className="chMark";
-      mk.style.left=(e.clientX-r.left)+"px"; mk.style.top=(e.clientY-r.top)+"px";
-      $$("chFrame").appendChild(mk); mk._t=setTimeout(()=>{ if(!mk.classList.contains("stay")) mk.remove(); },500);
+      const cx=Math.max(r.left,Math.min(r.right,x)), cy=Math.max(r.top,Math.min(r.bottom,y-RET_OFF));
+      ret.style.left=cx+"px"; ret.style.top=cy+"px"; ret._x=cx; ret._y=cy;
+      if(aimRec&&aimRec.p.length<160){ const t=t0?Date.now()-t0:0;
+        if(!aimRec._l||t-aimRec._l>=80){ aimRec._l=t;
+          aimRec.p.push([t,Math.round((cx-r.left)/r.width*1000)/1000,Math.round((cy-r.top)/r.height*1000)/1000]); } } };
 
-      let res; try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:Date.now()-t0}); }catch(e){ return; }
-      if(res&&res.hit){
-        done=true; clearInterval(clock);
-        const secs=((Date.now()-t0)/1000).toFixed(1);
-        /* THE WINNING SPOT STAYS ON SCREEN. Every other mark is a 500ms pop that clears
-           itself; this one is the answer, and clearing it threw away the only moment where
-           the player sees what they were looking for. */
-        mk.className="chMark hit stay"; clearTimeout(mk._t);
-        chCelebrate($$("chFrame"), (e.clientX-r.left), (e.clientY-r.top));
-        /* The sparks mark WHERE it was; these two say THAT they won. Same green frame and the
-           same burst the sender got in their preview, so the two sides of one challenge share
-           a vocabulary instead of each having their own idea of a win. */
-        $$("chFrame").classList.add("found");
-        confettiBurst($$("chFrame"));
-        track("seek_found",{tries:tries,ms:Date.now()-t0});
-        /* MY OWN MISSES ARE NOT OTHER PEOPLE. res.missed is every failed attempt ever
-           recorded on this hide, which includes the ones I just made — so a player who
-           found it on their third tap was told "2 people missed them" about themselves.
-           Subtract this session's misses; say nothing rather than something false when
-           nobody else has tried. */
-        const others=Math.max(0,(res.missed||0)-(tries-1));
-        ending("Found in "+secs+"s",
-          others ? (plural(others,"person","people")+" missed them. You didn't.")
-                 : (tries>1 ? ("Took you "+tries+" taps.") : "First try."),
-          "Send one back");
+    stage.addEventListener("pointerdown",e=>{
+      pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      try{ stage.setPointerCapture(e.pointerId); }catch(_){}
+      if(pts.size===2){
+        /* The second finger is the pinch — an aim in progress is ABANDONED, never
+           committed. This is what makes zooming safe while armed. */
+        closeAim(false); postDown=null;
+        const p=[...pts.values()];
+        pinch={d0:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1,k0:k,mx:(p[0].x+p[1].x)/2,my:(p[0].y+p[1].y)/2,tx0:tx,ty0:ty};
         return;
       }
-      img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
-      track("seek_miss",{tries:tries});
-      if(tries>=TAPS) timeUp("taps");
+      if(pts.size!==1) return;
+      if(!done){
+        aimId=e.pointerId;
+        ret=document.createElement("div"); ret.className="chRet"; ret.innerHTML="<i></i>";
+        w.appendChild(ret);
+        aimRec={d:t0?Date.now()-t0:0,u:0,c:0,p:[],_l:0};
+        retMove(e.clientX,e.clientY);
+        buzzHaptic(8);
+      } else {
+        postDown={x:e.clientX,y:e.clientY,t:Date.now(),moved:false};
+      }
+    });
+    stage.addEventListener("pointermove",e=>{
+      const p=pts.get(e.pointerId); if(p){ p.x=e.clientX; p.y=e.clientY; }
+      if(pinch&&pts.size>=2){
+        const v=[...pts.values()];
+        k=Math.max(1,Math.min(K_MAX,pinch.k0*(Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y)/pinch.d0)));
+        tx=pinch.tx0+((v[0].x+v[1].x)/2-pinch.mx); ty=pinch.ty0+((v[0].y+v[1].y)/2-pinch.my);
+        applyT(); return;
+      }
+      if(ret&&e.pointerId===aimId){ retMove(e.clientX,e.clientY); return; }
+      if(postDown&&done){
+        if(Math.abs(e.clientX-postDown.x)>6||Math.abs(e.clientY-postDown.y)>6) postDown.moved=true;
+        if(postDown.moved&&k>1.001){ tx+=e.clientX-postDown.x; ty+=e.clientY-postDown.y;
+          postDown.x=e.clientX; postDown.y=e.clientY; applyT(); }
+      }
+    });
+    const up=e=>{
+      pts.delete(e.pointerId);
+      if(pinch&&pts.size<2) pinch=null;
+      if(ret&&e.pointerId===aimId){
+        const x=ret._x, y=ret._y;
+        const commit=(e.type==="pointerup"&&!done);
+        closeAim(commit);
+        if(commit) buzz(x,y);
+        return;
+      }
+      if(postDown&&done&&e.type==="pointerup"&&!postDown.moved&&(Date.now()-postDown.t)<350&&revealedSrc) flip();
+      if(!pts.size) postDown=null;
+    };
+    stage.addEventListener("pointerup",up);
+    stage.addEventListener("pointercancel",up);
+
+    function sendTrace(why){
+      if(traceSent) return; traceSent=true;
+      try{ trace.why=why; chRpc("save_seek_trace",{p_id:CH_SEEK,p_trace:trace}).catch(()=>{}); }catch(_){}
+    }
+
+    async function buzz(sx,sy){
+      if(done) return; done=true;
+      clearInterval(clock);
+      const ms=t0?Date.now()-t0:0;
+      clockEl.textContent=(ms/1000).toFixed(1)+"s";
+      quit.remove();
+      const r=img.getBoundingClientRect();
+      const x=Math.max(0,Math.min(1,(sx-r.left)/r.width)), y=Math.max(0,Math.min(1,(sy-r.top)/r.height));
+      trace.end={ms:ms,x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000};
+      /* The mark lives in FRAME coordinates so it rides the zoom — it is the record of
+         the buzz, and it stays: on a miss, the flip against the revealed frame shows
+         exactly how far off it was, which is half the double-take. */
+      const fx=x*img.offsetWidth, fy=y*img.offsetHeight;
+      const mk=document.createElement("div"); mk.className="chMark stay";
+      mk.style.left=fx+"px"; mk.style.top=fy+"px";
+      $$("chFrame").appendChild(mk);
+      buzzHaptic(20);
+      let res=null;
+      try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:ms,p_v:2}); }
+      catch(e){ try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:ms}); }catch(_){}}
+      if(res&&res.hit){
+        mk.className="chMark hit stay";
+        chCelebrate($$("chFrame"),fx,fy);
+        $$("chFrame").classList.add("found");
+        confettiBurst($$("chFrame"));
+        track("seek_found",{ms:ms,pct:(res.pct==null?-1:res.pct),others:res.others|0});
+        sendTrace("hit");
+        const frames=await snapReveal(false);
+        /* ④ — the chrono noted, now it speaks: rank among everyone who buzzed this hide
+           before (misses count as slower — they never found it at all). Silent when there
+           is nobody to compare against yet. */
+        ending("Found in "+(ms/1000).toFixed(1)+"s",
+          res.pct!=null ? "Faster than "+res.pct+"% of players."
+                        : (res.others===0 ? "First one in." : ""),
+          {rehide:true,camoSrc:camoSrc});
+        if(frames) armFlipUI();
+      } else {
+        img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
+        track("seek_failed",{reason:"miss",ms:ms});
+        sendTrace("miss");
+        const frames=await snapReveal(true);
+        ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
+        if(frames) armFlipUI();
+      }
+    }
+
+    quit.onclick=async()=>{
+      if(done) return; done=true;
+      clearInterval(clock); clockEl.style.display="none";
+      quit.remove(); closeAim(false);
+      const ms=t0?Date.now()-t0:0;
+      trace.end={ms:ms,x:-1,y:-1};
+      track("seek_failed",{reason:"giveup",ms:ms});
+      sendTrace("giveup");
+      const frames=await snapReveal(true);
+      ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
+      if(frames) armFlipUI();
     };
 
-    /* ONE LOSS, TWO WAYS IN. Out of taps and out of time end identically — the reveal, then
-       the ask — because the feeling is the same and a second ending screen would be a second
-       thing to maintain and diverge. */
-    async function timeUp(why){
-      if(done) return;
-      done=true; clearInterval(clock);
-      /* THE REVEAL IS THE PITCH. Ending on "you lost" with the figure still invisible is a
-         shrug; showing them what they stared past is the moment the tool becomes worth
-         having. Asked for only now — never served with the puzzle. */
-      try{
-        const g=await chRpc("reveal_hide",{p_id:CH_SEEK});
-        const ir=img.getBoundingClientRect();
-        if(g){ const mk2=document.createElement("div"); mk2.className="chMark hit";
-          mk2.style.left=(g.cx*ir.width)+"px"; mk2.style.top=(g.cy*ir.height)+"px";
-          mk2.style.animation="none"; mk2.style.opacity="1"; mk2.style.transform="scale(1.2)";
-          $$("chFrame").appendChild(mk2); }
-      }catch(e){}
-      track("seek_failed",{reason:why||"time",tries:tries,ms:t0?Date.now()-t0:0});
-      ending("They were right there.",
-        why==="taps"?"Five taps, and you walked past them every time.":"Time ran out. They never moved.",
-        "Send one back");
+    /* THE SNAP — one frame, never a fade. A fade never produces a double-take, and a
+       reveal that arrives gradually erases the creator's work on the way in. */
+    async function snapReveal(lost){
+      const base=camoSrc.replace(/\.jpg$/,"");
+      const load=(u)=>new Promise(res0=>{ const m=new Image(); m.onload=()=>res0(u); m.onerror=()=>res0(null); m.src=u; });
+      let bSrc=null, wSrc=null;
+      try{ bSrc=await load(base+"_b.jpg"); }catch(_){}
+      if(bSrc){
+        try{ wSrc=await load(base+"_w.jpg"); }catch(_){}
+        img.src=bSrc; revealedSrc=bSrc; flipped=true;
+        buzzHaptic([28,50,28]);
+        track("seek_reveal_shown",{assets:wSrc?"wave":"still"});
+        /* IL BOUGE: two frames alternating — up, wave, up — then it settles standing.
+           A two-frame coucou reads as movement; a video would read as a fade. */
+        if(wSrc){ let i=0; const iv=setInterval(()=>{ i++;
+          if(i>5||!flipped){ clearInterval(iv); if(flipped) img.src=bSrc; return; }
+          img.src=(i%2)?wSrc:bSrc; },360); }
+        return true;
+      }
+      /* Legacy hide — published before the reveal frames existed. The answer is a marker,
+         exactly as before, and only a LOSS needs it (a finder is already staring at it). */
+      if(lost){
+        try{
+          const g=await chRpc("reveal_hide",{p_id:CH_SEEK});
+          if(g&&g.cx!=null){
+            const mk2=document.createElement("div"); mk2.className="chMark hit";
+            mk2.style.left=(g.cx*img.offsetWidth)+"px"; mk2.style.top=(g.cy*img.offsetHeight)+"px";
+            mk2.style.animation="none"; mk2.style.opacity="1"; mk2.style.transform="scale(1.2)";
+            $$("chFrame").appendChild(mk2);
+          }
+        }catch(e){}
+      }
+      track("seek_reveal_shown",{assets:"marker"});
+      return false;
+    }
+
+    /* THE FLIP — the double-take, on demand. Tap the photo, or the button. */
+    function flip(){
+      if(!revealedSrc) return;
+      flipped=!flipped; img.src=flipped?revealedSrc:camoSrc; flipN++;
+      buzzHaptic(10);
+      track("seek_flip",{n:flipN});
+    }
+    function armFlipUI(){
+      const b=document.createElement("button"); b.className="chFlipB"; b.id="chFlipB"; b.textContent="⇆";
+      $$("chFoot").prepend(b);
+      b.onclick=(ev)=>{ ev.stopPropagation(); flip(); };
+    }
+
+    /* ⑤ — SEND ONE BACK, no install. The camouflaged JPEG is the same photo (the figure
+       painted into it is invisible by construction, so it can carry a second one — and
+       this works for every hide ever published, with no extra asset). Drop the overlay,
+       hand the photo to the normal compose flow, and the full create-paint-share loop
+       runs from here: place, paint, send. crossOrigin, or the board taints and the
+       publish dies at toBlob — storage answers ACAO:* (verified). */
+    function chRehide(src){
+      track("seek_rehide_tapped",{});
+      try{ w.remove(); st.remove(); }catch(_){}
+      photo.crossOrigin="anonymous";
+      photo.onload=()=>syncPreviewFit();
+      photo.src=src;
+      photo.style.display="block"; cam.style.display="none"; bgKind="photo";
+      enterCompose();
+    }
+
+    /* One ending, three ways in — found, missed, given up — because the reveal is the
+       product, not a punishment, and a second ending screen would be a second thing to
+       maintain and diverge. */
+    function ending(head,sub,opts){
+      $$("chHead").textContent=head;
+      $$("chSub").textContent=sub||"";
+      const q=$$("chQuit"); if(q) q.remove();
+      $$("chFoot").innerHTML='<div class="chCard">'
+        +(opts.rehide?'<button class="chCta" id="chReh">Send one back</button>':'')
+        +'<button class="'+(opts.rehide?'chCta2':'chCta')+'" id="chGo">'+(opts.rehide?'Get KAMO':'Play KAMO')+'</button>'
+        +'<button class="chR" id="chRep">Report this photo</button></div>';
+      /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
+         listing silently, and a silent degradation in the ONE measured link is exactly the
+         failure this change exists to end. Split seek_cta_tapped by tier and a template that
+         stopped resolving shows up as a column, not as a slow drift in "organic". */
+      $$("chGo").onclick=()=>{ const u=refLink("seek_cta",CH_SEEK);
+        track("seek_cta_tapped",{tier:u===appLink?"plain":"onelink"});
+        location.href=u; };
+      if(opts.rehide){ $$("chReh").onclick=()=>chRehide(opts.camoSrc); }
+      $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{}); track("seek_reported",{});
+        $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
     }
   })();
 }
