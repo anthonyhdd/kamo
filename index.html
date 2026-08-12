@@ -7275,7 +7275,7 @@ window.__kamoNotifResult=function(r){ try{ track("web_notif_armed",{key:(r&&r.ke
    playkamo.com/h/<id> for free, without touching the landing page. Flip SHARE_HOST to
    "https://playkamo.com/h" once that route answers, and NOT before: until it exists every
    challenge sent would 404, which is a worse failure than an ugly domain. */
-const SHARE_HOST="https://qpztlobbnjyjbxqyuzgg.supabase.co/functions/v1/h";
+const SHARE_HOST="https://playkamo.com/h";
 /* One edit, no other change: the id rides as the last path segment either way, which both
    hosts accept (the function reads ?h= and falls back to the trailing segment). */
 function chLink(){ return chId?(SHARE_HOST+"/"+chId):""; }
