@@ -149,17 +149,17 @@ console.log('\nEXACTLY ONE share mechanism per tap');
 
 console.log('\nTHE MESSAGE MATCHES THE ROUND THE RECEIVER WILL PLAY');
 {
-  const { calls } = await run({ nativeInvite: true, share: null, settings: { limit: 35, taps: 3 } });
+  /* One buzz on no clock is the ONLY deal the seeker runs, so the message states it and
+     quotes no numbers — a quoted "35 sec and 3 taps" would promise a round that no longer
+     exists, which is the exact class of bug the old assertions were written against. */
+  const { calls } = await run({ nativeInvite: true, share: null });
   const t = calls.text || '';
-  t.includes('35 sec') && t.includes('3 taps')
-    ? ok('custom 35s / 3 taps → quoted in the message')
-    : bad(`custom settings not in the message: ${JSON.stringify(t)}`);
-}
-{
-  const { calls } = await run({ nativeInvite: true, share: null, settings: { limit: 30, taps: 1 } });
-  (calls.text || '').includes('1 tap') && !(calls.text || '').includes('1 taps')
-    ? ok('a single tap is singular, not "1 taps"')
-    : bad(`plural bug: ${JSON.stringify(calls.text)}`);
+  t.includes('One buzz')
+    ? ok('the message states the one-buzz deal')
+    : bad(`the one-buzz deal is missing from the message: ${JSON.stringify(t)}`);
+  !/\d+\s*sec/.test(t) && !/\d+\s*taps?/.test(t)
+    ? ok('and it quotes no seconds or taps — those knobs no longer exist')
+    : bad(`the message still quotes a clock or a tap budget: ${JSON.stringify(t)}`);
 }
 {
   const { calls } = await run({ nativeInvite: true, share: null });
@@ -288,11 +288,11 @@ console.log('\nTHE INVITE CARRIES THE HANDLE');
     : bad(`the unsigned invite changed: ${JSON.stringify(calls.text)}`);
 }
 {
-  /* Still the terms and still the link — signing must not have displaced either. */
-  const { calls } = await run({ nativeInvite: true, share: null, handle: 'tony', settings: { limit: 30, taps: 3 } });
-  /30 sec and 3 taps/.test(calls.text || '') && /\?h=abc123/.test(calls.text || '')
-    ? ok('the terms and the link survive the signature')
-    : bad(`signing displaced the round or the link: ${JSON.stringify(calls.text)}`);
+  /* Still the stake and still the link — signing must not have displaced either. */
+  const { calls } = await run({ nativeInvite: true, share: null, handle: 'tony' });
+  /One buzz/.test(calls.text || '') && /\?h=abc123/.test(calls.text || '')
+    ? ok('the stake and the link survive the signature')
+    : bad(`signing displaced the stake or the link: ${JSON.stringify(calls.text)}`);
 }
 
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ share paths behave');
