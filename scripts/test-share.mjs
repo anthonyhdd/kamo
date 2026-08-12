@@ -149,14 +149,14 @@ console.log('\nEXACTLY ONE share mechanism per tap');
 
 console.log('\nTHE MESSAGE MATCHES THE ROUND THE RECEIVER WILL PLAY');
 {
-  /* One buzz on no clock is the ONLY deal the seeker runs, so the message states it and
+  /* One tap on no clock is the ONLY deal the seeker runs, so the message states it and
      quotes no numbers — a quoted "35 sec and 3 taps" would promise a round that no longer
      exists, which is the exact class of bug the old assertions were written against. */
   const { calls } = await run({ nativeInvite: true, share: null });
   const t = calls.text || '';
-  t.includes('One buzz')
-    ? ok('the message states the one-buzz deal')
-    : bad(`the one-buzz deal is missing from the message: ${JSON.stringify(t)}`);
+  t.includes('One tap')
+    ? ok('the message states the one-tap deal')
+    : bad(`the one-tap deal is missing from the message: ${JSON.stringify(t)}`);
   !/\d+\s*sec/.test(t) && !/\d+\s*taps?/.test(t)
     ? ok('and it quotes no seconds or taps — those knobs no longer exist')
     : bad(`the message still quotes a clock or a tap budget: ${JSON.stringify(t)}`);
@@ -290,7 +290,7 @@ console.log('\nTHE INVITE CARRIES THE HANDLE');
 {
   /* Still the stake and still the link — signing must not have displaced either. */
   const { calls } = await run({ nativeInvite: true, share: null, handle: 'tony' });
-  /One buzz/.test(calls.text || '') && /\?h=abc123/.test(calls.text || '')
+  /One tap/.test(calls.text || '') && /\?h=abc123/.test(calls.text || '')
     ? ok('the stake and the link survive the signature')
     : bad(`signing displaced the stake or the link: ${JSON.stringify(calls.text)}`);
 }
