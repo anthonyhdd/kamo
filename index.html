@@ -6719,9 +6719,18 @@ window.__kamoNotifResult=function(r){ try{ track("web_notif_armed",{key:(r&&r.ke
    So the shared URL points at an edge function that answers scrapers with THIS hide's photo
    and THIS sender's name, then bounces the human to KAMO_HOST?h=… in a single frame. The
    game is still the same static file it has always been; nothing was put in front of play.
-   CH_SEEK reads ?h= off location.search after the bounce, so the seeker path is unchanged. */
+   CH_SEEK reads ?h= off location.search after the bounce, so the seeker path is unchanged.
+
+   THE DOMAIN IS PART OF THE MESSAGE. A supabase.co URL from a friend reads as spam, and the
+   whole point of this work is to be tapped — the photo is the hook, the domain is the
+   permission to act on it. infra/playkamo-worker.js puts the same function behind
+   playkamo.com/h/<id> for free, without touching the landing page. Flip SHARE_HOST to
+   "https://playkamo.com/h" once that route answers, and NOT before: until it exists every
+   challenge sent would 404, which is a worse failure than an ugly domain. */
 const SHARE_HOST="https://qpztlobbnjyjbxqyuzgg.supabase.co/functions/v1/h";
-function chLink(){ return chId?(SHARE_HOST+"?h="+chId):""; }
+/* One edit, no other change: the id rides as the last path segment either way, which both
+   hosts accept (the function reads ?h= and falls back to the trailing segment). */
+function chLink(){ return chId?(SHARE_HOST+"/"+chId):""; }
 /* The community door, in one place. It is an invite link, so it can be rotated or revoked
    from Discord without a push — but it is also the only URL in this app that points at a
    place rather than at the app itself, and burying it in a click handler is how it ends up
