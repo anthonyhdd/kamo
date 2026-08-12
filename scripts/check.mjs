@@ -63,7 +63,7 @@ const deref = new Set([
   ...[...html.matchAll(/getElementById\("([A-Za-z0-9_-]+)"\)\s*\./g)].map((m) => m[1]),
 ]);
 // Built by JS at runtime rather than declared in the markup — listed, not guessed.
-const RUNTIME_IDS = new Set(['ivPrev', 'chPPh', 'chSetH', 'chSetS', 'chSetT']);
+const RUNTIME_IDS = new Set(['ivPrev', 'chPPh']);
 const missing = [...deref].filter((id) => !declared.has(id) && !RUNTIME_IDS.has(id));
 missing.length
   ? bad(`script dereferences ids that do not exist, unguarded: ${missing.join(', ')}`)
@@ -482,11 +482,12 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     ['openShareSheet renders the challenge card', 'function openShareSheet(', 'chPrevRender()',
       'openShareSheet() does not call chPrevRender() — the card is display:none until something '
       + 'adds .on, so it will only appear after a share instead of before one'],
-    ['saving challenge settings republishes the hide', 'document.getElementById("chSetOk").onclick=', 'chRepublish()',
-      'the settings Done handler does not call chRepublish() — the card and the message will '
-      + 'promise the new taps/clock while the published hide keeps the old ones'],
-    ['resetting to automatic republishes the hide', 'document.getElementById("chSetReset").onclick=', 'chRepublish()',
-      'the settings Reset handler does not call chRepublish() — same mismatch, in reverse'],
+    /* The chSetOk / chSetReset rows are gone WITH the settings sheet: the seeker plays one
+       buzz on no clock, so there are no taps or seconds left to save. chRepublish() is still
+       guarded — the handle's blur handler is its remaining caller. */
+    ['renaming the handle republishes the signed hide', 'inp.addEventListener("blur"', 'chRepublish()',
+      'the handle blur handler no longer calls chRepublish() — a renamed sender keeps '
+      + 'signing the OLD name on the hide behind the link'],
   ];
   for (const [label, start, needs, why] of wiring) {
     const body = bodyOf(start);
@@ -701,6 +702,20 @@ try {
     : ok('the seeker screen names the sender (node scripts/test-seek-dom.mjs)');
 } catch (e) {
   bad('THE SEEKER SCREEN IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
+/* ---- 12b. The one-buzz round, end to end -------------------------------------------------
+   The seeker was rewritten around one aimed buzz, the snap reveal and the A/B flip, and
+   every failure mode in that chain is runtime state a static read cannot see: a reticle
+   that never mounts, a release that commits nothing, a snap that arrives as a fade, a
+   flip armed with nothing behind it, a re-hide that strands the overlay. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-buzz-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · BUZZ TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the one-buzz round behaves end to end (node scripts/test-buzz-dom.mjs)');
+} catch (e) {
+  bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
 /* The handle crosses a trust boundary: one user types it, another user's phone renders it.
