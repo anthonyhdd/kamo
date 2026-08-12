@@ -2981,6 +2981,7 @@ function capture(){
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; KAMO+ only — tapping it opens the paywall, and the free preset dots that used to sit under it are gone
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
   tlReset();   // the timelapse belongs to THIS hide — see tlCapture()
+  chResetRound();   // ...and so does the published hide — see chResetRound()
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
@@ -5157,7 +5158,7 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -7187,6 +7188,14 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   ["swatchRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
   showScore();   // "vanished in Xs" — the number the round was played for
+  /* THE PICTURE STARTS ITS JOURNEY NOW, and this is the whole reason the share stopped
+     taking eight seconds. It does NOT publish — see chPrepare(): no row is created, so
+     there is still no hide until the sender reaches for the sheet, which is the invariant
+     peekShareSheet has always defended. All it does is get the ~200KB JPEG onto storage
+     while the reveal is being looked at, so the create_hide that DOES publish is one
+     ~300ms round trip instead of an encode, an upload and an RPC on the same gesture as
+     the tap. */
+  chPrepare();
   $("#actionRow").style.display="";  // reveal Share/Save now that the hide is done
   revealHandle.style.display="flex"; revealHint.style.display="block";
   /* A class, so the stylesheet can lift the wordmark over the reveal canvas — see .brand
@@ -7433,6 +7442,57 @@ async function chUploadReveal(name){
    the scraper falls back to the generic icon card. The share button still works — with no
    chId the message becomes the invite, which never promises a puzzle. */
 const CH_MIN_COVERAGE=30;
+/* PREPARE ≠ PUBLISH, and the difference is the whole design.
+ * PREPARE puts this round's JPEG on storage under a random name. Nothing points at it: no
+ * row exists, get_hide has nothing to return, the link-preview function has nothing to
+ * render. It is bytes at an unguessable path, and it is started at the REVEAL so the slow
+ * part is over before anyone reaches for the share sheet.
+ * PUBLISH is create_hide — one ~300ms round trip — and it still happens exactly where it
+ * always has: on the first touch of the sheet, which is the deliberate act peekShareSheet
+ * has always been forbidden from performing on the user's behalf. That invariant is
+ * untouched; what changed is that publishing no longer drags an encode and an upload
+ * behind it on the same gesture as the tap.
+ * Cost, stated plainly: a round that is finished and never shared leaves an orphan image
+ * in the bucket — bytes, referenced by nothing, discoverable by nobody.
+ * One PROMISE, not a flag: chUpload() awaits this, so a tap that lands mid-upload joins
+ * the flight already in progress instead of starting a second one. */
+let chPrep=null;
+function chPrepare(){
+  if(chPrep) return chPrep;
+  if(!CH_MAKE||chId) return Promise.resolve(null);
+  if(Math.round(currentScore||0)<CH_MIN_COVERAGE) return Promise.resolve(null);
+  chPrep=(async()=>{
+    const g=chGeom(); if(!g) return null;
+    const blob=await chBlob(); if(!blob) return null;
+    const name=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).replace(/[^a-z0-9]/g,"")+".jpg";
+    const up=await fetch(CH_URL+"/storage/v1/object/hides/"+name,{method:"POST",
+      headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
+    if(!up.ok) throw new Error("upload "+up.status);
+    return {name,g};
+  })().catch((e)=>{
+    /* Cleared, so the tap can try again rather than inheriting a dead promise for the
+       rest of the round. */
+    chPrep=null;
+    track("hide_prepare_failed",{reason:String((e&&e.message)||e).slice(0,120)});
+    return null;
+  });
+  return chPrep;
+}
+/* EVERY CAPTURE IS A NEW HIDE, and chId used to survive it. `capture()` reset the score,
+   the clock and the timelapse but not the published id — so within one session only the
+   FIRST round could ever publish (`if(chId) return` below), and every round after it sent
+   its friend the link to the PREVIOUS photo, signed and personalised, with nothing on
+   screen saying so. The reload between app launches is what hid it: one hide per launch
+   looks exactly like a user who only made one. */
+/* A ROUND TOKEN, because clearing chId is not enough on its own. The publish of the
+   PREVIOUS round can still be in flight when the next capture happens — touch the sheet,
+   change your mind, retake, paint a new hide — and when its create_hide finally answers it
+   writes its id straight over the reset. The next share then goes out personalised, signed,
+   and pointing at the photo before it. Reproduced in a real browser with a 3s upload; the
+   id landed 900ms after the reset. So every round carries a number, and a publish that
+   comes back to a round that no longer exists drops its answer instead of installing it. */
+let chRound=0;
+function chResetRound(){ chId=""; chPrep=null; chRound++; }
 async function chUpload(){
   if(!CH_MAKE||chId) return;
   /* Concurrent calls raced past the chId guard — the peek's pointerdown and the sheet
@@ -7442,13 +7502,13 @@ async function chUpload(){
   if(chUpload._busy) return;
   if(Math.round(currentScore||0)<CH_MIN_COVERAGE){ track("hide_publish_blocked",{coverage:Math.round(currentScore||0)}); return; }
   chUpload._busy=true;
+  const myRound=chRound;
   try{
-    const g=chGeom(); if(!g) return;
-    const blob=await chBlob(); if(!blob) return;
-    const name=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).replace(/[^a-z0-9]/g,"")+".jpg";
-    const up=await fetch(CH_URL+"/storage/v1/object/hides/"+name,{method:"POST",
-      headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
-    if(!up.ok) throw new Error("upload "+up.status);
+    /* Started at the reveal (see enterFinished) and almost always finished by now; a tap
+       that beats it simply joins the same flight. */
+    const prep=await chPrepare(); if(!prep) return;
+    if(myRound!==chRound) return;   // a new hide was captured while this waited
+    const name=prep.name, g=prep.g;
     /* WHICH OVERLOAD, AND WHY THERE ARE TWO LEFT. create_hide exists at 6, 8 and 9
        arguments and PostgREST resolves by the exact set of keys sent. The 8-arg
        (settings) form is retired product: the seeker plays one buzz on no clock, so
@@ -7470,11 +7530,18 @@ async function chUpload(){
     } else {
       chId=await chRpc("create_hide",base);
     }
+    /* The row exists on the server either way — abandoning it here costs one hide nobody
+       will ever open, which is strictly cheaper than sending a friend the wrong picture. */
+    if(myRound!==chRound){ chId=""; track("hide_published_stale",{}); return; }
     chRemember(chId);
     track("hide_published",{});
     chAttachPush();
     armResultsPing();
-    chUploadReveal(name);   // fire-and-forget — the snap's frames; see chUploadReveal
+    /* HELD BACK A BEAT. These are two more uploads and two more canvas encodes, and they
+       used to start in the same breath as the share — competing for the radio and the main
+       thread with the one action the user is waiting on. The snap needs them by the time a
+       friend OPENS the link, which is minutes away at best. */
+    setTimeout(()=>chUploadReveal(name),1500);
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
   finally{ chUpload._busy=false; }
 }
