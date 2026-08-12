@@ -85,6 +85,18 @@ const html = real.slice(0, at)
   + 'return{more:b(".ssBtn.ssMore"),plus:b("#ssPlus"),spin:spin};},'
   + 'grab(){document.getElementById("ssGrab").click();return this.snap();},'
   + 'fold(){stepSheet(-1);return new Promise(r=>setTimeout(()=>r(this.snap()),420));},'
+  /* A REAL DRAG ON THE REAL HANDLE, in steps, because what has to be measured is what a thumb
+     does: the card tracking the finger, and where it lands when the finger lifts. Calling
+     stepSheet() would prove nothing about either — that is the API the drag was rewritten to
+     stop going through. */
+  + 'drag(dy,steps){const g=document.getElementById("ssGrab");'
+  + 'const r=g.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;'
+  + 'const ev=(t,cy)=>g.dispatchEvent(new PointerEvent(t,{pointerId:1,clientX:x,clientY:cy,bubbles:true}));'
+  + 'const c=shareSheetEl.querySelector(".ssCard");'
+  + 'ev("pointerdown",y);const seen=[];const n=steps||6;'
+  + 'for(let i=1;i<=n;i++){ev("pointermove",y+dy*i/n);seen.push(Math.round(c.getBoundingClientRect().height));}'
+  + 'ev("pointerup",y+dy);'
+  + 'return new Promise(r2=>setTimeout(()=>r2(Object.assign({seen:seen},this.snap())),520));},'
   + 'visible(sel){const e=shareSheetEl.querySelector(sel);return e?getComputedStyle(e).display:"absent";},'
   + 'backdrop(){shareSheetEl.click();return this.snap();},'
   + 'snap(){const c=shareSheetEl.querySelector(".ssCard");return{state:ssState,'
@@ -568,6 +580,44 @@ console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
   (await page.evaluate(() => window.__t.snap())).state === 'peek'
     ? ok('and a tap on the handle brings the peek straight back')
     : bad(`tapping the handle from mini gave "${back.state}" — the way back has to be one tap`);
+}
+
+/* THE CARD FOLLOWS THE FINGER, AND ONE GESTURE CAN CROSS TWO DETENTS.
+   It used to do neither: 24px past a threshold fired one stepSheet() and then locked the
+   gesture out until the finger came up. So the sheet never tracked the hand — a drag felt
+   like a button misfiring — and pulling the open sheet down to the handle was impossible in
+   one movement, which is exactly what was reported. Both halves are asserted, because fixing
+   only the second would leave the gesture feeling just as dead. */
+console.log('\nDRAGGING THE HANDLE MOVES THE CARD, NOT JUST ITS STATE');
+{
+  await page.evaluate(() => window.__t.present());
+  await page.evaluate(() => window.__t.grab());              // peek -> open
+  await page.waitForTimeout(420);
+  const open = await page.evaluate(() => window.__t.snap());
+  open.state === 'open'
+    ? ok('starting from the full sheet')
+    : bad(`could not reach the open state to drag from (got "${open.state}")`);
+
+  const d = await page.evaluate(() => window.__t.drag(520, 8));
+  const shrinking = d.seen.every((h, i) => i === 0 || h <= d.seen[i - 1]);
+  const moved = d.seen[0] - d.seen[d.seen.length - 1];
+  shrinking && moved > 80
+    ? ok(`the card tracks the finger down (${d.seen[0]}px → ${d.seen[d.seen.length - 1]}px across the drag)`)
+    : bad(`the card did not follow: heights were ${JSON.stringify(d.seen)} — a drag that only `
+        + 'fires a state change at a threshold reads as a button that misfired');
+  d.state === 'mini'
+    ? ok('and one long drag crosses BOTH detents, open → mini, as the finger asked')
+    : bad(`a 520px drag from open landed on "${d.state}" — one gesture must be able to reach `
+        + 'the smallest position, not step exactly one detent per touch');
+  d.inline === ''
+    ? ok('and the inline height is handed back to the stylesheet on settle')
+    : bad(`the card is pinned at inline height ${JSON.stringify(d.inline)} — a stuck height on `
+        + 'the reveal is a dead end, since the sheet is the only route to a send');
+
+  const up = await page.evaluate(() => window.__t.drag(-520, 8));
+  up.state === 'open'
+    ? ok('and dragging back up returns the full sheet in one gesture')
+    : bad(`dragging up 520px from mini landed on "${up.state}"`);
 }
 
 console.log('\nTAPPING THE WORDMARK OPENS THE CARD, AND CLOSING IT GIVES THE SHEET BACK');

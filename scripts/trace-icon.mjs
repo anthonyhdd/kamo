@@ -97,7 +97,7 @@ const paths = await p.evaluate(async ()=>{
   };
   const S=24/N;
   return keep.map(k=>{
-    const pts=rdp(trace(k),1.6);
+    const pts=rdp(trace(k),0.8);
     return {n:k.n, d:'M'+pts.map(([i,j])=>`${(i*S).toFixed(2)} ${(j*S).toFixed(2)}`).join('L')+'Z'};
   });
 });
