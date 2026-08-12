@@ -1004,9 +1004,11 @@
     color:#eafff5;border-radius:999px;padding:6px 13px;font-family:var(--display);
     font-size:12.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .khSend:active{transform:scale(.95);}
-  .kpQuiet{display:block;width:100%;margin-top:10px;background:none;border:none;
-    color:rgba(255,255,255,.5);font-size:13px;font-weight:700;cursor:pointer;padding:8px;
-    -webkit-tap-highlight-color:transparent;}
+  /* The headline is the edit control once a handle exists — see #khName's note. Press state
+     on the title itself so the tap visibly lands; no underline or icon, the card's subline
+     already explains what the name is for and chrome here would fight the display face. */
+  #khTitle{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  #khTitle:active{opacity:.7;}
   .kpClose{display:block;width:100%;margin-top:11px;background:none;border:none;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:700;cursor:pointer;padding:8px;}
   @keyframes pwFade{from{opacity:0}to{opacity:1}}
   .pwCard{position:relative;width:100%;max-width:460px;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:26px 24px calc(24px + var(--safe-b));animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
@@ -1807,30 +1809,32 @@
      outside a round: sign their hides, and find the other players. -->
 <div id="kamoHome" data-blocks-timer>
   <div class="kpCard pwCard">
-    <!-- The + is conditional. Wearing "KAMO+" on a free user's own card would be the app
-         telling them they have something they do not. khSetPlus() decides. -->
-    <div class="kpBadge">KAMO<span class="kPlus" id="khPlus">+</span></div>
+    <!-- The whole badge is conditional, not just the +. Wearing "KAMO+" on a free user's own
+         card would be the app telling them they have something they do not — and a plain
+         "KAMO" badge on their card was the logo restated over a headline that is about THEM
+         (founder's call, 2026-08-12). khSetPlus() decides; it stays visible under forceFree
+         so the founder's 5-tap restore door on it never disappears with the preview. -->
+    <div class="kpBadge" id="khBadge">KAMO<span class="kPlus" id="khPlus">+</span></div>
     <div class="kpTitle" id="khTitle">Sign your hides</div>
     <div class="kpSub" id="khSub"></div>
     <!-- The @ is furniture, so it lives in the markup and never in the value. Storing it
          would put a second @ in every message the first time someone typed one. -->
     <!-- Hidden once a handle exists — the headline above IS the handle by then, and showing
-         it again in a field 40px lower is the same value twice in one glance. "Change name"
-         takes its place, and reveals it. -->
+         it again in a field 40px lower is the same value twice in one glance. Tapping the
+         headline reveals it: the name on screen is the thing you tap to change the name,
+         so the "Change name" button that used to stand in for the field is gone. -->
     <div class="khName" id="khName">
       <span class="khAt">@</span>
       <input id="khHandle" type="text" inputmode="text" autocomplete="off" autocapitalize="none"
              autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname"
              aria-label="Your handle">
     </div>
-    <!-- WHAT HAPPENED TO THE HIDES YOU SENT. Filled asynchronously by khResults() and hidden
-         until there is something true to put in it — a zero here would greet someone who has
-         never sent a challenge with their own inactivity, and an empty row is worse than no
-         row. This is the only reason to open this card twice. -->
+    <!-- WHAT HAPPENED TO THE HIDES YOU SENT. The count paints the instant the card opens —
+         the ids are local, so "N challenges sent" is certain without a network — and
+         khResults() swaps in the outcomes when the fetch lands. Still hidden for someone
+         who has never sent a challenge: a zero here would greet them with their own
+         inactivity, and an empty row is worse than no row. -->
     <div class="khScore" id="khScore" style="display:none"></div>
-    <!-- AFTER the score, not before it. Sitting directly on top of that box it read as the
-         box's label — "Change name" over a row of numbers about other people. -->
-    <button class="kpQuiet khEdit" id="khEdit" style="display:none">Change name</button>
     <!-- NO PERK CHIPS. They listed what KAMO+ contains, on a card that is now about who the
          player is and where the other players are — and for a member they were three things
          they already owned, restated. The post-purchase card still carries them, which is the
@@ -4249,6 +4253,10 @@ window.KAMO.setStoredHandle=function(h){
    membership signal on it — the +, the perk chips, the upsell — has to be able to say no. */
 function khSetPlus(){
   const plus=$("#khPlus"); if(plus) plus.style.display = isPro ? "" : "none";
+  /* The whole badge stands down for a free user — their card leads with the headline, not
+     the logo. `|| forceFree` keeps it for a member previewing as free: the 5-tap restore
+     door lives on this badge, and hiding the door with the preview would lock it. */
+  const badge=$("#khBadge"); if(badge) badge.style.display = (isPro||forceFree) ? "" : "none";
   /* THE DOORWAY HAS TO NAME THE OFFER, NOT THE PRICE OF REFUSING IT. This said "Unlock
      everything", which a free user reads as "pay" — so the one entry point that converts
      (paywalls the user opens themselves tap at ~4%, ones that interrupt them at 0% over
@@ -4262,12 +4270,11 @@ function khSetPlus(){
   if(up){ up.style.display = isPro ? "none" : "";
     up.textContent = trialAdvertised() ? "Try KAMO+ for free" : "Unlock everything"; }
 }
-/* One switch, because these two are never both right. Focus is deliberate on reveal: the
-   button said "change name", so the next thing should be a caret, not a second tap. */
+/* Just the field now. Its stand-in button ("Change name") is gone — the headline itself is
+   the edit control once it shows a handle, see the #khTitle tap below. */
 function khShowField(on){
-  const f=$("#khName"), e=$("#khEdit");
+  const f=$("#khName");
   if(f) f.style.display = on ? "" : "none";
-  if(e) e.style.display = on ? "none" : "";
 }
 /* The headline and the subline, from whatever the handle is RIGHT NOW. Split out of
    openKamoHome() because it stopped being true only at open time: typing a name has to move it
@@ -4296,8 +4303,9 @@ function openKamoHome(){
      reopens the card must get the field back, not a button offering to change nothing. */
   khShowField(!h);
   khSetPlus();
-  /* Not awaited: the card must open at once. The row appears under the handle a moment later
-     if there is anything to say, and never moves anything the user is already reaching for —
+  /* Not awaited: the card must open at once. The row's COUNT is on screen in the same frame
+     — khResults() paints it from the local ids before its first await — and the outcomes
+     replace it when the fetch lands, never moving anything the user is already reaching for:
      it sits above the buttons, not between them. */
   try{ khResults(); }catch(_){}
   /* THEY CAME TO LOOK, SO THE REMINDER TO LOOK IS SPENT. Opening this card IS reading the
@@ -4444,8 +4452,13 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
   }
   /* The only door in the product to other players. openURL() goes through the native bridge
      when there is one, so it opens the Discord app rather than a web view of it. */
-  const ed=$("#khEdit");
-  if(ed) ed.onclick=()=>{ haptic(8); khShowField(true); const i=$("#khHandle"); if(i){ i.focus(); try{ i.setSelectionRange(i.value.length,i.value.length); }catch(_){} } };
+  /* THE NAME IS THE BUTTON. Once a handle exists the field collapses and the headline shows
+     "@name" — tapping that name reopens the field, caret at the end, keyboard up. Guarded on
+     getHandle(): with no handle the headline says "Sign your hides" and the field is already
+     on screen, so the tap has nothing to reveal. Focus is deliberate: the user tapped a name
+     to change it, so the next thing should be a caret, not a second tap. */
+  const tt=$("#khTitle");
+  if(tt) tt.onclick=()=>{ if(!getHandle()) return; haptic(8); khShowField(true); const i=$("#khHandle"); if(i){ i.focus(); try{ i.setSelectionRange(i.value.length,i.value.length); }catch(_){} } };
   /* THE DISCORD BUTTON IS GONE — founder's call, 2026-08-12, and the numbers agree: 10 taps
      in seven days against ~150 card opens, all of them landing in an empty server. A door to
      an empty room is worse than no door, because it spends the one thing this card has —
@@ -7385,17 +7398,26 @@ function khRenderRows(el,rows,head){
 }
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
-  /* IT ONLY GOES DARK IF IT WAS DARK — OR IF THERE IS DEMONSTRABLY NOTHING. Blanking the box
-     at the top of every open meant one slow or failed round trip took away a row that was on
-     screen a second ago: the user closed the card, reopened it, and their results were gone.
-     The last true render stays up until a new one replaces it.
-     The one case that must still clear INSTANTLY is the never-sent user, and it can, because
-     the ids are local — chMine() answers without a network, before the first await. Deciding
-     it here rather than after the fetch is what keeps a cached row off a card that has no
-     hides behind it. */
-  const hasIds=chMine().length>0;
-  if(!hasIds||el.dataset.filled!=="1") el.style.display="none";
-  if(!hasIds){ el.innerHTML=""; el.onclick=null; delete el.dataset.filled; }
+  /* THE BOX IS ON SCREEN BEFORE THE NETWORK ANSWERS. It used to stay display:none until
+     chTally() resolved, so on the first open of a session the card sat with a hole where
+     the results belong for the whole round trip — long enough to read as "no component"
+     (founder's report, 2026-08-12). The COUNT never needed the network: the ids are local,
+     chMine() answers before the first await. So the certain half paints immediately —
+     "N challenges sent · checking…" — and the fetch swaps in the outcomes (or the retry
+     line) when it lands. Nothing is invented: the count is reported, the outcome is not
+     claimed, which is the same honesty rule the offline branch below already follows.
+     A box already filled this session keeps its last true render instead — blanking it on
+     every open meant one slow round trip took away a row that was on screen a second ago.
+     The never-sent user still gets nothing, instantly, for the same local-ids reason:
+     a row here would be about their inactivity rather than about other people. */
+  const ids=chMine();
+  if(!ids.length){ el.style.display="none"; el.innerHTML=""; el.onclick=null; delete el.dataset.filled; }
+  else if(el.dataset.filled!=="1"){
+    el.innerHTML="<b>"+ids.length+"</b> challenge"+(ids.length===1?"":"s")
+      + ' sent · <span class="khNone">checking…</span>';
+    el.onclick=null;
+    el.style.display="block";
+  }
   khOpen=false;
   try{
     /* null means NO IDS — the one answer that is certain without a network, and the one that
