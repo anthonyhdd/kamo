@@ -53,11 +53,16 @@ const html = real.slice(0, at)
      which is the shape of the false pass this hook was written to avoid. Both are removed
      again on the way out so nothing downstream inherits a fake wrapper. */
   + 'tapLine(){window.__bought=null;const rn=window.ReactNativeWebView,pn=postNative;'
+  + 'const before={plan:pwPlan,buy:document.getElementById("pwBuy").textContent,'
+  + 'line:document.getElementById("pwLifeLine").textContent};'
   + 'window.ReactNativeWebView={postMessage(){}};'
   + 'postNative=(m)=>{if(m&&m.type==="purchase")window.__bought=m.product;return true;};'
   + 'try{document.getElementById("pwLifeLine").click();}finally{postNative=pn;'
   + 'if(rn)window.ReactNativeWebView=rn;else delete window.ReactNativeWebView;}'
-  + 'return{purchased:window.__bought,plan:pwPlan};},'
+  + 'return{purchased:window.__bought,plan:pwPlan,before:before,'
+  + 'buy:document.getElementById("pwBuy").textContent,'
+  + 'line:document.getElementById("pwLifeLine").textContent,'
+  + 'loading:document.getElementById("pwBuy").classList.contains("loading")};},'
   /* #shareSheet is in this list because it was missing from the CSS one, and it is the biggest
      thing on the screen the full arm opens over: on the reveal the sheet is auto-presented, so
      every paywall opened from a finished round had "Can they find you?", the challenge card,
@@ -180,9 +185,25 @@ console.log('\nTHE ONE-LINE PLAN SELLS ONLY WHAT THE STORE RETURNED, AND BUYS IN
   bought.purchased === 'com.blisscoach.kamo.pro'
     ? ok('one tap on the line goes straight to StoreKit with the lifetime product')
     : bad(`tapping the line asked to purchase ${JSON.stringify(bought.purchased)} — it must buy, not switch`);
-  bought.plan === 'lifetime'
-    ? ok('and the plan is set to lifetime on the way through, so the tracking agrees')
-    : bad(`pwPlan is "${bought.plan}" after the line tap`);
+  /* AND IT LEAVES THE SCREEN ALONE. Buying used to run through SELECTING lifetime first —
+     pwPlan, the row highlight, updatePwBuy() — so the CTA rewrote itself to the lifetime price
+     and the line flipped to offering the weekly, in the same instant StoreKit slid up over
+     them. Cancel Apple's sheet and you are returned to a paywall that is not the one you were
+     reading. The plan travels as an argument now, and these three assertions are the whole
+     difference between "buys" and "selects, then buys". */
+  bought.plan === bought.before.plan
+    ? ok(`and the selected plan is untouched ("${bought.plan}") — the line buys, it does not select`)
+    : bad(`pwPlan moved from "${bought.before.plan}" to "${bought.plan}" on a line tap`);
+  bought.buy === bought.before.buy
+    ? ok('the CTA still says what it said before the tap')
+    : bad(`the CTA rewrote itself from ${JSON.stringify(bought.before.buy)} to `
+        + `${JSON.stringify(bought.buy)} while the native sheet was opening`);
+  bought.line === bought.before.line
+    ? ok('and so does the line itself')
+    : bad(`the line flipped from ${JSON.stringify(bought.before.line)} to ${JSON.stringify(bought.line)}`);
+  !bought.loading
+    ? ok('no spinner on the CTA either — the feedback belongs to the control that was pressed')
+    : bad('the weekly CTA went into its loading state because the lifetime line was tapped');
 }
 
 await browser.close();

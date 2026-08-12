@@ -3981,13 +3981,13 @@ document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=
    purchase path read pwPlan and the rows are still the record a returning sheet arm renders
    from. plan_selected still fires first so the choice and the checkout stay separable in the
    funnel. */
+/* BUYS, AND CHANGES NOTHING. No pwPlan write, no row highlight, no updatePwBuy() — the plan
+   travels as an argument instead. What the user was reading is still on screen when Apple's
+   sheet opens, and still there unchanged if they cancel it. */
 $("#pwLifeLine").onclick=()=>{
   const plan = pwPlan==="lifetime" ? "weekly" : "lifetime";
-  pwPlan=plan;
-  document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x.dataset.plan===plan));
-  updatePwBuy();
   track("plan_selected",{plan:plan,via:"line"});
-  pwPurchase();
+  pwPurchase(plan);
 };
 /* The native wrapper buys whatever product id we post — it resolves `msg.product` against
    the RevenueCat offering (App.js: `const wanted = msg.product || PRODUCT_ID`). That is
@@ -4011,8 +4011,17 @@ $("#pwLifeLine").onclick=()=>{
    Someone who taps "$14.99 once — yours forever" has decided; making them find the button
    again is a leak we invented. Both entry points land here so the tracking, the carrier and
    the native call cannot drift apart. */
-function pwPurchase(){ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID);
-  const buyProps={ plan:pwPlan, product_id:prod, source:pwLastSource, nth:pwOpens, trial:trialOn() };
+/* THE PLAN CAN BE PASSED IN, AND THE ONE THAT DOES NEVER TOUCHES THE SCREEN.
+   The lifetime line used to buy by first SELECTING lifetime — pwPlan, the row highlight and
+   updatePwBuy() — and then purchasing. Everything about that is correct except what the user
+   sees: the CTA rewrites itself to the lifetime price and the line flips to offering the
+   weekly, in the same instant StoreKit slides up over it. Tap something, watch the page
+   rearrange behind the sheet, cancel, and land on a paywall that is no longer the one you were
+   reading. The line is a BUY, so it should do nothing but buy. */
+function pwPurchase(planOverride){
+  const plan=planOverride||pwPlan;
+  const prod=plan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID);
+  const buyProps={ plan:plan, product_id:prod, source:pwLastSource, nth:pwOpens, trial:trialOn() };
   track("purchase_initiated",buyProps);
   /* CARRIER — the third and LAST of these. purchase_initiated is not on 1.0.2's
      WEB_EVENTS list, so it reports zero on every single day, including the day that
@@ -4025,8 +4034,18 @@ function pwPurchase(){ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?TRI
      there is no channel left, and anything else new has to wait for a build.
      ⚠️ DELETE when a build ships with purchase_initiated allow-listed. */
   trackCarried("purchase_initiated",buyProps);
-  haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } }
-$("#pwBuy").onclick=pwPurchase;
+  /* The spinner belongs to the CTA, so it only runs when the CTA is what was pressed. Putting
+     a loading state on the weekly button because someone tapped the lifetime line underneath
+     it points the feedback at the wrong control — the haptic already confirms the tap, and
+     StoreKit is the next thing on screen either way. */
+  haptic(16); pwBuyIntent=true;
+  if(window.ReactNativeWebView){ if(!planOverride) setPwBuyLoading(true); postNative({type:"purchase",product:prod}); }
+  else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } }
+/* Bound through a wrapper, not passed directly: onclick hands the handler a MouseEvent, and
+   pwPurchase's first argument is now the plan — `pwPurchase` as a listener would read the
+   event object as a plan override. It is falsy in neither sense that matters (an object is
+   truthy), so the CTA would have started buying `WEEKLY_ID` regardless of the selected plan. */
+$("#pwBuy").onclick=()=>pwPurchase();
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; }   // the hold already acted
   doRestore(); };
