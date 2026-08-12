@@ -838,6 +838,16 @@
      only what pwCard does not set (text-align:center — this one IS a celebration). */
   #kamoPlus,#kamoHome{position:absolute;inset:0;z-index:80;display:none;align-items:flex-end;justify-content:center;background:radial-gradient(120% 90% at 50% 28%,rgba(95,230,164,.18),rgba(3,5,8,.9));backdrop-filter:blur(8px);}
   #kamoPlus.show,#kamoHome.show{display:flex;animation:pwFade .3s ease;}
+  /* THE PICKER MUST SHOW ITS WORK. The character picker lives on this card and applies on
+     tap — so #kamoHome's outside stays CLEAR (no blur, no heavy dim, founder's call
+     2026-08-12): the body swaps in plain sight right behind the card. A light scrim only
+     where the card sits, for its own legibility. #kamoPlus keeps the shared treatment. */
+  #kamoHome{backdrop-filter:none;-webkit-backdrop-filter:none;background:linear-gradient(180deg,rgba(3,5,8,0) 34%,rgba(3,5,8,.72));}
+  .khChar{display:flex;gap:8px;justify-content:center;margin:2px 0 8px;}
+  .khCharOpt{font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:-.2px;color:rgba(255,255,255,.65);
+    background:rgba(255,255,255,.06);border:1px solid var(--stroke);border-radius:999px;padding:8px 16px;cursor:pointer;}
+  .khCharOpt.on{color:var(--mint);border-color:rgba(95,230,164,.55);box-shadow:0 0 0 1px rgba(95,230,164,.25),0 0 14px rgba(95,230,164,.18);}
+  .khCharOpt:active{transform:scale(.96);}
   .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;animation:kpRise .4s cubic-bezier(.2,.9,.3,1);}
   /* THE PLAYER CARD DOES NOT FLOAT. It inherits .pwCard, which is a bottom sheet: a drop
      shadow to lift it off the reveal behind it, and a breathing mint glow across its top.
@@ -1829,6 +1839,12 @@
              autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname"
              aria-label="Your handle">
     </div>
+    <!-- PICK YOUR CHARACTER. Applied the instant it is tapped, and visibly: this card's
+         backdrop is deliberately clear so the body swaps in plain sight behind it. -->
+    <div class="khChar" id="khChar">
+      <button class="khCharOpt" id="khCharA">Original</button>
+      <button class="khCharOpt" id="khCharB">New</button>
+    </div>
     <!-- WHAT HAPPENED TO THE HIDES YOU SENT. The count paints the instant the card opens —
          the ids are local, so "N challenges sent" is certain without a network — and
          khResults() swaps in the outcomes when the fetch lands. Still hidden for someone
@@ -1878,19 +1894,11 @@
          line on this sheet that puts the other person at the centre; everything else is about
          the hide you just made. -->
     <div class="pwTitle" style="margin-bottom:14px">Can they find you?</div>
-    <!-- CHALLENGE IS THE DEFAULT AGAIN. Before/After took this slot on the argument that the
-         reveal MP4 is the differentiator and that ~93% of users never switch tabs, so nobody
-         was choosing — both still true.
-         What changed underneath it: the sheet now leads with "Challenge a friend", and a
-         challenge link is a playable game rather than a caption. Opening on the reveal tab
-         put the loop's own format one tab away from the button that sells it.
-         The 93% cuts both ways — whichever tab opens is what gets sent — which is the reason
-         it should be the one the product is now built around.
-         Must stay in sync with `shareMode`'s initial value below. -->
-    <div id="ssMode">
-      <button class="ssTab active" data-mode="challenge">Challenge</button>
-      <button class="ssTab" data-mode="ba">Before / After</button>
-    </div>
+    <!-- THE TABS ARE GONE — CHALLENGE IS THE ONLY FORMAT (founder, 2026-08-12). ~93% never
+         switched, and the challenge link is a playable game where Before/After was a
+         caption; a selector between the product and a lesser copy of it was one more
+         decision in front of the send. `shareMode` stays "challenge" as a constant, and
+         beforeBoard lives on for the reveal MP4 the native share path still builds. -->
     <!-- FIRST, AND THE LOUDEST THING IN THE SHEET. This is the loop: a challenge sent to
          one person is the only share that asks for something back, and it was sitting last,
          under More/Save, in the position people scroll past on the way to Cancel. The
@@ -2157,19 +2165,25 @@ function blobShadow(){
    Gated on the handle "tony" so exactly one player sees it, and LAZY: the 2.5 MB GLB is
    fetched only when the gate is true, so the fleet never downloads a byte of it. Hides
    the founder SENDS bake the new body into the photo — that is the in-the-wild test.
-   Same pattern as the Tony Pro unlock in the main portfolio: NOT a leak, do not "fix" it.
-   To graduate: flip the gate to `true` (and budget the 2.5 MB, or quantize the GLB).
    A v2 character is ANIMATED, not posed: setPose/setPoseInstant/lerpChar all branch on
    char.mixer — the pose wheel crossfades clips, capture freezes whatever frame the mixer
-   is on, and the reveal's wave frame samples mid-clip. */
-function founderChunky(){ try{ return (getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; } }
+   is on, and the reveal's wave frame samples mid-clip.
+   GRADUATED TO A CHOICE (founder, 2026-08-12): the player card carries an Original/New
+   picker, stored under CHAR_KEY and applied on the spot. Unset, the founder's handle
+   still defaults to the new body (his test rig); everyone else defaults to Original.
+   The GLB stays lazy either way — only pickers pay the download. */
+const CHAR_KEY="kamo_char";
+function wantsV2(){
+  try{ const v=localStorage.getItem(CHAR_KEY); if(v==="v2") return true; if(v==="classic") return false; }catch(e){}
+  try{ return (getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; }
+}
 /* Clip names as they exist in the asset — vendor/kamo-v2.glb is the founder's own
    kamo_light.glb from the Aug 9 weekend (kamo-sprites kit), whose six clips are already
    named for the app's pose labels, index-aligned with POSES. */
 const V2POSE=["Stand","Wave","Arms up","Sit","Run","Point"];
 let kamoV2=null, kamoV2Loading=false;
 function loadKamoV2(){
-  if(kamoV2||kamoV2Loading||!founderChunky()) return;
+  if(kamoV2||kamoV2Loading||!wantsV2()) return;
   kamoV2Loading=true;
   import("./vendor/GLTFLoader.js").then(m=>{
     /* ?v= BUMPS WITH THE ASSET. index.html is cache-busted on every launch by the wrapper,
@@ -2224,7 +2238,7 @@ function loadKamoV2(){
       kamoV2=g; kamoV2Loading=false;
       /* Hot-swap: if the founder is already framing a shot, replace the stand-in body
          the moment the real one lands. */
-      try{ if(mode==="compose"&&founderChunky()){ clearCharacters(); spawnHider(); } }catch(_){}
+      try{ if(mode==="compose"&&wantsV2()){ clearCharacters(); spawnHider(); } }catch(_){}
     },undefined,()=>{ kamoV2Loading=false; });
   }).catch(()=>{ kamoV2Loading=false; });
 }
@@ -2260,7 +2274,7 @@ function makeCharacter(px=0){
   const group=new THREE.Group(); group.position.x=px; scene.add(group);
   const charG=new THREE.Group(); group.add(charG);
   const parts={};
-  if(founderChunky()&&kamoV2){
+  if(wantsV2()&&kamoV2){
     const body=kamoV2.scene;
     body.scale.setScalar(1); body.position.set(0,0,0); body.rotation.set(0,0,0);
     charG.add(body);
@@ -4468,6 +4482,20 @@ function openKamoHome(){
      tells them to check something they already checked is how an app gets its notifications
      switched off, which iOS never re-asks about. Cheap, keyed, and a no-op if none is armed. */
   if(nativeCaps && nativeCaps.notifSchedule) postNative({type:"notif-cancel",key:"results"});
+  /* THE CHARACTER PICKER. Repainted on every open, applied on the tap — and VISIBLY: this
+     card's backdrop is deliberately clear (no blur, no heavy dim), so the body respawns in
+     plain sight right behind it. Picking the new body starts its lazy GLB fetch; the
+     classic stands in until it lands and is hot-swapped by the loader. */
+  const paintChar=()=>{ const v=wantsV2();
+    $("#khCharA").classList.toggle("on",!v);
+    $("#khCharB").classList.toggle("on",v); };
+  paintChar();
+  const pickChar=(c)=>{ try{ localStorage.setItem(CHAR_KEY,c); }catch(e){}
+    haptic(10); paintChar(); track("char_selected",{c:c});
+    loadKamoV2();
+    if(mode==="compose"){ clearCharacters(); spawnHider(); } };
+  $("#khCharA").onclick=()=>pickChar("classic");
+  $("#khCharB").onclick=()=>pickChar("v2");
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
@@ -5123,7 +5151,7 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","hide_publish_blocked","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -5262,7 +5290,7 @@ function composeShare(W,src){ src=src||board; const H=Math.round(W*16/9); const 
    render is 795 ms. Sub-second and perfect, gated behind a tab 93% of users never tapped.
    Safe either way — with no reveal module and no before-frame, composeBeforeAfter() falls
    back to `board` and the share stays a static image. */
-let beforeBoard=null, shareMode="challenge";   // must match the .ssTab.active in the markup
+let beforeBoard=null, shareMode="challenge";   // a constant since the tabs left — challenge is the only format
 /* native capabilities (injected by the Expo wrapper on load). {revealVideo:true} once the
    native MP4 module ships. Absent on older builds → shares stay static (backward-safe). */
 /* Declared with the other store state above — see the note there. */
@@ -5663,8 +5691,12 @@ function expandShareSheet(){
      so without this guard every drag ended by ALSO stepping the sheet one detent past where it
      was released — the settle and the click fighting over one gesture. `moved` is set the
      moment the drag threshold is crossed and cleared on the next pointerdown. */
+  /* TAPS WALK DOWN — grand, petit, à peine vu — and from the floor back up to open, so
+     every state is one tap from the next and the handle is never a dead end (founder,
+     2026-08-12). The old toggle stepped UP from peek, which meant the third detent was
+     only ever reachable by drag. */
   if(grab) grab.onclick=()=>{ if(moved){ moved=false; return; }
-    haptic(10); stepSheet(ssState==="open"?-1:1); };
+    haptic(10); stepSheet(ssState==="mini"?2:-1); };
 })();
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
    closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
@@ -6218,6 +6250,18 @@ function chAwaitId(ms){
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
+  /* UNDER THE PUBLISH FLOOR THERE IS NOTHING TO SEND AND NOTHING TO WAIT FOR. chUpload()
+     refuses a hide this bare (CH_MIN_COVERAGE — the link card was spoiling the answer), so
+     the 8s wait below would burn in full and then send the generic invite: "Preparing your
+     challenge…" for eight seconds, followed by the wrong thing, with the reason nowhere on
+     screen. That is exactly what the founder hit. FIRST, before the sent stamp — a blocked
+     hide is not sent. Blocked is SAID, instantly, and the tap goes to the fix. */
+  if(sc<CH_MIN_COVERAGE){
+    showHint("🖌️ Paint them invisible first");
+    closeShareSheet();
+    const be=$("#btnEdit"); if(be&&be.style.display!=="none") be.click();
+    return;
+  }
   /* STAMPED HERE, at the tap, not after the share reports back. iOS never tells the web
      whether the sheet was sent or cancelled — invite_native is the last thing we see — so
      waiting for confirmation means never stamping at all. This over-counts by whatever
@@ -6374,7 +6418,8 @@ updateInviteBtn();   // plain browser → visible immediately; native → waits 
    that Before/After IS the default, the question flips to whether people actively switch
    BACK to the static image — that is the signal that would justify reverting, and nothing
    in the funnel could see it. */
-document.querySelectorAll("#ssMode .ssTab").forEach(t=>t.onclick=()=>{ shareMode=t.dataset.mode; document.querySelectorAll("#ssMode .ssTab").forEach(x=>x.classList.toggle("active",x===t)); haptic(8); track("share_mode_selected",{mode:shareMode}); syncShareMode(); });
+/* The mode tabs are gone with their markup — shareMode is the "challenge" constant now
+   (see the sheet comment). share_mode_selected retires with them. */
 
 /* BEFORE/AFTER IS NOT A CHALLENGE. That tab produces a reveal of YOUR OWN hide — a clip to
  * post — while "Challenge a friend" and the card beneath it describe a link somebody else
