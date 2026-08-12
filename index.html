@@ -849,6 +849,10 @@
   .khCharOpt.on{color:var(--mint);border-color:rgba(95,230,164,.55);background:rgba(95,230,164,.08);
     box-shadow:0 0 0 1px rgba(95,230,164,.25),0 0 16px rgba(95,230,164,.16);}
   .khCharOpt:active{transform:scale(.96);}
+  /* Same mark, same corner as the locked swatches — one vocabulary for "this is KAMO+". */
+  .khCharOpt.lock{position:relative;}
+  .khCharOpt.lock::after{content:"✦";position:absolute;right:6px;top:2px;font-size:11px;line-height:1;
+    color:var(--mint);text-shadow:0 0 6px rgba(0,0,0,.8);}
   /* Swatches, not labelled chips: the colour IS the label, and five names in a row would
      out-weigh the two body chips above them — the body is the bigger choice. */
   .khFin{display:flex;gap:9px;justify-content:center;margin:-6px 0 18px;}
@@ -1841,8 +1845,8 @@
          above it, and Clean export has to stay because it is the only perk here with
          no free substitute. Both sheets keep the same row - see TWO SHEETS, ONE LOOK. -->
     <div class="kpChips">
-      <span class="kpChip">Every color</span>
-      <span class="kpChip">Fine brush</span>
+      <span class="kpChip">Every body</span>
+      <span class="kpChip">Every finish</span>
       <span class="kpChip">Clean export</span>
     </div>
     <button class="kpGo" id="kpGo">Start blending in →</button>
@@ -4447,11 +4451,16 @@ function kpConfetti(){ const host=$("#kpBurst"); if(!host) return; host.innerHTM
     host.appendChild(s); } setTimeout(()=>{ if(host) host.innerHTML=""; },1900); }
 function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
   const lifetime = pwPlan==="lifetime";
-  /* "Every camo brush" outlived the brushes by two releases. What was actually bought is
-     the colour picker, the fine brush and the clock. */
+  /* THIS SCREEN HAS TO NAME WHAT THE PAYWALL SOLD, and for one release it did not. The
+     pitch now leads with the body and the finishes; this line still congratulated people on
+     a colour picker and a brush, so someone who bought because of "EVERY FINISH." was
+     thanked for something else entirely. It also promised "no clocks anywhere", which stopped
+     being much of a perk the moment the free round went to a minute and a half.
+     ("Every camo brush" outlived the brushes by two releases before that — same failure,
+     twice, which is why the pitch and this line should be changed together from now on.) */
   const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
-    ? "Every color, the fine brush, and no clocks anywhere — yours forever. Now go disappear."
-    : "Every color, the fine brush, and no clocks anywhere — cancel anytime.";
+    ? "Every body, every finish, and every tool — yours forever. Now go disappear."
+    : "Every body, every finish, and every tool — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
 
@@ -4629,9 +4638,16 @@ function openKamoHome(){
      card's backdrop is deliberately clear (no blur, no heavy dim), so the body respawns in
      plain sight right behind it. Picking the new body starts its lazy GLB fetch; the
      classic stands in until it lands and is hot-swapped by the loader. */
+  /* The body is gated exactly like the finishes now, so it has to be MARKED like them. The
+     swatches below wear the ✦ and this chip did not, which made the one bigger choice on the
+     card the only unlabelled locked thing on it — you found out by tapping. Note this asks
+     "may they have it", not wantsV2() ("do they have it selected"): the chip is locked for a
+     free user whether or not they have ever picked it. */
+  const canChar=()=>{ try{ return canPro()||(getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; } };
   const paintChar=()=>{ const v=wantsV2();
     $("#khCharA").classList.toggle("on",!v);
-    $("#khCharB").classList.toggle("on",v); };
+    $("#khCharB").classList.toggle("on",v);
+    $("#khCharB").classList.toggle("lock",!canChar()); };
   paintChar();
   /* THE PREFERENCE IS STORED EVEN WHEN IT IS LOCKED, and that is deliberate. wantsV2() and
      curFinish() both fall back on their own when membership is missing, so writing the choice
