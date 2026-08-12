@@ -320,6 +320,10 @@
      links that read fine on the sheet disappear here. White, founder's call. */
   #paywall.pwFull #pwTerms{opacity:1;color:#fff;}
   #paywall.pwFull .pwFine a,#paywall.pwFull .pwFine button{color:rgba(255,255,255,.9);}
+  #pwBuy .pwBuySub{display:block;font-size:11.5px;font-weight:600;letter-spacing:0;opacity:.8;margin-top:2px;}
+  /* The button says the price now, so the standalone terms line under it stays quiet — but
+     only while the sub exists: the loading/unavailable states still speak through #pwTerms. */
+  #paywall.pwFull.hasBuySub #pwTerms{display:none;}
   #btnLight{right:24px;}
   /* torch on = the button itself lights up */
   #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
@@ -750,9 +754,17 @@
   #paywall.pwFull .pwKick,#paywall.pwFull .pwTitle,#paywall.pwFull .pwSub,#paywall.pwFull #pwPlans{display:none!important;}
   #pwHero{display:none;}
   #paywall.pwFull #pwHero{display:block;position:absolute;left:0;right:0;top:24%;text-align:center;padding:0 12px;pointer-events:none;}
+  /* GREEN, AS A GRADIENT — founder's call. Every line wears a white-into-mint vertical
+     gradient (background-clip:text); the lit line trades the white top for a saturated
+     mint-to-deep ramp, so "which lock opened this" still reads at a glance. drop-shadow
+     replaces text-shadow: a shadow on clipped text paints over the fill. The solid color
+     stays as the fallback for any renderer without background-clip:text. */
   .pwHeroLn{font-family:'KamoHero',var(--display),sans-serif;font-weight:400;font-size:clamp(36px,12.5vw,54px);line-height:1.06;letter-spacing:.2px;
-    color:rgba(255,255,255,.94);text-shadow:0 4px 22px rgba(0,0,0,.8);}
-  .pwHeroLn.on{color:var(--mint);}
+    color:var(--mint);background:linear-gradient(180deg,#ffffff 0%,#c8f7de 45%,var(--mint) 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 3px 14px rgba(0,0,0,.7));}
+  .pwHeroLn.on{background:linear-gradient(180deg,#eafff5 0%,var(--mint) 55%,#2fbf7d 100%);
+    -webkit-background-clip:text;background-clip:text;}
   /* The strike is mint on white and inverts when the line lights: two colours must always
      separate the word from its deletion, or the strike disappears into its own line. */
   .pwHeroLn s{text-decoration-thickness:.09em;text-decoration-color:var(--mint);}
@@ -3757,6 +3769,18 @@ function setTerms(txt){ const t=$("#pwTerms"); if(t){ t.classList.remove("fade")
    rotation block took it with it. Every buy-label write goes through it — the span exists so
    .pwBuy::after's sheen can sit under the text instead of over it. */
 function setBuyLabel(b,txt){ b.textContent=""; const sp=document.createElement("span"); sp.className="pwBuyTxt"; sp.textContent=txt; b.appendChild(sp); }
+/* THE PRICE RIDES THE BUTTON — full arm only. Yesterday: 31 Buy taps, 12 Apple-sheet cancels,
+   0 trials. A tap from someone who has not priced the offer is worth nothing — it dies on the
+   sheet — so the price belongs at the point of decision, once: a small second line inside the
+   CTA, and the separate #pwTerms line goes quiet (hasBuySub) instead of saying it twice.
+   Cleared whenever there is nothing true to say (loading, unavailable, sheet arm), which also
+   lets the error states keep using #pwTerms. Prices read from the store-fed nodes, never typed. */
+function setBuySub(b,txt){
+  let sp=b.querySelector(".pwBuySub");
+  if(!txt){ if(sp) sp.remove(); paywallEl.classList.remove("hasBuySub"); return; }
+  if(!sp){ sp=document.createElement("span"); sp.className="pwBuySub"; b.appendChild(sp); }
+  sp.textContent=txt; paywallEl.classList.add("hasBuySub");
+}
 function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is written only through setTerms() now */
   /* Buy stays disabled until a real localized price arrives. It used to be live from the
      first frame while the markup showed hardcoded $14.99/$2.99: on any non-USD storefront
@@ -3765,9 +3789,11 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
      Three states, because "still loading" and "nothing is for sale" must not look alike —
      otherwise a missing store key leaves a spinner-ish "Loading…" on screen forever. */
   if(!storeReady){ setBuyLabel(b,storeAnswered?"Currently unavailable":"Loading…"); b.disabled=true; b.classList.add("pwBuyOff");
+    setBuySub(b,"");
     setTerms(storeAnswered?"Purchases aren't available right now.":""); return; }
   b.disabled=false; b.classList.remove("pwBuyOff");
-  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; setBuyLabel(b,p?("Unlock forever — "+p):"Unlock forever"); setTerms("One-time purchase. Yours forever."); }
+  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; setBuyLabel(b,p?("Unlock forever — "+p):"Unlock forever"); setTerms("One-time purchase. Yours forever.");
+    setBuySub(b, pwArm==="full" ? "One-time purchase · yours forever" : ""); }
   else { const p=($("#pwWeeklyPrice")||{}).textContent||"";
     /* An unadvertised free trial converts barely better than no trial at all: the user
        decides whether to tap Buy from THIS button, long before Apple's sheet shows them
@@ -3788,7 +3814,9 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
        Built from trialLabel, never a typed numeral — the store can report a trial length
        different from TRIAL.days, and check.mjs refuses a bare number in paywall copy. */
     if(trialAdvertised()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
-    setTerms(trialTermsLine()); }
+    setTerms(trialTermsLine());
+    const wk=(($("#pwWeeklyPrice")||{}).textContent||"").trim();
+    setBuySub(b, (pwArm==="full"&&wk) ? ((trialAdvertised()?"then ":"")+wk+"/week · cancel anytime") : ""); }
   updatePwLifeLine(); }
 /* THE OTHER PLAN, AS ONE LINE — full arm only. The sheet shows both plans as rows; the full
    arm shows one CTA and offers whichever plan is NOT selected here, as a quiet toggle. Every
