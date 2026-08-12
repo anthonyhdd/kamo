@@ -2148,19 +2148,58 @@ function blobShadow(){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
   m.rotation.x=-Math.PI/2; m.position.y=0.01; return m;
 }
+/* FOUNDER-ONLY BODY DOUBLE. The August reference sheets fixed the character's real
+   proportions (MEASURED on the plates: 2.50 heads tall, head = 40% of the height, torso
+   ≈ 1.0× the head, profile depth 0.91× the head, shoulder line at 39% from the top, NO
+   neck) and the founder called the current build ugly — but also explicitly asked that
+   nothing ship. This is the agreed middle: the chunky anatomy exists behind the handle
+   gate below, so exactly one player sees it — and every hide they SEND bakes it into the
+   photo, which is the in-the-wild test. Same pivots, same names, so every pose, the mask,
+   the coverage score and the reveal frames work unchanged. Flip the gate to `true` the
+   day it graduates. Same pattern as the Tony Pro unlock in the main portfolio: NOT a
+   leak, do not "fix" it. */
+function founderChunky(){ try{ return (getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; } }
 function makeCharacter(px=0){
   const group=new THREE.Group(); group.position.x=px; scene.add(group);
   const charG=new THREE.Group(); group.add(charG);
   const parts={};
-  const spine=pivot(0,1.0,0); charG.add(spine); parts.spine=spine;
-  const torso=capsule(0.34,0.62); torso.position.y=0.36; spine.add(torso);
-  const shoulders=pivot(0,0.72,0); spine.add(shoulders);
-  const head=pivot(0,0,0); shoulders.add(head); parts.head=head;
-  const headMesh=new THREE.Mesh(new THREE.SphereGeometry(0.32,24,20),WHITE()); headMesh.position.y=0.34; head.add(headMesh);
-  function arm(side){ const sh=pivot(0.30*side,-0.02,0); shoulders.add(sh); const up=capsule(0.145,0.40); up.position.y=-0.24; sh.add(up); const el=pivot(0,-0.46,0); sh.add(el); const lo=capsule(0.13,0.38); lo.position.y=-0.23; el.add(lo); return {sh,el}; }
-  const aL=arm(1), aR=arm(-1); parts.shL=aL.sh; parts.elL=aL.el; parts.shR=aR.sh; parts.elR=aR.el;
-  function leg(side){ const hip=pivot(0.17*side,1.0,0); charG.add(hip); const up=capsule(0.16,0.44); up.position.y=-0.27; hip.add(up); const kn=pivot(0,-0.52,0); hip.add(kn); const lo=capsule(0.145,0.42); lo.position.y=-0.26; kn.add(lo); const foot=new THREE.Mesh(new THREE.SphereGeometry(0.15,16,12),WHITE()); foot.scale.set(1,.6,1.5); foot.position.set(0,-0.5,0.06); kn.add(foot); return {hip,kn}; }
-  const lL=leg(1), lR=leg(-1); parts.hipL=lL.hip; parts.knL=lL.kn; parts.hipR=lR.hip; parts.knR=lR.kn;
+  if(founderChunky()){
+    /* 2.4 units tall like the classic build, so placement, pinch scale and the camera
+       need nothing. Head sphere r=0.48 → 0.96 = 40% of 2.4; head bottom lands ON the
+       shoulder line (39% from the top) and sinks into the torso top — that IS the
+       no-neck read. Legs are what remains (~0.5): stumps. Everything overlaps on
+       purpose; on a white unlit-looking body the intersections read far less than on
+       the slim build, which is most of what the plates changed. */
+    const spine=pivot(0,0.50,0); charG.add(spine); parts.spine=spine;
+    const torso=capsule(0.42,0.30); torso.position.y=0.47; spine.add(torso);
+    const shoulders=pivot(0,0.92,0); spine.add(shoulders);
+    const head=pivot(0,0.02,0); shoulders.add(head); parts.head=head;
+    const headMesh=new THREE.Mesh(new THREE.SphereGeometry(0.48,28,22),WHITE());
+    headMesh.scale.set(1,1.02,0.91);            // profile depth 0.91× the head, per the plates
+    headMesh.position.y=0.40; head.add(headMesh);   // welded into the torso top — the no-neck IS a weld, not a hover
+    function arm(side){ const sh=pivot(0.38*side,0,0); shoulders.add(sh);
+      const up=capsule(0.15,0.18); up.position.y=-0.14; sh.add(up);
+      const el=pivot(0,-0.30,0); sh.add(el);
+      const lo=capsule(0.135,0.16); lo.position.y=-0.13; el.add(lo); return {sh,el}; }
+    const aL=arm(1), aR=arm(-1); parts.shL=aL.sh; parts.elL=aL.el; parts.shR=aR.sh; parts.elR=aR.el;
+    function leg(side){ const hip=pivot(0.19*side,0.50,0); charG.add(hip);
+      const up=capsule(0.20,0.14); up.position.y=-0.13; hip.add(up);
+      const kn=pivot(0,-0.24,0); hip.add(kn);
+      const lo=capsule(0.18,0.10); lo.position.y=-0.10; kn.add(lo);
+      const foot=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),WHITE());
+      foot.scale.set(1,.55,1.4); foot.position.set(0,-0.22,0.05); kn.add(foot); return {hip,kn}; }
+    const lL=leg(1), lR=leg(-1); parts.hipL=lL.hip; parts.knL=lL.kn; parts.hipR=lR.hip; parts.knR=lR.kn;
+  } else {
+    const spine=pivot(0,1.0,0); charG.add(spine); parts.spine=spine;
+    const torso=capsule(0.34,0.62); torso.position.y=0.36; spine.add(torso);
+    const shoulders=pivot(0,0.72,0); spine.add(shoulders);
+    const head=pivot(0,0,0); shoulders.add(head); parts.head=head;
+    const headMesh=new THREE.Mesh(new THREE.SphereGeometry(0.32,24,20),WHITE()); headMesh.position.y=0.34; head.add(headMesh);
+    function arm(side){ const sh=pivot(0.30*side,-0.02,0); shoulders.add(sh); const up=capsule(0.145,0.40); up.position.y=-0.24; sh.add(up); const el=pivot(0,-0.46,0); sh.add(el); const lo=capsule(0.13,0.38); lo.position.y=-0.23; el.add(lo); return {sh,el}; }
+    const aL=arm(1), aR=arm(-1); parts.shL=aL.sh; parts.elL=aL.el; parts.shR=aR.sh; parts.elR=aR.el;
+    function leg(side){ const hip=pivot(0.17*side,1.0,0); charG.add(hip); const up=capsule(0.16,0.44); up.position.y=-0.27; hip.add(up); const kn=pivot(0,-0.52,0); hip.add(kn); const lo=capsule(0.145,0.42); lo.position.y=-0.26; kn.add(lo); const foot=new THREE.Mesh(new THREE.SphereGeometry(0.15,16,12),WHITE()); foot.scale.set(1,.6,1.5); foot.position.set(0,-0.5,0.06); kn.add(foot); return {hip,kn}; }
+    const lL=leg(1), lR=leg(-1); parts.hipL=lL.hip; parts.knL=lL.kn; parts.hipR=lR.hip; parts.knR=lR.kn;
+  }
   const meshes=[]; charG.traverse(o=>{ if(o.isMesh) meshes.push(o); });
   const char={group,charG,parts,meshes,poseIdx:0,target:fullPose(0)};
   setPoseInstant(char,0);
