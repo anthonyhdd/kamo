@@ -328,7 +328,11 @@
   #btnLight.on svg{stroke:#04120b;fill:#04120b;}
   /* KAMO+ entry point, mirrors #flip on the other side of the wordmark */
   #btnPlus{left:14px;width:44px;border:none;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
-  #btnPlus svg{width:21px;height:21px;fill:#fff;stroke:none;filter:drop-shadow(0 1px 4px rgba(0,0,0,.55));}
+  /* Stroked now, not filled — the star was a solid glyph, the figure is line art. Same 21px
+     so the corner's weight does not move. Two shadows: the black one keeps it readable over a
+     bright viewfinder, the mint one is the glow. */
+  #btnPlus svg{width:21px;height:21px;fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;
+    filter:drop-shadow(0 1px 4px rgba(0,0,0,.55)) drop-shadow(0 0 5px rgba(95,230,164,.75));}
   /* Apple-camera-style shutter: white ring + gap + white inner disc, no colour */
   .shutter{position:relative;width:78px;height:78px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
   .shutter .ring{position:absolute;inset:0;border-radius:50%;border:4px solid #fff;box-shadow:0 6px 22px rgba(0,0,0,.5);}
@@ -818,6 +822,25 @@
      keep both; this one is flat. */
   #kamoHome .kpCard{box-shadow:none;}
   #kamoHome .kpCard::before{display:none;}
+  /* THE CARD CANNOT GROW PAST THE TOP OF THE SCREEN.
+     It is anchored to the BOTTOM edge (#kamoHome is align-items:flex-end), so every pixel it
+     gains goes upward — and the results list is the one child whose height is decided by how
+     many challenges the user has sent, up to ten. Expanding the accordion on a full list grew
+     the card by several hundred pixels: the badge, the name and the results header all ended
+     up above y=0. That is the "on voit plus le haut" report, and it is also why "Show each
+     one" read as a dead button — it worked perfectly, it just rendered the rows off-screen.
+     Fixing it needs a bound on the card AND a scroll region inside it, or the bound would only
+     move the clipping somewhere else. The card becomes a column so the leftover space can be
+     handed to exactly one child; align-items:center keeps .kpBadge a pill (an inline-flex
+     child would stretch edge to edge under the default `stretch`), while every button here
+     already declares width:100% and so still fills the card. */
+  #kamoHome .kpCard{max-height:100%;display:flex;flex-direction:column;align-items:center;}
+  /* grow:0 — collapsed, this box is one line and must stay one line rather than inflate to
+     fill the card. shrink:1 + min-height:0 is the pair that actually lets it give way: a flex
+     item's default min-height is auto, which refuses to go below its content and hands the
+     overflow back to the card. Expanded, it takes what room is left and scrolls the rest. */
+  #kamoHome .khScore{flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;}
   @keyframes kpRise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
   /* THE KAMO FACE, like everything else that speaks for the brand. The badge and the
      headline were both set in --font (Avenir) while the paywall's kicker and title next
@@ -918,6 +941,9 @@
   .khScore{cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .khScore:active{transform:scale(.985);}
   .khMore{display:block;margin-top:7px;color:var(--mint);font-size:12.5px;font-weight:700;}
+  /* The summary, kept above the list it opened. Separated by the same hairline the rows use so
+     it reads as the head of a table rather than as a first row with no picture. */
+  .khHead{padding-bottom:9px;}
   /* One line per hide, the state on the left and the one action on the right. Bordered rows
      rather than a list with bullets: each row is its own object because each row sends its
      own challenge. */
@@ -1115,18 +1141,23 @@
      Reached ONLY by dragging the handle down from the peek — the sheet still ARRIVES in peek,
      because the send is the flattest number in this app and starting folded would put it one
      gesture further away. A tap on the handle, or a swipe up, brings it straight back. */
-  #shareSheet.mini{display:flex;}
-  #shareSheet.mini .ssCard > *:not(.ssGrab){display:none!important;}
-  /* THE SAFE AREA IS APPLIED ONCE. .ssCard already ends on calc(16px + var(--safe-b)), so a
-     grabber that also added var(--safe-b) stacked two home-indicator insets and left ~90px of
-     empty green under the bar — the whole point of this state is to be small. The card gives
-     up its own padding here and the handle owns the spacing: ~20px of bar plus one safe area,
-     flush to the bottom edge. */
-  #shareSheet.mini .ssCard{padding:0 0 var(--safe-b);}
-  #shareSheet.mini .ssGrab{padding:9px 0 7px;}
+  #shareSheet.ssMini{display:flex;}
+  #shareSheet.ssMini .ssCard > *:not(.ssGrab){display:none!important;}
+  /* THE SAFE AREA IS APPLIED ONCE, AND ONLY AS MUCH OF IT AS THE HOME INDICATOR NEEDS.
+     .ssCard already ends on calc(16px + var(--safe-b)), so a grabber that also added
+     var(--safe-b) stacked two home-indicator insets and left ~90px of empty green under the
+     bar. Halving that was still not small: a full var(--safe-b) under a 4px bar is 34pt of
+     nothing, which is where "trop d'espace sur la barre, trop de hauteur" came from.
+     The inset exists for ONE reason here — the system's home pill lives about 8pt off the
+     bottom edge and our grabber is also a centred pill, so they must not collide. Clearing it
+     costs ~20pt, not 34. `max()` keeps a floor for the devices that report no inset at all
+     (any browser, and the DOM harness), where the bar would otherwise sit on the screen edge.
+     Total: ~7 + 4 + ~20 = 31px of card, hard against the bottom edge. */
+  #shareSheet.ssMini .ssCard{padding:0;}
+  #shareSheet.ssMini .ssGrab{padding:7px 0 max(9px,calc(var(--safe-b) - 14px));}
   /* Brighter and wider than the peek's: at this size the grabber IS the control, not a
      decoration on a full card. */
-  #shareSheet.mini .ssGrab::before{width:52px;background:rgba(255,255,255,.55);}
+  #shareSheet.ssMini .ssGrab::before{width:52px;background:rgba(255,255,255,.55);}
   /* ONE RISE, AND IT COMES FROM .pwCard. There used to be a second animation here — a `.rise`
      one-shot class, added on arrival and removed 420ms later — layered on top of the
      `animation:pwUp` that .ssCard already inherits from .pwCard. Two animations on one
@@ -1174,7 +1205,7 @@
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
-  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab,#shareSheet.mini .ssGrab{display:block;}
+  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab,#shareSheet.ssMini .ssGrab{display:block;}
   /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
      gradient, same 26px corners, same rise, same breathing mint glow — because the two are
      the only full-width sheets in the app and they were speaking in different voices: the
@@ -1456,7 +1487,17 @@
     <div id="fx"></div>
 
     <button id="btnPlus" class="topbtn" title="KAMO+" aria-label="KAMO+">
-      <svg viewBox="0 0 24 24"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+      <!-- THE FIGURE PEEKING PAST AN EDGE — the app icon's pose, in outline. It replaces a
+           generic sparkle: the ✦ said "premium" in the same voice as every other app's ✦,
+           while this says KAMO and nothing else. Stroked, not filled, so it stays legible at
+           21px over a bright viewfinder; the mint drop-shadow is the glow. -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6.6 2.4v19.2"/>
+        <circle cx="14.6" cy="7.2" r="4.4"/>
+        <path d="M6.6 4.9c1.5-.5 2.6.1 3.1 1 .4.8.2 1.7-.5 2.3"/>
+        <path d="M11.3 10.6c-1.1 1.5-1.9 3.4-2.3 5.5-.3 1.7-.3 3.4 0 5.1"/>
+        <path d="M17.4 10.7c1 1.6 1.5 3.3 1.4 5-.1 1.2-.5 2.3-1.2 3.2"/>
+      </svg>
     </button>
     <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
     <div id="timerBar"></div><div id="timerTag"></div><div id="timerNum"></div>
@@ -1743,7 +1784,6 @@
     <!-- Free users only — see khSetPlus(). Tagged `home`, not `brand`, so the ~9 paywall views
          a day the wordmark used to send can be told apart from the ones this row sends. -->
     <button class="kpPrimary" id="khUpsell" style="display:none">Unlock everything</button>
-    <button class="kpSecondary" id="khDiscord">Join the Discord</button>
     <!-- NO RESTORE HERE. It was added on the argument that this is an account screen and that
          five people had tapped Restore in a week looking for it — but those five taps happened
          on the PAYWALL, which is the only place it existed. They prove people find it there.
@@ -4163,6 +4203,34 @@ function openKamoHome(){
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
+/* SWIPE DOWN CLOSES IT. The card is a bottom sheet in every visual respect — same .pwCard
+   chrome as the paywall and the share sheet — and the share sheet has answered a downward
+   drag since it shipped. This one only ever had a Back button, so the gesture people already
+   use on the sheet 40px away did nothing here.
+   Bound on the CARD, not the backdrop, and only past 40px: this sheet contains a text field
+   and a results list, so a short drag has to stay a scroll and a tap has to stay a tap —
+   nothing is preventDefault()ed before the threshold. */
+(function kamoHomeSwipe(){
+  const el=$("#kamoHome"); if(!el) return;
+  const card=el.querySelector(".kpCard"); if(!card) return;
+  let y0=null, fired=false;
+  /* A DRAG THAT STARTS ON THE RESULTS LIST IS A SCROLL. That box is a scroll container once
+     the accordion is open, and closing the whole card because someone dragged down inside it
+     would make the list unreadable — the gesture to look further down it and the gesture to
+     dismiss the card would be the same one. Only while it can actually scroll: collapsed, it
+     is one line and a drag there means what it means anywhere else on the card. */
+  const inScroller=(t)=>{ const s=t&&t.closest&&t.closest("#khScore");
+    return !!s && s.scrollHeight>s.clientHeight+1; };
+  card.addEventListener("pointerdown",e=>{ y0=inScroller(e.target)?null:e.clientY; fired=false; },{passive:true});
+  card.addEventListener("pointermove",e=>{
+    if(y0===null||fired) return;
+    if(e.clientY-y0<40) return;                 // up, or not far enough down: leave it alone
+    fired=true; haptic(8); closeKamoHome();
+  },{passive:true});
+  const end=()=>{ y0=null; };
+  card.addEventListener("pointerup",end,{passive:true});
+  card.addEventListener("pointercancel",end,{passive:true});
+})();
 function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show");
   /* AND THE SHARE SHEET COMES BACK, SHORT. On the reveal the sheet is the only route to a
      share, and the wordmark now sits over that screen — so opening the card from there and
@@ -4273,8 +4341,11 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
      when there is one, so it opens the Discord app rather than a web view of it. */
   const ed=$("#khEdit");
   if(ed) ed.onclick=()=>{ haptic(8); khShowField(true); const i=$("#khHandle"); if(i){ i.focus(); try{ i.setSelectionRange(i.value.length,i.value.length); }catch(_){} } };
-  const d=$("#khDiscord");
-  if(d) d.onclick=()=>{ haptic(12); track("discord_opened",{}); openURL(DISCORD_URL); };
+  /* THE DISCORD BUTTON IS GONE — founder's call, 2026-08-12, and the numbers agree: 10 taps
+     in seven days against ~150 card opens, all of them landing in an empty server. A door to
+     an empty room is worse than no door, because it spends the one thing this card has —
+     a player who came looking for their results. DISCORD_URL stays in one place below; when
+     there is a community to walk into, this is one button and one handler. */
   /* `home`, not `brand`. The wordmark used to send ~9 paywall views a day tagged `brand`;
      this row replaces them, and a separate tag is the only way to see whether repurposing the
      wordmark cost anything or whether these convert better. */
@@ -4980,7 +5051,7 @@ function openShareSheet(via){
      and setSheetSize() plays the current height into the target one by measuring both. */
   setSheetSize("open"); haptic(10);
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","mini"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","ssMini"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -5026,12 +5097,19 @@ const SHEET_STEPS=["mini","peek","open"];
  * never starts, and the timer is the only thing that catches that. */
 let sheetResizeT=null;
 function setSheetSize(next){
-  const cls = next==="open" ? "show" : next;   // "mini" and "peek" are their own class names
-  const apply=()=>{ shareSheetEl.classList.remove("show","peek","mini"); shareSheetEl.classList.add(cls); };
+  /* THE STATE NAME AND THE CLASS NAME ARE NOT THE SAME WORD, AND "mini" IS WHY.
+     `.mini` was already taken — the app's small underlined text button, ~5000 lines up — so
+     putting the raw state name on the container silently handed the sheet `padding:6px`, an
+     underline and a 13px font. The padding is the one that showed: 6px of dead space under a
+     card whose entire brief is to sit flush on the bottom edge, reported twice as "pas collé
+     au bas de l'écran" and invisible to anyone reading the sheet's own rules, because the
+     offending one names nothing about sheets. Namespaced; test-peek-dom measures the gap. */
+  const cls = next==="open" ? "show" : next==="mini" ? "ssMini" : next;
+  const apply=()=>{ shareSheetEl.classList.remove("show","peek","ssMini"); shareSheetEl.classList.add(cls); };
   const card=shareSheetEl.querySelector(".ssCard");
   const was = shareSheetEl.classList.contains("show") ? "show"
             : shareSheetEl.classList.contains("peek") ? "peek"
-            : shareSheetEl.classList.contains("mini") ? "mini" : null;
+            : shareSheetEl.classList.contains("ssMini") ? "ssMini" : null;
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   /* `was` is null when the sheet is not on screen at all — the Share CTA's hidden → open path.
      There is no height to animate FROM there; the card's own entrance (pwUp) is the animation. */
@@ -5043,7 +5121,7 @@ function setSheetSize(next){
   apply();
   const to=card.getBoundingClientRect().height;
   if(Math.abs(to-from)<2){ return; }           // same size — nothing worth transitioning
-  if(to<from) { shareSheetEl.classList.remove("show","peek","mini"); shareSheetEl.classList.add(was); }
+  if(to<from) { shareSheetEl.classList.remove("show","peek","ssMini"); shareSheetEl.classList.add(was); }
   card.style.height=from+"px";
   shareSheetEl.classList.add("ssResizing");
   void card.offsetHeight;                      // commit `from` as a style, or the browser only ever sees `to`
@@ -6981,7 +7059,13 @@ async function chTally(){
   const rows=(await Promise.all(ids.map(id=>
     chRpc("get_hide",{p_id:id}).then(r=>r?Object.assign({id:id},r):null).catch(()=>null)
   ))).filter(Boolean);
-  if(!rows.length) return null;
+  /* NO ROWS IS NOT NO HIDES. Every get_hide here can fail — one dead cell, one cold start —
+     and returning null made the card answer "you have never sent anything" to someone holding
+     ten challenge ids in localStorage. That is the whole of the "pas toujours visible"
+     report: the box was not missing, it was being told there was nothing to say by a failed
+     fetch. The ids are local and certain, so the count is reported and the outcome is not
+     claimed; khResults() paints a retry instead of inventing zeroes. */
+  if(!rows.length) return { hides:ids.length, tried:0, found:0, rows:[], offline:true };
   return { hides:rows.length,
     tried:rows.reduce((a,h)=>a+((h&&h.n_attempts)|0),0),
     found:rows.reduce((a,h)=>a+((h&&h.n_found)|0),0),
@@ -7073,18 +7157,45 @@ function khRowHtml(h,i){
     + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
     + '</span><button class="khSend" data-i="'+i+'">Send</button></div>';
 }
-function khRenderRows(el,rows){
-  el.innerHTML = '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
+function khRenderRows(el,rows,head){
+  el.innerHTML = (head?'<div class="khHead">'+head+'<span class="khMore">Hide these</span></div>':'')
+    + '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
   el.querySelectorAll(".khSend").forEach((b)=>{
     b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
   });
 }
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
-  el.style.display="none"; khOpen=false;
+  /* IT ONLY GOES DARK IF IT WAS DARK — OR IF THERE IS DEMONSTRABLY NOTHING. Blanking the box
+     at the top of every open meant one slow or failed round trip took away a row that was on
+     screen a second ago: the user closed the card, reopened it, and their results were gone.
+     The last true render stays up until a new one replaces it.
+     The one case that must still clear INSTANTLY is the never-sent user, and it can, because
+     the ids are local — chMine() answers without a network, before the first await. Deciding
+     it here rather than after the fetch is what keeps a cached row off a card that has no
+     hides behind it. */
+  const hasIds=chMine().length>0;
+  if(!hasIds||el.dataset.filled!=="1") el.style.display="none";
+  if(!hasIds){ el.innerHTML=""; el.onclick=null; delete el.dataset.filled; }
+  khOpen=false;
   try{
-    const t=await chTally(); if(!t) return;
+    /* null means NO IDS — the one answer that is certain without a network, and the one that
+       must still be able to take the box away: someone who has never sent a challenge, or who
+       cleared this device, cannot be left looking at a cached row about hides they do not
+       have. Every other failure now arrives as t.offline instead. */
+    const t=await chTally();
+    if(!t){ el.style.display="none"; el.innerHTML=""; el.onclick=null; delete el.dataset.filled; return; }
     const {tried,found}=t, rows=t.rows;
+    /* THE FETCH FAILED AND THE IDS DID NOT. Say the half that is known, offer the half that
+       is not, and do not touch the unread dot — those results have not been read. */
+    if(t.offline){
+      el.innerHTML = "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")
+        + ' sent · <span class="khNone">results didn\'t load</span>'
+        + '<span class="khMore">Tap to retry</span>';
+      el.onclick=()=>{ khResults(); };
+      el.style.display="block";
+      return;
+    }
     /* NOTHING PLAYED IS NOT NOTHING TO SAY. This used to return here, and an absent row is
        ambiguous in exactly the wrong direction: someone who sent three challenges and sees
        no row cannot tell "nobody has opened them" from "this is broken". They DID act — they
@@ -7105,15 +7216,23 @@ async function khResults(){
        the reveal: a share sheet that opens without being asked for is indistinguishable from a
        misfire. One hide expands to one row; the extra tap buys the user the chance to see WHAT
        they are about to re-send. */
+    /* THE HEADLINE SURVIVES THE EXPANSION. Opening used to REPLACE the two numbers with the
+       list, so the one fact the card exists to deliver — "12 played your hides" — was on
+       screen only while the thing it summarises was closed. It rides along as the first line
+       of the open state now, which also gives the collapse a visible word instead of leaving
+       "tap anything" as folklore. scrollTop resets on both directions: the box is a scroll
+       container now and it would otherwise reopen halfway down where it was left. */
     const paint=()=>{
-      if(khOpen){ khRenderRows(el,rows); return; }
-      el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+      if(khOpen) khRenderRows(el,rows,head);
+      else el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+      el.scrollTop=0;
     };
     paint();
     el.onclick=()=>{
       khOpen=!khOpen; paint();
       if(khOpen) track("home_results_expanded",{hides:rows.length,tried:tried});
     };
+    el.dataset.filled="1";
     el.style.display="block";
     track("home_results_shown",{hides:rows.length,tried:tried,found:found});
   }catch(e){}
