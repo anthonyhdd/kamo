@@ -3841,13 +3841,18 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
    as the CTA's, so it obeys the same rule — only claimed when the build can confirm the
    store actually returned a trial. */
 function updatePwLifeLine(){
+  /* display:"block", never "". The stylesheet declares #pwLifeLine{display:none} as its
+     resting state, so clearing the INLINE display falls straight back onto that rule and the
+     line stays invisible — which is exactly what shipped from 2026-08-11 to 08-12: every
+     price was right, sellable() said yes, and nothing was ever on screen. The plan ROWS get
+     away with "" because their hidden state is a markup attribute, not a stylesheet rule. */
   const el=$("#pwLifeLine"); if(!el) return;
   if(pwArm!=="full"||!storeReady){ el.style.display="none"; return; }
   const sellable=(plan)=>{ const r=document.querySelector('#pwPlans .pwPlan[data-plan="'+plan+'"]'); return !!r&&r.style.display!=="none"; };
   const life=($("#pwLifetimePrice")||{}).textContent||"", wk=($("#pwWeeklyPrice")||{}).textContent||"";
-  if(pwPlan!=="lifetime"&&sellable("lifetime")&&life){ el.textContent="or "+life+" once — yours forever"; el.style.display=""; }
+  if(pwPlan!=="lifetime"&&sellable("lifetime")&&life){ el.textContent="or "+life+" once — yours forever"; el.style.display="block"; }
   else if(pwPlan==="lifetime"&&sellable("weekly")&&wk){
-    el.textContent="or "+(trialAdvertised()?("try "+trialLabel+" free · "):"")+wk+"/week"; el.style.display=""; }
+    el.textContent="or "+(trialAdvertised()?("try "+trialLabel+" free · "):"")+wk+"/week"; el.style.display="block"; }
   else el.style.display="none";
 }
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
