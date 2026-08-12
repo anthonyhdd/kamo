@@ -1018,6 +1018,26 @@
      read at a glance without either of them needing the word "you" underlined. */
   .khScore .khWin{color:var(--mint);font-weight:700;}
   .khScore .khHit{color:rgba(255,255,255,.9);font-weight:700;}
+  /* Quieter than Send: watching is the reward, sending is the job. */
+  .khWatch{flex:none;background:rgba(255,255,255,.06);border:1px solid var(--stroke);color:rgba(255,255,255,.72);
+    font-family:var(--display);font-size:12px;font-weight:700;border-radius:999px;padding:6px 11px;margin-right:6px;}
+  .khWatch:active{transform:scale(.94);}
+  /* The replay stage: the photo, the travelling viewport, the doubts. */
+  .khRpFrame{position:relative;width:100%;max-height:52vh;aspect-ratio:9/16;margin:2px auto 10px;border-radius:16px;overflow:hidden;
+    border:1px solid var(--stroke);background:#05060a;}
+  .khRpFrame img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;}
+  /* Everything outside the rectangle is dimmed by its own enormous shadow — one element,
+     no mask, and it reads instantly as "this is all they could see". */
+  .khRpView{position:absolute;border:2px solid rgba(255,255,255,.9);border-radius:6px;
+    box-shadow:0 0 0 4000px rgba(3,5,8,.62);transition:none;pointer-events:none;}
+  .khRpFx{position:absolute;inset:0;pointer-events:none;transition:box-shadow .2s;}
+  .khRpFx.win{box-shadow:inset 0 0 0 3px var(--mint),inset 0 0 60px rgba(95,230,164,.45);}
+  .khRpFx.lose{box-shadow:inset 0 0 0 3px rgba(255,95,87,.75);}
+  .khRpAim{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.55);animation:chPop .5s ease-out forwards;}
+  .khRpAim.buzz{border-color:#ff5f57;box-shadow:0 0 0 6px rgba(255,95,87,.18);animation:none;opacity:1;}
+  .khRpBar{height:4px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;margin-bottom:10px;}
+  .khRpBar i{display:block;height:100%;width:0;background:var(--mint);}
   .khSend{flex:none;background:rgba(95,230,164,.14);border:1px solid rgba(95,230,164,.45);
     color:#eafff5;border-radius:999px;padding:6px 13px;font-family:var(--display);
     font-size:12.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;}
@@ -5161,7 +5181,7 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -7705,10 +7725,13 @@ function khRowHtml(h,i){
   const chips=[];
   if(h&&h.n_attempts>0) chips.push('<span class="chChip">'+h.n_attempts+' tried</span>');
   if(h&&h.n_found>0)    chips.push('<span class="chChip">'+h.n_found+' found</span>');
+  /* WATCH comes before SEND on a hide somebody has already played. The row's job is to
+     report what other people did; until now it could only say it in numbers. */
+  const watch = (h&&h.n_attempts>0) ? '<button class="khWatch" data-w="'+i+'">Watch</button>' : '';
   return '<div class="khRow">'+shot
     + '<span class="khRowTxt"><b>'+chStateLine(h)+'</b>'
     + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
-    + '</span><button class="khSend" data-i="'+i+'">Send</button></div>';
+    + '</span>'+watch+'<button class="khSend" data-i="'+i+'">Send</button></div>';
 }
 function khRenderRows(el,rows,head){
   el.innerHTML = (head?'<div class="khHead">'+head+'<span class="khMore">Hide these</span></div>':'')
@@ -7716,6 +7739,134 @@ function khRenderRows(el,rows,head){
   el.querySelectorAll(".khSend").forEach((b)=>{
     b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
   });
+  el.querySelectorAll(".khWatch").forEach((b)=>{
+    b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); khReplay(rows[+b.dataset.w],b); };
+  });
+}
+
+/* ===== THE SPECTATOR SEAT =================================================================
+ * You hid someone in your own room and a stranger spent forty seconds failing to find them.
+ * Until now the app could only report that as a number — "2 tried · 1 found" — which is the
+ * scoreboard of a game nobody got to watch. This is the watching.
+ *
+ * WHAT IS BEING REPLAYED. The seeker screen records its own round (see the trace in
+ * chSeek): the zoom transform sampled ~8×/s, every aim raised — kept or ABANDONED, and the
+ * abandoned ones are the hesitations, the moment they nearly buzzed and thought better of
+ * it — and the buzz that ended it. That is enough to reconstruct the exact frame they were
+ * staring at, because the transform IS the frame: at scale k with translate t, the image
+ * point sitting under the middle of their screen is -t/k from the centre, and 1/k of the
+ * picture is what they could see. So the replay is a rectangle travelling over the photo,
+ * which is what "watch them search" actually looks like.
+ *
+ * THE ANSWER IS NOT IN THE PAYLOAD. get_seek_traces strips the buzz position and the aim
+ * that committed it from any round that ended in a find — so a replay of a successful hunt
+ * shows the search and stops, and this screen cannot be turned into a cheat sheet by
+ * someone holding a link. Misses keep everything: a wrong buzz gives nothing away and it is
+ * the funniest thing on the screen.
+ */
+function khReplay(h,btn){
+  const id=h&&h.id; if(!id) return;
+  const label=btn?btn.textContent:"";
+  if(btn){ btn.textContent="…"; btn.disabled=true; }
+  chRpc("get_seek_traces",{p_id:id}).then((rows)=>{
+    if(btn){ btn.textContent=label; btn.disabled=false; }
+    const list=Array.isArray(rows)?rows:(rows?[rows]:[]);
+    const t=list.find(r=>r&&r.trace&&Array.isArray(r.trace.s)&&r.trace.s.length>1);
+    /* NOTHING TO WATCH IS A SENTENCE, NOT A DEAD BUTTON. Every hide played before the
+       recorder shipped has attempts and no trace, and that is most of them today. */
+    if(!t){ showHint("No replay for this one yet"); track("replay_empty",{}); return; }
+    khPlayTrace(h,t);
+  }).catch(()=>{ if(btn){ btn.textContent=label; btn.disabled=false; } showHint("Couldn't load the replay"); });
+}
+function khPlayTrace(h,rec){
+  try{
+    document.getElementById("khRp")?.remove();
+    const w=document.createElement("div"); w.id="khRp"; w.className="chPP";
+    const found=rec.why==="hit", gave=rec.why==="giveup";
+    const secs=((rec.ms||0)/1000).toFixed(1);
+    /* The headline is the verdict, said from the creator's side. */
+    const head = found ? "They found you in "+secs+"s"
+               : gave  ? "They gave up after "+secs+"s"
+                       : "They missed after "+secs+"s";
+    w.innerHTML='<div class="chPPin">'
+      +'<div class="pwKick">THEIR HUNT</div>'
+      +'<div class="chPPh">'+head+'</div>'
+      +'<div class="khRpFrame" id="khRpFrame">'
+        +'<img id="khRpImg" alt="">'
+        +'<div class="khRpView" id="khRpView"></div>'
+        +'<div class="khRpFx" id="khRpFx"></div>'
+      +'</div>'
+      +'<div class="khRpBar"><i id="khRpFill"></i></div>'
+      +'<div class="chPPfoot">'
+        +'<button class="pwBuy" id="khRpAgain"><span class="pwBuyTxt">Watch again</span></button>'
+        +'<button class="chPPclose" id="khRpX">Back</button>'
+      +'</div></div>';
+    document.body.appendChild(w);
+    const frame=document.getElementById("khRpFrame"), img=document.getElementById("khRpImg");
+    const view=document.getElementById("khRpView"), fx=document.getElementById("khRpFx");
+    /* THE STAGE TAKES THE PHOTO'S SHAPE, and it has to. The recorded transform is relative
+       to the picture the seeker was looking at, so any letterboxing here would offset every
+       rectangle by the width of the black bars — the replay would point next to what they
+       were actually staring at. Sized from the image itself the moment it decodes; the 9/16
+       in the stylesheet is only what holds the layout until then. */
+    img.onload=()=>{ if(img.naturalWidth&&img.naturalHeight)
+      frame.style.aspectRatio=img.naturalWidth+" / "+img.naturalHeight; play(); };
+    img.src=CH_URL+"/storage/v1/object/public/hides/"+encodeURIComponent(h.img_path);
+
+    const S=(rec.trace.s||[]), A=(rec.trace.a||[]), END=rec.trace.end||null;
+    const DUR=Math.max(1200,(rec.ms|0)||S[S.length-1][0]||3000);
+    let raf=0, t0=0;
+    /* The recorded viewport, mapped back onto the photo: at scale k the seeker saw 1/k of
+       it, centred 1/k × (-t) from the middle. Percentages, so it rides any frame size. */
+    const at=(ms)=>{
+      let s=S[0];
+      for(const x of S){ if(x[0]<=ms) s=x; else break; }
+      const k=Math.max(1,s[1]||1), tx=s[2]||0, ty=s[3]||0;
+      const fw=frame.clientWidth||1, fh=frame.clientHeight||1;
+      const wpc=100/k, hpc=100/k;
+      const cx=50-(tx/k)/fw*100, cy=50-(ty/k)/fh*100;
+      return {l:Math.max(0,Math.min(100-wpc,cx-wpc/2)), t:Math.max(0,Math.min(100-hpc,cy-hpc/2)), w:wpc, h:hpc};
+    };
+    const marks=[];
+    const play=()=>{
+      cancelAnimationFrame(raf);
+      marks.forEach(m=>m.remove()); marks.length=0;
+      fx.className="khRpFx"; t0=performance.now();
+      const step=()=>{
+        const ms=performance.now()-t0;
+        const p=Math.min(1,ms/DUR);
+        document.getElementById("khRpFill").style.width=(p*100)+"%";
+        const b=at(ms);
+        view.style.left=b.l+"%"; view.style.top=b.t+"%"; view.style.width=b.w+"%"; view.style.height=b.h+"%";
+        /* An abandoned aim: they raised the reticle here and let go without buzzing. It is
+           the only recorded evidence of doubt, so it stays on screen once it appears. */
+        A.forEach((a)=>{
+          if(a._done||!a.p||!a.p.length||(a.d||0)>ms) return;
+          a._done=1;
+          const last=a.p[a.p.length-1];
+          const m=document.createElement("div"); m.className="khRpAim";
+          m.style.left=(last[1]*100)+"%"; m.style.top=(last[2]*100)+"%";
+          fx.appendChild(m); marks.push(m);
+        });
+        if(p<1){ raf=requestAnimationFrame(step); return; }
+        /* THE END. A miss shows where they buzzed — wrong, and that is the joke. A find
+           shows nothing but the flash: the server never sent the spot. */
+        if(END&&END.x>=0){
+          const m=document.createElement("div"); m.className="khRpAim buzz";
+          m.style.left=(END.x*100)+"%"; m.style.top=(END.y*100)+"%";
+          fx.appendChild(m); marks.push(m);
+        }
+        fx.className="khRpFx "+(found?"win":"lose");
+      };
+      raf=requestAnimationFrame(step);
+    };
+    if(img.complete&&img.naturalWidth) img.onload();
+    document.getElementById("khRpAgain").onclick=()=>{ haptic(8); A.forEach(a=>{delete a._done;}); play(); };
+    const close=()=>{ cancelAnimationFrame(raf); w.remove(); };
+    document.getElementById("khRpX").onclick=close;
+    w.onclick=(ev)=>{ if(ev.target===w) close(); };
+    track("replay_watched",{why:rec.why||"",ms:rec.ms|0});
+  }catch(e){}
 }
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
@@ -8147,8 +8298,14 @@ function chSeek(){
         /* ④ — the chrono noted, now it speaks: rank among everyone who buzzed this hide
            before (misses count as slower — they never found it at all). Silent when there
            is nobody to compare against yet. */
+        /* THE POPULATION IS NAMED, because the two claims are not the same one. Ranked
+           against this hide's own field once it has one (scope 'hide'), and against every
+           one-buzz round ever played until then — which is the honest reading when you are
+           the second person to open a link. */
         ending("Found in "+(ms/1000).toFixed(1)+"s",
-          res.pct!=null ? "Faster than "+res.pct+"% of players."
+          res.pct!=null ? (res.scope==="hide"
+                            ? "Faster than "+res.pct+"% on this photo."
+                            : "Faster than "+res.pct+"% of players.")
                         : (res.others===0 ? "First one in." : ""),
           {rehide:true,camoSrc:camoSrc});
         if(frames) armFlipUI();
