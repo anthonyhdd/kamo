@@ -538,9 +538,14 @@ console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
   folded.state === 'mini' && /\bmini\b/.test(folded.cls)
     ? ok('a downward step folds it to the handle')
     : bad(`stepping down gave state=${folded.state} cls=${JSON.stringify(folded.cls)}`);
-  folded.h < arrived.h
-    ? ok(`and the card is shorter than the peek (${Math.round(folded.h)}px < ${Math.round(arrived.h)}px)`)
-    : bad(`folded height ${folded.h} is not under the peek's ${arrived.h} — nothing was actually folded`);
+  /* A CEILING, NOT JUST "SHORTER". The first version stacked two safe-area insets — the
+     card's and the grabber's — and left ~90px of empty green under the bar while still
+     passing a "shorter than the peek" test. The point of this state is to be small, so the
+     assertion is an absolute one: a handle, its breathing room, and nothing else. */
+  folded.h < arrived.h && folded.h <= 30
+    ? ok(`and the card is a bar, not a box (${Math.round(folded.h)}px, peek is ${Math.round(arrived.h)}px)`)
+    : bad(`folded height ${Math.round(folded.h)}px — must be under 30px (peek: ${Math.round(arrived.h)}px). `
+        + 'Check for a doubled var(--safe-b) between .ssCard and .ssGrab.');
   (await page.evaluate(() => window.__t.visible('.ssInvite'))) === 'none'
     ? ok('the CTA is put away with the rest of the card')
     : bad('the folded sheet still shows its buttons — it is not folded, it is just shorter');
