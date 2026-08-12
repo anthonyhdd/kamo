@@ -51,6 +51,7 @@ const html = real.slice(0, at)
   + 'text:(document.getElementById("khScore")||{}).textContent||"",'
   + 'shown:(document.getElementById("khScore")||{}).style.display};},'
   + 'dot(){const b=document.querySelector(".brand");return !!b&&b.classList.contains("hasNews");},'
+  + 'lsDot(){const l=document.getElementById("lastShot");return !!l&&l.classList.contains("hasNews");},'
   /* The accordion is driven through a real click on the box rather than by calling the paint
      function: the whole point of the change is that the summary IS the tap target, and a test
      that calls the renderer directly would pass with the handler unwired. */
@@ -121,6 +122,9 @@ console.log('\nTHE DOT MEANS SOMETHING NEW');
   (await page.evaluate(() => window.__m.check())) === true
     ? ok('someone played → the dot appears')
     : bad('nothing appeared after 12 attempts across two hides');
+  (await page.evaluate(() => window.__m.lsDot())) === true
+    ? ok('and the camera-corner thumbnail carries the same dot')
+    : bad('the thumbnail missed the news dot — two surfaces now disagree about "something new"');
 }
 
 console.log('\nREADING IT CLEARS IT, AND ONLY NEW PLAY BRINGS IT BACK');
