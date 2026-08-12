@@ -301,7 +301,7 @@ console.log('\nCHANGING TAPS OR THE CLOCK REPUBLISHES THE HIDE');
 console.log('\nTHE INVITE CARRIES THE HANDLE');
 {
   const { calls } = await run({ nativeInvite: true, share: null, handle: 'tony' });
-  /@tony is hidden in this photo/.test(calls.text || '')
+  /@tony hid a body in this photo/.test(calls.text || '')
     ? ok('a set handle signs the challenge')
     : bad(`the handle did not reach the message: ${JSON.stringify(calls.text)}`);
   !/@@|@undefined|@null/.test(calls.text || '')

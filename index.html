@@ -6125,7 +6125,7 @@ function chPrevPlay(){
       +'</div></div>';
     document.body.appendChild(w);
     const who=getHandle();
-    document.getElementById("chPPh").textContent = who ? "Find @"+who : "Find the body";
+    document.getElementById("chPPh").textContent = who ? "@"+who+" hid a body in here" : "Someone hid a body in here";
 
     const frame=document.getElementById("chPPframe");
     /* The frame takes the BOARD's shape, so the hide fills it edge to edge instead of sitting
@@ -6333,8 +6333,8 @@ $("#ssInvite").onclick=async()=>{
      line that has always shipped. */
   const who=getHandle();
   const text = link
-    ? (who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.")
-      +"\nOne tap to find "+(who?"them":"it")+"."
+    ? (who ? "🫥 @"+who+" hid a body in this photo." : "🫥 There's a body hidden in this photo.")
+      +"\nOne tap to find it."
       +"\n\n"+link
     : "🫥 KAMO — paint yourself into the background until nobody can find you."
       +"\n\n"+inviteUrl();
@@ -7720,10 +7720,10 @@ async function chShareHide(h,btn){
   const id=h&&h.id; if(!id) return;
   haptic(10);
   const link=KAMO_HOST+"?h="+id, who=(h&&h.name)||getHandle();
-  const head = who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.";
+  const head = who ? "🫥 @"+who+" hid a body in this photo." : "🫥 There's a body hidden in this photo.";
   /* One deal for every hide, old or new — the seeker plays one buzz on no clock, so the
      message never quotes seconds or taps again, whatever the row still stores. */
-  const text = head+"\nOne tap to find "+(who?"them":"it")+"."+"\n\n"+link;
+  const text = head+"\nOne tap to find it."+"\n\n"+link;
   track("resend_tapped",{played:((h&&h.n_attempts)|0)>0});
   if(nativeCaps && nativeCaps.invite){ postNative({type:"invite",message:text,score:0}); return; }
   let shared=false, cancelled=false;
@@ -8214,8 +8214,14 @@ function chSeek(){
     /* textContent, never innerHTML — the value comes off another user's device and lands in
        front of a stranger. The page narrows it on the way in and the database narrows it
        again on insert, and this is the third place it cannot become markup. */
-    $$("chHead").textContent = h.name ? "Find @"+h.name : "Find the body";
-    $$("chSub").textContent="One tap.";
+    /* WHO DID WHAT, AND TO WHOM. This said "Find @tony", which makes @tony the thing that
+       is hidden — and he is not: he HID someone, a small white figure he painted into his
+       own photo. The sender is the author of the puzzle, never its subject, and a stranger
+       who reads "Find @tony" spends their one tap looking for a person who was never in
+       the picture. The headline states the dare and names its author; the sub carries the
+       rule. */
+    $$("chHead").textContent = h.name ? "@"+h.name+" hid a body in here" : "Someone hid a body in here";
+    $$("chSub").textContent="One tap to find it.";
 
     const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit"; quit.textContent="I give up";
     w.appendChild(quit);
