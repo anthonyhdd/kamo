@@ -479,6 +479,18 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   const wiring = [
     /* No `()` in the anchor: it took a `via` parameter and this check went red on a signature
        change that had nothing to do with what it guards. Anchors match the NAME. */
+    /* EVERY CAPTURE IS A NEW HIDE. chId survived capture() for months: within one session
+       only the first round could publish, and every round after it shared the link to the
+       PREVIOUS photo — personalised, signed, and pointing at someone else's picture. The
+       app reload between launches hid it perfectly (one hide per launch reads as a user
+       who made one). Nothing user-visible says it is happening, so it gets an assertion. */
+    ['capture starts a fresh hide', 'function capture(', 'chResetRound()',
+      'capture() does not call chResetRound() — chId survives into the next round, so the '
+      + 'second hide of a session shares the FIRST hide\'s link and the friend opens a '
+      + 'different photo'],
+    ['the reveal starts the upload without publishing', 'function enterFinished(', 'chPrepare()',
+      'enterFinished() no longer calls chPrepare() — the image upload goes back to starting '
+      + 'on the same gesture as the tap, which is the eight-second wait this split removed'],
     ['openShareSheet renders the challenge card', 'function openShareSheet(', 'chPrevRender()',
       'openShareSheet() does not call chPrevRender() — the card is display:none until something '
       + 'adds .on, so it will only appear after a share instead of before one'],
@@ -716,6 +728,21 @@ try {
     : ok('the one-buzz round behaves end to end (node scripts/test-buzz-dom.mjs)');
 } catch (e) {
   bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
+/* ---- 12b-bis. The share sends THIS round's hide, and sends it now -------------------------
+   Two field-reported bugs that hid each other: the upload starting on the same gesture as
+   the tap (an 8s wait, then the generic invite), and chId surviving capture() so the second
+   hide of a session shared the FIRST hide's link. Both are timing, both are invisible to a
+   static read, and the test stubs a 3-second upload because neither reproduces on a fast
+   one. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-share-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · SHARE-TIMING TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the share is instant and always its own hide (node scripts/test-share-dom.mjs)');
+} catch (e) {
+  bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
 /* ---- 12c. The spectator seat ------------------------------------------------------------
