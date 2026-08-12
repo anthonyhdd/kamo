@@ -78,10 +78,13 @@ fi
 # ---- dns ------------------------------------------------------------------------------------
 # THE TRAP. A grey-cloud record serves GitHub Pages directly and never reaches the Worker.
 say "2/5  dns must be proxied"
-RECS=$(cf "$API/zones/$ZONE_ID/dns_records?per_page=100")
-echo "$RECS" | python3 - "$ZONE_ID" <<'PY' > /tmp/kamo_unproxied.txt
-import sys, json
-d = json.load(sys.stdin)
+# The records go through a FILE, not a pipe. `python3 -` already reads its program from
+# stdin, so a heredoc and a pipe on the same command fight over it: the heredoc wins, the
+# piped JSON never arrives, and json.load hits EOF with "Expecting value: line 1 column 1".
+cf "$API/zones/$ZONE_ID/dns_records?per_page=100" > /tmp/kamo_recs.json
+python3 - <<'PY' > /tmp/kamo_unproxied.txt
+import json
+d = json.load(open("/tmp/kamo_recs.json"))
 for r in d.get("result", []):
     if r["type"] in ("A", "AAAA", "CNAME") and r["name"] in ("playkamo.com",) and not r["proxied"]:
         print(r["id"], r["type"], r["name"], sep="\t")
@@ -94,7 +97,7 @@ if [ -s /tmp/kamo_unproxied.txt ]; then
 else
   echo "  already proxied"
 fi
-rm -f /tmp/kamo_unproxied.txt
+rm -f /tmp/kamo_unproxied.txt /tmp/kamo_recs.json
 
 # ---- worker ---------------------------------------------------------------------------------
 say "3/5  worker"
