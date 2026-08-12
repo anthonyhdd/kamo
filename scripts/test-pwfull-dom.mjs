@@ -47,6 +47,9 @@ const html = real.slice(0, at)
   + 'return{show:el.style.display!=="none",text:el.textContent,'
   + 'buy:(document.getElementById("pwBuy")||{}).textContent||"",plan:pwPlan};},'
   + 'toggle(){document.getElementById("pwLifeLine").click();return this.lifeline();},'
+  + 'chrome(){const g=q=>getComputedStyle(document.querySelector(q)).visibility;'
+  + 'return{brand:g(".brand"),done:g("#btnDone"),back:g("#btnBack"),hint:g("#hint")};},'
+  + 'close(){closePaywall();return this.chrome();},'
   + 'facts(){return{paint:PAINT_SECONDS};}};\n'
   + real.slice(at);
 
@@ -122,6 +125,19 @@ await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
   g.lit.length === 0 && g.ctx.length > 0
     ? ok('a contextless open lights nothing and still says something')
     : bad(`generic open: lit=${JSON.stringify(g.lit)} ctx=${JSON.stringify(g.ctx)}`);
+}
+
+console.log('\nTHE STAGE GOES QUIET UNDERNEATH, AND WAKES ON CLOSE');
+{
+  await page.evaluate(() => window.__f.open('time'));
+  const c = await page.evaluate(() => window.__f.chrome());
+  Object.values(c).every((v) => v === 'hidden')
+    ? ok('wordmark, Retake, Done and the hint are all hidden under the paywall')
+    : bad(`stage chrome shows through the full arm: ${JSON.stringify(c)}`);
+  const after = await page.evaluate(() => window.__f.close());
+  Object.values(after).every((v) => v !== 'hidden')
+    ? ok('and every one of them is back the moment it closes')
+    : bad(`chrome still hidden after close: ${JSON.stringify(after)} — the app looks broken`);
 }
 
 console.log('\nTHE ONE-LINE PLAN TOGGLE SELLS ONLY WHAT THE STORE RETURNED');
