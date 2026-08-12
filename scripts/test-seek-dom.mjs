@@ -65,11 +65,11 @@ async function head(name){
 console.log('\nTHE SEEKER IS TOLD WHO THEY ARE PLAYING');
 {
   const t=await head('tony');
-  t==='Find @tony' ? ok(`a signed hide names its sender ("${t}")`) : bad(`signed hide shows ${JSON.stringify(t)}`);
+  t==='@tony hid a body in here' ? ok(`a signed hide names its sender as the AUTHOR ("${t}")`) : bad(`signed hide shows ${JSON.stringify(t)}`);
 }
 {
   const t=await head(null);
-  t==='Find the body' ? ok(`an unsigned hide keeps the original line ("${t}")`) : bad(`unsigned hide shows ${JSON.stringify(t)}`);
+  t==='Someone hid a body in here' ? ok(`an unsigned hide still says what happened ("${t}")`) : bad(`unsigned hide shows ${JSON.stringify(t)}`);
 }
 await browser.close(); server.close();
 console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the seeker screen names the sender');

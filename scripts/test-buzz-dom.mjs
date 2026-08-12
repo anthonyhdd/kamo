@@ -98,8 +98,10 @@ const calls = async (page) => page.evaluate(() => window.__calls.map(c => c[0]))
 console.log('\nLOAD — full-bleed photo, floating words, running clock');
 {
   const page = await boot({ hit: false, frames: true });
-  (await txt(page, 'chHead')) === 'Find @tony' ? ok('head names the sender') : bad('head: ' + await txt(page, 'chHead'));
-  /^One (tap|buzz)\.$/.test(await txt(page, 'chSub') || '') ? ok('sub states the deal') : bad('sub: ' + await txt(page, 'chSub'));
+  /* The sender is the AUTHOR of the puzzle, never its subject: "Find @tony" made the
+     stranger hunt for a person who is not in the picture. */
+  (await txt(page, 'chHead')) === '@tony hid a body in here' ? ok('head names the sender as the one who HID') : bad('head: ' + await txt(page, 'chHead'));
+  /^One (tap|buzz) to find it\.$/.test(await txt(page, 'chSub') || '') ? ok('sub states the deal') : bad('sub: ' + await txt(page, 'chSub'));
   const clockShown = await page.evaluate(() => document.getElementById('chClock').style.display !== 'none');
   clockShown ? ok('clock is running from decode') : bad('clock never started');
   const capped = await page.evaluate(() => {
