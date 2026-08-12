@@ -310,6 +310,10 @@
   #lastShot .lsDot{display:none;position:absolute;top:3px;right:3px;width:9px;height:9px;border-radius:50%;
     background:var(--mint);box-shadow:0 0 8px rgba(95,230,164,.9);border:1.5px solid rgba(5,6,10,.6);}
   #lastShot.hasNews .lsDot{display:block;}
+  /* Under the CTA the full arm sits on a photo, not on a card — the dim terms line and grey
+     links that read fine on the sheet disappear here. White, founder's call. */
+  #paywall.pwFull #pwTerms{opacity:1;color:#fff;}
+  #paywall.pwFull .pwFine a,#paywall.pwFull .pwFine button{color:rgba(255,255,255,.9);}
   #btnLight{right:24px;}
   /* torch on = the button itself lights up */
   #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
@@ -747,7 +751,7 @@
      separate the word from its deletion, or the strike disappears into its own line. */
   .pwHeroLn s{text-decoration-thickness:.09em;text-decoration-color:var(--mint);}
   .pwHeroLn.on s{text-decoration-color:rgba(255,255,255,.94);}
-  #pwHeroCtx{margin-top:12px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.8);text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  #pwHeroCtx{margin:12px auto 0;max-width:260px;padding:0 10px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.8);text-shadow:0 2px 10px rgba(0,0,0,.8);}
   #pwLifeLine{display:none;background:none;border:none;color:var(--mint);font-weight:700;font-size:13px;font-family:inherit;
     padding:8px;margin:0 auto;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   /* The X was invisible on the full arm: rgba(255,255,255,.42) glyph with no plate, sitting
@@ -3576,10 +3580,10 @@ const pwGenericSub=()=>`Any brush and color · no clock to line it up · no cloc
    Functions for the same TDZ reason as PW_PITCH, and no typed numerals — check.mjs. */
 const PW_HERO_LINE={ time:"time", round_end:"time", size:"size", size_star:"size", mark:"mark" };
 const PW_HERO_CTX={
-  time:      ()=>`All the time you want — free gets ${PAINT_SECONDS} seconds. This round is waiting.`,
-  round_end: ()=>`All the time you want — free gets ${PAINT_SECONDS} seconds.`,
-  size:      ()=>"Down to the fine one — paint the details, not just the shape.",
-  size_star: ()=>"Down to the fine one — paint the details, not just the shape.",
+  time:      ()=>`All the time you want — free gets ${PAINT_SECONDS}s.`,
+  round_end: ()=>`All the time you want — free gets ${PAINT_SECONDS}s.`,
+  size:      ()=>"Paint the details, not just the shape.",
+  size_star: ()=>"Paint the details, not just the shape.",
   mark:      ()=>"Your exports, clean.",
 };
 function pwHeroApply(src){
