@@ -89,6 +89,7 @@ const html = real.slice(0, at)
   + 'backdrop(){shareSheetEl.click();return this.snap();},'
   + 'snap(){const c=shareSheetEl.querySelector(".ssCard");return{state:ssState,'
   + 'cls:shareSheetEl.className,h:c.getBoundingClientRect().height,inline:c.style.height,'
+  + 'gap:Math.round(innerHeight-c.getBoundingClientRect().bottom),'
   + 'resizing:shareSheetEl.classList.contains("ssResizing"),'
   + 'pe:getComputedStyle(shareSheetEl).pointerEvents};},'
   + 'thumb(w,h){board.width=w;board.height=h;'
@@ -535,17 +536,26 @@ console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
     : bad(`the sheet arrived in "${arrived.state}" — folding by default puts the send a gesture further away`);
 
   const folded = await page.evaluate(() => window.__t.fold());
-  folded.state === 'mini' && /\bmini\b/.test(folded.cls)
+  folded.state === 'mini' && /\bssMini\b/.test(folded.cls)
     ? ok('a downward step folds it to the handle')
     : bad(`stepping down gave state=${folded.state} cls=${JSON.stringify(folded.cls)}`);
   /* A CEILING, NOT JUST "SHORTER". The first version stacked two safe-area insets — the
      card's and the grabber's — and left ~90px of empty green under the bar while still
-     passing a "shorter than the peek" test. The point of this state is to be small, so the
-     assertion is an absolute one: a handle, its breathing room, and nothing else. */
-  folded.h < arrived.h && folded.h <= 30
+     passing a "shorter than the peek" test. Halving that was still reported as "trop de
+     hauteur": the state is meant to be a handle, its breathing room, and nothing else, so the
+     assertion is absolute. 24px here is measured with NO safe-area inset (headless reports
+     none); on a device the grabber adds ~20px more to clear the home pill. */
+  folded.h < arrived.h && folded.h <= 24
     ? ok(`and the card is a bar, not a box (${Math.round(folded.h)}px, peek is ${Math.round(arrived.h)}px)`)
-    : bad(`folded height ${Math.round(folded.h)}px — must be under 30px (peek: ${Math.round(arrived.h)}px). `
+    : bad(`folded height ${Math.round(folded.h)}px — must be under 24px (peek: ${Math.round(arrived.h)}px). `
         + 'Check for a doubled var(--safe-b) between .ssCard and .ssGrab.');
+  /* AND IT IS AGAINST THE EDGE. "Pas collé au bas de l'écran" is a different defect from
+     "too tall" — a bar of the right height floating above the bottom edge looks like a bug in
+     a way that a tall one does not — and nothing measured the gap, so only one of the two was
+     ever being caught. */
+  folded.gap === 0
+    ? ok('and it sits flush on the bottom edge, with nothing under it')
+    : bad(`there are ${folded.gap}px between the folded card and the bottom of the screen`);
   (await page.evaluate(() => window.__t.visible('.ssInvite'))) === 'none'
     ? ok('the CTA is put away with the rest of the card')
     : bad('the folded sheet still shows its buttons — it is not folded, it is just shorter');

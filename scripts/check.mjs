@@ -262,9 +262,9 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     const showCss = rule('#shareSheet.show');
     /* The third detent answers to the same rule as the short one: it is even smaller and sits
        over the same live reveal, so it must never swallow a touch either. */
-    const miniCss = rule('#shareSheet.mini');
+    const miniCss = rule('#shareSheet.ssMini');
     /pointer-events\s*:\s*auto/.test(miniCss)
-      ? bad('#shareSheet.mini takes pointer events — the folded sheet sits over a live reveal and '
+      ? bad('#shareSheet.ssMini takes pointer events — the folded sheet sits over a live reveal and '
           + 'the wipe handle behind it stops responding')
       : ok('the folded state stays transparent to touch');
     /pointer-events\s*:\s*auto/.test(peekCss)
