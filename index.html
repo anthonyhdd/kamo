@@ -2148,11 +2148,12 @@ function blobShadow(){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
   m.rotation.x=-Math.PI/2; m.position.y=0.01; return m;
 }
-/* FOUNDER-ONLY BODY DOUBLE — the REAL v2 this time. The character the founder made on the
-   weekend of Aug 9 with Meshy (mesh) + Mixamo (rig + clips) now lives in
-   vendor/kamo-v2.glb: one skinned mesh, one skeleton, six clips named for the app's pose
-   slots (idle, wave, victory, sit, run, point). The procedural chunky that briefly sat
-   here was a reconstruction from the reference plates — not their model — and is gone.
+/* FOUNDER-ONLY BODY DOUBLE — the REAL v2. The character the founder made on the weekend
+   of Aug 9 with Meshy (mesh) + Mixamo (rig + clips), packaged that same evening as
+   kamo_light.glb in the ~/Downloads/kamo-sprites kit, now lives in vendor/kamo-v2.glb:
+   one skinned mesh, one skeleton, six clips named for the app's own pose labels. (An
+   intermediate merge rebuilt from the raw Mixamo downloads weighed 2.5 MB; the founder's
+   light asset carries the same six clips at 1 MB and replaced it.)
    Gated on the handle "tony" so exactly one player sees it, and LAZY: the 2.5 MB GLB is
    fetched only when the gate is true, so the fleet never downloads a byte of it. Hides
    the founder SENDS bake the new body into the photo — that is the in-the-wild test.
@@ -2162,7 +2163,10 @@ function blobShadow(){
    char.mixer — the pose wheel crossfades clips, capture freezes whatever frame the mixer
    is on, and the reveal's wave frame samples mid-clip. */
 function founderChunky(){ try{ return (getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; } }
-const V2POSE=["idle","wave","victory","sit","run","point"];   // index-aligned with POSES
+/* Clip names as they exist in the asset — vendor/kamo-v2.glb is the founder's own
+   kamo_light.glb from the Aug 9 weekend (kamo-sprites kit), whose six clips are already
+   named for the app's pose labels, index-aligned with POSES. */
+const V2POSE=["Stand","Wave","Arms up","Sit","Run","Point"];
 let kamoV2=null, kamoV2Loading=false;
 function loadKamoV2(){
   if(kamoV2||kamoV2Loading||!founderChunky()) return;
