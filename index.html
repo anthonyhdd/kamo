@@ -1138,8 +1138,14 @@
          four things a free user cannot reach by using the app differently: a clean export,
          a clock that stops taking the round away, colours that are not in the photo, and a
          brush fine enough to work an edge.
-         ⚠️ Numbers appear here AND in PAINT_SECONDS/PRO_PAINT_SECONDS. Change them together.
-         Keep in sync with the share-sheet line (#ssPlus). -->
+         ⚠️ THIS LINE NO LONGER QUOTES A PRO NUMBER, and that is deliberate. It read "75s to
+         paint instead of 32s" until KAMO+ went unlimited: two numbers invited the reader to
+         divide them, and 32->75 divides to a forgettable 2.3x. "No clock at all" is not a
+         bigger number, it is a different kind of promise, and it is the only one of the four
+         claims here that removes a rule instead of raising a limit.
+         The free number is still real and still printed elsewhere (PAINT_SECONDS drives the
+         countdown the user watches), so it must stay true — but it does not belong on the
+         sell. Keep in sync with PW_PITCH.time and the share-sheet line (#ssPlus). -->
     <!-- Generic copy is no longer the feature list: the rows below are, and printing both
          would say the same four things twice. The per-lock pitches in PW_PITCH still
          overwrite this line, which is the point of it. -->
@@ -1147,7 +1153,7 @@
          nothing in this app is a daily challenge. "Challenge" here means the share format,
          the "Challenge a friend" invite, and the inbound referral hint — all of which are
          FREE. Printing it next to a price would be selling a feature that does not exist. -->
-    <div class="pwSub" id="pwSub">Any size and color of brush · 75s to paint instead of 32s</div>
+    <div class="pwSub" id="pwSub">Any size and color of brush · no clock at all</div>
     <!-- Weekly starts HIDDEN on purpose: the subscription isn't approved yet, so the
          store won't sell it. applyPlanAvailability() reveals it the moment a real
          weekly price arrives from the native layer. Fail-safe: if no prices ever
@@ -1189,11 +1195,16 @@
     <div class="kpTitle">You're KAMO+ ✨</div>
     <div class="kpSub" id="kpSub"></div>
     <!-- Chips describe what KAMO+ actually is now. "All Pro brushes" outlived the brushes. -->
-    <!-- THREE chips, not four. Four wrapped to a second row on narrow screens, and
-         "75s rounds" was the one to go: the member home now tiles Time hidden right
-         above it, and Clean export has to stay because it is the only perk here with
-         no free substitute. Both sheets keep the same row - see TWO SHEETS, ONE LOOK. -->
+    <!-- FOUR AGAIN, and the clock is back at the front. The chip that was cut here was
+         "75s rounds", dropped because four wrapped to a second row on narrow screens and a
+         longer allowance was the weakest of the four claims. It is not an allowance any
+         more: KAMO+ is unlimited time on both phases, so this is now the headline perk and
+         cannot be the one missing from the list of what was just bought. "No clock" is also
+         the shortest label of the four, so the row is narrower than the one that wrapped —
+         verified at 375px and 320px. Both sheets keep the same row - see TWO SHEETS, ONE
+         LOOK, so this list and the member home's must be edited together. -->
     <div class="kpChips">
+      <span class="kpChip">No clock</span>
       <span class="kpChip">Every color</span>
       <span class="kpChip">Fine brush</span>
       <span class="kpChip">Clean export</span>
@@ -1221,11 +1232,14 @@
       <div class="kpStat"><b id="khTime">0</b><span>Time hidden</span></div>
       <div class="kpStat"><b id="khCov">0</b><span>Best cover</span></div>
     </div>
-    <!-- THREE chips, not four. Four wrapped to a second row on narrow screens, and
-         "75s rounds" was the one to go: the member home now tiles Time hidden right
-         above it, and Clean export has to stay because it is the only perk here with
-         no free substitute. Both sheets keep the same row - see TWO SHEETS, ONE LOOK. -->
+    <!-- Same four as the welcome sheet, same order - see TWO SHEETS, ONE LOOK. "No clock"
+         replaces the old "75s rounds" chip that was cut for wrapping: KAMO+ is unlimited
+         time on both phases now, and the shorter label costs less width than the row that
+         wrapped. Note this sits directly under the Time hidden tile, which is a MEASURED
+         total and not a limit — no contradiction, but keep them distinguishable if either
+         label is ever reworded. -->
     <div class="kpChips">
+      <span class="kpChip">No clock</span>
       <span class="kpChip">Every color</span>
       <span class="kpChip">Fine brush</span>
       <span class="kpChip">Clean export</span>
@@ -2744,8 +2758,10 @@ const pwSourceOpens={};
    Every other source keeps its pill; they fire from places with no control to light up. */
 const PW_LOCK_HINT={
   color: "Every colour is KAMO+ — tap to unlock",
-  round_end:"More time, every tool — tap for KAMO+",
-  time:  "75 seconds to paint — tap for KAMO+",
+  round_end:"No clock, every tool — tap for KAMO+",
+  /* Was "75 seconds to paint". There is no Pro paint number any more, and naming the free
+     one here would sell the constraint rather than its removal. */
+  time:  "No clock with KAMO+ — tap to unlock",
 };
 /* THE LOCK ANSWERS ON THE CONTROL, NOT IN A SENTENCE. Past its cap, touching the size bar
    pulses the bar and its ✦ mint for 600ms and says nothing. The user gets an unmistakable
@@ -2773,13 +2789,16 @@ const PW_PITCH={
            s:"Free gets three shades off the photo. KAMO+ opens them all." },
   mark:  { t:"Your hide, without our name on it",
            s:"No mark on the image or the reveal clip." },
-  /* The free clock moved 22 -> 32 on 2026-08-06, so "instead of 22" became a false number on
-     the one line of the paywall that makes a measurable claim. It also stopped being a 3.4x
-     gap, which is why the line now says what the multiple IS rather than leaving the reader
-     to divide: 2.3x reads as small when it is written as two bare numbers and large when it
-     is named. Keep in sync with PAINT_SECONDS / PRO_PAINT_SECONDS and #pwSub. */
+  /* This is the pitch shown to someone the clock has just beaten, so it answers with the
+     rule being removed, not with a bigger allowance. It went "75 seconds instead of 22" ->
+     "instead of 32" -> this, in two days: the free clock moved and the Pro clock was then
+     deleted outright, and a pitch built on a ratio had to be rewritten each time. A pitch
+     built on "no clock" cannot go stale when PAINT_SECONDS is next tuned — which is the
+     other reason it is worded this way. Both phases, because both are unarmed now: naming
+     only the paint clock would undersell it and misdescribe the aim screen.
+     Keep in sync with #pwSub and PW_LOCK_HINT.time. */
   time:  { t:"Stop losing hides to the clock",
-           s:"More than double the paint clock — 75 seconds instead of 32." },
+           s:"KAMO+ removes it. Aim and paint for as long as you want, every round." },
 };
 /* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
    the first tool-specific open would become the new "default". */
@@ -4137,24 +4156,30 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    window it is documented to be, it was 3s shorter than a standard aim.
    Previous pass, for the record: aim 10 -> 8 (band 7-18 -> 6-14), paint 30 -> 22.
    ⚠️ A "the paint clock feels far too long" report was once acted on and had to be reverted:
-   it came from a KAMO+ account, which is on PRO_PAINT_SECONDS=75, not this number. Before
-   touching PAINT_SECONDS again, confirm the report is from a FREE round.
+   it came from a KAMO+ account, which was on PRO_PAINT_SECONDS=75 and now has no clock at
+   all. Before touching PAINT_SECONDS again, confirm the report is from a FREE round — a
+   member cannot be reporting on this number, because no clock runs for them.
    ⚠️ These numbers are PRINTED at three copy sites — #pwSub, PW_PITCH.time.s and the
    PW_LOCK_HINT line. A silent change here makes the paywall state a false number, which is
    a pricing-adjacent claim. Change them together. */
 const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=32;
-/* KAMO+ BUYS TIME. The clock is the single most-felt constraint in the product — it is
-   what makes people lose a hide they were enjoying — so "no rush" is a perk you feel every
-   round, unlike a brush that has a free substitute sitting next to it.
-   Gated on canPro(), which is exactly isPro now that the free round is gone.
-   ⚠️ The comment above argues PAINT must stay identical for everyone "because the round
-   time is the score". That still holds for the DISPLAYED time — a Pro user who takes 50s
-   still shows "vanished in 50s", the limit only decides when the clock takes the round
-   away. What does change is coverage: a 32s auto-Done can end a hide mid-paint, so Pro
-   hides will trend better-covered. Accepted deliberately — that IS the perk, though at
-   32 vs 75 the gap is 2.3x, down from the 3.4x it was at 22s. */
-const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
-function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
+/* KAMO+ BUYS TIME, AND SINCE 2026-08-06 IT BUYS ALL OF IT. There is no Pro clock any more:
+   both phases are simply not armed for a member (see timerArmed). PRO_PAINT_SECONDS=75,
+   PRO_AIM_BONUS=8 and PRO_AIM_MAX=30 are GONE rather than raised to a big number, because a
+   90s or 999s ceiling is still a ceiling — it would keep the bar draining on screen, keep
+   auto-Done alive, and keep the perk describable as a number the free tier can be compared
+   against. "No clock" is a different promise from "a longer clock", and it is the one being
+   sold on the paywall now.
+   ⚠️ The comment above argues PAINT must stay identical for everyone "because the round time
+   is the score". That still holds for the DISPLAYED time: roundSeconds() measures from
+   roundStartedAt, not from the clock, so a member who takes 50s still shows "vanished in
+   50s" on the reveal and in the share. Only the limit is gone.
+   ⚠️ WHAT THIS COSTS. The round timer's other job was to GUARANTEE every round lands on the
+   reveal — the only share surface — via auto-capture and auto-Done. Members now have to tap
+   the shutter and Done themselves, so a member who wanders off mid-hide reaches no reveal
+   and no share. Both buttons are always on screen, so it is a real path, not a trap; but if
+   share_opened per session drops for members specifically, this is the change that did it. */
+function paintSeconds(){ return PAINT_SECONDS; }
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
 /* HIDE ONE ONLY. maybeOnboard() spends 7.2s on two hints; this leaves ~18s of aiming after
    they clear, which is a normal round. It replaces "no clock at all on the first hide" —
@@ -4165,20 +4190,19 @@ function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||
    MUST STAY ABOVE AIM_DEFAULT. At 15 against the new 18s default this was the shorter
    window, which inverts the whole point of it. Moved 15 -> 25 with the +10s pass. */
 const FIRST_AIM_SECONDS=25;
+/* FREE-ONLY NOW. The Pro branch (bonus + raised ceiling) is gone with PRO_AIM_BONUS and
+   PRO_AIM_MAX: startTimer never reaches this for a member, so a pro path here would be dead
+   code that reads like a live rule. */
 function aimSeconds(){
   if(firstRun()) return FIRST_AIM_SECONDS;
-  /* Pro gets the bonus AND a raised ceiling. Adding the bonus alone would do almost
-     nothing for the people who most want it: anyone the clock keeps beating is already
-     pinned at AIM_MAX, so the bonus would be clamped straight back off. */
-  const pro=canPro(), bonus=pro?PRO_AIM_BONUS:0, hi=pro?PRO_AIM_MAX:AIM_MAX;
-  const h=aimHistory(); if(h.length<2) return AIM_DEFAULT+bonus;
+  const h=aimHistory(); if(h.length<2) return AIM_DEFAULT;
   const recent=h.slice(-4);
   // any round the clock had to finish means they needed more time than they got
-  if(recent.slice(-2).every(r=>r.auto)) return Math.min(hi, (recent[recent.length-1].s||AIM_DEFAULT)+5+bonus);
+  if(recent.slice(-2).every(r=>r.auto)) return Math.min(AIM_MAX, (recent[recent.length-1].s||AIM_DEFAULT)+5);
   const manual=recent.filter(r=>!r.auto).map(r=>r.t).sort((a,b)=>a-b);
-  if(!manual.length) return AIM_DEFAULT+bonus;
+  if(!manual.length) return AIM_DEFAULT;
   const med=manual[manual.length>>1];
-  return Math.max(AIM_MIN, Math.min(hi, Math.round(med*1.6)+bonus));
+  return Math.max(AIM_MIN, Math.min(AIM_MAX, Math.round(med*1.6)));
 }
 function recordAim(seconds,took,auto){
   try{
@@ -4201,7 +4225,16 @@ let timerEnd=0, timerPhase=null, _timerDone=null, _timerTick=null, _timerSec=nul
    nothing left to teach (maybeOnboardPaint deliberately shows no hint) and the round is
    the thing.
    Kept as a function, and still called per phase, so a future phase can opt out again. */
-function timerArmed(){ return true; }
+/* AND THE ONE PHASE THAT OPTS OUT IS EVERY PHASE, FOR A MEMBER. KAMO+ is unlimited time on
+   both clocks as of 2026-08-06, and this is the single place that implements it: startTimer
+   calls stopTimer() and then returns here, so a member gets no bar, no countdown tag, no
+   auto-capture and no auto-Done. Done as an arming gate rather than a huge PRO_*_SECONDS
+   because a big number is still a visible clock draining toward a deadline, which is the
+   exact feeling being sold away.
+   It also keeps the analytics honest for free: `timed` and `aim_timed` are read off this
+   function on photo_captured, paint_completed and round_finished, so member rounds now
+   correctly report themselves as untimed instead of claiming a clock that never ran. */
+function timerArmed(){ return !canPro(); }
 function stopTimer(){
   if(_timerDone){ clearTimeout(_timerDone); _timerDone=null; }
   if(_timerTick){ clearTimeout(_timerTick); _timerTick=null; }
