@@ -84,6 +84,8 @@ const html = real.slice(0, at)
   + '.map(a=>(a.effect.target.id||a.effect.target.className||"?")+(a.effect.pseudoElement||"")+":"+(a.animationName||"anim"));'
   + 'return{more:b(".ssBtn.ssMore"),plus:b("#ssPlus"),spin:spin};},'
   + 'grab(){document.getElementById("ssGrab").click();return this.snap();},'
+  + 'fold(){stepSheet(-1);return new Promise(r=>setTimeout(()=>r(this.snap()),420));},'
+  + 'visible(sel){const e=shareSheetEl.querySelector(sel);return e?getComputedStyle(e).display:"absent";},'
   + 'backdrop(){shareSheetEl.click();return this.snap();},'
   + 'snap(){const c=shareSheetEl.querySelector(".ssCard");return{state:ssState,'
   + 'cls:shareSheetEl.className,h:c.getBoundingClientRect().height,inline:c.style.height,'
@@ -519,6 +521,40 @@ console.log('\nTHE CARD OPENS THE PREVIEW');
    On the reveal the share sheet is the only route to a share — the Share button was removed
    when the sheet started presenting itself — so opening the card over that screen and closing
    it must not strand someone on a reveal with no way to send. */
+/* THE THIRD DETENT — folded to the handle so the painting can be seen whole. A "mini" state
+   existed before and was removed for a rendering bug (it swapped classes outside
+   setSheetSize()), so what has to hold is that it goes through the same door as the others,
+   that it hides the card without hiding the way back, and that the sheet never ARRIVES in it:
+   the send is the flattest number in this app and starting folded costs a gesture. */
+console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
+{
+  await page.evaluate(() => window.__t.present());
+  const arrived = await page.evaluate(() => window.__t.snap());
+  arrived.state === 'peek'
+    ? ok('the sheet still ARRIVES in the peek, never folded')
+    : bad(`the sheet arrived in "${arrived.state}" — folding by default puts the send a gesture further away`);
+
+  const folded = await page.evaluate(() => window.__t.fold());
+  folded.state === 'mini' && /\bmini\b/.test(folded.cls)
+    ? ok('a downward step folds it to the handle')
+    : bad(`stepping down gave state=${folded.state} cls=${JSON.stringify(folded.cls)}`);
+  folded.h < arrived.h
+    ? ok(`and the card is shorter than the peek (${Math.round(folded.h)}px < ${Math.round(arrived.h)}px)`)
+    : bad(`folded height ${folded.h} is not under the peek's ${arrived.h} — nothing was actually folded`);
+  (await page.evaluate(() => window.__t.visible('.ssInvite'))) === 'none'
+    ? ok('the CTA is put away with the rest of the card')
+    : bad('the folded sheet still shows its buttons — it is not folded, it is just shorter');
+  (await page.evaluate(() => window.__t.visible('.ssGrab'))) !== 'none'
+    ? ok('but the handle stays, so there is a way back')
+    : bad('the handle is gone in the folded state — the sheet is now unreachable');
+
+  const back = await page.evaluate(() => window.__t.grab());
+  await page.waitForTimeout(420);
+  (await page.evaluate(() => window.__t.snap())).state === 'peek'
+    ? ok('and a tap on the handle brings the peek straight back')
+    : bad(`tapping the handle from mini gave "${back.state}" — the way back has to be one tap`);
+}
+
 console.log('\nTAPPING THE WORDMARK OPENS THE CARD, AND CLOSING IT GIVES THE SHEET BACK');
 {
   await page.evaluate(() => window.__t.present());
