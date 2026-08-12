@@ -104,7 +104,11 @@ say "3/5  worker"
 UP=$(curl -sS -X PUT "$API/accounts/$CF_ACCOUNT_ID/workers/scripts/$WORKER" \
   -H "Authorization: Bearer $CF_API_TOKEN" \
   -F 'metadata={"main_module":"worker.js","compatibility_date":"2024-11-01"};type=application/json' \
-  -F "worker.js=@$WORKER_FILE;type=application/javascript+module")
+  -F "worker.js=@$WORKER_FILE;filename=worker.js;type=application/javascript+module")
+# `filename=` is load-bearing. Cloudflare resolves main_module against the FILENAME of the
+# multipart part, not its field name, and curl defaults the filename to the file on disk —
+# so the module arrived as "playkamo-worker.js" and main_module pointed at nothing:
+# "Uncaught Error: No such module: worker.js".
 [ -n "$(echo "$UP" | ok)" ] && echo "  uploaded" || { echo "$UP"; exit 1; }
 
 # ---- route ----------------------------------------------------------------------------------
