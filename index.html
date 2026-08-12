@@ -5912,10 +5912,15 @@ function chPrevPlay(){
       document.head.appendChild(fx);
     }
     const w=document.createElement("div"); w.id="chPP"; w.className="chPP";
-    /* KICKER = the terms, headline = the invitation to play. */
+    /* KICKER = the terms, headline = the EXACT line the friend will read. The preview's one
+       job is to show the other side of the deal, and the other side opens on "Find @tony" —
+       which is also the only place the sender ever SEES their signature working (the handle
+       is set on the player card, two screens away from the send). Unsigned keeps the
+       seeker's own unsigned line, not a placeholder. Written below via textContent, never
+       into this HTML string: the handle is typed by a user. */
     w.innerHTML='<div class="chPPin">'
       +'<div class="pwKick">ONE BUZZ · NO CLOCK</div>'
-      +'<div class="chPPh" id="chPPh">Try their buzz.</div>'
+      +'<div class="chPPh" id="chPPh"></div>'
       +'<div class="chPPframe" id="chPPframe"></div>'
       +'<div class="chPPfoot" id="chPPfoot">'
       /* THE SEND IS AVAILABLE FROM THE FIRST FRAME, not only after a result. Making someone
@@ -5925,6 +5930,8 @@ function chPrevPlay(){
       +'<button class="chPPclose" id="chPPx0">Back</button>'
       +'</div></div>';
     document.body.appendChild(w);
+    const who=getHandle();
+    document.getElementById("chPPh").textContent = who ? "Find @"+who : "Find the body";
 
     const frame=document.getElementById("chPPframe");
     /* The frame takes the BOARD's shape, so the hide fills it edge to edge instead of sitting
