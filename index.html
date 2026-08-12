@@ -4210,6 +4210,33 @@ function setHandle(v){
    native is the only case it acts on — precisely the case this exists for: a launch where
    the WebView's storage came up blank. */
 window.KAMO=window.KAMO||{};
+/* THE ADDRESS A HIDE CAN BE NOTIFIED AT.
+ *
+ * Handed over by the wrapper on every sync, "" when there is none — which is the normal state
+ * before the notification opt-in, and stays that way forever if the user declines. An empty
+ * value is not a failure: it means this hide gets no push, exactly as every hide before this
+ * shipped. Nothing on screen depends on it, so there is nothing to re-render here.
+ *
+ * Held in a variable rather than localStorage on purpose. iOS rotates push tokens and a
+ * reinstall invalidates them; the wrapper is the only thing that knows the current one, and a
+ * cached copy would outlive it and start stamping new hides with a dead address. */
+let pushToken="";
+window.KAMO.setPushToken=function(t){
+  try{
+    const was=pushToken;
+    pushToken=(typeof t==="string"&&/^ExponentPushToken\[[A-Za-z0-9_-]{1,64}\]$/.test(t))?t:"";
+    /* AND CATCH UP THE HIDE THAT IS ALREADY OUT.
+       The token is minted the moment the notification opt-in is granted, and the wrapper now
+       spends that opt-in after a challenge has been SENT — which is strictly after chUpload()
+       published the hide and ran chAttachPush() with nothing to attach. So on the one hide
+       that matters most, the first one, the address would arrive seconds too late and only
+       the NEXT hide would ever carry one.
+       chId still points at that hide here, and attach_push_token is an idempotent update, so
+       the fix is to simply try again. Only on a token we did not have a moment ago: a repeat
+       sync of the same value must not re-post on every wrapper refresh. */
+    if(pushToken&&pushToken!==was&&chId) chAttachPush();
+  }catch(e){ pushToken=""; }
+};
 window.KAMO.setStoredHandle=function(h){
   try{
     const inc=cleanHandle(h); if(!inc) return;
@@ -7178,8 +7205,31 @@ async function chUpload(){
     }
     chRemember(chId);
     track("hide_published",{});
+    chAttachPush();
     armResultsPing();
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
+}
+/* THE OTHER HALF OF armResultsPing, and the half that is actually about something.
+   armResultsPing is a blind three-hour timer that says "go look" — it cannot know whether
+   anyone came, and on the 88% of hides nobody opens it sends the creator to an empty card.
+   This attaches the device's push address to the hide, so the server can say the one thing
+   the app has never been able to: somebody opened it, somebody found you.
+   A SEPARATE CALL, deliberately, rather than a tenth argument on create_hide. That function
+   already exists at 6, 8 and 9 arguments and PostgREST resolves by the exact key set, so a
+   new signature would mean the page and the database have to deploy together — which they
+   never do. Failing here costs nothing: the hide is already published and simply gets no
+   push, which is how every hide behaved before this.
+   The offset is minutes EAST of UTC, from this device's own clock, and it is what lets the
+   server tell 22:00 from 06:00 for this particular person. A toy that wakes someone at 4am
+   gets its notifications switched off, and iOS never asks a second time. */
+function chAttachPush(){
+  if(!chId||!pushToken) return;
+  try{
+    chRpc("attach_push_token",{p_id:chId,p_token:pushToken,
+                               p_tz_offset:-(new Date().getTimezoneOffset())})
+      .then(()=>track("push_attached",{}))
+      .catch(()=>{});
+  }catch(e){}
 }
 /* THE ONE THING THIS APP CAN SAY THAT ISN'T GENERIC.
    The daily reminder is built a fortnight ahead, so it can only ever talk about hiding in
@@ -7209,7 +7259,26 @@ function armResultsPing(){
    page could not tell "armed" from "swallowed", and the opt-in rate would look like a
    scheduling rate. openKamoHome cancels it — see there. */
 window.__kamoNotifResult=function(r){ try{ track("web_notif_armed",{key:(r&&r.key)||"",ok:!!(r&&r.ok)}); }catch(e){} };
-function chLink(){ return chId?(KAMO_HOST+"?h="+chId):""; }
+/* THE LINK THAT GOES OUT IS NOT THE LINK THAT PLAYS, and it has to be that way.
+   344 of the 504 challenges ever sent were never opened. The reason is in this page's <head>:
+   og:image is the app icon and og:title is the same sentence for every hide in existence,
+   because GitHub Pages serves static HTML and scrapers do not run JS. A dare from a friend
+   arrived looking like an advert, so it got treated like one.
+   So the shared URL points at an edge function that answers scrapers with THIS hide's photo
+   and THIS sender's name, then bounces the human to KAMO_HOST?h=… in a single frame. The
+   game is still the same static file it has always been; nothing was put in front of play.
+   CH_SEEK reads ?h= off location.search after the bounce, so the seeker path is unchanged.
+
+   THE DOMAIN IS PART OF THE MESSAGE. A supabase.co URL from a friend reads as spam, and the
+   whole point of this work is to be tapped — the photo is the hook, the domain is the
+   permission to act on it. infra/playkamo-worker.js puts the same function behind
+   playkamo.com/h/<id> for free, without touching the landing page. Flip SHARE_HOST to
+   "https://playkamo.com/h" once that route answers, and NOT before: until it exists every
+   challenge sent would 404, which is a worse failure than an ugly domain. */
+const SHARE_HOST="https://qpztlobbnjyjbxqyuzgg.supabase.co/functions/v1/h";
+/* One edit, no other change: the id rides as the last path segment either way, which both
+   hosts accept (the function reads ?h= and falls back to the trailing segment). */
+function chLink(){ return chId?(SHARE_HOST+"/"+chId):""; }
 /* The community door, in one place. It is an invite link, so it can be rotated or revoked
    from Discord without a push — but it is also the only URL in this app that points at a
    place rather than at the app itself, and burying it in a click handler is how it ends up
