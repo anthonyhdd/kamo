@@ -148,14 +148,14 @@ console.log('\nTHE ONE-LINE PLAN TOGGLE SELLS ONLY WHAT THE STORE RETURNED');
     ? ok(`prices in → the line offers lifetime ("${after.text}")`)
     : bad(`with both prices, the line reads: ${JSON.stringify(after.text)} (show:${after.show})`);
 
-  /* The two-line CTA: the price rides the button, and the standalone terms line goes quiet
-     so the deal is stated exactly once. */
-  /\$2\.99\/week · cancel anytime/.test(after.buy)
-    ? ok(`the CTA carries the price as its second line ("${after.buy.trim()}")`)
+  /* The price is in the LABEL itself, one font — and "cancel anytime" lives outside the
+     button on the terms line, which also keeps the auto-renewal disclosure visible. */
+  /Try 3 days free then \$2\.99 \/ week/.test(after.buy)
+    ? ok(`the CTA states the whole deal in one line ("${after.buy.trim()}")`)
     : bad(`the button reads: ${JSON.stringify(after.buy)} — the price never reached the point of decision`);
-  after.terms === 'none'
-    ? ok('and the duplicate terms line under it is gone')
-    : bad('the price is now stated twice — on the button and in #pwTerms');
+  after.terms !== 'none'
+    ? ok('and the terms line below still speaks (auto-renews · cancel anytime)')
+    : bad('the terms line is hidden — the renewal disclosure has to stay visible');
 
   const flipped = await page.evaluate(() => window.__f.toggle());
   flipped.plan === 'lifetime' && /\$14\.99/.test(flipped.buy) && /\$2\.99\/week/.test(flipped.text)
