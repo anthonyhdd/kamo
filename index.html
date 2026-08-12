@@ -319,11 +319,9 @@
   /* Under the CTA the full arm sits on a photo, not on a card — the dim terms line and grey
      links that read fine on the sheet disappear here. White, founder's call. */
   #paywall.pwFull #pwTerms{opacity:1;color:#fff;}
-  #paywall.pwFull .pwFine a,#paywall.pwFull .pwFine button{color:rgba(255,255,255,.9);}
-  #pwBuy .pwBuySub{display:block;font-size:11.5px;font-weight:600;letter-spacing:0;opacity:.8;margin-top:2px;}
-  /* The button says the price now, so the standalone terms line under it stays quiet — but
-     only while the sub exists: the loading/unavailable states still speak through #pwTerms. */
-  #paywall.pwFull.hasBuySub #pwTerms{display:none;}
+  /* No underlines on Restore / Terms / Privacy here — founder's call. On the photo they read
+     as three scratches; white weight alone carries "tappable" on this arm. */
+  #paywall.pwFull .pwFine a,#paywall.pwFull .pwFine button{color:rgba(255,255,255,.9);text-decoration:none;}
   #btnLight{right:24px;}
   /* torch on = the button itself lights up */
   #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
@@ -3769,18 +3767,13 @@ function setTerms(txt){ const t=$("#pwTerms"); if(t){ t.classList.remove("fade")
    rotation block took it with it. Every buy-label write goes through it — the span exists so
    .pwBuy::after's sheen can sit under the text instead of over it. */
 function setBuyLabel(b,txt){ b.textContent=""; const sp=document.createElement("span"); sp.className="pwBuyTxt"; sp.textContent=txt; b.appendChild(sp); }
-/* THE PRICE RIDES THE BUTTON — full arm only. Yesterday: 31 Buy taps, 12 Apple-sheet cancels,
-   0 trials. A tap from someone who has not priced the offer is worth nothing — it dies on the
-   sheet — so the price belongs at the point of decision, once: a small second line inside the
-   CTA, and the separate #pwTerms line goes quiet (hasBuySub) instead of saying it twice.
-   Cleared whenever there is nothing true to say (loading, unavailable, sheet arm), which also
-   lets the error states keep using #pwTerms. Prices read from the store-fed nodes, never typed. */
-function setBuySub(b,txt){
-  let sp=b.querySelector(".pwBuySub");
-  if(!txt){ if(sp) sp.remove(); paywallEl.classList.remove("hasBuySub"); return; }
-  if(!sp){ sp=document.createElement("span"); sp.className="pwBuySub"; b.appendChild(sp); }
-  sp.textContent=txt; paywallEl.classList.add("hasBuySub");
-}
+/* THE PRICE IS IN THE LABEL ITSELF — full arm only, one font, one line: "Try 3 days free
+   then $2.99 / week". The two-line sub version lived for an hour on 2026-08-12 and came out
+   on the founder's call. The reasoning that put the price on the button stands (31 Buy taps,
+   12 Apple-sheet cancels, 0 trials — a tap that has not priced the offer dies on the sheet);
+   only the typography changed. "Cancel anytime" moves back OUTSIDE the button, on #pwTerms,
+   which also keeps Apple's auto-renewal disclosure visible. Prices from the store-fed nodes,
+   never typed. */
 function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is written only through setTerms() now */
   /* Buy stays disabled until a real localized price arrives. It used to be live from the
      first frame while the markup showed hardcoded $14.99/$2.99: on any non-USD storefront
@@ -3789,11 +3782,9 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
      Three states, because "still loading" and "nothing is for sale" must not look alike —
      otherwise a missing store key leaves a spinner-ish "Loading…" on screen forever. */
   if(!storeReady){ setBuyLabel(b,storeAnswered?"Currently unavailable":"Loading…"); b.disabled=true; b.classList.add("pwBuyOff");
-    setBuySub(b,"");
     setTerms(storeAnswered?"Purchases aren't available right now.":""); return; }
   b.disabled=false; b.classList.remove("pwBuyOff");
-  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; setBuyLabel(b,p?("Unlock forever — "+p):"Unlock forever"); setTerms("One-time purchase. Yours forever.");
-    setBuySub(b, pwArm==="full" ? "One-time purchase · yours forever" : ""); }
+  if(pwPlan==="lifetime"){ const p=($("#pwLifetimePrice")||{}).textContent||""; setBuyLabel(b,p?("Unlock forever — "+p):"Unlock forever"); setTerms("One-time purchase. Yours forever."); }
   else { const p=($("#pwWeeklyPrice")||{}).textContent||"";
     /* An unadvertised free trial converts barely better than no trial at all: the user
        decides whether to tap Buy from THIS button, long before Apple's sheet shows them
@@ -3813,10 +3804,14 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
        a $2.99 impulse rather than lowering it.
        Built from trialLabel, never a typed numeral — the store can report a trial length
        different from TRIAL.days, and check.mjs refuses a bare number in paywall copy. */
-    if(trialAdvertised()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
-    setTerms(trialTermsLine());
     const wk=(($("#pwWeeklyPrice")||{}).textContent||"").trim();
-    setBuySub(b, (pwArm==="full"&&wk) ? ((trialAdvertised()?"then ":"")+wk+"/week · cancel anytime") : ""); }
+    if(pwArm==="full"&&wk){
+      setBuyLabel(b, trialAdvertised() ? `Try ${trialLabel} free then ${wk} / week` : `Get KAMO+ · ${wk} / week`);
+      setTerms("Auto-renews · cancel anytime.");
+    } else {
+      if(trialAdvertised()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
+      setTerms(trialTermsLine());
+    } }
   updatePwLifeLine(); }
 /* THE OTHER PLAN, AS ONE LINE — full arm only. The sheet shows both plans as rows; the full
    arm shows one CTA and offers whichever plan is NOT selected here, as a quiet toggle. Every
