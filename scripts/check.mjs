@@ -278,16 +278,27 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
        would not come back up. No DOM test can catch it: headless reports no safe area at all,
        so the arithmetic that breaks a phone is 0px either way here. The declaration is the
        only place the mistake is visible, so the declaration is what gets checked. */
+    /* ON THE GRABBER, NOT ON THE CARD, and the difference is a bug that already shipped twice.
+       The padding has to hang off .ssGrab: that element is the only one in the folded sheet
+       with touch-action:none and a drag handler, so whatever it does NOT cover is a strip of
+       .ssCard that swallows a touch and hands it to the system — and from a sheet sitting on
+       the bottom edge, an unclaimed upward swipe is the iOS app switcher. On .ssCard it looked
+       identical and left a 5px handle. */
     {
+      const grabCss = rule('#shareSheet.ssMini .ssGrab');
       const cardCss = rule('#shareSheet.ssMini .ssCard');
-      const pad = (cardCss.match(/padding\s*:\s*([^;}]+)/) || [])[1] || '';
+      const pad = (grabCss.match(/padding\s*:\s*([^;}]+)/) || [])[1] || '';
+      const cardPad = (cardCss.match(/padding\s*:\s*([^;}]+)/) || [])[1] || '';
       !/var\(--safe-b\)/.test(pad)
-        ? bad(`#shareSheet.ssMini .ssCard pads "${pad.trim()}" — the folded bar needs the full `
-            + 'var(--safe-b) beneath it or iOS eats the swipe that reopens the sheet')
+        ? bad(`#shareSheet.ssMini .ssGrab pads "${pad.trim()}" — the folded bar needs the full `
+            + 'var(--safe-b) beneath it, ON THE GRABBER, or iOS takes the swipe that reopens the sheet')
         : /--safe-b\)\s*-/.test(pad)
-          ? bad(`#shareSheet.ssMini .ssCard subtracts from the safe area ("${pad.trim()}") — that `
-              + 'is exactly what put the grabber inside the home-indicator band')
-          : ok('the folded bar sits clear of the home indicator');
+          ? bad(`#shareSheet.ssMini .ssGrab subtracts from the safe area ("${pad.trim()}") — that `
+              + 'is exactly what put the handle inside the home-indicator band')
+          : /[1-9]/.test(cardPad)
+            ? bad(`#shareSheet.ssMini .ssCard still pads "${cardPad.trim()}" — every padded pixel `
+                + 'there is outside the grabber, so it is a dead strip that leaks the gesture to iOS')
+            : ok('the folded bar clears the home indicator, and the grabber owns the whole target');
     }
     /pointer-events\s*:\s*auto/.test(peekCss)
       ? bad('#shareSheet.peek takes pointer events — the short sheet sits over a live reveal and '

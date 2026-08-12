@@ -1191,8 +1191,16 @@
      handle sits the same distance from the card's top edge in every state. ~18 + 5 + 34 =
      ~57px: not the smallest bar that could be drawn, but the smallest one iOS will let us
      have — the bottom third of it is the home indicator's, not ours. */
-  #shareSheet.ssMini .ssCard{padding:18px 0 var(--safe-b);}
-  #shareSheet.ssMini .ssGrab{padding:0;}
+  /* THE HANDLE OWNS THE WHOLE CARD HERE, AND THAT IS A HIT-AREA DECISION, NOT A VISUAL ONE.
+     Hanging this padding on .ssCard looked identical and left .ssGrab five pixels tall — a 5px
+     touch target. Everything above and below it was .ssCard, which has no touch-action and no
+     drag handler, so an upward swipe that missed the strip went unclaimed: from a sheet sitting
+     on the bottom edge, iOS reads that gesture as the app switcher. "Ça ouvre toutes les apps
+     en parallèle" is the system being handed a swipe KAMO never took.
+     The grabber carries the padding instead. Identical on screen, but the target is the full
+     ~57px and every pixel of it is touch-action:none. */
+  #shareSheet.ssMini .ssCard{padding:0;}
+  #shareSheet.ssMini .ssGrab{padding:18px 0 var(--safe-b);}
   /* Brighter, wider and a touch thicker than the peek's: at this size the grabber IS the
      control rather than a decoration on a full card, and it is the only thing on screen
      saying the sheet can come back. */
@@ -1546,8 +1554,7 @@
            than as peeking.
            The mint drop-shadow is the glow, kept low (.5 alpha, 4px) — "subtile" was the word. -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M1.85 1.1V22.9"/>
-        <path d="M10.7 1.3L11.59 1.3L12.47 1.48L13.17 1.75L14.15 2.36L15.12 3.5L15.46 4.21L15.73 5.18L15.73 6.76L15.46 7.64L14.93 8.61L13.7 9.85L12.56 10.46L11.86 10.64L11.94 10.91L11.68 11.42L11.68 11.79L12.56 13.55L13.01 15.3L13.01 17.78L12.82 18.66L12.47 19.35L11.94 19.89L11.24 20.15L10.45 20.15L10 19.98L9.56 19.45L9.56 19.01L9.82 18.66L9.56 18.39L9.48 18.13L9.39 18.39L8.6 18.57L8.06 19.01L7.98 19.27L7.36 20.06L5.96 21.56L5.6 22.44L5.25 22.7L4.63 22.7L3.48 22.09L3.22 21.21L3.32 16.63L3.48 16.71L3.93 16.53L4.1 16.28L3.57 15.3L3.48 14.87L3.32 14.69L3.32 9.49L3.66 9.85L3.75 9.58L3.57 9.15L3.32 8.88L3.32 6.41L2.69 5.79L2.6 5.45L2.69 4.47L3.32 3.77L3.85 3.77L4.2 3.94L4.89 4.82L5.08 5.45L5.08 6.23L4.98 6.33L5.08 6.41L5.25 6.33L5.34 6.41L6.04 6.41L6.3 6.14L6.39 6.41L6.48 6.33L6.48 5.26L6.75 4.38L7.02 3.77L7.63 2.89L8.16 2.36L9.12 1.75L10.18 1.38L10.62 1.38Z"/>
+        <path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/>
       </svg>
     </button>
     <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
