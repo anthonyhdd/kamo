@@ -8736,8 +8736,8 @@ function chSeek(){
        hand the photo to the normal compose flow, and the full create-paint-share loop
        runs from here: place, paint, send. crossOrigin, or the board taints and the
        publish dies at toBlob — storage answers ACAO:* (verified). */
-    function chRehide(src){
-      track("seek_rehide_tapped",{});
+    function chRehide(src,round,sellApp){
+      track("seek_rehide_tapped",{round:round||1,primary:sellApp?"app":"rehide"});
       try{ w.remove(); st.remove(); }catch(_){}
       photo.crossOrigin="anonymous";
       photo.onload=()=>syncPreviewFit();
@@ -8746,6 +8746,26 @@ function chSeek(){
       enterCompose();
     }
 
+    /* HOW MANY ROUNDS THIS BROWSER HAS ALREADY FINISHED — and it decides which CTA is the
+       loud one. Round one sells the LOOP ("Send one back"), because a seeker who has just
+       played is worth more to it as a sender than as an install, and that is the whole
+       point of ⑤. From round two on it sells the APP, because somebody who opened a second
+       stranger's hide has already answered the only question the store page asks.
+       The number behind it: on 2026-08-12, 383 browser landings arrived and in-app DAU did
+       not move — 237 the day before, 238 that day. "Get KAMO" was demoted to secondary on
+       every reveal that afternoon, deliberately. This keeps that for the first round and
+       takes it back afterwards, rather than choosing once for everybody.
+
+       localStorage, and it is not the fragile choice it looks like. It is per-origin and
+       every challenge link lands on the same origin; and this block only ever runs where
+       there is NO wrapper — the same fact that lets chDeviceId() keep kamo_did right here
+       and sends seek_* straight to Amplitude. So the 1.0.2 launch wipe, which is what makes
+       localStorage untrustworthy elsewhere in this file, cannot reach it. A cleared browser
+       reads as a first round, which is the safe direction to be wrong in: it shows the loop. */
+    const CH_ROUNDS_KEY="kamo_rounds";
+    function chRoundsPlayed(){ try{ return parseInt(localStorage.getItem(CH_ROUNDS_KEY)||"0",10)||0; }catch(e){ return 0; } }
+    function chBumpRounds(n){ try{ localStorage.setItem(CH_ROUNDS_KEY,String(n)); }catch(e){} }
+
     /* One ending, three ways in — found, missed, given up — because the reveal is the
        product, not a punishment, and a second ending screen would be a second thing to
        maintain and diverge. */
@@ -8753,18 +8773,29 @@ function chSeek(){
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
       const q=$$("chQuit"); if(q) q.remove();
+      /* Counted only where there is something to send back, which is also the only shape
+         that IS a round: the "This hide is gone" ending arrives with no opts, and a visitor
+         who met an expired link must not be promoted to a player. Read before the bump, so
+         `played` is how many rounds came before this one. */
+      const played=opts.rehide?chRoundsPlayed():0;
+      if(opts.rehide) chBumpRounds(played+1);
+      const sellApp=opts.rehide&&played>=1;
+      const rehideBtn='<button class="'+(sellApp?'chCta2':'chCta')+'" id="chReh">Send one back</button>';
+      const goBtn='<button class="'+(opts.rehide&&!sellApp?'chCta2':'chCta')+'" id="chGo">'+(opts.rehide?'Get KAMO':'Play KAMO')+'</button>';
       $$("chFoot").innerHTML='<div class="chCard">'
-        +(opts.rehide?'<button class="chCta" id="chReh">Send one back</button>':'')
-        +'<button class="'+(opts.rehide?'chCta2':'chCta')+'" id="chGo">'+(opts.rehide?'Get KAMO':'Play KAMO')+'</button>'
+        +(opts.rehide?(sellApp?goBtn+rehideBtn:rehideBtn+goBtn):goBtn)
         +'<button class="chR" id="chRep">Report this photo</button></div>';
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
          failure this change exists to end. Split seek_cta_tapped by tier and a template that
-         stopped resolving shows up as a column, not as a slow drift in "organic". */
+         stopped resolving shows up as a column, not as a slow drift in "organic".
+         `round` and `primary` ride along, on BOTH buttons, because a swap that cannot be read
+         is a hunch that ships: rehide-primary against app-primary, compared at equal round
+         numbers, is the only thing that can settle whether this was worth doing. */
       $$("chGo").onclick=()=>{ const u=refLink("seek_cta",CH_SEEK);
-        track("seek_cta_tapped",{tier:u===appLink?"plain":"onelink"});
+        track("seek_cta_tapped",{tier:u===appLink?"plain":"onelink",round:played+1,primary:sellApp?"app":"rehide"});
         location.href=u; };
-      if(opts.rehide){ $$("chReh").onclick=()=>chRehide(opts.camoSrc); }
+      if(opts.rehide){ $$("chReh").onclick=()=>chRehide(opts.camoSrc,played+1,sellApp); }
       $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{}); track("seek_reported",{});
         $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
     }

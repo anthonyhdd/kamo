@@ -70,7 +70,7 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
-async function boot({ hit, pct, others, frames, name = 'tony' }) {
+async function boot({ hit, pct, others, frames, name = 'tony', rounds = 0, gone = false }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
@@ -78,20 +78,28 @@ async function boot({ hit, pct, others, frames, name = 'tony' }) {
     if (!frames && (u.includes('_b.jpg') || u.includes('_w.jpg'))) return route.fulfill({ status: 404, body: 'x' });
     route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
   });
-  await page.addInitScript(({ hit, pct, others, name }) => {
+  await page.addInitScript(({ hit, pct, others, name, rounds, gone }) => {
+    /* The seeker's round counter lives in localStorage on this origin and decides which CTA
+       is loud. Seeded before the page's own script can read it. */
+    try { if (rounds) localStorage.setItem('kamo_rounds', String(rounds)); } catch (e) {}
+    window.__gone = gone;
     window.__calls = [];
     window.__rpc = (fn, body) => {
       window.__calls.push([fn, body]);
-      if (fn === 'get_hide') return Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 3, n_found: 1, limit_s: null, max_taps: null, name });
+      if (fn === 'get_hide') return window.__gone ? Promise.resolve(null) : Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 3, n_found: 1, limit_s: null, max_taps: null, name });
       if (fn === 'submit_attempt') return Promise.resolve({ hit, tries: 4, missed: 3, secs: 9, pct, others });
       if (fn === 'reveal_hide') return Promise.resolve({ cx: 0.5, cy: 0.5, r: 0.1 });
       return Promise.resolve(null);
     };
-  }, { hit, pct, others, name });
+  }, { hit, pct, others, name, rounds, gone });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(700);
   return page;
 }
+/* Both CTAs in DOM order, with the class that says which one is primary. */
+const ctaLayout = async (page) => page.evaluate(() => [...document.querySelectorAll('#chFoot button')]
+  .filter((b) => b.id === 'chReh' || b.id === 'chGo')
+  .map((b) => ({ id: b.id, cls: b.className, text: b.textContent })));
 const txt = async (page, id) => page.evaluate(i => { const e = document.getElementById(i); return e ? e.textContent : null; }, id);
 const calls = async (page) => page.evaluate(() => window.__calls.map(c => c[0]));
 
@@ -142,6 +150,15 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
   (await txt(page, 'chHead')) === 'They were right there.' ? ok('one miss ends the round') : bad('head after miss: ' + await txt(page, 'chHead'));
   const reh = await page.evaluate(() => { const e = document.getElementById('chReh'); return e ? e.textContent : null; });
   reh === 'Send one back' ? ok('primary CTA is the no-install send-back') : bad('chReh: ' + reh);
+  /* TEXT WAS NOT ENOUGH. Which button is LOUD is the whole decision, and it lives in the
+     order and the class (chCta primary, chCta2 secondary) — both invisible to a check that
+     only reads textContent. */
+  const c1 = await ctaLayout(page);
+  c1.length === 2 && c1[0].id === 'chReh' && c1[0].cls === 'chCta' && c1[1].id === 'chGo' && c1[1].cls === 'chCta2'
+    ? ok('round 1 sells the LOOP: Send one back is primary, Get KAMO secondary')
+    : bad('round 1 CTA layout: ' + JSON.stringify(c1));
+  (await page.evaluate(() => localStorage.getItem('kamo_rounds'))) === '1'
+    ? ok('the round is counted once') : bad('kamo_rounds after one round: ' + await page.evaluate(() => localStorage.getItem('kamo_rounds')));
   const go = await page.evaluate(() => { const e = document.getElementById('chGo'); return e ? e.textContent : null; });
   go === 'Get KAMO' ? ok('install CTA is secondary') : bad('chGo: ' + go);
   // flip
@@ -219,6 +236,40 @@ console.log('\nSEND ONE BACK — drops into compose with the same photo, no came
   ph && ph.cors === 'anonymous' ? ok('crossOrigin set (board will not taint)') : bad('crossOrigin missing');
   const composing = await page.evaluate(() => document.getElementById('start') ? document.getElementById('start').style.display === 'none' : true);
   composing ? ok('compose flow entered (splash gone)') : bad('splash still up');
+  await page.close();
+}
+
+/* ---- ROUND TWO --------------------------------------------------------------------------
+   The swap is the point of the change, so it is asserted rather than assumed. A seeker who
+   opens a SECOND stranger's hide has already answered the question the store page asks, and
+   from there the reveal sells the app instead of the loop. Round one is unchanged (asserted
+   above), which is what keeps chantier 5 intact for everyone meeting KAMO for the first time. */
+console.log('\nROUND TWO SELLS THE APP');
+{
+  const page = await boot({ hit: false, frames: true, rounds: 1 });
+  await page.mouse.move(200, 500); await page.mouse.down(); await page.waitForTimeout(120);
+  await page.mouse.move(210, 520); await page.waitForTimeout(60); await page.mouse.up();
+  await page.waitForTimeout(1200);
+  const c2 = await ctaLayout(page);
+  c2.length === 2 && c2[0].id === 'chGo' && c2[0].cls === 'chCta' && c2[1].id === 'chReh' && c2[1].cls === 'chCta2'
+    ? ok('round 2 sells the APP: Get KAMO is primary, Send one back secondary')
+    : bad('round 2 CTA layout: ' + JSON.stringify(c2));
+  c2[0] && c2[0].text === 'Get KAMO' ? ok('and the primary still reads "Get KAMO"')
+    : bad('round 2 primary text: ' + (c2[0] && c2[0].text));
+  (await page.evaluate(() => localStorage.getItem('kamo_rounds'))) === '2'
+    ? ok('the counter keeps climbing') : bad('kamo_rounds: ' + await page.evaluate(() => localStorage.getItem('kamo_rounds')));
+  await page.close();
+}
+
+/* A DEAD LINK IS NOT A ROUND. "This hide is gone" ends with no opts, so there is nothing to
+   send back and nothing was played — counting it would promote somebody who met an expired
+   link into a second-round player and sell them the app on arrival. */
+console.log('\nAN EXPIRED LINK DOES NOT COUNT AS A ROUND');
+{
+  const page = await boot({ hit: false, frames: true, gone: true });
+  (await page.evaluate(() => localStorage.getItem('kamo_rounds'))) === null
+    ? ok('an expired hide leaves the counter untouched')
+    : bad('kamo_rounds after an expired hide: ' + await page.evaluate(() => localStorage.getItem('kamo_rounds')));
   await page.close();
 }
 
