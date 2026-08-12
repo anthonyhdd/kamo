@@ -4968,7 +4968,7 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","hide_publish_blocked","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -5707,10 +5707,16 @@ function chCopy(text){
 function chPrevRender(){
   try{
     const row=document.getElementById("chPrev"); if(!row) return;
+    /* UNDER THE PUBLISH FLOOR, THE CARD IS THE FIX-IT AFFORDANCE. chUpload() refuses a
+       hide this bare (see CH_MIN_COVERAGE), so "Challenge a friend" would send the
+       generic invite — and nothing on the sheet said why. The card now says it, and
+       tapping it goes straight back to the brush instead of opening a preview of a game
+       that will not be published. */
+    const blocked=Math.round(currentScore||0)<CH_MIN_COVERAGE;
     /* The two chips ARE the deal the friend gets, and the deal is fixed now: one buzz,
        no clock. Constants, so the card can never disagree with the seeker screen. */
-    document.getElementById("chChipS").textContent="1 buzz";
-    document.getElementById("chChipT").textContent="no clock";
+    document.getElementById("chChipS").textContent=blocked?"not hidden yet":"1 buzz";
+    document.getElementById("chChipT").textContent=blocked?"paint them first":"no clock";
     /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
        an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
        because a third chip made the card read as clutter. What survives it: the share MESSAGE
@@ -5742,13 +5748,16 @@ function chPrevRender(){
        and to be about to be shown. onclick (not addEventListener) on purpose — chPrevRender
        runs again on every share sheet open, and a listener would stack a duplicate each
        time, so the preview would open twice, then three times. */
-    shot.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chPrevPlay(); };
+    const go=blocked
+      ? ()=>{ haptic(10); closeShareSheet(); if($("#btnEdit").style.display!=="none") $("#btnEdit").click(); }
+      : ()=>{ haptic(10); chPrevPlay(); };
+    shot.onclick=(ev)=>{ ev.stopPropagation(); go(); };
     /* THE WHOLE ROW OPENS IT, not just the 46px thumbnail. The card is one object that says
        "here is what they get", and only the picture answered to a tap — so the title, the two
        chips and all the space between them were dead, and the tap target for the only way to
        SEE the challenge was the smallest thing on the card. The gear stops propagation, so
        settings still win on their own corner. */
-    row.onclick=()=>{ haptic(10); chPrevPlay(); };
+    row.onclick=go;
     /* The gear set seconds and taps. Nothing consumes them any more — the deal is one buzz
        on no clock, and difficulty comes from the paint, never from a knob — so the control
        is hidden rather than left selling a setting the round ignores. Markup stays so the
@@ -7124,8 +7133,23 @@ async function chUploadReveal(name){
 
 /* Fire-and-forget: the reveal must never wait on a network round trip. If this fails the
    share silently falls back to the App Store link, which is exactly today's behaviour. */
+/* NOT HIDDEN = NOT PUBLISHED. A hide with (almost) no paint is not a game — the figure
+   stands in plain sight, and since the per-hide link previews shipped, the SHARE CARD
+   itself spoils it in the thread (a raw mannequin on the og:image, live, 2026-08-12).
+   Same scale as the native review gate: under MIN_SCORE=30 a hide is botched. get_hide is
+   gated server-side at the same floor, so even a link that slips out is a dead link, and
+   the scraper falls back to the generic icon card. The share button still works — with no
+   chId the message becomes the invite, which never promises a puzzle. */
+const CH_MIN_COVERAGE=30;
 async function chUpload(){
   if(!CH_MAKE||chId) return;
+  /* Concurrent calls raced past the chId guard — the peek's pointerdown and the sheet
+     open both fire this, and chId is only set after create_hide resolves, so one share
+     produced two and three identical rows (verified in the table: 2-3 hides on the same
+     second). An in-flight flag is the missing half of the idempotence. */
+  if(chUpload._busy) return;
+  if(Math.round(currentScore||0)<CH_MIN_COVERAGE){ track("hide_publish_blocked",{coverage:Math.round(currentScore||0)}); return; }
+  chUpload._busy=true;
   try{
     const g=chGeom(); if(!g) return;
     const blob=await chBlob(); if(!blob) return;
@@ -7160,6 +7184,7 @@ async function chUpload(){
     armResultsPing();
     chUploadReveal(name);   // fire-and-forget — the snap's frames; see chUploadReveal
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
+  finally{ chUpload._busy=false; }
 }
 /* THE OTHER HALF OF armResultsPing, and the half that is actually about something.
    armResultsPing is a blind three-hour timer that says "go look" — it cannot know whether
