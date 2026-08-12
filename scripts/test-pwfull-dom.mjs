@@ -47,7 +47,17 @@ const html = real.slice(0, at)
   + 'return{show:getComputedStyle(el).display!=="none",text:el.textContent,'
   + 'buy:(document.getElementById("pwBuy")||{}).textContent||"",plan:pwPlan,'
   + 'terms:getComputedStyle(document.getElementById("pwTerms")).display};},'
-  + 'toggle(){document.getElementById("pwLifeLine").click();return this.lifeline();},'
+  /* postNative is the last thing KAMO controls before StoreKit takes over, so stubbing it is
+     how "did this actually try to buy" gets answered without a store. ReactNativeWebView has
+     to exist too, or pwPurchase() takes the browser branch (setPro) and never posts at all —
+     which is the shape of the false pass this hook was written to avoid. Both are removed
+     again on the way out so nothing downstream inherits a fake wrapper. */
+  + 'tapLine(){window.__bought=null;const rn=window.ReactNativeWebView,pn=postNative;'
+  + 'window.ReactNativeWebView={postMessage(){}};'
+  + 'postNative=(m)=>{if(m&&m.type==="purchase")window.__bought=m.product;return true;};'
+  + 'try{document.getElementById("pwLifeLine").click();}finally{postNative=pn;'
+  + 'if(rn)window.ReactNativeWebView=rn;else delete window.ReactNativeWebView;}'
+  + 'return{purchased:window.__bought,plan:pwPlan};},'
   + 'chrome(){const g=q=>getComputedStyle(document.querySelector(q)).visibility;'
   + 'return{brand:g(".brand"),done:g("#btnDone"),back:g("#btnBack"),hint:g("#hint")};},'
   + 'close(){closePaywall();return this.chrome();},'
@@ -136,7 +146,7 @@ console.log('\nTHE STAGE GOES QUIET UNDERNEATH, AND WAKES ON CLOSE');
     : bad(`chrome still hidden after close: ${JSON.stringify(after)} — the app looks broken`);
 }
 
-console.log('\nTHE ONE-LINE PLAN TOGGLE SELLS ONLY WHAT THE STORE RETURNED');
+console.log('\nTHE ONE-LINE PLAN SELLS ONLY WHAT THE STORE RETURNED, AND BUYS IN ONE TAP');
 {
   const before = await page.evaluate(() => window.__f.lifeline());
   before.show === false
@@ -157,15 +167,17 @@ console.log('\nTHE ONE-LINE PLAN TOGGLE SELLS ONLY WHAT THE STORE RETURNED');
     ? ok('and the terms line below still speaks (auto-renews · cancel anytime)')
     : bad('the terms line is hidden — the renewal disclosure has to stay visible');
 
-  const flipped = await page.evaluate(() => window.__f.toggle());
-  flipped.plan === 'lifetime' && /\$14\.99/.test(flipped.buy) && /\$2\.99\/week/.test(flipped.text)
-    ? ok(`tapping it flips the CTA to lifetime and offers the weekly back ("${flipped.text}")`)
-    : bad(`after the toggle: plan=${flipped.plan} buy=${JSON.stringify(flipped.buy)} line=${JSON.stringify(flipped.text)}`);
-
-  const back = await page.evaluate(() => window.__f.toggle());
-  back.plan === 'weekly' && /or \$14\.99 once/.test(back.text)
-    ? ok('and tapping again goes back to the weekly with the trial CTA')
-    : bad(`after the second toggle: plan=${back.plan} line=${JSON.stringify(back.text)}`);
+  /* THE LINE BUYS, IT DOES NOT SELECT. Two taps to buy was a leak we invented on a screen
+     that already loses 12 Apple-sheet cancels for 0 trials: someone who taps "$14.99 once —
+     yours forever" has decided. The assertion is that ONE tap reaches StoreKit with the
+     lifetime product — not that the CTA changed. */
+  const bought = await page.evaluate(() => window.__f.tapLine());
+  bought.purchased === 'com.blisscoach.kamo.pro'
+    ? ok('one tap on the line goes straight to StoreKit with the lifetime product')
+    : bad(`tapping the line asked to purchase ${JSON.stringify(bought.purchased)} — it must buy, not switch`);
+  bought.plan === 'lifetime'
+    ? ok('and the plan is set to lifetime on the way through, so the tracking agrees')
+    : bad(`pwPlan is "${bought.plan}" after the line tap`);
 }
 
 await browser.close();
