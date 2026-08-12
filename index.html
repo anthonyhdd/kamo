@@ -356,12 +356,6 @@
      to get another is one tap away rather than a dead end). */
   /* .passChip removed with the free KAMO+ round. Paid tools now require a real
      entitlement — a subscription or Apple's own trial — and nothing in the app grants them. */
-  #poseBar{position:absolute;left:0;right:0;bottom:calc(150px + var(--safe-b));z-index:14;display:none;justify-content:center;gap:7px;padding:0 14px;}
-  #poseBar .poseBtn{flex:0 0 auto;width:48px;height:48px;border-radius:13px;border:1px solid rgba(255,255,255,.16);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s cubic-bezier(.3,1.4,.5,1),border-color .2s,background .2s;}
-  #poseBar .poseBtn svg{width:22px;height:34px;opacity:.72;}
-  #poseBar .poseBtn.active{border-color:#fff;background:rgba(255,255,255,.16);}
-  #poseBar .poseBtn.active svg{opacity:1;}
-  #poseBar .poseBtn:active{transform:scale(.88);}
 
   #flash{position:absolute;inset:0;z-index:40;background:#fff;opacity:0;pointer-events:none;}
   #fx{position:absolute;inset:0;z-index:38;pointer-events:none;overflow:hidden;}
@@ -806,7 +800,7 @@
   #stage.pwCover .brand,#stage.pwCover #btnBack,#stage.pwCover #btnDone,#stage.pwCover #btnEdit,
   #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
-  #stage.pwCover #poseBar,#stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
+  #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
   #stage.pwCover #flip,#stage.pwCover #scoreChip{visibility:hidden!important;}
   /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
      #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
@@ -1618,8 +1612,7 @@
     <div id="wheel"><div id="wheelCenter"></div></div>
     <div id="loupe"></div>
 
-    <div id="poseBar"></div>
-    <div id="shutterWrap">
+        <div id="shutterWrap">
       <button id="shutter" class="shutter" aria-label="Capture"><div class="spin"></div><div class="ring"></div><div class="core"></div></button>
       <div class="capLabel">Capture</div>
     </div>
@@ -2392,16 +2385,6 @@ function fullPose(i){ const o=JSON.parse(JSON.stringify(REST)); const p=POSES[i]
 /* NO NAME PILL ON POSE CHANGE. Tapping the figure cycles the pose and the figure itself is
    the feedback — it visibly changes shape. Announcing "Stand" over it labelled something the
    user was already looking at, once per tap, on the screen where they are framing a shot. */
-/* NOBODY KNOWS IF ANYONE USES THIS. The poses are 122 lines of this file and have never been
-   instrumented — setPose() has run since launch without a single track(). "Do people change
-   pose" was unanswerable, not because the answer was bad but because the question was never
-   wired. One line makes it a number: how many do it, how often, and whether the ones who do
-   go on to share. */
-function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length;
-  if(char.mixer){ v2Pose(char,char.poseIdx,false); haptic(); updatePoseBar();
-    track("pose_changed",{pose:char.poseIdx,of:POSES.length}); return; }
-  char.target=fullPose(char.poseIdx); haptic(); updatePoseBar();
-  track("pose_changed",{pose:char.poseIdx,of:POSES.length}); }
 function setPoseInstant(char,i){ if(char.mixer){ v2Pose(char,i,true); return; }
   char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); for(const k in REST){ if(k==="rootDY"){ char.charG.position.y=char.target.rootDY; continue;} char.parts[k].rotation.set(char.target[k][0],char.target[k][1],char.target[k][2]); } }
 function lerpChar(char){ const s=0.18; const g=char.group;
@@ -2422,14 +2405,23 @@ function lerpChar(char){ const s=0.18; const g=char.group;
   /* The v2 body is DRIVEN, not posed: the mixer owns every bone, so the rest-pose easing
      and the drag sway below would fight it frame by frame. It keeps the position spring
      and the capture pop above (they act on group/charG, not on bones). */
-  if(char.mixer){ char.mixer.update(1/60); return; }
+  if(char.mixer){ char.mixer.update(frameDt); return; }
   // secondary motion: limbs/torso trail the movement, then settle to rest when it stops
   const px=g.position.x; if(char._lx===undefined)char._lx=px; char._vx=(char._vx||0)*0.86+(px-char._lx)*0.16; char._lx=px;
   const v=Math.max(-0.9,Math.min(0.9,char._vx*10));
   const sw={ spine:[0,0,-v*0.6], head:[0,0,-v*0.45], shL:[0,0,-v*1.1], shR:[0,0,-v*1.1], hipL:[v*0.45,0,0], hipR:[-v*0.45,0,0] };
   for(const k in REST){ if(k==="rootDY"){ char.charG.position.y+=(char.target.rootDY-char.charG.position.y)*s; continue;} const r=char.parts[k].rotation,t=char.target[k],o=sw[k]||[0,0,0]; r.x+=((t[0]+o[0])-r.x)*s; r.y+=((t[1]+o[1])-r.y)*s; r.z+=((t[2]+o[2])-r.z)*s; } }
 function resize3(){ const w=stage.clientWidth,h=stage.clientHeight; renderer.setPixelRatio(dpr); renderer.setSize(w,h,false); camera3.aspect=w/h; camera3.updateProjectionMatrix(); }
-function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!renderer) return; characters.forEach(lerpChar); renderer.render(scene,camera3); }
+/* REAL SECONDS, NOT ASSUMED ONES. The animation mixer was advanced by a hardcoded 1/60 per
+   frame, which is only true on a 60Hz display: on the 120Hz phones this app is aimed at the
+   idle played at HALF speed, and after a stall it caught up as if no time had passed.
+   Clamped at 50ms so a hitch — or coming back from the app switcher, where rAF simply stops
+   — resumes the loop instead of teleporting it forward by however long the phone was away. */
+let frameDt=1/60;
+function animate(){ requestAnimationFrame(animate); if(mode!=="compose"||!renderer) return;
+  const now=performance.now();
+  frameDt=Math.min(0.05,Math.max(0.001,(now-(animate._t||(now-16)))/1000)); animate._t=now;
+  characters.forEach(lerpChar); renderer.render(scene,camera3); }
 
 /* ===== CAMERA ===== */
 // Drop the splash disguise and show the real hero (title + CTAs). Called only
@@ -2769,7 +2761,6 @@ function enterCompose(){
      compose must never inherit a running clock from the previous phase. */
   if(canPro()) stopTimer(); else startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   lastShotRender();
-  buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
 /* Reached only from the Retake confirmation (#cfYes), which calls exitFinished() first —
@@ -2785,7 +2776,6 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
-  $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
   resumeCamera();   // paused for the whole hide by capture()
@@ -2799,7 +2789,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
 
 /* ===== GESTURES ===== */
 const pointers=new Map();
-let downT=0, downX=0, downY=0, downHit=-1, moved=false, dragging=false, pinchStart=0, scaleStart=1, rotStart=0, rotBaseY=0, lpTimer=null, wheelOpen=false;
+let downT=0, downX=0, downY=0, downHit=-1, moved=false, dragging=false, pinchStart=0, scaleStart=1, rotStart=0, rotBaseY=0, lpTimer=null;
 const plane=new THREE.Plane(new THREE.Vector3(0,0,1),0);
 const ray=new THREE.Raycaster();
 function ndc(cx,cy){ const r=stage.getBoundingClientRect(); return new THREE.Vector2(((cx-r.left)/r.width)*2-1, -(((cy-r.top)/r.height)*2-1)); }
@@ -2812,12 +2802,18 @@ function onDown(e){
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pointers.size===1){ downT=performance.now(); downX=e.clientX; downY=e.clientY; moved=false; dragging=false;
     downHit=pickChar(e.clientX,e.clientY); if(downHit>=0) selIdx=downHit;
-    if(downHit>=0) lpTimer=setTimeout(()=>openWheel(downX,downY),470);
+    /* NO POSE PICKER ON THE FIGURE ANY MORE (founder, 2026-08-12). A tap cycled the pose
+       and a hold opened a radial wheel of six — drawn from the ORIGINAL rig, which is not
+       what the new body does: its six clips are animations, they read differently, and the
+       wheel's little icons promised poses the character no longer strikes. Two avatars, one
+       menu, and the menu was lying about one of them.
+       The figure keeps everything that is about placing it: drag to move, pinch to scale
+       and rotate. What is gone is a control that had to describe the character to be usable
+       — and could not describe both. */
   } else if(pointers.size===2){ clearTimeout(lpTimer); const p=[...pointers.values()]; pinchStart=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1; scaleStart=sel()?sel().group.scale.x:1; rotStart=Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x); rotBaseY=sel()?sel().group.rotation.y:0; }
 }
 function onMove(e){
   if(!pointers.has(e.pointerId)) return; pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(wheelOpen){ updateWheel(e.clientX,e.clientY); return; }
   const dx=e.clientX-downX, dy=e.clientY-downY;
   if(pointers.size>=2 && sel()){ clearTimeout(lpTimer); const p=[...pointers.values()]; const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); sel().group.scale.setScalar(Math.max(0.3,Math.min(3.5,scaleStart*(d/pinchStart)))); const a=Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x); sel().group.rotation.y=rotBaseY+(a-rotStart); return; }
   if(!moved && Math.hypot(dx,dy)>10){ moved=true; clearTimeout(lpTimer); if(sel()){ dragging=true; dragStartWorld=screenToWorld(e.clientX,e.clientY); dragStartPos=sel().group.position.clone(); } }
@@ -2825,8 +2821,6 @@ function onMove(e){
 }
 function onUp(e){
   clearTimeout(lpTimer); pointers.delete(e.pointerId);
-  if(wheelOpen){ closeWheel(true); return; }
-  if(!moved && performance.now()-downT<450 && mode==="compose" && pointers.size===0 && downHit>=0){ selIdx=downHit; setPose(sel(),sel().poseIdx+1); }
   if(pointers.size===0){ dragging=false; downHit=-1; flushExpire(); }
 }
 glCanvas.addEventListener("pointerdown",onDown);
@@ -2834,45 +2828,11 @@ glCanvas.addEventListener("pointermove",onMove);
 glCanvas.addEventListener("pointerup",onUp);
 glCanvas.addEventListener("pointercancel",onUp);
 
-/* ---- radial pose wheel (acts on selected char) ---- */
-let wheelSlices=[], wheelHot=-1, wheelCx=0, wheelCy=0;
-function miniSVG(i){
-  const a={0:"stand",1:"wave",2:"up",3:"sit",4:"run",5:"point"}[i];
-  const L=(x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#fff" stroke-width="7" stroke-linecap="round"/>`;
-  const H=`<circle cx="50" cy="26" r="14" fill="#fff"/>`;
-  const b={stand:L(50,40,50,120)+L(50,60,28,96)+L(50,60,72,96)+L(50,120,34,178)+L(50,120,66,178),
-    wave:L(50,40,50,120)+L(50,58,80,26)+L(50,64,30,96)+L(50,120,34,178)+L(50,120,66,178),
-    up:L(50,40,50,120)+L(50,56,24,24)+L(50,56,76,24)+L(50,120,34,178)+L(50,120,66,178),
-    sit:L(50,44,50,104)+L(50,64,28,96)+L(50,64,72,96)+L(50,104,24,104)+L(24,104,24,150)+L(50,104,76,104)+L(76,104,76,150),
-    run:L(52,42,46,120)+L(52,64,84,50)+L(52,66,24,84)+L(46,120,24,152)+L(46,120,78,168),
-    point:L(50,40,50,120)+L(50,60,86,52)+L(50,64,30,96)+L(50,120,34,178)+L(50,120,66,178)}[a];
-  return `<svg viewBox="0 0 100 190">${H}${b}</svg>`;
-}
-/* ---- visible pose bar (tap a pose directly) ---- */
-function buildPoseBar(){ const bar=$("#poseBar"); if(!bar||bar.childElementCount) return;
-  for(let i=0;i<POSES.length;i++){ const b=document.createElement("button"); b.className="poseBtn"; b.dataset.i=i; b.title=POSES[i].label; b.innerHTML=miniSVG(i);
-    b.onclick=()=>{ let c=sel(); if(!c){ selIdx=0; c=characters[0]; } if(c) setPose(c,i); }; bar.appendChild(b); } }
-function updatePoseBar(){ const c=sel()||characters[0]; const p=c?c.poseIdx:-1;
-  document.querySelectorAll("#poseBar .poseBtn").forEach(b=>b.classList.toggle("active",+b.dataset.i===p)); }
-function openWheel(cx,cy){
-  if(!sel()) return; wheelOpen=true; wheelHot=-1; haptic(14);
-  const r=stage.getBoundingClientRect();
-  let lx=Math.max(120,Math.min(r.width-120,cx-r.left)), ly=Math.max(150,Math.min(r.height-150,cy-r.top));
-  wheelCx=lx+r.left; wheelCy=ly+r.top; wheelCenter.style.left=lx+"px"; wheelCenter.style.top=ly+"px";
-  wheelEl.querySelectorAll(".slice").forEach(s=>s.remove()); wheelSlices=[];
-  const R=118, n=POSES.length;
-  for(let i=0;i<n;i++){ const ang=-Math.PI/2+i*(2*Math.PI/n); const sx=lx+Math.cos(ang)*R, sy=ly+Math.sin(ang)*R;
-    const el=document.createElement("div"); el.className="slice"; el.style.left=sx+"px"; el.style.top=sy+"px";
-    el.innerHTML=miniSVG(i)+`<small>${POSES[i].label}</small>`; wheelEl.appendChild(el); wheelSlices.push(el); }
-  wheelEl.style.display="block"; teachHint("Slide to a pose and release");
-}
-function updateWheel(px,py){
-  const r=stage.getBoundingClientRect(), cx=wheelCx-r.left, cy=wheelCy-r.top, lx=px-r.left, ly=py-r.top;
-  const dist=Math.hypot(lx-cx,ly-cy); let hot=-1;
-  if(dist>36){ const ang=Math.atan2(ly-cy,lx-cx), n=POSES.length; let idx=Math.round((ang+Math.PI/2)/(2*Math.PI/n)); hot=((idx%n)+n)%n; }
-  if(hot!==wheelHot){ wheelHot=hot; wheelSlices.forEach((el,i)=>el.classList.toggle("hot",i===hot)); if(hot>=0) haptic(6); }
-}
-function closeWheel(commit){ wheelOpen=false; wheelEl.style.display="none"; if(commit&&wheelHot>=0&&sel()) setPose(sel(),wheelHot); else teachHint("Tap to pose · hold for more"); }
+/* THE RADIAL POSE WHEEL, THE POSE BAR AND THEIR ICONS ARE GONE — see onDown(). They were
+   one menu describing two different characters, and it could only ever be honest about the
+   original rig. setPose() went with them: nothing changes a pose at runtime any more.
+   setPoseInstant() stays and is load-bearing — it is how the wave frame of the reveal is
+   struck (chUploadReveal) and how a freshly spawned figure gets its rest pose. */
 
 /* ===== FX: poof particles ===== */
 function poof(sx,sy){
@@ -2995,7 +2955,7 @@ function capture(){
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   resetZoom();   // every round starts framed as shot — a leftover zoom would silently crop the next hide
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; $("#poseBar").style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
   /* Reset to the roller on every capture for a non-member. Nothing hands the slider over any
      more now that the free round is gone, but this stays as belt and braces: a small brush
@@ -8548,7 +8508,6 @@ if(location.search.includes("debug")){
     setBg:(url)=>{ photo.onload=()=>syncPreviewFit(); photo.src=url; photo.style.display="block"; cam.style.display="none"; bgKind="photo"; enterCompose(); },
     pose:(i)=>{ if(sel()) setPoseInstant(sel(),i); }, capture, score:()=>currentScore,
     reveal:buildReveal, chars:()=>characters.length, poses:POSES.map(p=>p.label),
-    wheel:(x,y)=>openWheel(x,y), wheelHi:(x,y)=>updateWheel(x,y),
     /* v2 body forensics: the GLB's geometry box (unskinned) vs the skeleton's world span.
        When these disagree, the mesh follows the BONES — scale by the wrong one and the
        character renders at the wrong size while every box says otherwise. */
