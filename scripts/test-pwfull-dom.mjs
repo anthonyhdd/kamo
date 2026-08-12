@@ -45,7 +45,8 @@ const html = real.slice(0, at)
   + 'prices(p){window.KAMO.setPrices(p);return this.lifeline();},'
   + 'lifeline(){const el=document.getElementById("pwLifeLine");'
   + 'return{show:el.style.display!=="none",text:el.textContent,'
-  + 'buy:(document.getElementById("pwBuy")||{}).textContent||"",plan:pwPlan};},'
+  + 'buy:(document.getElementById("pwBuy")||{}).textContent||"",plan:pwPlan,'
+  + 'terms:getComputedStyle(document.getElementById("pwTerms")).display};},'
   + 'toggle(){document.getElementById("pwLifeLine").click();return this.lifeline();},'
   + 'chrome(){const g=q=>getComputedStyle(document.querySelector(q)).visibility;'
   + 'return{brand:g(".brand"),done:g("#btnDone"),back:g("#btnBack"),hint:g("#hint")};},'
@@ -146,6 +147,15 @@ console.log('\nTHE ONE-LINE PLAN TOGGLE SELLS ONLY WHAT THE STORE RETURNED');
   after.show && /or \$14\.99 once/.test(after.text)
     ? ok(`prices in → the line offers lifetime ("${after.text}")`)
     : bad(`with both prices, the line reads: ${JSON.stringify(after.text)} (show:${after.show})`);
+
+  /* The two-line CTA: the price rides the button, and the standalone terms line goes quiet
+     so the deal is stated exactly once. */
+  /\$2\.99\/week · cancel anytime/.test(after.buy)
+    ? ok(`the CTA carries the price as its second line ("${after.buy.trim()}")`)
+    : bad(`the button reads: ${JSON.stringify(after.buy)} — the price never reached the point of decision`);
+  after.terms === 'none'
+    ? ok('and the duplicate terms line under it is gone')
+    : bad('the price is now stated twice — on the button and in #pwTerms');
 
   const flipped = await page.evaluate(() => window.__f.toggle());
   flipped.plan === 'lifetime' && /\$14\.99/.test(flipped.buy) && /\$2\.99\/week/.test(flipped.text)
