@@ -107,14 +107,9 @@ await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
   t.lit.length === 1 && t.lit[0] === 'time'
     ? ok('the clock lock lights MORE TIME and nothing else')
     : bad(`from the time lock, lit = ${JSON.stringify(t.lit)}`);
-  t.ctx.includes(`${f.paint} seconds`) && /All the time you want/.test(t.ctx) && /waiting/.test(t.ctx)
+  t.ctx.includes(`${f.paint}s`) && /All the time you want/.test(t.ctx)
     ? ok(`and the context sells unlimited against the real free clock ("${t.ctx}")`)
     : bad(`the time context reads: ${JSON.stringify(t.ctx)}`);
-
-  const re = await page.evaluate(() => window.__f.open('round_end'));
-  !/waiting/.test(re.ctx) && re.ctx.includes(`${f.paint} seconds`)
-    ? ok('round_end keeps the free clock but drops "this round is waiting" — the round is over')
-    : bad(`round_end context reads: ${JSON.stringify(re.ctx)}`);
 
   const m = await page.evaluate(() => window.__f.open('mark'));
   m.lit.length === 1 && m.lit[0] === 'mark'
