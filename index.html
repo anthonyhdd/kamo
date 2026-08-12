@@ -2148,48 +2148,119 @@ function blobShadow(){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
   m.rotation.x=-Math.PI/2; m.position.y=0.01; return m;
 }
-/* FOUNDER-ONLY BODY DOUBLE. The August reference sheets fixed the character's real
-   proportions (MEASURED on the plates: 2.50 heads tall, head = 40% of the height, torso
-   ≈ 1.0× the head, profile depth 0.91× the head, shoulder line at 39% from the top, NO
-   neck) and the founder called the current build ugly — but also explicitly asked that
-   nothing ship. This is the agreed middle: the chunky anatomy exists behind the handle
-   gate below, so exactly one player sees it — and every hide they SEND bakes it into the
-   photo, which is the in-the-wild test. Same pivots, same names, so every pose, the mask,
-   the coverage score and the reveal frames work unchanged. Flip the gate to `true` the
-   day it graduates. Same pattern as the Tony Pro unlock in the main portfolio: NOT a
-   leak, do not "fix" it. */
+/* FOUNDER-ONLY BODY DOUBLE — the REAL v2 this time. The character the founder made on the
+   weekend of Aug 9 with Meshy (mesh) + Mixamo (rig + clips) now lives in
+   vendor/kamo-v2.glb: one skinned mesh, one skeleton, six clips named for the app's pose
+   slots (idle, wave, victory, sit, run, point). The procedural chunky that briefly sat
+   here was a reconstruction from the reference plates — not their model — and is gone.
+   Gated on the handle "tony" so exactly one player sees it, and LAZY: the 2.5 MB GLB is
+   fetched only when the gate is true, so the fleet never downloads a byte of it. Hides
+   the founder SENDS bake the new body into the photo — that is the in-the-wild test.
+   Same pattern as the Tony Pro unlock in the main portfolio: NOT a leak, do not "fix" it.
+   To graduate: flip the gate to `true` (and budget the 2.5 MB, or quantize the GLB).
+   A v2 character is ANIMATED, not posed: setPose/setPoseInstant/lerpChar all branch on
+   char.mixer — the pose wheel crossfades clips, capture freezes whatever frame the mixer
+   is on, and the reveal's wave frame samples mid-clip. */
 function founderChunky(){ try{ return (getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; } }
+const V2POSE=["idle","wave","victory","sit","run","point"];   // index-aligned with POSES
+let kamoV2=null, kamoV2Loading=false;
+function loadKamoV2(){
+  if(kamoV2||kamoV2Loading||!founderChunky()) return;
+  kamoV2Loading=true;
+  import("./vendor/GLTFLoader.js").then(m=>{
+    new m.GLTFLoader().load("vendor/kamo-v2.glb",(g)=>{
+      /* Marked so clearCharacters() never disposes it — this one asset is reused across
+         every respawn, unlike the per-spawn primitive bodies. */
+      g.scene.traverse(o=>{ o.userData.kamoV2=1;
+        if(o.isMesh){ const ms=Array.isArray(o.material)?o.material:[o.material];
+          ms.forEach(mt=>{ if(mt){ mt.color=new THREE.Color(0xf6f6f8); mt.roughness=.82; mt.metalness=0; } }); } });
+      /* Mixamo clips carry the HIPS as a position track in centimetres, plus root motion.
+         Skinned vertices follow the BONES, so left alone the clip teleports the body to
+         cm-space (measured: geometry box 2.4 units, bone span 0.4→3.2 world — the render
+         was huge and cut off while every box said fine). Keep hips Y (sit needs it), pin
+         X/Z to the first frame — the character dances ON THE SPOT it was placed — and
+         drop every other position/scale track: rotations drive the rest. */
+      (g.animations||[]).forEach(c=>{
+        c.tracks=c.tracks.filter(t=>{
+          if(t.name.endsWith(".position")) return /Hips/.test(t.name);
+          if(t.name.endsWith(".scale")) return false;
+          return true;
+        });
+        c.tracks.forEach(t=>{ if(/Hips\.position$/.test(t.name)){
+          const v=t.values, x0=v[0], z0=v[2];
+          for(let i=0;i<v.length;i+=3){ v[i]=x0; v[i+2]=z0; } } });
+      });
+      kamoV2=g; kamoV2Loading=false;
+      /* Hot-swap: if the founder is already framing a shot, replace the stand-in body
+         the moment the real one lands. */
+      try{ if(mode==="compose"&&founderChunky()){ clearCharacters(); spawnHider(); } }catch(_){}
+    },undefined,()=>{ kamoV2Loading=false; });
+  }).catch(()=>{ kamoV2Loading=false; });
+}
+/* One driver for the six clips. `instant` (capture, reveal wave frame) jumps to mid-clip
+   — the most readable frame of every Mixamo loop — and applies it synchronously so a
+   render on the next line sees the pose. */
+/* World-space Y bounds of the SKINNED mesh as currently posed — the truth about what the
+   renderer will draw, sampled on the CPU (every 5th vertex; this runs twice per spawn,
+   for one player). */
+function v2Bounds(char){
+  let ymin=1e9,ymax=-1e9; const v=new THREE.Vector3();
+  scene.updateMatrixWorld(true);
+  char.meshes.forEach(m=>{
+    if(!m.isSkinnedMesh){ return; }
+    if(m.skeleton) m.skeleton.update();
+    const p=m.geometry.attributes.position;
+    for(let i=0;i<p.count;i+=5){
+      v.fromBufferAttribute(p,i); m.applyBoneTransform(i,v); v.applyMatrix4(m.matrixWorld);
+      if(v.y<ymin)ymin=v.y; if(v.y>ymax)ymax=v.y;
+    }
+  });
+  return {ymin,ymax};
+}
+function v2Pose(char,i,instant){
+  char.poseIdx=(i%V2POSE.length+V2POSE.length)%V2POSE.length;
+  const act=char.actions[V2POSE[char.poseIdx]]; if(!act) return;
+  Object.values(char.actions).forEach(a=>{ if(a!==act) a.stop(); });
+  act.reset().play();
+  if(instant){ act.time=act.getClip().duration*0.5; char.mixer.update(0); }
+  else act.fadeIn(0.2);
+}
 function makeCharacter(px=0){
   const group=new THREE.Group(); group.position.x=px; scene.add(group);
   const charG=new THREE.Group(); group.add(charG);
   const parts={};
-  if(founderChunky()){
-    /* 2.4 units tall like the classic build, so placement, pinch scale and the camera
-       need nothing. Head sphere r=0.48 → 0.96 = 40% of 2.4; head bottom lands ON the
-       shoulder line (39% from the top) and sinks into the torso top — that IS the
-       no-neck read. Legs are what remains (~0.5): stumps. Everything overlaps on
-       purpose; on a white unlit-looking body the intersections read far less than on
-       the slim build, which is most of what the plates changed. */
-    const spine=pivot(0,0.50,0); charG.add(spine); parts.spine=spine;
-    const torso=capsule(0.42,0.30); torso.position.y=0.47; spine.add(torso);
-    const shoulders=pivot(0,0.92,0); spine.add(shoulders);
-    const head=pivot(0,0.02,0); shoulders.add(head); parts.head=head;
-    const headMesh=new THREE.Mesh(new THREE.SphereGeometry(0.48,28,22),WHITE());
-    headMesh.scale.set(1,1.02,0.91);            // profile depth 0.91× the head, per the plates
-    headMesh.position.y=0.40; head.add(headMesh);   // welded into the torso top — the no-neck IS a weld, not a hover
-    function arm(side){ const sh=pivot(0.38*side,0,0); shoulders.add(sh);
-      const up=capsule(0.15,0.18); up.position.y=-0.14; sh.add(up);
-      const el=pivot(0,-0.30,0); sh.add(el);
-      const lo=capsule(0.135,0.16); lo.position.y=-0.13; el.add(lo); return {sh,el}; }
-    const aL=arm(1), aR=arm(-1); parts.shL=aL.sh; parts.elL=aL.el; parts.shR=aR.sh; parts.elR=aR.el;
-    function leg(side){ const hip=pivot(0.19*side,0.50,0); charG.add(hip);
-      const up=capsule(0.20,0.14); up.position.y=-0.13; hip.add(up);
-      const kn=pivot(0,-0.24,0); hip.add(kn);
-      const lo=capsule(0.18,0.10); lo.position.y=-0.10; kn.add(lo);
-      const foot=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),WHITE());
-      foot.scale.set(1,.55,1.4); foot.position.set(0,-0.22,0.05); kn.add(foot); return {hip,kn}; }
-    const lL=leg(1), lR=leg(-1); parts.hipL=lL.hip; parts.knL=lL.kn; parts.hipR=lR.hip; parts.knR=lR.kn;
-  } else {
+  if(founderChunky()&&kamoV2){
+    const body=kamoV2.scene;
+    body.scale.setScalar(1); body.position.set(0,0,0); body.rotation.set(0,0,0);
+    charG.add(body);
+    /* projectChar() and the poses read named parts; give them the skeleton's own bones.
+       Only spine/head are ever position-read — the rotation writers are gated off by
+       char.mixer in lerpChar/setPoseInstant. */
+    body.traverse(o=>{ if(o.isBone){ const n=o.name.toLowerCase();
+      if(!parts.spine&&n.includes("spine")) parts.spine=o;
+      if(!parts.head&&n.includes("head")) parts.head=o; } });
+    if(!parts.spine) parts.spine=body;
+    if(!parts.head) parts.head=parts.spine;
+    const meshes=[]; charG.traverse(o=>{ if(o.isMesh) meshes.push(o); });
+    const mixer=new THREE.AnimationMixer(body);
+    const actions={}; (kamoV2.animations||[]).forEach(c=>{ actions[c.name]=mixer.clipAction(c); });
+    const char={group,charG,parts,meshes,poseIdx:0,target:fullPose(0),mixer,actions};
+    v2Pose(char,0,true);
+    /* NORMALIZED OFF THE POSED, SKINNED VERTICES — not the geometry box (bind space lies
+       about size and altitude: first attempt rendered a giant) and not the bone span
+       either (this skeleton's last bone is the mid-head; the Meshy head extends far
+       above it: second attempt rendered a giant with its crown cut off). v2Bounds()
+       samples what will actually be on screen. Two passes: size to the classic body's
+       2.4 units, then put the feet on the ground. */
+    for(let i=0;i<2;i++){
+      const b=v2Bounds(char);
+      if(!(b.ymax>b.ymin)) break;
+      if(i===0){ body.scale.multiplyScalar(2.4/(b.ymax-b.ymin)); }
+      else { body.position.y-=b.ymin; }
+    }
+    characters.push(char); return char;
+  }
+  {
     const spine=pivot(0,1.0,0); charG.add(spine); parts.spine=spine;
     const torso=capsule(0.34,0.62); torso.position.y=0.36; spine.add(torso);
     const shoulders=pivot(0,0.72,0); spine.add(shoulders);
@@ -2215,9 +2286,14 @@ function makeCharacter(px=0){
    shared, so disposing them cannot affect a surviving character. */
 function clearCharacters(){
   characters.forEach(c=>{
+    if(c.mixer){ try{ c.mixer.stopAllAction(); }catch(_){} }
     scene.remove(c.group);
     c.group.traverse(o=>{
       if(!o.isMesh) return;
+      /* The v2 body is ONE loaded asset reused across every respawn — disposing its
+         geometry here would kill it for the next spawn. Everything else is created
+         per-spawn by capsule()/WHITE() and still needs the disposal below. */
+      if(o.userData&&o.userData.kamoV2) return;
       if(o.geometry) o.geometry.dispose();
       const mats=Array.isArray(o.material)?o.material:(o.material?[o.material]:[]);
       mats.forEach(m=>{ if(m.map) m.map.dispose(); m.dispose(); });
@@ -2246,9 +2322,13 @@ function fullPose(i){ const o=JSON.parse(JSON.stringify(REST)); const p=POSES[i]
    pose" was unanswerable, not because the answer was bad but because the question was never
    wired. One line makes it a number: how many do it, how often, and whether the ones who do
    go on to share. */
-function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); haptic(); updatePoseBar();
+function setPose(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length;
+  if(char.mixer){ v2Pose(char,char.poseIdx,false); haptic(); updatePoseBar();
+    track("pose_changed",{pose:char.poseIdx,of:POSES.length}); return; }
+  char.target=fullPose(char.poseIdx); haptic(); updatePoseBar();
   track("pose_changed",{pose:char.poseIdx,of:POSES.length}); }
-function setPoseInstant(char,i){ char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); for(const k in REST){ if(k==="rootDY"){ char.charG.position.y=char.target.rootDY; continue;} char.parts[k].rotation.set(char.target[k][0],char.target[k][1],char.target[k][2]); } }
+function setPoseInstant(char,i){ if(char.mixer){ v2Pose(char,i,true); return; }
+  char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); for(const k in REST){ if(k==="rootDY"){ char.charG.position.y=char.target.rootDY; continue;} char.parts[k].rotation.set(char.target[k][0],char.target[k][1],char.target[k][2]); } }
 function lerpChar(char){ const s=0.18; const g=char.group;
   // position spring — momentum + elastic settle on release (weight feel; stays where you leave it)
   if(char._svx===undefined){ char._svx=0; char._svy=0; }
@@ -2264,6 +2344,10 @@ function lerpChar(char){ const s=0.18; const g=char.group;
   let _pfx=1,_pfy=1;
   if(char._punch>0.002){ _pfx=1+char._punch*0.38; _pfy=1+char._punch*0.52; char._punch*=0.78; } else char._punch=0;
   cg.scale.x*=_pfx; cg.scale.y*=_pfy; char._pfx=_pfx; char._pfy=_pfy;
+  /* The v2 body is DRIVEN, not posed: the mixer owns every bone, so the rest-pose easing
+     and the drag sway below would fight it frame by frame. It keeps the position spring
+     and the capture pop above (they act on group/charG, not on bones). */
+  if(char.mixer){ char.mixer.update(1/60); return; }
   // secondary motion: limbs/torso trail the movement, then settle to rest when it stops
   const px=g.position.x; if(char._lx===undefined)char._lx=px; char._vx=(char._vx||0)*0.86+(px-char._lx)*0.16; char._lx=px;
   const v=Math.max(-0.9,Math.min(0.9,char._vx*10));
@@ -2602,6 +2686,7 @@ function enterCompose(){
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
+  loadKamoV2();   // founder-gated, lazy, no-op for everyone else; hot-swaps the body when it lands
   clearCharacters(); spawnHider();
   /* KAMO+ COMPOSES AND PAINTS WITH NO CLOCK — founder's call, 2026-08-11. The copy had
      claimed "no aim clock" since the round_end pitch shipped while aimSeconds() only granted
@@ -8206,7 +8291,16 @@ if(location.search.includes("debug")){
     setBg:(url)=>{ photo.onload=()=>syncPreviewFit(); photo.src=url; photo.style.display="block"; cam.style.display="none"; bgKind="photo"; enterCompose(); },
     pose:(i)=>{ if(sel()) setPoseInstant(sel(),i); }, capture, score:()=>currentScore,
     reveal:buildReveal, chars:()=>characters.length, poses:POSES.map(p=>p.label),
-    wheel:(x,y)=>openWheel(x,y), wheelHi:(x,y)=>updateWheel(x,y) };
+    wheel:(x,y)=>openWheel(x,y), wheelHi:(x,y)=>updateWheel(x,y),
+    /* v2 body forensics: the GLB's geometry box (unskinned) vs the skeleton's world span.
+       When these disagree, the mesh follows the BONES — scale by the wrong one and the
+       character renders at the wrong size while every box says otherwise. */
+    v2info:()=>{ const c=characters[selIdx]; if(!c) return null;
+      scene.updateMatrixWorld(true);
+      const b=new THREE.Box3().setFromObject(c.charG);
+      let ymin=1e9,ymax=-1e9,bones=0; const v=new THREE.Vector3();
+      c.charG.traverse(o=>{ if(o.isBone){ bones++; o.getWorldPosition(v); if(v.y<ymin)ymin=v.y; if(v.y>ymax)ymax=v.y; } });
+      return {mixer:!!c.mixer, box:[+b.min.y.toFixed(3),+b.max.y.toFixed(3)], boneY:bones?[+ymin.toFixed(3),+ymax.toFixed(3)]:null, bones}; } };
 }
 </script>
 </body>
