@@ -2172,12 +2172,39 @@ function loadKamoV2(){
   if(kamoV2||kamoV2Loading||!founderChunky()) return;
   kamoV2Loading=true;
   import("./vendor/GLTFLoader.js").then(m=>{
-    new m.GLTFLoader().load("vendor/kamo-v2.glb",(g)=>{
+    /* ?v= BUMPS WITH THE ASSET. index.html is cache-busted on every launch by the wrapper,
+       but this fetch was not — so the founder's WebView kept serving the old decimated
+       body after the full-res swap, and the "terraced" quality report was a STALE CACHE,
+       not the shipped mesh. Bump the rev whenever vendor/kamo-v2.glb changes. */
+    new m.GLTFLoader().load("vendor/kamo-v2.glb?v=4",(g)=>{
       /* Marked so clearCharacters() never disposes it — this one asset is reused across
          every respawn, unlike the per-spawn primitive bodies. */
       g.scene.traverse(o=>{ o.userData.kamoV2=1;
         if(o.isMesh){ const ms=Array.isArray(o.material)?o.material:[o.material];
-          ms.forEach(mt=>{ if(mt){ mt.color=new THREE.Color(0xf6f6f8); mt.roughness=.82; mt.metalness=0; } }); } });
+          ms.forEach(mt=>{ if(mt){ mt.color=new THREE.Color(0xf6f6f8); mt.roughness=.82; mt.metalness=0; mt.flatShading=false; } }); } });
+      /* THE STAIR-STEP SHADING FIX. On device the body rendered terraced — banded shading
+         across the head, hard seams — while the silhouette stayed smooth: broken normals,
+         not missing polygons (the export ships split/quantized normals). Welding the
+         vertices and recomputing smooth normals at load is what the asset should have
+         carried; done here so every future re-export of the model gets healed too. */
+      import("./vendor/BufferGeometryUtils.js").then(bgu=>{
+        try{
+          g.scene.traverse(o=>{
+            if(!o.isMesh||!o.geometry) return;
+            let geo=o.geometry;
+            /* mergeVertices hashes EVERY attribute, and the duplicates differ precisely in
+               their broken normals — drop normals (recomputed below) and uv (a plain white
+               body has no texture to map) so position+skin are what welding sees. */
+            try{
+              geo.deleteAttribute("normal"); geo.deleteAttribute("uv");
+              const merged=bgu.mergeVertices(geo,1e-4);
+              if(merged&&merged.attributes.position) geo=merged;
+            }catch(_){}
+            geo.computeVertexNormals();
+            o.geometry=geo;
+          });
+        }catch(_){}
+      }).catch(()=>{});
       /* Mixamo clips carry the HIPS as a position track in centimetres, plus root motion.
          Skinned vertices follow the BONES, so left alone the clip teleports the body to
          cm-space (measured: geometry box 2.4 units, bone span 0.4→3.2 world — the render
