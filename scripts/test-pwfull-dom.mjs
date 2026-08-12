@@ -19,15 +19,16 @@ import { createServer } from 'node:http';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { pwBases, chromeExe, PW_SETUP } from './lib/pw.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
 let chromium = null;
-for (const base of [process.env.PW_CORE, ROOT, process.cwd()]) {
+for (const base of pwBases(ROOT)) {
   try { ({ chromium } = req(base ? join(base, 'node_modules/playwright-core') : 'playwright-core')); break; } catch {}
 }
 if (!chromium) {
-  console.log('· playwright-core not installed — skipping the full-arm test (set PW_CORE=<dir with node_modules>)');
+  console.log('· playwright-core not installed — skipping the full-arm test — run: ' + PW_SETUP);
   process.exit(0);
 }
 
@@ -93,8 +94,8 @@ const ok = (m) => console.log('  ✓ ' + m);
 const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 
 const { globSync } = await import('node:fs');
-const exe = (globSync('/opt/pw-browsers/chromium-*/chrome-linux/chrome') || [])[0];
-if (!exe) { console.log('· no chromium under /opt/pw-browsers — skipping'); server.close(); process.exit(0); }
+const exe = chromeExe();
+if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
 
 console.log('\nTHE HARNESS PIN HOLDS — WITHOUT A SEED, HEADLESS GETS THE SHEET');
@@ -121,16 +122,23 @@ await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
     : bad(`seeded full but got arm "${a.arm}", class ${a.cls}`);
 
   const f = await page.evaluate(() => window.__f.facts());
-  const t = await page.evaluate(() => window.__f.open('time'));
+  /* WAS open('time'), AND THAT SLAB IS GONE. The retake paywall was the only thing that ever
+     opened the sheet on `time` or `round_end`, and it was removed on 2026-08-12 once the
+     measurement showed it was a third of all paywall views for no subscriptions. The hero
+     slab it lit went with it: NO CLOCK. sells a constraint the free round no longer has.
+     The character took its place, so this is the same assertion pointed at the pitch that
+     actually ships — one slab lit, and a context line that names it. */
+  const t = await page.evaluate(() => window.__f.open('char'));
   t.hero !== 'none' && t.plans === 'none' && t.title === 'none'
     ? ok('open: hero on screen, sheet copy and plan rows off it')
     : bad(`hero:${t.hero} plans:${t.plans} title:${t.title} — two paywalls are showing at once`);
-  t.lit.length === 1 && t.lit[0] === 'time'
-    ? ok('the clock lock lights MORE TIME and nothing else')
-    : bad(`from the time lock, lit = ${JSON.stringify(t.lit)}`);
-  t.ctx.includes(`${f.paint}s`) && /All the time you want/.test(t.ctx)
-    ? ok(`and the context sells unlimited against the real free clock ("${t.ctx}")`)
-    : bad(`the time context reads: ${JSON.stringify(t.ctx)}`);
+  t.lit.length === 1 && t.lit[0] === 'char'
+    ? ok('the character lock lights EVERY FINISH and nothing else')
+    : bad(`from the character lock, lit = ${JSON.stringify(t.lit)}`);
+  /* No numeral to check any more — the pitch stopped quoting a clock, which is the point. */
+  /Every body and every finish/.test(t.ctx)
+    ? ok(`and the context names what is bought ("${t.ctx}")`)
+    : bad(`the character context reads: ${JSON.stringify(t.ctx)}`);
 
   const m = await page.evaluate(() => window.__f.open('mark'));
   m.lit.length === 1 && m.lit[0] === 'mark'
