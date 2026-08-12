@@ -1117,9 +1117,15 @@
      gesture further away. A tap on the handle, or a swipe up, brings it straight back. */
   #shareSheet.mini{display:flex;}
   #shareSheet.mini .ssCard > *:not(.ssGrab){display:none!important;}
-  /* Roomier than the peek's handle: at this size the grabber IS the control, so it gets a
-     thumb-sized target and a brighter bar than the one that only decorates a full card. */
-  #shareSheet.mini .ssGrab{padding:10px 0 calc(10px + var(--safe-b));}
+  /* THE SAFE AREA IS APPLIED ONCE. .ssCard already ends on calc(16px + var(--safe-b)), so a
+     grabber that also added var(--safe-b) stacked two home-indicator insets and left ~90px of
+     empty green under the bar — the whole point of this state is to be small. The card gives
+     up its own padding here and the handle owns the spacing: ~20px of bar plus one safe area,
+     flush to the bottom edge. */
+  #shareSheet.mini .ssCard{padding:0 0 var(--safe-b);}
+  #shareSheet.mini .ssGrab{padding:9px 0 7px;}
+  /* Brighter and wider than the peek's: at this size the grabber IS the control, not a
+     decoration on a full card. */
   #shareSheet.mini .ssGrab::before{width:52px;background:rgba(255,255,255,.55);}
   /* ONE RISE, AND IT COMES FROM .pwCard. There used to be a second animation here — a `.rise`
      one-shot class, added on arrival and removed 420ms later — layered on top of the
