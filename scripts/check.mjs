@@ -260,6 +260,13 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     const rule = (sel) => (html.match(new RegExp(sel.replace(/[.#]/g, '\\$&') + '\\{[^}]*\\}')) || [])[0] || '';
     const peekCss = rule('#shareSheet.peek');
     const showCss = rule('#shareSheet.show');
+    /* The third detent answers to the same rule as the short one: it is even smaller and sits
+       over the same live reveal, so it must never swallow a touch either. */
+    const miniCss = rule('#shareSheet.mini');
+    /pointer-events\s*:\s*auto/.test(miniCss)
+      ? bad('#shareSheet.mini takes pointer events — the folded sheet sits over a live reveal and '
+          + 'the wipe handle behind it stops responding')
+      : ok('the folded state stays transparent to touch');
     /pointer-events\s*:\s*auto/.test(peekCss)
       ? bad('#shareSheet.peek takes pointer events — the short sheet sits over a live reveal and '
           + 'the wipe handle behind it stops responding')
@@ -268,7 +275,7 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       ? ok('the long state takes the backdrop, so a tap outside collapses it')
       : bad('#shareSheet.show does not take pointer events — the container is pointer-events:none, '
           + 'so shareSheetEl.onclick can never fire and tap-outside-to-dismiss is dead code');
-    [['peek', peekCss], ['show', showCss]].forEach(([n, css]) => {
+    [['peek', peekCss], ['show', showCss], ['mini', miniCss]].forEach(([n, css]) => {
       if (/backdrop-filter\s*:\s*(?!none)/.test(css) || /background\s*:\s*(?!transparent)/.test(css)) {
         bad(`#shareSheet.${n} puts a scrim back over the reveal: ${css}`);
       }
