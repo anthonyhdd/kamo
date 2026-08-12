@@ -849,6 +849,19 @@
   .khCharOpt.on{color:var(--mint);border-color:rgba(95,230,164,.55);background:rgba(95,230,164,.08);
     box-shadow:0 0 0 1px rgba(95,230,164,.25),0 0 16px rgba(95,230,164,.16);}
   .khCharOpt:active{transform:scale(.96);}
+  /* Swatches, not labelled chips: the colour IS the label, and five names in a row would
+     out-weigh the two body chips above them — the body is the bigger choice. */
+  .khFin{display:flex;gap:9px;justify-content:center;margin:-6px 0 18px;}
+  .khFinOpt{position:relative;width:30px;height:30px;border-radius:999px;cursor:pointer;padding:0;
+    border:1px solid rgba(255,255,255,.18);background:transparent;transition:transform .15s,box-shadow .15s;}
+  .khFinOpt i{position:absolute;inset:3px;border-radius:999px;display:block;}
+  .khFinOpt.on{box-shadow:0 0 0 2px rgba(95,230,164,.75),0 0 14px rgba(95,230,164,.28);border-color:transparent;}
+  .khFinOpt:active{transform:scale(.92);}
+  /* The lock is a ring, not a padlock glyph: at 30px a padlock is a smudge, and the point is
+     that the colour is still visible — you can see exactly what you are not getting. */
+  .khFinOpt.lock i{opacity:.42;}
+  .khFinOpt.lock::after{content:"✦";position:absolute;right:-2px;bottom:-3px;font-size:11px;
+    line-height:1;color:var(--mint);text-shadow:0 0 6px rgba(0,0,0,.8);}
   .khCharIco{width:17px;height:17px;fill:currentColor;flex:0 0 auto;}
   .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;animation:kpRise .4s cubic-bezier(.2,.9,.3,1);}
   /* THE PLAYER CARD DOES NOT FLOAT. It inherits .pwCard, which is a bottom sheet: a drop
@@ -1714,7 +1727,12 @@
          locks), and interpolated from the constants like every other paywall figure.
          The struck-through WATERMARK is the one line that sells by deletion. -->
     <div id="pwHero">
-      <div class="pwHeroLn" data-hero="time">NO CLOCK.</div>
+      <!-- WAS "NO CLOCK." That slab sold a constraint we have now largely given away — the
+           free round paints for a minute and a half — and the two sources that lit it
+           (time, round_end) no longer fire at all. The character takes its place because it
+           is the only thing in KAMO+ that is visible to anyone but the buyer: it is on the
+           body in the photo that gets sent. -->
+      <div class="pwHeroLn" data-hero="char">EVERY FINISH.</div>
       <div class="pwHeroLn" data-hero="size">EVERY DETAIL.</div>
       <div class="pwHeroLn" data-hero="mark"><s>WATERMARK</s>.</div>
       <div id="pwHeroCtx"></div>
@@ -1872,6 +1890,12 @@
       <button class="khCharOpt" id="khCharA">Original</button>
       <button class="khCharOpt" id="khCharB"><svg class="khCharIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>New</button>
     </div>
+    <!-- FINISHES. Built by JS from the FINISHES table rather than typed here, so the swatches
+         and the materials can never drift apart — an empty row is the honest failure if the
+         script dies, not five chips that paint nothing. Same "changes in plain sight" trick
+         as the body chips above: the card's backdrop is clear, so tapping one repaints the
+         figure behind it. -->
+    <div class="khFin" id="khFin"></div>
     <!-- WHAT HAPPENED TO THE HIDES YOU SENT. The count paints the instant the card opens —
          the ids are local, so "N challenges sent" is certain without a network — and
          khResults() swaps in the outcomes when the fetch lands. Still hidden for someone
@@ -2174,6 +2198,52 @@ function initThree(){
   resize3(); animate();
 }
 const WHITE=()=>new THREE.MeshStandardMaterial({color:0xf6f6f8,roughness:.82,metalness:0});
+/* ===== FINISHES — what KAMO+ actually sells =====
+   The paywall used to sell brush sizes and colour swatches: painting TOOLS, in a product
+   whose entire point is social. Measured 2026-08-12, it was shown ~11000 times in 14 days
+   and produced 4 active subscriptions, which is what "nobody pays for a finer brush" looks
+   like in a table.
+   A finish is the opposite kind of thing. It is on the body in the photo that gets sent, so
+   it travels: the friend who plays your hide sees the chrome one and the only way to get it
+   is to be a member. It costs the free player nothing — stock is the same white body the
+   app has always had, and nothing about the free round is degraded to make room for this.
+   Kept to a handful on purpose. A grid of thirty reads as a shop; five reads as a choice. */
+/* ⚠️ metalness STAYS AT ZERO ON EVERY ROW, and this is not a style preference.
+   MeshStandardMaterial gets a metal's appearance from what it REFLECTS, and this scene has
+   no environment map — so a metalness of 1 has nothing to reflect and renders near-black.
+   Chrome and gold were authored at 1 and both came out as the same glossy black body;
+   caught in a screenshot, not in the numbers, because every assertion about them passed.
+   The metal read comes from colour plus a low roughness instead, which is stable under the
+   lights this scene actually has. If a PMREM environment is ever added, raise these
+   together and look at the render again — do not trust the swatch. */
+const FINISHES=[
+  {k:"stock", label:"Stock",  color:0xf6f6f8, rough:.82, metal:0, pro:false},
+  {k:"noir",  label:"Noir",   color:0x15171d, rough:.34, metal:0, pro:true},
+  {k:"chrome",label:"Chrome", color:0xe6ecf5, rough:.16, metal:0, pro:true},
+  {k:"gold",  label:"Gold",   color:0xe0ad3e, rough:.28, metal:0, pro:true},
+  {k:"neon",  label:"Neon",   color:0x5fe6a4, rough:.40, metal:0, pro:true},
+];
+const FINISH_KEY="kamo_finish";
+/* FALLS BACK TO STOCK RATHER THAN REMEMBERING A LOCKED CHOICE. A lapsed member whose stored
+   finish is `gold` must not keep painting in gold — but the preference is left in storage
+   untouched, so resubscribing restores it without them having to pick again. */
+function curFinish(){
+  let k=""; try{ k=localStorage.getItem(FINISH_KEY)||""; }catch(e){}
+  const f=FINISHES.find(x=>x.k===k);
+  if(!f||(f.pro&&!canPro())) return FINISHES[0];
+  return f;
+}
+/* Mutates in place instead of assigning a new material: the v2 body's materials belong to a
+   GLTF scene that clearCharacters() deliberately never disposes (userData.kamoV2), so a
+   fresh material here would leak one per respawn. Re-applied on every spawn because that
+   same sharing means a finish set on hide four is still on the asset at hide five. */
+function applyFinish(root){
+  const f=curFinish();
+  root.traverse(o=>{ if(!o.isMesh) return;
+    const ms=Array.isArray(o.material)?o.material:[o.material];
+    ms.forEach(mt=>{ if(!mt||!mt.color) return;
+      mt.color.setHex(f.color); mt.roughness=f.rough; mt.metalness=f.metal; mt.needsUpdate=true; }); });
+}
 function capsule(r,len){ return new THREE.Mesh(new THREE.CapsuleGeometry(r,len,6,16),WHITE()); }
 function pivot(x,y,z){ const g=new THREE.Group(); g.position.set(x,y,z); return g; }
 function blobShadow(){
@@ -2200,8 +2270,17 @@ function blobShadow(){
    still defaults to the new body (his test rig); everyone else defaults to Original.
    The GLB stays lazy either way — only pickers pay the download. */
 const CHAR_KEY="kamo_char";
+/* THE SECOND BODY IS A MEMBER BODY NOW, not a founder easter egg. It was gated on the
+   handle `tony` because it existed before there was anything to do with it; it is the one
+   asset in the app that is visible in every photo that gets sent, which makes it the natural
+   thing to sell. The handle check survives so the founder still sees it on a free build.
+   PURE — no side effects, called from render paths. The lapse case matters: a stored "v2"
+   with no membership falls back to the original body rather than silently keeping a paid
+   asset, and the preference stays in storage so resubscribing restores it. */
 function wantsV2(){
-  try{ const v=localStorage.getItem(CHAR_KEY); if(v==="v2") return true; if(v==="classic") return false; }catch(e){}
+  let owner=false;
+  try{ owner=canPro()||(getHandle()||"").toLowerCase()==="tony"; }catch(e){}
+  try{ const v=localStorage.getItem(CHAR_KEY); if(v==="v2") return owner; if(v==="classic") return false; }catch(e){}
   try{ return (getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; }
 }
 /* Clip names as they exist in the asset — vendor/kamo-v2.glb is the founder's own
@@ -2330,7 +2409,7 @@ function makeCharacter(px=0){
       if(i===0){ body.scale.multiplyScalar(2.4/(b.ymax-b.ymin)); }
       else { body.position.y-=b.ymin; }
     }
-    characters.push(char); return char;
+    applyFinish(charG); characters.push(char); return char;
   }
   {
     const spine=pivot(0,1.0,0); charG.add(spine); parts.spine=spine;
@@ -2346,7 +2425,7 @@ function makeCharacter(px=0){
   const meshes=[]; charG.traverse(o=>{ if(o.isMesh) meshes.push(o); });
   const char={group,charG,parts,meshes,poseIdx:0,target:fullPose(0)};
   setPoseInstant(char,0);
-  characters.push(char); return char;
+  applyFinish(charG); characters.push(char); return char;
 }
 /* scene.remove() only detaches from the scene graph — three.js keeps every geometry and
    material alive on the GPU until dispose() fires its event, and dropping the JS
@@ -3830,7 +3909,11 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    drawn. It keeps its own PW_CAP of one per launch, so exempting it from the GLOBAL budget
    cannot flood anything; what it fixes is the accounting, which was charging a paywall the
    user asked for against the budget reserved for the ones they did not. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size"]);
+/* `char` belongs here for the same reason `size` does: the tap on a locked swatch IS the
+   request. It already opens with force:true, so the cap cannot swallow it either way — but
+   leaving it out would charge a paywall the user asked for against the budget reserved for
+   the ones they did not, which is the accounting bug that note above describes. */
+const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size","char"]);
 
 /* 3 -> 1. The note above asked for `nth_interruption` to settle whether 3 was too low; the
    revenue settled it from the other side first. ~11000 views over 14 days bought 4 active
@@ -3914,6 +3997,13 @@ const PW_PITCH={
      no clock, so "set the challenge yourself" would sell a control that changes nothing. */
   time:  { t:"Stop losing hides to the clock",
            s:()=>`No clock to line it up, no clock to paint — free gets ${PAINT_SECONDS} seconds.` },
+  /* THE HEADLINE PITCH NOW, and the only one that argues from the loop rather than from a
+     tool. Every other thing in KAMO+ is invisible to everyone except the person who bought
+     it; the body is in the photo that gets sent, so a member's hide advertises the thing
+     that made it. "They actually see" is doing real work in that sentence — it names why
+     this is worth money and a finer brush is not. */
+  char:  { t:"Nobody else is wearing this",
+           s:()=>"Every body and every finish, on the figure they actually see." },
 };
 /* The generic pitch, for entry points that are not a specific locked tool. Built here rather
    than typed into the markup for the same reason as the rest — it carried "75s to paint
@@ -3921,17 +4011,21 @@ const PW_PITCH={
 /* The star answers the same question as the size lock, so it gets the same words. Assigned
    rather than duplicated: two copies of one pitch is how they drift apart. */
 PW_PITCH.size_star=PW_PITCH.size;
-const pwGenericSub=()=>`Any brush and color · no clock to line it up · no clock to paint`;
+/* LEADS WITH THE BODY NOW. It used to lead with brushes and close on two clock promises —
+   one of which the free round has since been given. The order here is the order of the
+   argument: the thing that shows in the photo first, the tools after. */
+const pwGenericSub=()=>`Every body and every finish · any brush and color · exports without our mark`;
 /* THE HERO'S CONTEXT LINE, per SOURCE — not per highlighted line, because the same line can
    be reached from two different moments that deserve different sentences: `time` fires
    mid-round (the clock just took the round, which is frozen behind the paywall) and
    `round_end` fires after it, when "this round is waiting" would be a lie. Sources with no
    entry here fall through to their PW_PITCH body, so nothing ever renders an empty line.
    Functions for the same TDZ reason as PW_PITCH, and no typed numerals — check.mjs. */
-const PW_HERO_LINE={ time:"time", round_end:"time", size:"size", size_star:"size", mark:"mark" };
+/* `time` and `round_end` are gone from this map with the slab they lit: the retake paywall
+   that was their only trigger is off, so an entry for them would be copy nothing can reach. */
+const PW_HERO_LINE={ char:"char", size:"size", size_star:"size", mark:"mark" };
 const PW_HERO_CTX={
-  time:      ()=>`All the time you want — free gets ${PAINT_SECONDS}s.`,
-  round_end: ()=>`All the time you want — free gets ${PAINT_SECONDS}s.`,
+  char:      ()=>"Every body and every finish.",
   size:      ()=>"Paint the details, not just the shape.",
   size_star: ()=>"Paint the details, not just the shape.",
   mark:      ()=>"Your exports, clean.",
@@ -4539,12 +4633,38 @@ function openKamoHome(){
     $("#khCharA").classList.toggle("on",!v);
     $("#khCharB").classList.toggle("on",v); };
   paintChar();
+  /* THE PREFERENCE IS STORED EVEN WHEN IT IS LOCKED, and that is deliberate. wantsV2() and
+     curFinish() both fall back on their own when membership is missing, so writing the choice
+     costs nothing today and means a purchase applies the thing they actually wanted instead
+     of dropping them back on stock white with nothing to show for it. */
+  const respawn=()=>{ if(mode==="compose"){ clearCharacters(); spawnHider(); } };
   const pickChar=(c)=>{ try{ localStorage.setItem(CHAR_KEY,c); }catch(e){}
     haptic(10); paintChar(); track("char_selected",{c:c});
-    loadKamoV2();
-    if(mode==="compose"){ clearCharacters(); spawnHider(); } };
+    if(c==="v2"&&!wantsV2()){ closeKamoHome(); openPaywall("char",true); return; }
+    loadKamoV2(); respawn(); };
   $("#khCharA").onclick=()=>pickChar("classic");
   $("#khCharB").onclick=()=>pickChar("v2");
+  /* ===== FINISH SWATCHES ===== built here, from the same table the materials read, so the
+     row cannot advertise a colour the renderer does not have. */
+  const finEl=$("#khFin");
+  const paintFin=()=>{ if(!finEl) return; const cur=curFinish().k;
+    [...finEl.children].forEach(b=>{ const f=FINISHES.find(x=>x.k===b.dataset.f);
+      b.classList.toggle("on",b.dataset.f===cur);
+      b.classList.toggle("lock",!!(f&&f.pro&&!canPro())); }); };
+  if(finEl){
+    finEl.innerHTML=FINISHES.map(f=>'<button class="khFinOpt" data-f="'+f.k+'" aria-label="'+f.label
+      +'"><i style="background:#'+f.color.toString(16).padStart(6,"0")+'"></i></button>').join("");
+    [...finEl.children].forEach(b=>{ b.onclick=()=>{
+      const f=FINISHES.find(x=>x.k===b.dataset.f); if(!f) return;
+      try{ localStorage.setItem(FINISH_KEY,f.k); }catch(e){}
+      haptic(10); track("finish_selected",{f:f.k,locked:!!(f.pro&&!canPro())});
+      if(f.pro&&!canPro()){ paintFin(); closeKamoHome(); openPaywall("char",true); return; }
+      paintFin();
+      /* Repaint in place rather than respawning: the materials are what changed, and a
+         respawn would throw away the pose and position the player just chose. */
+      characters.forEach(c=>applyFinish(c.charG)); }; });
+    paintFin();
+  }
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
