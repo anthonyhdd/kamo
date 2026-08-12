@@ -7536,6 +7536,12 @@ async function chUpload(){
     chRemember(chId);
     track("hide_published",{});
     chAttachPush();
+    /* WHICH POPULATION MADE THIS, so the loop can still be read once a second country is
+       running. Fire-and-forget and after the id exists, exactly like the push token: no
+       table has a geo, so without this the day France is switched on, "% of hides sent"
+       moves for a reason nobody can name — while a product change is being measured on
+       that very number. */
+    try{ chRpc("set_hide_lang",{p_id:chId,p_lang:(navigator.language||"")}).catch(()=>{}); }catch(e){}
     armResultsPing();
     /* HELD BACK A BEAT. These are two more uploads and two more canvas encodes, and they
        used to start in the same breath as the share — competing for the radio and the main
