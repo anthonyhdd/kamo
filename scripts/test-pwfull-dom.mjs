@@ -44,7 +44,7 @@ const html = real.slice(0, at)
   + 'title:getComputedStyle(document.getElementById("pwTitle")).display};},'
   + 'prices(p){window.KAMO.setPrices(p);return this.lifeline();},'
   + 'lifeline(){const el=document.getElementById("pwLifeLine");'
-  + 'return{show:el.style.display!=="none",text:el.textContent,'
+  + 'return{show:getComputedStyle(el).display!=="none",text:el.textContent,'
   + 'buy:(document.getElementById("pwBuy")||{}).textContent||"",plan:pwPlan,'
   + 'terms:getComputedStyle(document.getElementById("pwTerms")).display};},'
   + 'toggle(){document.getElementById("pwLifeLine").click();return this.lifeline();},'
