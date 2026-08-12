@@ -1504,11 +1504,12 @@
      Now a real row — tinted and bordered like ssInvite, so it reads as an option rather than
      a footnote — but deliberately NOT a slab in a brand colour like Instagram or Snapchat.
      It has weight without competing with the destinations, which are still the growth loop.
-     The thing being sold used to be INVISIBLE until after the share — drawWatermark() ran in
-     composeShare()/composeBeforeAfter() only, never in drawReveal(). FIXED: drawReveal() now
-     draws it too, so by the time this row appears the user has been looking at the mark on
-     their own hide. The row and the mark ship together on purpose; neither is worth much
-     alone, and `paywall_viewed.source="mark"` measures the pair. */
+     The thing being sold is INVISIBLE until after the share again — drawReveal() drew the
+     mark on the Done screen for a while, but it doubled the .brand wordmark already at the
+     top of that screen and was pulled (founder's call, 2026-08-12). The mark lives in the
+     exports only now: top wordmark + "Get KAMO" bottom line, see drawWatermark(). This row
+     is back to being the pitch's only pre-share exposure; watch
+     `paywall_viewed.source="mark"` against share volume before judging it. */
   /* A SLAB IN THE MORE ROW, not a line of its own. Everything about the geometry now comes from
      .ssBtn and .ssRow2 — width, height, radius, the flex share of the line — so the only thing
      left here is the colour that says "offer, not destination": the same mint the chips and the
@@ -4779,6 +4780,19 @@ const KAMO_HOST="https://kamo.bliss-coach.com/";
 function inviteUrl(){ return KAMO_HOST+"?i=1"; }
 const KF="Kamo,-apple-system,sans-serif";  // Space Grotesk if loaded, else system
 function fit(c,txt,base,W,minPx,weight){ let s=Math.round(base); c.font=`${weight} ${s}px ${KF}`; while(c.measureText(txt).width>W*0.9 && s>minPx){ s-=1; c.font=`${weight} ${s}px ${KF}`; } return s; }
+/* THE TOP WORDMARK ON EXPORTS IS THE .brand BUTTON, REPRODUCED — same face, same 700, same
+   18px-at-390 size, same -.4px tracking, same shadow instead of a scrim. Plain white, ONE
+   colour: no mint rule under it and no two-tone halves — founder's call, 2026-08-12. The
+   receiver should see exactly the mark the sender sees at the top of their own screen.
+   Shared by composeShare() (via drawWatermark) and composeBeforeAfter(), which paints its
+   own bottom overlay — keep them on this one function or the two export modes drift. */
+function drawBrandTop(c,W){ const u=W/390, fs=Math.round(18*u);
+  c.save(); c.textAlign="center";
+  try{ c.letterSpacing=(-0.4*u).toFixed(2)+"px"; }catch(e){}
+  c.shadowColor="rgba(0,0,0,.7)"; c.shadowBlur=10*u; c.shadowOffsetY=2*u;
+  c.fillStyle="#fff"; c.font=`700 ${fs}px ${KF}`;
+  c.fillText("KAMO", W/2, Math.round(32*u));
+  c.restore(); }
 function drawWatermark(c,W,H){
   /* KAMO+ EXPORTS CLEAN. This is the thing being sold now, and it is deliberately the one
      perk gated on `isPro` rather than canPro(). Identical now that the free round is gone,
@@ -4788,10 +4802,11 @@ function drawWatermark(c,W,H){
      the viral loop keeps running on the free tier — which is the overwhelming majority.
      Gating the reveal VIDEO instead would have cost every free user the format that
      actually travels, which is the opposite of what this app needs.
-     Called from drawReveal() as well as the two composers, so the Done screen previews the
-     exact file that leaves the phone. Keep this cheap — the reveal path runs it on every rAF
-     of the Done animation and every pointermove of the slider drag. One gradient fill and one
-     fillText, no allocations, no measureText. */
+     EXPORT-ONLY AGAIN — founder's call, 2026-08-12. drawReveal() drew this for a while so
+     free users would meet the mark before the share sheet offered to remove it; the screen
+     already carries the .brand wordmark at the top, so the bottom mark read as the logo
+     twice. The on-screen preview is gone; this now runs only in the composers, so the rAF
+     budget note above it no longer binds. */
   if(isPro) return;
   const u=W/390, pad=Math.round(H*0.028); c.textAlign="center";
   /* BOTTOM SCRIM — EASED, AND ITS SHAPE NO LONGER DEPENDS ON ITS HEIGHT.
@@ -4835,19 +4850,16 @@ function drawWatermark(c,W,H){
      video answers its own question two seconds later.
      .14H keeps the gradient's .45 midpoint just above the wordmark's baseline, so it still
      sits on dark pixels over a bright photo instead of disappearing into it. */
-  /* BIGGER, AND A LOCKUP RATHER THAN A CAPTION. At 23u this read as a small line of text at
-     the bottom of a photo — which is what a caption looks like, and nobody pays to remove a
-     caption. 30u plus a mint rule under it reads as a mark that was placed there, which is
-     the thing "Remove the KAMO mark" is actually selling. It also survives being watched at
-     thumbnail size in a feed, where 23u disappeared entirely.
-     Still two cheap calls and no allocations: this runs on every rAF of the Done animation
-     and every pointermove of the reveal drag. */
+  /* THE WORDMARK MOVED UP, THE BOTTOM BECAME THE ASK — founder's call, 2026-08-12. The
+     bottom lockup (30u KAMO over a mint rule) doubled the wordmark once the top mark landed,
+     so the logo now lives at the top — drawn by drawBrandTop() as the exact .brand button —
+     and the bottom line is "Get KAMO": the pitch, not the brand twice. Same 30u/700 so it
+     still survives thumbnail size in a feed, where 23u disappeared entirely. No mint rule:
+     that existed to make a bare wordmark read as a placed mark, and an imperative line does
+     not need it. */
+  drawBrandTop(c,W);
   const fs=Math.round(30*u), y=H-Math.round(30*u)-pad;
-  c.fillStyle="#fff"; c.font=`700 ${fs}px ${KF}`; c.fillText("KAMO", W/2, y);
-  /* The mint rule is the brand's only colour and it is what stops the wordmark reading as
-     someone's font choice. Width tied to the type size so it tracks at any export scale. */
-  const rw=Math.round(fs*2.05), rh=Math.max(2,Math.round(u*1.6));
-  c.fillStyle="#5fe6a4"; c.fillRect(Math.round(W/2-rw/2), y+Math.round(fs*0.34), rw, rh);
+  c.fillStyle="#fff"; c.font=`700 ${fs}px ${KF}`; c.fillText("Get KAMO", W/2, y);
 }
 /* native bridge (when wrapped in the Expo WebView) */
 function postNative(o){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); return true; }catch(e){} } return false; }
@@ -5099,7 +5111,10 @@ function composeBeforeAfter(W){ const H=Math.round(W*16/9); const o=document.cre
     const u=W/390; c.textAlign="center";
     const bh=H*0.2, g=c.createLinearGradient(0,H-bh,0,H); g.addColorStop(0,"rgba(4,6,10,0)"); g.addColorStop(1,"rgba(4,6,10,.93)"); c.fillStyle=g; c.fillRect(0,H-bh,W,bh);
     c.fillStyle="#fff"; fit(c,"Now you see him. Now you don't.",24*u,W,14,"700"); c.fillText("Now you see him. Now you don't.",W/2,H-Math.round(76*u));
-    c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("KAMO",W/2,H-Math.round(32*u));
+    /* Same top-wordmark / bottom-ask split as drawWatermark — the two export modes must
+       carry the same mark or the tab choice changes the branding. */
+    c.font=`700 ${Math.round(23*u)}px ${KF}`; c.fillText("Get KAMO",W/2,H-Math.round(32*u));
+    drawBrandTop(c,W);
   }
   return o; }
 async function shareBlob(){ const canv = shareMode==="ba" ? composeBeforeAfter(1080) : composeShare(1080); return await new Promise(r=>canv.toBlob(r,"image/jpeg",0.9)); }
@@ -6763,9 +6778,6 @@ sizeStar.addEventListener("pointerdown",e=>{
 /* ===== Done / Edit finished view + before/after reveal ===== */
 let finished=false, revealX=0.5, lastRoundAuto=false;
 const revealC=$("#revealC"), rctx=revealC.getContext("2d"), revealHandle=$("#revealHandle"), revealHint=$("#revealHint");
-// Cached beside the others: drawReveal() needs its rect every frame of the Done animation
-// and every pointermove, and re-resolving the selector 60x/second buys nothing.
-const actionRow=$("#actionRow");
 /* Assigning canvas width/height ALWAYS reallocates the backing store — even when the
    value is unchanged. This runs on every rAF of the Done animation AND on every
    pointermove of the reveal drag, so at 1290x2796 it was discarding and re-allocating
@@ -6795,30 +6807,16 @@ function drawReveal(){ if(!beforeBoard||!finished) return; const r=board.getBoun
   rctx.clearRect(0,0,W,H); rctx.drawImage(board,0,0,W,H);
   rctx.save(); rctx.beginPath(); rctx.rect(0,0,sp,H); rctx.clip(); rctx.drawImage(beforeBoard,0,0,W,H); rctx.restore();
   rctx.fillStyle="rgba(255,255,255,.95)"; rctx.fillRect(sp-2*paintDpr,0,4*paintDpr,H);
-  /* THE MARK IS NOW VISIBLE BEFORE THE SHARE, NOT ONLY AFTER IT.
-     drawWatermark() ran in composeShare()/composeBeforeAfter() only — i.e. inside the export.
-     So the wordmark existed on every free user's file and NONE of them had ever seen it on
-     their own hide. We were charging to remove something nobody knew was there, and the
-     numbers say exactly that: the watermark pitch took 2 taps against 772 paywall views.
-     That is not a rejected offer, it is an unread one.
-     Drawn last so it sits above both boards and the divider, which is the layer order the
-     export uses. Same function, same isPro gate, same geometry — the preview now shows the
-     file that will actually leave the phone instead of a cleaner one. Paying users keep the
-     clean preview, which is the perk demonstrating itself.
-     COST, accepted knowingly: the scrim covers a band of the preview, and this is the screen
-     people share from. Watch share_opened/active — it has sat at 47-48% — and revert this
-     block alone if it drops.
-     The mark is drawn against a SHORTENED height, not the canvas bottom. At the true bottom
-     it lands underneath #actionRow ("Share now" + Save), which is opaque and covers it — the
-     first version of this shipped invisible for exactly that reason. Positional fidelity to
-     the export was never on the table anyway: composeShare() letterboxes this board into a
-     9:16 frame, so the export's bottom edge is not the board's. What has to be faithful is
-     the mark existing, its size and its wordmark — and those are the same function. */
-  const br=actionRow?actionRow.getBoundingClientRect():null;
-  // How much of the canvas the button row hides, in canvas pixels, floored at 0 for the
-  // case where the row sits fully below the board.
-  const hidden=br?Math.max(0,(r.bottom-br.top)*paintDpr+8*paintDpr):0;
-  drawWatermark(rctx,W,Math.max(H*0.5,H-hidden));
+  /* NO MARK PREVIEW ON THIS SCREEN — founder's call, 2026-08-12. drawWatermark() ran here
+     for a while so free users would meet the mark before the sheet offered to remove it
+     (before that, 2 taps against 772 paywall views — an unread offer, not a rejected one).
+     But the .brand wordmark already sits at the top of this screen, so the drawn mark was
+     the logo twice on one screen, and its scrim covered a band of the photo on the exact
+     screen people share from. The mark still exists — export-only, top wordmark + a
+     "Get KAMO" bottom line, see drawWatermark() — and the .ssPlus row still sells removing
+     it; the preview alone is what's gone. If the mark pitch needs pre-share exposure again,
+     restore the drawWatermark(rctx,…) call that ended this block (it drew against a
+     shortened height so #actionRow wouldn't cover it — see git for the geometry). */
   revealHandle.style.left=(r.left+r.width*revealX)+"px"; revealHandle.style.top=r.top+"px"; revealHandle.style.height=r.height+"px"; }
 function enterFinished(auto){ if(finished) return; finished=true; resetZoom();   // the reveal composites from #board — a live transform would misalign the wipe
   tlCaptureFinal();   // the reveal's camouflaged beat is frames.last — see tlCaptureFinal()
