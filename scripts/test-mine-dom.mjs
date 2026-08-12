@@ -195,7 +195,12 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
   /tap 4/.test(t[2] || '')
     ? ok('a later find names the tap it happened on')
     : bad(`found on tap 4 reads: ${JSON.stringify(t[2])}`);
-  /nobody has played yet/.test(t[3] || '')
+  /* Matched on "played yet", not on the whole sentence. The invariant defended here is that an
+     unopened hide SAYS so rather than rendering blank; the exact prose was never the guarantee,
+     and pinning it turned a copy edit into a failure. The row shortened to "not played yet"
+     when the list grew to ten — the summary above still carries the full sentence, and
+     repeating it down every row had made it wallpaper. */
+  /played yet/.test(t[3] || '')
     ? ok('and an unopened one still says so, rather than showing nothing')
     : bad(`an unplayed hide reads: ${JSON.stringify(t[3])}`);
 

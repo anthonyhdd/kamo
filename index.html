@@ -328,12 +328,13 @@
   #btnLight.on svg{stroke:#04120b;fill:#04120b;}
   /* KAMO+ entry point, mirrors #flip on the other side of the wordmark */
   #btnPlus{left:14px;width:44px;border:none;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
-  /* Filled, like the star it replaces — the outlined version disappeared at this size. Same
-     21px so the corner's weight does not move. The edge path opts back out to a stroke on the
-     element itself. Two shadows: the black one keeps it readable over a bright viewfinder, the
-     mint one is the glow. */
-  #btnPlus svg{width:21px;height:21px;fill:#fff;stroke:none;
-    filter:drop-shadow(0 1px 4px rgba(0,0,0,.55)) drop-shadow(0 0 4px rgba(95,230,164,.5));}
+  /* OUTLINE, HOLLOW BODY — the artwork is line art and the glyph is line art. Same 21px so the
+     corner's weight does not move. Two shadows: the black one is what makes a 1.3px white line
+     survive a bright viewfinder, which is the whole reason a fill was tried and is why the fill
+     is not needed; the mint one is the glow. */
+  #btnPlus svg{width:21px;height:21px;fill:none;stroke:#fff;stroke-width:1.3;
+    stroke-linejoin:round;stroke-linecap:round;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.6)) drop-shadow(0 0 4px rgba(95,230,164,.5));}
   /* Apple-camera-style shutter: white ring + gap + white inner disc, no colour */
   .shutter{position:relative;width:78px;height:78px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
   .shutter .ring{position:absolute;inset:0;border-radius:50%;border:4px solid #fff;box-shadow:0 6px 22px rgba(0,0,0,.5);}
@@ -857,7 +858,13 @@
      handed to exactly one child; align-items:center keeps .kpBadge a pill (an inline-flex
      child would stretch edge to edge under the default `stretch`), while every button here
      already declares width:100% and so still fills the card. */
-  #kamoHome .kpCard{max-height:100%;display:flex;flex-direction:column;align-items:center;}
+  /* 70%, NOT 100%. Capping at the viewport stopped the overflow but left the card free to
+     take the WHOLE screen, and at ten challenges it did — the badge ended up under the
+     dynamic island and the thing stopped reading as a sheet at all. A bottom sheet has to
+     show what it is sitting on. 70% of an 844pt screen leaves ~190px for the list once the
+     header and the buttons have taken theirs, which is about three rows and a hint of a
+     fourth — enough to make it obvious the list scrolls. */
+  #kamoHome .kpCard{max-height:70%;display:flex;flex-direction:column;align-items:center;}
   /* grow:0 — collapsed, this box is one line and must stay one line rather than inflate to
      fill the card. shrink:1 + min-height:0 is the pair that actually lets it give way: a flex
      item's default min-height is auto, which refuses to go below its content and hands the
@@ -970,15 +977,19 @@
   /* One line per hide, the state on the left and the one action on the right. Bordered rows
      rather than a list with bullets: each row is its own object because each row sends its
      own challenge. */
-  .khRow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--stroke);}
-  .khRow:first-child{border-top:none;padding-top:4px;}
-  .khRowTxt{flex:1;min-width:0;font-size:13px;line-height:1.35;display:block;}
-  .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:13px;color:inherit;}
+  /* TIGHTER, BECAUSE THERE ARE TEN OF THEM. At 40x52 and 10px of padding a row was 72px, so
+     the list alone wanted 720px on an 844px screen — which is how it came to fill the card and
+     push the badge off the top. Two thirds of that height was the thumbnail, and the thumbnail
+     only has to be recognisable to the person who took it. */
+  .khRow{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--stroke);}
+  .khRow:first-child{border-top:none;padding-top:2px;}
+  .khRowTxt{flex:1;min-width:0;font-size:12.5px;line-height:1.3;display:block;}
+  .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:12.5px;color:inherit;}
   /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
      .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
      rather than a canvas, because these hides are on the server, not in this session's memory.
      No ::after play glyph: that one opens a preview, this one is a label. */
-  .khShot{flex:0 0 auto;width:40px;height:52px;border-radius:9px;overflow:hidden;
+  .khShot{flex:0 0 auto;width:31px;height:40px;border-radius:7px;overflow:hidden;
     border:1px solid rgba(255,255,255,.18);background:#0a0f0d;display:block;}
   .khShot img{width:100%;height:100%;object-fit:cover;display:block;}
   .khRowChips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
@@ -1517,20 +1528,26 @@
     <button id="btnPlus" class="topbtn" title="KAMO+" aria-label="KAMO+">
       <!-- THE APP ICON'S FIGURE, TRACED FROM THE APP ICON. Not drawn, traced: the outline below
            is the silhouette of ./icon.png, thresholded at luminance 118, boundary-followed and
-           Douglas-Peucker simplified at 1.6/320px, then fitted to this box. It is the artwork,
+           Douglas-Peucker simplified at 0.8/320px, then fitted to this box. It is the artwork,
            not an impression of it.
            Three hand-drawn attempts came before it and all three were wrong, because a drawing
            made from looking at a picture is a guess and looks like one. The pixels were in the
            repository the whole time. If the icon is ever re-rendered, re-run the trace rather
            than nudging these numbers by hand.
-           FILLED, because mass is what survives 21px — the reference is line art, and hairlines
-           at this size are hairlines, not a person. The wall keeps its own stroke: the icon
-           hides it in shadow, so it does not survive a luminance threshold, and without it the
-           figure reads as standing rather than as peeking.
+           STROKED, NOT FILLED — the body is hollow, the way the reference is. It shipped filled
+           for one deploy on the argument that mass survives 21px better than a line; true, and
+           beside the point, because the reference is an outline and a solid slug is not the
+           mark. 1.3 is where the weight lands: 1.5 starts closing the gap between the arm and
+           the torso at 21px, 1.1 vanishes against a bright viewfinder. The trace epsilon came
+           down from 1.6 to 0.8 for the same reason — the contour IS the drawing now, so its
+           faceting shows where the silhouette's never did.
+           The wall is the one hand-authored part: the icon keeps it in shadow, so it does not
+           survive a luminance threshold, and without it the figure reads as standing rather
+           than as peeking.
            The mint drop-shadow is the glow, kept low (.5 alpha, 4px) — "subtile" was the word. -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M1.85 1.1V22.9" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
-        <path d="M10.61 1.3L12.37 1.48L14.05 2.36L15.03 3.5L15.64 5.18L15.64 6.76L14.84 8.61L13.61 9.85L11.76 10.64L11.59 11.79L12.47 13.55L12.91 15.3L12.91 17.78L12.37 19.35L11.84 19.89L11.15 20.15L9.91 19.98L9.47 19.45L9.73 18.66L9.39 18.13L9.29 18.39L8.51 18.57L7.97 19.01L5.16 22.7L4.54 22.7L3.39 22.09L3.13 21.21L3.22 16.63L3.83 16.53L4.01 16.28L3.22 14.69L3.22 9.49L3.56 9.85L3.66 9.58L3.22 8.88L3.22 6.41L2.6 5.79L2.6 4.47L3.22 3.77L4.1 3.94L4.8 4.82L4.89 6.33L5.95 6.41L6.21 6.14L6.3 6.41L6.65 4.38L7.53 2.89L9.02 1.75L10.53 1.38Z"/>
+        <path d="M1.85 1.1V22.9"/>
+        <path d="M10.7 1.3L11.59 1.3L12.47 1.48L13.17 1.75L14.15 2.36L15.12 3.5L15.46 4.21L15.73 5.18L15.73 6.76L15.46 7.64L14.93 8.61L13.7 9.85L12.56 10.46L11.86 10.64L11.94 10.91L11.68 11.42L11.68 11.79L12.56 13.55L13.01 15.3L13.01 17.78L12.82 18.66L12.47 19.35L11.94 19.89L11.24 20.15L10.45 20.15L10 19.98L9.56 19.45L9.56 19.01L9.82 18.66L9.56 18.39L9.48 18.13L9.39 18.39L8.6 18.57L8.06 19.01L7.98 19.27L7.36 20.06L5.96 21.56L5.6 22.44L5.25 22.7L4.63 22.7L3.48 22.09L3.22 21.21L3.32 16.63L3.48 16.71L3.93 16.53L4.1 16.28L3.57 15.3L3.48 14.87L3.32 14.69L3.32 9.49L3.66 9.85L3.75 9.58L3.57 9.15L3.32 8.88L3.32 6.41L2.69 5.79L2.6 5.45L2.69 4.47L3.32 3.77L3.85 3.77L4.2 3.94L4.89 4.82L5.08 5.45L5.08 6.23L4.98 6.33L5.08 6.41L5.25 6.33L5.34 6.41L6.04 6.41L6.3 6.14L6.39 6.41L6.48 6.33L6.48 5.26L6.75 4.38L7.02 3.77L7.63 2.89L8.16 2.36L9.12 1.75L10.18 1.38L10.62 1.38Z"/>
       </svg>
     </button>
     <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
@@ -5287,7 +5304,38 @@ function expandShareSheet(){
      chUpload() is idempotent (`if(!CH_MAKE||chId) return`), so repeated touches cost
      nothing. If it still has not finished by the time they send, the message falls back to
      the honest invite text rather than promising a puzzle that does not exist. */
-  card.addEventListener("pointerdown",e=>{ y0=e.clientY; moved=false; },{passive:true});
+  /* THE CARD FOLLOWS THE FINGER. It used to jump: 24px past a threshold fired ONE stepSheet()
+     and then `moved` locked the gesture out until the finger came up. Two things were wrong
+     with that and the report named both. The sheet never tracked the hand, so a drag felt like
+     a button that had misfired rather than like a sheet being moved. And one gesture could
+     only ever cross ONE detent, so there was no way to pull the open sheet down to the handle
+     — "ça suit pas le doigt pour aller stick vers la position la plus petite" is literally
+     what the code did.
+     All three heights are measured once on pointerdown, by applying each state's class and
+     reading the box. The stylesheet decides them — hardcoding would go stale the first time a
+     button is added to the sheet — and doing it here rather than per-frame keeps the drag to
+     one style write per move. */
+  const cardEl=shareSheetEl.querySelector(".ssCard");
+  let detents=null, dragH=0, dragging=false;
+  const measureDetents=()=>{
+    const prev=shareSheetEl.className, inline=cardEl.style.height;
+    cardEl.style.height="";
+    const out={};
+    for(const [state,cls] of [["mini","ssMini"],["peek","peek"],["open","show"]]){
+      shareSheetEl.classList.remove("show","peek","ssMini");
+      shareSheetEl.classList.add(cls);
+      out[state]=cardEl.getBoundingClientRect().height;
+    }
+    shareSheetEl.className=prev; cardEl.style.height=inline;
+    return out;
+  };
+  card.addEventListener("pointerdown",e=>{
+    y0=e.clientY; moved=false; dragging=false;
+    if(SHEET_STEPS.indexOf(ssState)<0) return;      // hidden: nothing to drag
+    cardEl.style.height="";
+    detents=measureDetents();
+    dragH=cardEl.getBoundingClientRect().height;
+  },{passive:true});
   /* THE UPLOAD LISTENS ON THE WHOLE CARD, THE SWIPE ONLY ON THE HANDLE. These were the same
      listener until the swipe moved to the grabber, and the publish went with it — so the
      link was only being prepared by someone who touched a 38px handle, and everyone else
@@ -5301,14 +5349,75 @@ function expandShareSheet(){
     if(ssState==="peek"||ssState==="open"){ try{ chUpload(); }catch(_){} }
   },{passive:true});
   card.addEventListener("pointermove",e=>{
-    if(y0===null||moved) return;
+    if(y0===null||!detents) return;
     const dy=e.clientY-y0;
-    if(Math.abs(dy)<24) return;
-    moved=true;
-    stepSheet(dy<0?1:-1);
+    /* 6px, not 24: this is only the tap/drag discrimination now, not the whole gesture. The
+       old 24 was the distance you had to travel before ANYTHING happened, which is most of
+       why the control felt dead. */
+    if(!dragging){
+      if(Math.abs(dy)<6) return;
+      dragging=true; moved=true;
+      shareSheetEl.classList.remove("ssResizing");   // no transition while a finger is on it
+      try{ card.setPointerCapture(e.pointerId); }catch(_){}   // the handle is 38px; the drag is not
+    }
+    cardEl.style.height=Math.max(detents.mini,Math.min(detents.open,dragH-dy))+"px";
   },{passive:true});
-  card.addEventListener("pointerup",()=>{ y0=null; },{passive:true});
-  card.addEventListener("pointercancel",()=>{ y0=null; },{passive:true});
+  /* SETTLE TO THE NEAREST DETENT, from wherever the finger left it. The height is already
+     known for all three, so the target is a min-by-distance rather than a guess at intent.
+     Direction is NOT consulted on purpose: the card is under the thumb the whole way, so
+     where it was let go IS the intent — a flick heuristic would only ever overrule what the
+     user could see. */
+  const settle=(e)=>{
+    if(!dragging){ y0=null; return; }
+    dragging=false; y0=null;
+    try{ card.releasePointerCapture(e.pointerId); }catch(_){}
+    const h=cardEl.getBoundingClientRect().height;
+    let best="peek", bd=Infinity;
+    for(const s of SHEET_STEPS){ const d=Math.abs(detents[s]-h); if(d<bd){ bd=d; best=s; } }
+    const was=ssState, cls={mini:"ssMini",peek:"peek",open:"show"}[best];
+    /* GROWING APPLIES THE CLASS FIRST, SHRINKING APPLIES IT LAST — setSheetSize's rule, for
+       setSheetSize's reason: the short states hide the card's children, so committing them on
+       the way down blinks the content out and animates an empty pocket closing. On the way up
+       the content has to exist before the box uncovers it. */
+    const apply=()=>{ shareSheetEl.classList.remove("show","peek","ssMini"); shareSheetEl.classList.add(cls); };
+    /* LANDING ON `open` IS DELEGATED, because opening is not only a size: openShareSheet()
+       publishes the hide, fills the destinations and tracks share_opened, and a second path
+       that "also opens the sheet" is how those three quietly stop happening. The class and the
+       height are handed over first, so the setSheetSize() inside it measures from ≈ to and
+       takes its own early-return instead of animating a second time on top of this gesture. */
+    if(best==="open"&&was!=="open"){
+      apply(); cardEl.style.height=""; shareSheetEl.classList.remove("ssResizing");
+      ssState="open"; openShareSheet(); haptic(8); return;
+    }
+    /* GROWING APPLIES THE CLASS FIRST, SHRINKING APPLIES IT LAST — setSheetSize's rule, for
+       setSheetSize's reason: the short states hide the card's children, so committing them on
+       the way down blinks the content out and animates an empty pocket closing. On the way up
+       the content has to exist before the box uncovers it. */
+    const grow=detents[best]>h;
+    if(grow) apply();
+    shareSheetEl.classList.add("ssResizing");
+    void cardEl.offsetHeight;
+    cardEl.style.height=detents[best]+"px";
+    const done=()=>{ clearTimeout(cardEl._settleT); cardEl._settleT=null;
+      cardEl.style.height=""; shareSheetEl.classList.remove("ssResizing");
+      if(!grow) apply(); };
+    /* Both a transitionend and a timer: transitionend never fires when the height was already
+       correct (settling back into the detent you started from), and the timer is the only
+       thing that puts the inline height back in that case — a card left pinned to an inline
+       height is a dead end on the one screen that can send. */
+    cardEl._settleT=setTimeout(done,380);
+    cardEl.addEventListener("transitionend",function te(ev){
+      if(ev.propertyName!=="height"||ev.target!==cardEl) return;
+      cardEl.removeEventListener("transitionend",te); done(); });
+    if(best===was) return;
+    /* The same reporting stepSheet() does, because this is the same transition by a different
+       gesture — the funnel must not be able to tell the two apart. */
+    if(was==="open") track("share_dismissed",{via:"drag",mode:shareMode,score:Math.round(currentScore||0)});
+    if(best==="mini") track("sheet_minimized",{score:Math.round(currentScore||0)});
+    ssState=best; haptic(8);
+  };
+  card.addEventListener("pointerup",settle,{passive:true});
+  card.addEventListener("pointercancel",settle,{passive:true});
   /* A tap on the grabber is the same intent as a swipe up, and it is the only part of the
      peek that is not already a button. */
   /* A tap on the grabber TOGGLES. It used to only ever step up, so once the sheet was open the
@@ -5319,7 +5428,12 @@ function expandShareSheet(){
      resizing the sheet would fire every time a thumb missed "Challenge a friend" by a few
      pixels — a mis-tap that hides the thing you were reaching for. */
   const grab=$("#ssGrab");
-  if(grab) grab.onclick=()=>{ haptic(10); stepSheet(ssState==="open"?-1:1); };
+  /* NOT AFTER A DRAG. The drag settles on pointerup and a click follows it on the same finger,
+     so without this guard every drag ended by ALSO stepping the sheet one detent past where it
+     was released — the settle and the click fighting over one gesture. `moved` is set the
+     moment the drag threshold is crossed and cleared on the next pointerdown. */
+  if(grab) grab.onclick=()=>{ if(moved){ moved=false; return; }
+    haptic(10); stepSheet(ssState==="open"?-1:1); };
 })();
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
    closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
@@ -6523,21 +6637,22 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      positions exist or that two of them are for sale. The diameter previews the stroke, so
      the locked pair reads as "finer than anything you have" without a word of copy.
      The diameter comes from dotDia(), which the fill also reads so the two cannot drift. */
-  dots.forEach((d,i)=>{
-    d.style.display="none";
-    if(true) return;
-    const size=SIZE_STOPS[i], th=stopTh(size);
-    d.style.height=th+"px"; d.style.marginTop=(-th/2)+"px";
-    d.style.top=stopY(i,h)+"px";
-    d.classList.toggle("on",size===brush);
-  }); }
+  /* STILL NOT DRAWN, AND THAT WAS RE-DECIDED RATHER THAN INHERITED. Turning these back on was
+     the first answer to "the size bar does nothing" — with no marks the control looks
+     continuous, so a press-and-slide that snaps to three values reads as a misfire. But two
+     notes above already killed this exact design for a reason that has not changed: the thumb
+     is a circle too, so three dots beside it make four circles, one of which behaves
+     differently from the others. The real defect was that the gesture did nothing, not that it
+     was unlabelled — the thumb's diameter IS the size, and it moves. Fixing the drag fixed the
+     report; drawing the dots would have re-created a problem four designs died on. */
+  dots.forEach((d)=>{ d.style.display="none"; }); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
   /* No free-user branch here any more: the bar's pointerdown handler turns free users away
      before sizing ever starts, so this only ever runs for a member. The old floor logic
      (drag freely down to FREE_BRUSH_MIN, paywall on crossing) is gone with it. */
   brush=b; renderSizeBar(); }
-let sizing=false;
+let sizing=false, freeSizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
    intent — it is someone adjusting their brush who gets a full screen in the face. It was
    one of only three paywall entry points and by far the most irritating: pure interruption
@@ -6616,9 +6731,30 @@ sizeBar.addEventListener("pointerdown",e=>{
       clearTimeout(sizeBar._bt);
       sizeBar._bt=setTimeout(()=>sizeBar.classList.remove("floorBounce"),420);
       return; }
+    /* AND THE FINGER CAN KEEP GOING. This branch used to end here: one snap on pointerdown,
+       no capture, no move handler — `sizing` was deliberately left false so a free user could
+       never leave the three stops. The intent was right and the result was a control that
+       ignored the gesture its own shape asks for. Pressing and sliding did nothing, which is
+       indistinguishable from broken.
+       freeSizing is the narrow version of `sizing`: it re-snaps to the nearest of the THREE
+       free stops on every move, so the paid range is exactly as unreachable as before — the
+       brush can still only ever hold a value from SIZE_STOPS. Sliding into the ✦ zone clamps
+       to the finest free size rather than re-opening the sheet; only a pointerdown down there
+       is a question, and it is still answered once per launch. */
+    freeSizing=true;
+    try{ sizeBar.setPointerCapture(e.pointerId); }catch(_){}
+    freeSnap(t,h);
+    return;
+  }
+  e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+/* Snap to the nearest of the three free stops, by POSITION — the same arithmetic the tap used,
+   factored out so the press and the drag cannot drift apart. Silent when nothing changes: a
+   slow drag across one stop should tick once, not sixty times. */
+function freeSnap(t,h){
     const span=(h-STAR_RESERVE(h))/h;
     let best=Math.round(((1-t)/span)*(SIZE_STOPS.length-1));
     best=Math.max(0,Math.min(SIZE_STOPS.length-1,best));
+    if(brush===SIZE_STOPS[best]) return;
     brush=SIZE_STOPS[best];
     /* haptic(), NOT paintHaptic(). paintHaptic posts {type:"haptic"} with NO style, and the
        wrapper turns a styleless tick into Haptics.selectionAsync() — the faintest thing iOS
@@ -6627,13 +6763,22 @@ sizeBar.addEventListener("pointerdown",e=>{
        strongest the 1.0.2 bridge knows, and 1.0.2 is the whole fleet, so this is the ceiling
        until a build ships. */
     renderSizeBar(); haptic(10);
-    return;
-  }
-  e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+}
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
-sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
-sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
+sizeBar.addEventListener("pointermove",e=>{
+  if(sizing){ sizeFromEvent(e); paintHaptic(); return; }
+  /* The free drag re-snaps to the three stops. t is clamped to [0,1] exactly as it is for a
+     member, so sliding below the free floor holds at the finest free size instead of falling
+     into the ✦ zone a second time — that zone is a question asked by a press, not something
+     to be re-asked sixty times on the way past it. */
+  if(freeSizing){
+    const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2;
+    let t=1-((e.clientY-r.top-SB_PAD)/h);
+    freeSnap(Math.max(0,Math.min(1,t)),h);
+  } });
+const endSizing=()=>{ sizing=false; freeSizing=false; };
+sizeBar.addEventListener("pointerup",endSizing); sizeBar.addEventListener("pointercancel",endSizing);
 /* THE ✦ IS A BUTTON, NOT A DECAL. It marks the bar as the premium tool and now sits at the
    locked end of it, so a tap on it is an explicit "show me what this costs" — the clearest
    buying intent the paint screen produces.
@@ -7121,7 +7266,11 @@ function chStateLine(h){
   if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>';
   if(h&&h.burned)        return '<span class="khWin">burned all '+taps+' taps</span>';
   if(h&&h.n_attempts>0)  return h.n_attempts+" tried · "+'<span class="khNone">nobody found you</span>';
-  return '<span class="khNone">nobody has played yet</span>';
+  /* SHORTER IN A LIST OF TEN. "nobody has played yet" is the right sentence when it is the
+     ONE line on the card — it is what the summary above still says. Repeated down ten rows it
+     stopped being information and became wallpaper, and it was the widest thing on every row.
+     The summary carries the sentence; the row carries the state. */
+  return '<span class="khNone">not played yet</span>';
 }
 /* SEND A HIDE THAT IS ALREADY PUBLISHED, from the card rather than from the share sheet.
  * 2347 hides published, 197 ever played. Nearly nine in ten die unopened, and the card was
