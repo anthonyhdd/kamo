@@ -773,7 +773,7 @@
   .pwHeroLn.on s{text-decoration-color:rgba(255,255,255,.94);}
   #pwHeroCtx{margin:12px auto 0;max-width:260px;padding:0 10px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.8);text-shadow:0 2px 10px rgba(0,0,0,.8);}
   #pwLifeLine{display:none;background:none;border:none;color:var(--mint);font-weight:700;font-size:13.5px;font-family:inherit;
-    padding:8px 10px;margin:0 auto 8px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+    padding:8px 10px;margin:9px auto 0;cursor:pointer;-webkit-tap-highlight-color:transparent;
     text-shadow:0 2px 10px rgba(0,0,0,.8);}
   #pwLifeLine:active{transform:scale(.96);}
   /* The X was invisible on the full arm: rgba(255,255,255,.42) glyph with no plate, sitting
@@ -1654,14 +1654,14 @@
         <div class="pwPlanPrice"><b id="pwLifetimePrice">$14.99</b></div>
       </button>
     </div>
-    <!-- The OTHER plan, as one line — ABOVE the CTA since 2026-08-12 (founder: it was easy to
-         miss underneath). The sheet arm shows both plans as rows; the full arm shows one CTA
-         and offers the alternative here. Lifetime outsold the weekly 4:3 with zero promotion,
-         so it must stay reachable — but as a line you read before deciding, not a second CTA
-         competing with the trial. Written by updatePwLifeLine() from the SAME store-fed price
-         nodes the rows use; never a typed price. -->
-    <button id="pwLifeLine" style="display:none"></button>
     <button id="pwBuy" class="pwBuy">Get KAMO+</button>
+    <!-- The OTHER plan, in one line, UNDER the CTA. It went above for a few minutes while it
+         was still a selector — a thing you read before deciding. It buys directly now, so it
+         is a second ACTION, and a second action belongs after the primary one rather than in
+         front of it. Lifetime outsold the weekly 4:3 with zero promotion, so it must stay
+         reachable; it just must not outrank the trial. Written by updatePwLifeLine() from the
+         SAME store-fed price nodes the rows use; never a typed price. -->
+    <button id="pwLifeLine" style="display:none"></button>
     <div id="pwTerms">Renews automatically until cancelled.</div>
     <div class="pwFine">
       <button id="pwRestore">Restore</button>
@@ -3873,13 +3873,18 @@ function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
   if(holder) holder.style.display=trialAdvertised()?(fb?"inline-flex":""):"none"; }
 applyTrialCopy();
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
-/* The full arm's plan toggle. Mirrors the row handler above — including keeping the hidden
-   rows' .active in sync, because updatePwBuy() and the purchase path read pwPlan but the
-   rows are still the record a returning sheet arm would render from. */
+/* THE LINE IS A BUY BUTTON, NOT A SWITCH. It selects its plan and goes straight to StoreKit
+   — the hidden rows' .active is kept in sync on the way through, because updatePwBuy() and the
+   purchase path read pwPlan and the rows are still the record a returning sheet arm renders
+   from. plan_selected still fires first so the choice and the checkout stay separable in the
+   funnel. */
 $("#pwLifeLine").onclick=()=>{
-  pwPlan = pwPlan==="lifetime" ? "weekly" : "lifetime";
-  document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x.dataset.plan===pwPlan));
-  updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan});
+  const plan = pwPlan==="lifetime" ? "weekly" : "lifetime";
+  pwPlan=plan;
+  document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x.dataset.plan===plan));
+  updatePwBuy();
+  track("plan_selected",{plan:plan,via:"line"});
+  pwPurchase();
 };
 /* The native wrapper buys whatever product id we post — it resolves `msg.product` against
    the RevenueCat offering (App.js: `const wanted = msg.product || PRODUCT_ID`). That is
@@ -3898,7 +3903,12 @@ $("#pwLifeLine").onclick=()=>{
    ⚠️ New event NAMES are dropped by the wrapper's WEB_EVENTS allow-list, so this stays
    invisible until a build shipping the matching analytics.js entry reaches users. It is
    added there in the same change. */
-$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID);
+/* ONE PURCHASE PATH, TWO ENTRY POINTS. The lifetime line used to TOGGLE the CTA and wait for
+   a second tap — two taps to buy, on the screen with 12 Apple-sheet cancels for 0 trials.
+   Someone who taps "$14.99 once — yours forever" has decided; making them find the button
+   again is a leak we invented. Both entry points land here so the tracking, the carrier and
+   the native call cannot drift apart. */
+function pwPurchase(){ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID);
   const buyProps={ plan:pwPlan, product_id:prod, source:pwLastSource, nth:pwOpens, trial:trialOn() };
   track("purchase_initiated",buyProps);
   /* CARRIER — the third and LAST of these. purchase_initiated is not on 1.0.2's
@@ -3912,7 +3922,8 @@ $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?
      there is no channel left, and anything else new has to wait for a build.
      ⚠️ DELETE when a build ships with purchase_initiated allow-listed. */
   trackCarried("purchase_initiated",buyProps);
-  haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
+  haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } }
+$("#pwBuy").onclick=pwPurchase;
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; }   // the hold already acted
   doRestore(); };
