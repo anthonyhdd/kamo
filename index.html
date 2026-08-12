@@ -1903,7 +1903,7 @@
       <button class="chPrevShot" id="chPrevShot" aria-label="Preview what they receive"></button>
       <div class="chPrevTxt">
         <b>My challenge</b>
-        <div class="chPrevChips"><span class="chChip" id="chChipS">1 buzz</span><span class="chChip" id="chChipT">no clock</span></div>
+        <div class="chPrevChips"><span class="chChip" id="chChipS">1 tap</span><span class="chChip" id="chChipT">no clock</span></div>
       </div>
       <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
     </div>
@@ -5841,9 +5841,9 @@ function chPrevRender(){
        tapping it goes straight back to the brush instead of opening a preview of a game
        that will not be published. */
     const blocked=Math.round(currentScore||0)<CH_MIN_COVERAGE;
-    /* The two chips ARE the deal the friend gets, and the deal is fixed now: one buzz,
+    /* The two chips ARE the deal the friend gets, and the deal is fixed now: one tap,
        no clock. Constants, so the card can never disagree with the seeker screen. */
-    document.getElementById("chChipS").textContent=blocked?"not hidden yet":"1 buzz";
+    document.getElementById("chChipS").textContent=blocked?"not hidden yet":"1 tap";
     document.getElementById("chChipT").textContent=blocked?"paint them first":"no clock";
     /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
        an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
@@ -6047,7 +6047,7 @@ function chPrevPlay(){
        seeker's own unsigned line, not a placeholder. Written below via textContent, never
        into this HTML string: the handle is typed by a user. */
     w.innerHTML='<div class="chPPin">'
-      +'<div class="pwKick">ONE BUZZ · NO CLOCK</div>'
+      +'<div class="pwKick">ONE TAP · NO CLOCK</div>'
       +'<div class="chPPh" id="chPPh"></div>'
       +'<div class="chPPframe" id="chPPframe"></div>'
       +'<div class="chPPfoot" id="chPPfoot">'
@@ -6215,7 +6215,7 @@ $("#ssInvite").onclick=async()=>{
   /* WRITTEN FOR THE RECEIVER'S TASK, NOT THE SENDER'S BRAG. The old line led with
      "I made someone vanish in 22s" and closed on "Beat that →", which asks the receiver to
      beat a hiding time — except the receiver does not hide, they SEEK. Now: what is
-     hidden, the stake in one line ("One buzz to find them."), and the link on its own line
+     hidden, the stake in one line ("One tap to find them."), and the link on its own line
      so every messaging app renders it tappable. Quoting seconds or taps again would
      promise a deal the seeker screen no longer runs. */
   /* AND IT ONLY PROMISES A PUZZLE WHEN THERE IS ONE. chUpload() is fire-and-forget by
@@ -6230,7 +6230,21 @@ $("#ssInvite").onclick=async()=>{
      and WebKit refuses the sheet — the rule already stated further down this file. So the
      web path keeps today's behaviour exactly, and only the native path waits. */
   const useNative = !!(nativeCaps && nativeCaps.invite);
-  if(useNative) await chAwaitId(2500);
+  /* 8s, NOT 2.5s — and the button says so. The upload only STARTS on this same gesture
+     (the card's pointerdown, ~200ms before this click), and a ~200KB JPEG + create_hide
+     over LTE routinely takes 3-5s. At 2500 the founder's own rapid-fire test shares lost
+     the race every single time and went out as the generic invite — the DB showed the row
+     landing seconds AFTER the share left (2026-08-12). postNative carries no activation
+     debt, so the native path can afford the honest wait; what it cannot afford is looking
+     dead, hence the button state. The web branch below is unchanged and unwaitable:
+     navigator.share dies on the first await, that rule still stands. */
+  const inviteBtn=$("#ssInvite"), inviteHtml=inviteBtn?inviteBtn.innerHTML:"";
+  if(useNative){
+    const pending=!chLink();
+    if(pending && inviteBtn){ inviteBtn.textContent="Preparing your challenge…"; inviteBtn.disabled=true; }
+    await chAwaitId(8000);
+    if(pending && inviteBtn){ inviteBtn.innerHTML=inviteHtml; inviteBtn.disabled=false; }
+  }
   const link=chLink();
   /* SIGNED, WHEN THERE IS A NAME TO SIGN IT WITH. An anonymous dare is a weaker ask than one
      with a person behind it, and this is the loop that is flat — 71 shares a day, roughly one
@@ -6242,7 +6256,7 @@ $("#ssInvite").onclick=async()=>{
   const who=getHandle();
   const text = link
     ? (who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.")
-      +"\nOne buzz to find "+(who?"them":"it")+"."
+      +"\nOne tap to find "+(who?"them":"it")+"."
       +"\n\n"+link
     : "🫥 KAMO — paint yourself into the background until nobody can find you."
       +"\n\n"+inviteUrl();
@@ -7564,7 +7578,7 @@ async function chShareHide(h,btn){
   const head = who ? "🫥 @"+who+" is hidden in this photo." : "🫥 There's a body hidden in this photo.";
   /* One deal for every hide, old or new — the seeker plays one buzz on no clock, so the
      message never quotes seconds or taps again, whatever the row still stores. */
-  const text = head+"\nOne buzz to find "+(who?"them":"it")+"."+"\n\n"+link;
+  const text = head+"\nOne tap to find "+(who?"them":"it")+"."+"\n\n"+link;
   track("resend_tapped",{played:((h&&h.n_attempts)|0)>0});
   if(nativeCaps && nativeCaps.invite){ postNative({type:"invite",message:text,score:0}); return; }
   let shared=false, cancelled=false;
@@ -7925,7 +7939,7 @@ function chSeek(){
        front of a stranger. The page narrows it on the way in and the database narrows it
        again on insert, and this is the third place it cannot become markup. */
     $$("chHead").textContent = h.name ? "Find @"+h.name : "Find the body";
-    $$("chSub").textContent="One buzz.";
+    $$("chSub").textContent="One tap.";
 
     const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit"; quit.textContent="I give up";
     w.appendChild(quit);
