@@ -39,13 +39,17 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  * Run the handler in one simulated environment.
  * `share` describes what navigator.share does: 'ok' | 'abort' | 'throw' | null (absent).
  */
-async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '' }) {
-  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0 };
+async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40 }) {
+  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0, sheetClosed: 0, hints: [] };
   const btn = { innerHTML: 'Challenge a friend', onclick: null };
 
   const env = {
     haptic: () => {},
-    currentScore: 40,
+    currentScore: score,
+    /* The publish floor and its escape hatch — the handler refuses to wait for an upload
+       that chUpload() will never run, closes the sheet and routes to the brush. */
+    CH_MIN_COVERAGE: 30,
+    closeShareSheet: () => { calls.sheetClosed++; },
     roundSeconds: () => 12,
     shareMode: 'ba',
     track: (n, p) => calls.events.push([n, p]),
@@ -69,7 +73,7 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
     /* The handle signs the invite. Stubbed rather than reading localStorage so the two cases
        that matter — signed and unsigned — are both reachable in one process. */
     getHandle: () => handle,
-    showHint: () => {},
+    showHint: (t) => { calls.hints.push(t); },
     $: (sel) => (sel === '#ssInvite' ? btn : null),
     setTimeout: () => 0,
     navigator: {
@@ -145,6 +149,29 @@ console.log('\nEXACTLY ONE share mechanism per tap');
   calls.webShare === 0 && calls.clipboard === 1
     ? ok(`no navigator.share at all → clipboard only (${label(calls)})`)
     : bad(`no-share environment misbehaved — ${label(calls)}`);
+}
+
+/* UNDER THE PUBLISH FLOOR, NOTHING WAITS AND NOTHING SENDS. chUpload() refuses an
+   unpainted hide, so the 8s "Preparing your challenge…" wait would burn in full and end
+   on the generic invite — the founder hit exactly that. The handler must bail instantly:
+   no share mechanism, no sent stamp, no upload wait; the sheet closes and the hint says
+   why. */
+console.log('\nBELOW THE PUBLISH FLOOR, THE BUTTON SAYS WHY INSTEAD OF WAITING');
+{
+  const { calls } = await run({ nativeInvite: true, share: 'ok', score: 0 });
+  calls.native === 0 && calls.webShare === 0 && calls.clipboard === 0 && calls.markedSent === 0 && calls.waited === 0
+    ? ok(`unpainted hide → no wait, no share, no sent stamp (${label(calls)} waited:${calls.waited})`)
+    : bad(`the blocked path still fired something — ${label(calls)} sent:${calls.markedSent} waited:${calls.waited}`);
+  calls.sheetClosed === 1 && calls.hints.some((h) => /[Pp]aint/.test(h || ''))
+    ? ok('the sheet closes and the hint names the fix')
+    : bad(`blocked without explanation — closed:${calls.sheetClosed} hints:${JSON.stringify(calls.hints)}`);
+}
+{
+  /* And the floor is a FLOOR, not a switch that broke sending: at 30 everything works. */
+  const { calls } = await run({ nativeInvite: true, share: null, score: 30 });
+  calls.native === 1
+    ? ok('at the floor exactly, the share goes out')
+    : bad(`score 30 blocked — ${label(calls)}`);
 }
 
 console.log('\nTHE MESSAGE MATCHES THE ROUND THE RECEIVER WILL PLAY');
