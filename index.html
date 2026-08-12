@@ -91,6 +91,12 @@
      the launch screen. block keeps it invisible until the font lands (12 KB, preloaded
      in <head>), then paints once, correctly. */
   @font-face{font-family:'Kamo';src:url('vendor/SpaceGrotesk-700.woff2') format('woff2');font-weight:700;font-display:block;}
+  /* The paywall hero's display face — Anton, vendored like everything else (no CDN, no
+     network dependency beyond the page's own origin, OFL licence via @fontsource/anton).
+     One weight, latin subset, 18KB. font-display:swap on purpose, unlike the wordmark's
+     block: the hero is three words over a photo, and three words of Space Grotesk for one
+     frame beats three words of nothing. */
+  @font-face{font-family:'KamoHero';src:url('vendor/anton.woff2') format('woff2');font-weight:400;font-display:swap;}
   .heroLogo{font-family:var(--display);font-weight:700;letter-spacing:-1.5px;font-size:clamp(48px,16vw,66px);line-height:1;color:#fff;text-shadow:0 8px 34px rgba(0,0,0,.55);}
   .heroLogo b{color:#fff;font-weight:700;}
   @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -744,7 +750,7 @@
   #paywall.pwFull .pwKick,#paywall.pwFull .pwTitle,#paywall.pwFull .pwSub,#paywall.pwFull #pwPlans{display:none!important;}
   #pwHero{display:none;}
   #paywall.pwFull #pwHero{display:block;position:absolute;left:0;right:0;top:24%;text-align:center;padding:0 12px;pointer-events:none;}
-  .pwHeroLn{font-family:var(--display);font-weight:900;font-size:clamp(30px,10.5vw,44px);line-height:1.07;letter-spacing:-1.3px;
+  .pwHeroLn{font-family:'KamoHero',var(--display),sans-serif;font-weight:400;font-size:clamp(36px,12.5vw,54px);line-height:1.06;letter-spacing:.2px;
     color:rgba(255,255,255,.94);text-shadow:0 4px 22px rgba(0,0,0,.8);}
   .pwHeroLn.on{color:var(--mint);}
   /* The strike is mint on white and inverts when the line lights: two colours must always
