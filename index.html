@@ -1036,6 +1036,10 @@
     color:#eafff5;border-radius:999px;padding:6px 13px;font-family:var(--display);
     font-size:12.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .khSend:active{transform:scale(.95);}
+  /* A hide that never left the phone gets the filled button, because on that row sending is
+     not one of two options — it is the only thing left to do. Same size and same place, so
+     the list does not reflow between states; only the weight changes. */
+  .khSend.khSendNow{background:var(--mint);border-color:var(--mint);color:#04120b;}
   /* The headline is the edit control once a handle exists — see #khName's note. Press state
      on the title itself so the tap visibly lands; no underline or icon, the card's subline
      already explains what the name is for and chrome here would fight the display face. */
@@ -5196,7 +5200,7 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -7615,7 +7619,7 @@ async function chUpload(){
        moves for a reason nobody can name — while a product change is being measured on
        that very number. */
     try{ chRpc("set_hide_lang",{p_id:chId,p_lang:(navigator.language||"")}).catch(()=>{}); }catch(e){}
-    armResultsPing();
+    armResultsPing(false);   // published, not sent — see the note on armResultsPing
     /* HELD BACK A BEAT. These are two more uploads and two more canvas encodes, and they
        used to start in the same breath as the share — competing for the radio and the main
        thread with the one action the user is waiting on. The snap needs them by the time a
@@ -7659,13 +7663,28 @@ function chAttachPush(){
    nudges the timer three times must not collect three identical pings.
    Gated on nativeCaps.notifSchedule — no released binary sets it, so this is inert until the
    build that added the handler reaches users, and silently does nothing in a browser. */
-function armResultsPing(){
+/* IT WAS ARMED AT PUBLISH AND IT TALKED ABOUT SENDING. Publishing happens when the share
+   sheet is touched; sending is one tap further on, and most published hides have not been
+   sent at the moment this fires. So the creator who never sent got a notification three hours
+   later announcing "Your hide is out there" about a hide sitting on their phone — a false
+   claim, and worse, one that spends the notification on reassurance when the honest version
+   is the only nudge in the product that could still turn that hide into a link.
+   Two copies, one key, so whichever fires last replaces the other: publish arms the nudge,
+   chMarkSent re-arms the real one the moment the hide actually goes out. Sooner for the
+   nudge — an unsent hide is worth a lot less three hours later, when the photo, the moment
+   and the person they had in mind have all gone. */
+function armResultsPing(sent){
   if(!(nativeCaps && nativeCaps.notifSchedule)) return;
-  postNative({type:"notif-schedule",notif:{
+  postNative({type:"notif-schedule",notif:sent?{
     key:"results",
     delayMinutes:180,
     subtitle:"Your hide is out there",
     body:"See if anyone found it.",
+  }:{
+    key:"results",
+    delayMinutes:60,
+    subtitle:"You never sent that one",
+    body:"It's still on your phone. One tap sends it.",
   }});
 }
 /* ANSWERED EITHER WAY, and that is the point of the callback rather than fire-and-forget.
@@ -7722,9 +7741,19 @@ function chRemember(id,drop){
    server-side.
    Fire-and-forget, and idempotent server-side (coalesce keeps the first timestamp): this
    runs on the send path and must never delay or fail it. */
+/* `hide_sent` IS WEB_ONLY ON PURPOSE, and it is the only way this funnel becomes readable.
+   hide_published is WEB_ONLY, so it lands on the WEB Amplitude user; share_target_tapped goes
+   through the wrapper and lands on the NATIVE one. Those are two different users, so
+   published→sent could never join at user level — which is why the event counts and the
+   database disagreed all along and why every funnel drawn on them was wrong. This fires at
+   the exact moment sent_at is written, on the same user as hide_published, so the pair is
+   finally comparable without waiting for a build. */
 function chMarkSent(){
   if(!chId) return;
   try{ chRpc("mark_hide_sent",{p_id:chId}).catch(()=>{}); }catch(e){}
+  try{ track("hide_sent",{}); }catch(e){}
+  /* Same key, so this REPLACES the "you never sent that one" nudge armed at publish. */
+  try{ armResultsPing(true); }catch(e){}
 }
 
 /* WHAT HAPPENED WHILE THEY WERE AWAY.
@@ -7776,6 +7805,15 @@ function chStateLine(h){
   if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>';
   if(h&&h.burned)        return '<span class="khWin">burned all '+taps+' taps</span>';
   if(h&&h.n_attempts>0)  return h.n_attempts+" tried · "+'<span class="khNone">nobody found you</span>';
+  /* NEVER SENT IS NOT THE SAME NEWS AS NEVER PLAYED, and telling them apart is the whole
+     reason get_hide now returns `sent`. Publishing happens when the share sheet is touched;
+     sending happens one tap later, and a creator who iterates through three versions before
+     sending one used to see two rows of "not played yet" about hides that never left the
+     phone. That reads as "nobody plays KAMO" — the most discouraging possible reading, aimed
+     at the one person whose next tap would fix it. `sent === false` and not `!h.sent`: an
+     older row fetched before this shipped has `sent` undefined, and guessing "unsent" there
+     would accuse the creator of not sending something they did send. */
+  if(h&&h.sent===false) return '<span class="khNone">still on your phone</span>';
   /* SHORTER IN A LIST OF TEN. "nobody has played yet" is the right sentence when it is the
      ONE line on the card — it is what the summary above still says. Repeated down ten rows it
      stopped being information and became wallpaper, and it was the widest thing on every row.
@@ -7850,10 +7888,17 @@ function khRowHtml(h,i){
   /* WATCH comes before SEND on a hide somebody has already played. The row's job is to
      report what other people did; until now it could only say it in numbers. */
   const watch = (h&&h.n_attempts>0) ? '<button class="khWatch" data-w="'+i+'">Watch</button>' : '';
-  return '<div class="khRow">'+shot
+  /* THE ONE ROW WHERE THE BUTTON IS THE POINT. On a hide that was played, Send is a re-send
+     and sits quietly next to Watch. On a hide that never left the phone it is the only thing
+     the creator can usefully do, so it gets the filled treatment and says so — the row above
+     it now reads "still on your phone", and an unstyled "Send" beside that sentence is a
+     footnote to a problem instead of the answer to it. */
+  const unsent = !!(h && h.sent===false);
+  return '<div class="khRow'+(unsent?' khRowUnsent':'')+'">'+shot
     + '<span class="khRowTxt"><b>'+chStateLine(h)+'</b>'
     + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
-    + '</span>'+watch+'<button class="khSend" data-i="'+i+'">Send</button></div>';
+    + '</span>'+watch+'<button class="khSend'+(unsent?' khSendNow':'')+'" data-i="'+i+'">'
+    + (unsent?'Send it':'Send')+'</button></div>';
 }
 function khRenderRows(el,rows,head){
   el.innerHTML = (head?'<div class="khHead">'+head+'<span class="khMore">Hide these</span></div>':'')
@@ -8007,8 +8052,10 @@ async function khResults(){
   const ids=chMine();
   if(!ids.length){ el.style.display="none"; el.innerHTML=""; el.onclick=null; delete el.dataset.filled; }
   else if(el.dataset.filled!=="1"){
+    /* Not "sent" here either — the ids are hides this device PUBLISHED, and which of them
+       actually went out is exactly what the fetch below is about to answer. */
     el.innerHTML="<b>"+ids.length+"</b> challenge"+(ids.length===1?"":"s")
-      + ' sent · <span class="khNone">checking…</span>';
+      + ' · <span class="khNone">checking…</span>';
     el.onclick=null;
     el.style.display="block";
   }
@@ -8025,7 +8072,7 @@ async function khResults(){
        is not, and do not touch the unread dot — those results have not been read. */
     if(t.offline){
       el.innerHTML = "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")
-        + ' sent · <span class="khNone">results didn\'t load</span>'
+        + ' · <span class="khNone">results didn\'t load</span>'
         + '<span class="khMore">Tap to retry</span>';
       el.onclick=()=>{ khResults(); };
       el.style.display="block";
@@ -8040,10 +8087,29 @@ async function khResults(){
     /* Two facts and a divider, not a sentence. "12 people have played your hides. 3 found
        you." wrapped to two lines on a 390px card, and the numbers — the only part anyone
        reads — ended up at opposite ends of it. */
+    /* "N CHALLENGES SENT" WAS NOT TRUE, and it was the most damaging untrue sentence in the
+       app. chMine() holds every hide that was PUBLISHED — publishing happens the moment the
+       share sheet is touched — while sending is one tap further on. Measured on 2026-08-12:
+       creators average 1.92 published hides each and 69.8% of them send at least one, so the
+       typical card was calling two hides "sent" when one was, then reporting "nobody has
+       played yet" over the pair. The creator reads that as "KAMO is dead" when the real state
+       is "one of these never left your phone", which is a thing they can fix in one tap.
+       Unknown `sent` counts as sent: rows fetched before get_hide returned the field must not
+       accuse someone of not sending. */
+    const waiting = rows.filter(r=>r&&r.sent===false).length;
+    const sentN   = rows.length - waiting;
+    /* TWO SHAPES, BOTH ONE LINE. The note above this block records that a two-line summary
+       pushes the numbers to opposite ends of a 390px card, and spelling "still on your phone"
+       out a third time did exactly that again. The long sentence is only affordable when the
+       waiting hides ARE the news; once there are plays to report, the count rides as one
+       short word and the row underneath carries the sentence. */
     const head = tried<1
-      ? "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")+' sent · <span class="khNone">nobody has played yet</span>'
+      ? (waiting && !sentN ? "<b>"+waiting+"</b> still on your phone"
+        : waiting ? "<b>"+sentN+"</b> sent · <b>"+waiting+"</b> waiting"
+        : "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")+' sent · <span class="khNone">nobody has played yet</span>')
       : "<b>"+tried+"</b> played your hide"+(rows.length===1?"":"s")+" · "
-        + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>');
+        + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>')
+        + (waiting ? ' · <b>'+waiting+"</b> waiting" : "");
     /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
     markSeen(tried<1?0:tried); brandDot(false);
     /* THE SUMMARY IS THE CLOSED STATE, ALWAYS — including for a single hide. Sending straight
