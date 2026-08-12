@@ -57,6 +57,21 @@ const html = real.slice(0, at)
      stored value is handle-shaped and reachable, not the string concatenation, which
      test-share.mjs already covers against the real function body. */
   + 'handle(){return getHandle();},'
+  /* Opening the accordion goes through the box's own click handler, the way a finger does —
+     khOpen is module state, and flipping it directly would exercise a paint() that nothing
+     calls. */
+  + 'expand(){document.getElementById("khScore").click();return this.fit();},'
+  /* WHAT THE USER CAN ACTUALLY SEE. The card is anchored to the bottom edge, so overflow goes
+     off the TOP of the screen — and every element up there is still laid out, still styled,
+     still `display:block`. getComputedStyle cannot tell you the badge is sitting at y=-180.
+     Geometry can, so this reads rectangles. */
+  + 'fit(){const c=document.querySelector("#kamoHome .kpCard"),s=document.getElementById("khScore"),'
+  + 'b=document.querySelector("#kamoHome .kpBadge");'
+  + 'return{cardTop:Math.round(c.getBoundingClientRect().top),'
+  + 'badgeTop:Math.round(b.getBoundingClientRect().top),'
+  + 'scoreScrolls:s.scrollHeight>s.clientHeight+1,'
+  + 'rows:document.querySelectorAll("#khScore .khRow").length,'
+  + 'headText:(document.querySelector("#khScore .khHead")||{}).textContent||""};},'
   + 'wipe(){try{localStorage.removeItem("kamo_handle")}catch(e){}}};\n'
   + real.slice(at);
 
@@ -247,6 +262,48 @@ console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
   /^1 played your hide ·/.test(none.scoreText.trim()) && /nobody found you/.test(none.scoreText)
     ? ok('one player, none found → singular, and the loss is stated plainly')
     : bad(`the singular / nobody-found case reads: ${JSON.stringify(none.scoreText)}`);
+}
+
+/* TEN CHALLENGES IS THE MAXIMUM chMine() KEEPS, SO TEN IS THE SIZE THE CARD MUST SURVIVE.
+   The report was "quand on ouvre et qu'il y a beaucoup de challenges, ça casse la modal, et on
+   voit plus le haut" — and in the same breath, "Show each one ne fonctionne pas". Those were
+   one bug: the card is anchored to the BOTTOM edge, so expanding pushed the badge, the name
+   and the summary off the top of the screen, and the rows the button had just rendered were
+   drawn above y=0 where nothing could be seen. The button was working perfectly.
+   Nothing in this file could catch that, because every element involved was still `display`
+   whatever it should be — which is why the hook measures rectangles. */
+console.log('\nTEN CHALLENGES STILL FIT ON THE SCREEN');
+{
+  const ids = Array.from({ length: 10 }, (_, i) => 'h' + i);
+  const rows = {};
+  ids.forEach((id, i) => { rows[id] = { n_attempts: i, n_found: i % 3, img_path: '' }; });
+  await page.evaluate(([ids, rows]) => window.__h.hides(ids, rows), [ids, rows]);
+  await page.evaluate(() => window.__h.open(false));
+  await page.waitForTimeout(250);
+
+  const shut = await page.evaluate(() => window.__h.fit());
+  shut.cardTop >= 0
+    ? ok(`closed, the card starts on screen (top ${shut.cardTop}px)`)
+    : bad(`the card already overflows before anything is expanded (top ${shut.cardTop}px)`);
+
+  const open = await page.evaluate(() => window.__h.expand());
+  open.rows === 10
+    ? ok('"Show each one" renders all ten rows')
+    : bad(`expanding rendered ${open.rows} rows — the accordion is not opening`);
+  open.cardTop >= 0 && open.badgeTop >= 0
+    ? ok(`and the top of the card is still visible (card ${open.cardTop}px, badge ${open.badgeTop}px)`)
+    : bad(`expanded, the card runs off the top of the screen (card ${open.cardTop}px, badge `
+        + `${open.badgeTop}px) — the badge, the name and the summary are all unreachable`);
+  open.scoreScrolls
+    ? ok('the list scrolls inside its own box rather than growing the card')
+    : bad('the results box is not a scroll container — ten rows have to go somewhere, and '
+        + 'without this they go off the top of the screen');
+  /* The two numbers this card exists to deliver used to be REPLACED by the list they
+     summarise, so they were readable only while the thing they describe was closed. */
+  /played your hide/.test(open.headText)
+    ? ok(`the summary rides above the open list ("${open.headText.trim()}")`)
+    : bad(`the open state's header reads ${JSON.stringify(open.headText)} — the headline was `
+        + 'thrown away by the expansion');
 }
 
 await browser.close();

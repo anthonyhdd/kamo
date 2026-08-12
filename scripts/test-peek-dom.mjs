@@ -46,7 +46,7 @@ const html = real.slice(0, at)
   + 'copy(){return{generic:pwGenericSub(),'
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
-  + 'facts:{paint:PAINT_SECONDS,pro:PRO_PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
+  + 'facts:{paint:PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
   /* chGeom() needs a hider projected from the 3D scene, and this harness has no camera — so
      the preview would bail on its first line for a reason that has nothing to do with what is
      being tested. Stubbed to a hider dead centre. chGeom is a function DECLARATION, so it is
@@ -71,15 +71,6 @@ const html = real.slice(0, at)
   + 'cardState(){return{card:document.getElementById("kamoHome").classList.contains("show"),'
   + 'sheet:shareSheetEl.className,state:ssState};},'
   + 'closeCard(){closeKamoHome();return this.cardState();},'
-  + 'sign(){const c=document.getElementById("chChipN");if(!c)return null;'
-  + 'return{text:c.textContent,unsigned:c.classList.contains("unsigned")};},'
-  /* Any preview left open by an earlier check is cleared FIRST, or "did the tap fall through
-     to chPrevPlay" would be answered by a #chPP that was already on screen. */
-  + 'signOpen(){document.getElementById("chPP")?.remove();document.getElementById("chChipN").click();'
-  + 'return{prompt:!!document.getElementById("csIn"),preview:!!document.getElementById("chPP")};},'
-  + 'signSave(v){const i=document.getElementById("csIn");i.value=v;document.getElementById("csOk").click();'
-  + 'return{stored:getHandle(),chip:(document.getElementById("chChipN")||{}).textContent,'
-  + 'promptGone:!document.getElementById("csIn")};},'
   + 'row(){const b=(s)=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();'
   + 'return{d:getComputedStyle(e).display,x:r.left,y:r.top,w:r.width,h:r.height};};'
   /* Every infinite animation inside the card, pseudo-elements included — that is where the
@@ -93,9 +84,24 @@ const html = real.slice(0, at)
   + '.map(a=>(a.effect.target.id||a.effect.target.className||"?")+(a.effect.pseudoElement||"")+":"+(a.animationName||"anim"));'
   + 'return{more:b(".ssBtn.ssMore"),plus:b("#ssPlus"),spin:spin};},'
   + 'grab(){document.getElementById("ssGrab").click();return this.snap();},'
+  + 'fold(){stepSheet(-1);return new Promise(r=>setTimeout(()=>r(this.snap()),420));},'
+  /* A REAL DRAG ON THE REAL HANDLE, in steps, because what has to be measured is what a thumb
+     does: the card tracking the finger, and where it lands when the finger lifts. Calling
+     stepSheet() would prove nothing about either — that is the API the drag was rewritten to
+     stop going through. */
+  + 'drag(dy,steps){const g=document.getElementById("ssGrab");'
+  + 'const r=g.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;'
+  + 'const ev=(t,cy)=>g.dispatchEvent(new PointerEvent(t,{pointerId:1,clientX:x,clientY:cy,bubbles:true}));'
+  + 'const c=shareSheetEl.querySelector(".ssCard");'
+  + 'ev("pointerdown",y);const seen=[];const n=steps||6;'
+  + 'for(let i=1;i<=n;i++){ev("pointermove",y+dy*i/n);seen.push(Math.round(c.getBoundingClientRect().height));}'
+  + 'ev("pointerup",y+dy);'
+  + 'return new Promise(r2=>setTimeout(()=>r2(Object.assign({seen:seen},this.snap())),520));},'
+  + 'visible(sel){const e=shareSheetEl.querySelector(sel);return e?getComputedStyle(e).display:"absent";},'
   + 'backdrop(){shareSheetEl.click();return this.snap();},'
   + 'snap(){const c=shareSheetEl.querySelector(".ssCard");return{state:ssState,'
   + 'cls:shareSheetEl.className,h:c.getBoundingClientRect().height,inline:c.style.height,'
+  + 'gap:Math.round(innerHeight-c.getBoundingClientRect().bottom),'
   + 'resizing:shareSheetEl.classList.contains("ssResizing"),'
   + 'pe:getComputedStyle(shareSheetEl).pointerEvents};},'
   + 'thumb(w,h){board.width=w;board.height=h;'
@@ -521,43 +527,99 @@ console.log('\nTHE CARD OPENS THE PREVIEW');
   await page.emulateMedia({ reducedMotion: null });
 }
 
-/* THE ASK FOR A NAME LIVES ON THE CARD, NOT IN FRONT OF THE SEND.
-   Only ~3% of hide-makers ever tap the wordmark, so a handle settable only on the player card
-   is one almost nobody sets. But the send is the number this app is trying to move and it is
-   flat, so a prompt in front of it would be the fastest way to make it worse. The chip is the
-   middle, and what has to hold is that it is REACHABLE and that it never blocks anything. */
-console.log('\nTHE CARD ASKS TO BE SIGNED, WITHOUT BLOCKING THE SEND');
-{
-  await page.evaluate(() => { try{ localStorage.removeItem('kamo_handle'); }catch(e){} });
-  await page.evaluate(() => window.__t.present());
-  const empty = await page.evaluate(() => window.__t.sign());
-  empty && empty.unsigned && /your name/i.test(empty.text)
-    ? ok(`unsigned, the chip asks ("${empty.text}")`)
-    : bad(`the signature chip is ${JSON.stringify(empty)}`);
-
-  /* Tapping it must NOT open the full preview — the chip sits inside .chPrev, whose whole row
-     opens chPrevPlay(), so without stopPropagation this tap would launch a rehearsal round
-     instead of a name field. */
-  const opened = await page.evaluate(() => window.__t.signOpen());
-  opened.prompt && !opened.preview
-    ? ok('tapping it opens the field, and does not fall through to the preview round')
-    : bad(`tapping the chip gave prompt=${opened.prompt} preview=${opened.preview}`);
-
-  const saved = await page.evaluate(() => window.__t.signSave('nova'));
-  saved.stored === 'nova' && saved.promptGone && /@nova/.test(saved.chip || '')
-    ? ok(`saving signs the card in place ("${saved.chip}")`)
-    : bad(`after saving: ${JSON.stringify(saved)}`);
-
-  const after = await page.evaluate(() => window.__t.sign());
-  !after.unsigned
-    ? ok('and the chip stops asking')
-    : bad('the chip still reads as unsigned after a name was saved');
-}
-
+/* The name chip and its sign-from-the-sheet dialog were removed 2026-08-11 (founder's call:
+   three chips read as clutter). Signing lives on the player card, whose blur handler owns the
+   republish — covered by test-home-dom, not here. */
 /* THE WORDMARK IS THE WAY INTO THE CARD FROM THE REVEAL, AND THE SHEET MUST SURVIVE IT.
    On the reveal the share sheet is the only route to a share — the Share button was removed
    when the sheet started presenting itself — so opening the card over that screen and closing
    it must not strand someone on a reveal with no way to send. */
+/* THE THIRD DETENT — folded to the handle so the painting can be seen whole. A "mini" state
+   existed before and was removed for a rendering bug (it swapped classes outside
+   setSheetSize()), so what has to hold is that it goes through the same door as the others,
+   that it hides the card without hiding the way back, and that the sheet never ARRIVES in it:
+   the send is the flattest number in this app and starting folded costs a gesture. */
+console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
+{
+  await page.evaluate(() => window.__t.present());
+  const arrived = await page.evaluate(() => window.__t.snap());
+  arrived.state === 'peek'
+    ? ok('the sheet still ARRIVES in the peek, never folded')
+    : bad(`the sheet arrived in "${arrived.state}" — folding by default puts the send a gesture further away`);
+
+  const folded = await page.evaluate(() => window.__t.fold());
+  folded.state === 'mini' && /\bssMini\b/.test(folded.cls)
+    ? ok('a downward step folds it to the handle')
+    : bad(`stepping down gave state=${folded.state} cls=${JSON.stringify(folded.cls)}`);
+  /* A CEILING, NOT JUST "SHORTER". The first version stacked two safe-area insets — the
+     card's and the grabber's — and left ~90px of empty green under the bar while still
+     passing a "shorter than the peek" test. Halving that was still reported as "trop de
+     hauteur": the state is meant to be a handle, its breathing room, and nothing else, so the
+     assertion is absolute. 24px here is measured with NO safe-area inset (headless reports
+     none); on a device the grabber adds ~20px more to clear the home pill. */
+  folded.h < arrived.h && folded.h <= 62
+    ? ok(`and the card is a bar, not a box (${Math.round(folded.h)}px, peek is ${Math.round(arrived.h)}px)`)
+    : bad(`folded height ${Math.round(folded.h)}px — must be under 62px (peek: ${Math.round(arrived.h)}px). `
+        + 'Check for a doubled var(--safe-b) between .ssCard and .ssGrab.');
+  /* AND IT IS AGAINST THE EDGE. "Pas collé au bas de l'écran" is a different defect from
+     "too tall" — a bar of the right height floating above the bottom edge looks like a bug in
+     a way that a tall one does not — and nothing measured the gap, so only one of the two was
+     ever being caught. */
+  folded.gap === 0
+    ? ok('and it sits flush on the bottom edge, with nothing under it')
+    : bad(`there are ${folded.gap}px between the folded card and the bottom of the screen`);
+  (await page.evaluate(() => window.__t.visible('.ssInvite'))) === 'none'
+    ? ok('the CTA is put away with the rest of the card')
+    : bad('the folded sheet still shows its buttons — it is not folded, it is just shorter');
+  (await page.evaluate(() => window.__t.visible('.ssGrab'))) !== 'none'
+    ? ok('but the handle stays, so there is a way back')
+    : bad('the handle is gone in the folded state — the sheet is now unreachable');
+
+  const back = await page.evaluate(() => window.__t.grab());
+  await page.waitForTimeout(420);
+  (await page.evaluate(() => window.__t.snap())).state === 'peek'
+    ? ok('and a tap on the handle brings the peek straight back')
+    : bad(`tapping the handle from mini gave "${back.state}" — the way back has to be one tap`);
+}
+
+/* THE CARD FOLLOWS THE FINGER, AND ONE GESTURE CAN CROSS TWO DETENTS.
+   It used to do neither: 24px past a threshold fired one stepSheet() and then locked the
+   gesture out until the finger came up. So the sheet never tracked the hand — a drag felt
+   like a button misfiring — and pulling the open sheet down to the handle was impossible in
+   one movement, which is exactly what was reported. Both halves are asserted, because fixing
+   only the second would leave the gesture feeling just as dead. */
+console.log('\nDRAGGING THE HANDLE MOVES THE CARD, NOT JUST ITS STATE');
+{
+  await page.evaluate(() => window.__t.present());
+  await page.evaluate(() => window.__t.grab());              // peek -> open
+  await page.waitForTimeout(420);
+  const open = await page.evaluate(() => window.__t.snap());
+  open.state === 'open'
+    ? ok('starting from the full sheet')
+    : bad(`could not reach the open state to drag from (got "${open.state}")`);
+
+  const d = await page.evaluate(() => window.__t.drag(520, 8));
+  const shrinking = d.seen.every((h, i) => i === 0 || h <= d.seen[i - 1]);
+  const moved = d.seen[0] - d.seen[d.seen.length - 1];
+  shrinking && moved > 80
+    ? ok(`the card tracks the finger down (${d.seen[0]}px → ${d.seen[d.seen.length - 1]}px across the drag)`)
+    : bad(`the card did not follow: heights were ${JSON.stringify(d.seen)} — a drag that only `
+        + 'fires a state change at a threshold reads as a button that misfired');
+  d.state === 'mini'
+    ? ok('and one long drag crosses BOTH detents, open → mini, as the finger asked')
+    : bad(`a 520px drag from open landed on "${d.state}" — one gesture must be able to reach `
+        + 'the smallest position, not step exactly one detent per touch');
+  d.inline === ''
+    ? ok('and the inline height is handed back to the stylesheet on settle')
+    : bad(`the card is pinned at inline height ${JSON.stringify(d.inline)} — a stuck height on `
+        + 'the reveal is a dead end, since the sheet is the only route to a send');
+
+  const up = await page.evaluate(() => window.__t.drag(-520, 8));
+  up.state === 'open'
+    ? ok('and dragging back up returns the full sheet in one gesture')
+    : bad(`dragging up 520px from mini landed on "${up.state}"`);
+}
+
 console.log('\nTAPPING THE WORDMARK OPENS THE CARD, AND CLOSING IT GIVES THE SHEET BACK');
 {
   await page.evaluate(() => window.__t.present());
@@ -614,8 +676,14 @@ const says = (key, needles) => {
     ? bad(`the "${key}" pitch does not state ${miss.join(', ')} — it reads: ${JSON.stringify(line)}`)
     : ok(`"${key}" states ${needles.join(', ')}`);
 };
-says('generic', [`${f.pro}s`, `${f.paint}s`]);
-says('time', [`${f.pro} seconds`, `instead of ${f.paint}`]);
+/* KAMO+ has no clocks since 2026-08-11, so the generic line and the time pitch sell the
+   ABSENCE of a figure — the only number left is the free clock, quoted as the thing you
+   escape. The generic line must quote nothing at all. */
+const genericLine = (all.find(([k]) => k === 'generic') || [])[1] || '';
+!/\d/.test(genericLine) && /no clock/.test(genericLine)
+  ? ok('"generic" sells no-clock without quoting a figure')
+  : bad(`the generic pitch reads: ${JSON.stringify(genericLine)}`);
+says('time', [`${f.paint} seconds`, 'no clock']);
 /* The size pitch is the one that states NO figure, on purpose: "Free paints at 3 fixed sizes"
    was cut because it sells the limitation instead of the range. So it is asserted the other way
    round — it must not quote a count — which still catches a hardcoded number creeping back in,

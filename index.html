@@ -91,6 +91,12 @@
      the launch screen. block keeps it invisible until the font lands (12 KB, preloaded
      in <head>), then paints once, correctly. */
   @font-face{font-family:'Kamo';src:url('vendor/SpaceGrotesk-700.woff2') format('woff2');font-weight:700;font-display:block;}
+  /* The paywall hero's display face — Anton, vendored like everything else (no CDN, no
+     network dependency beyond the page's own origin, OFL licence via @fontsource/anton).
+     One weight, latin subset, 18KB. font-display:swap on purpose, unlike the wordmark's
+     block: the hero is three words over a photo, and three words of Space Grotesk for one
+     frame beats three words of nothing. */
+  @font-face{font-family:'KamoHero';src:url('vendor/anton.woff2') format('woff2');font-weight:400;font-display:swap;}
   .heroLogo{font-family:var(--display);font-weight:700;letter-spacing:-1.5px;font-size:clamp(48px,16vw,66px);line-height:1;color:#fff;text-shadow:0 8px 34px rgba(0,0,0,.55);}
   .heroLogo b{color:#fff;font-weight:700;}
   @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -298,14 +304,37 @@
   .camBtn{position:absolute;bottom:calc(52px + var(--safe-b));z-index:15;display:none;align-items:center;justify-content:center;width:46px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,.28);background:rgba(10,12,16,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .camBtn svg{width:23px;height:23px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
   .camBtn:active{transform:scale(.94);}
+  /* ONE button in this corner — founder's call, 2026-08-12 — and it goes to the LIBRARY.
+     A second thumbnail button that opened the player card lived here for a day and came out:
+     two stacked buttons in one corner read as clutter, and the corner's job is the picker.
+     iOS-camera convention kept the good half: once a round has finished, the picker wears
+     the last reveal as its face (lastShotRender), so the corner still previews your last
+     picture — it just opens the photo library, like it always did. */
   #btnPhoto{left:24px;}
+  #btnPhoto.hasShot{background-size:cover;background-position:center;border-color:rgba(255,255,255,.55);}
+  #btnPhoto.hasShot svg{display:none;}
+  /* Under the CTA the full arm sits on a photo, not on a card — the dim terms line and grey
+     links that read fine on the sheet disappear here. White, founder's call. */
+  #paywall.pwFull #pwTerms{opacity:1;color:#fff;}
+  /* The one-line label carries the whole deal now, so it needs less shout: smaller, and 700
+     instead of the base 900 — founder's call. */
+  #paywall.pwFull .pwBuy{font-size:14.5px;font-weight:700;}
+  /* No underlines on Restore / Terms / Privacy here — founder's call. On the photo they read
+     as three scratches; white weight alone carries "tappable" on this arm. */
+  #paywall.pwFull .pwFine a,#paywall.pwFull .pwFine button{color:rgba(255,255,255,.9);text-decoration:none;}
   #btnLight{right:24px;}
   /* torch on = the button itself lights up */
   #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
   #btnLight.on svg{stroke:#04120b;fill:#04120b;}
   /* KAMO+ entry point, mirrors #flip on the other side of the wordmark */
   #btnPlus{left:14px;width:44px;border:none;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
-  #btnPlus svg{width:21px;height:21px;fill:#fff;stroke:none;filter:drop-shadow(0 1px 4px rgba(0,0,0,.55));}
+  /* OUTLINE, HOLLOW BODY — the artwork is line art and the glyph is line art. Same 21px so the
+     corner's weight does not move. Two shadows: the black one is what makes a 1.3px white line
+     survive a bright viewfinder, which is the whole reason a fill was tried and is why the fill
+     is not needed; the mint one is the glow. */
+  #btnPlus svg{width:21px;height:21px;fill:none;stroke:#fff;stroke-width:1.3;
+    stroke-linejoin:round;stroke-linecap:round;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.6)) drop-shadow(0 0 4px rgba(95,230,164,.5));}
   /* Apple-camera-style shutter: white ring + gap + white inner disc, no colour */
   .shutter{position:relative;width:78px;height:78px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
   .shutter .ring{position:absolute;inset:0;border-radius:50%;border:4px solid #fff;box-shadow:0 6px 22px rgba(0,0,0,.5);}
@@ -711,6 +740,88 @@
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
+  /* THE FULL-BLEED ARM. Same element, same machinery — openPaywall, the caps, the store-fed
+     prices, the buy wiring, the timer pause (timerBlocked reads #paywall.show) all come for
+     free because this is a PRESENTATION variant, not a second paywall. The card loses its
+     sheet chrome and takes the whole screen over whatever is behind it: the live camera
+     before a capture, the frozen round mid-paint, the reveal at the end. The backdrop stays
+     translucent for exactly that reason — the context IS the pitch.
+     The blur is dropped, not inherited: a 6px blur over a full screen is a GPU cost on every
+     frame of the open animation, and the full arm dims instead. */
+  #paywall.pwFull{align-items:stretch;background:rgba(5,6,10,.44);backdrop-filter:none;-webkit-backdrop-filter:none;}
+  /* No bottom scrim — founder's call, 2026-08-12. The card is fully transparent: the flat
+     .44 dim on #paywall.pwFull is the only thing between the scene and the copy, so the
+     photo reads all the way down. The CTA is a white slab and survives anything; the small
+     white lines under it lean on their text-shadows. */
+  #paywall.pwFull .pwCard{max-width:none;width:100%;border-radius:0;border:none;box-shadow:none;
+    background:none;
+    display:flex;flex-direction:column;justify-content:flex-end;}
+  /* The sheet's copy block and plan rows are the sheet arm's furniture. The rows stay in the
+     DOM — applyPlanAvailability() still writes their display per store answer and
+     updatePwLifeLine() READS it as the sellability source — they are just never shown here. */
+  #paywall.pwFull .pwKick,#paywall.pwFull .pwTitle,#paywall.pwFull .pwSub,#paywall.pwFull #pwPlans{display:none!important;}
+  #pwHero{display:none;}
+  #paywall.pwFull #pwHero{display:block;position:absolute;left:0;right:0;top:24%;text-align:center;padding:0 12px;pointer-events:none;}
+  /* GREEN, AS A GRADIENT — founder's call. Every line wears a white-into-mint vertical
+     gradient (background-clip:text); the lit line trades the white top for a saturated
+     mint-to-deep ramp, so "which lock opened this" still reads at a glance. drop-shadow
+     replaces text-shadow: a shadow on clipped text paints over the fill. The solid color
+     stays as the fallback for any renderer without background-clip:text. */
+  .pwHeroLn{font-family:'KamoHero',var(--display),sans-serif;font-weight:400;font-size:clamp(36px,12.5vw,54px);line-height:1.06;letter-spacing:.2px;
+    color:var(--mint);background:linear-gradient(180deg,#ffffff 0%,#c8f7de 45%,var(--mint) 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 3px 14px rgba(0,0,0,.7));}
+  .pwHeroLn.on{background:linear-gradient(180deg,#eafff5 0%,var(--mint) 55%,#2fbf7d 100%);
+    -webkit-background-clip:text;background-clip:text;}
+  /* The strike is mint on white and inverts when the line lights: two colours must always
+     separate the word from its deletion, or the strike disappears into its own line. */
+  .pwHeroLn s{text-decoration-thickness:.09em;text-decoration-color:var(--mint);}
+  .pwHeroLn.on s{text-decoration-color:rgba(255,255,255,.94);}
+  #pwHeroCtx{margin:12px auto 0;max-width:260px;padding:0 10px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.8);text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  #pwLifeLine{display:none;background:none;border:none;color:var(--mint);font-weight:700;font-size:13.5px;font-family:inherit;
+    padding:8px 10px;margin:9px auto 0;cursor:pointer;-webkit-tap-highlight-color:transparent;
+    text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  #pwLifeLine:active{transform:scale(.96);}
+  /* The X was invisible on the full arm: rgba(255,255,255,.42) glyph with no plate, sitting
+     on a live camera feed that is often bright. Same treatment as the camera's .topbtn — a
+     dark translucent circle with a rim — and a brighter glyph. Sheet arm keeps its quiet X:
+     there the card background already separates it. */
+  #paywall.pwFull .pwClose{top:calc(14px + var(--safe-t));right:14px;width:38px;height:38px;
+    background:rgba(15,18,22,.5);border:1px solid rgba(255,255,255,.28);border-radius:50%;
+    color:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
+  /* THE STAGE GOES QUIET UNDER THE FULL ARM. The backdrop is translucent on purpose — the
+     scene is the pitch — but the scene's CHROME is not: Retake, Done, the hint, the wordmark
+     and the tool rows all showed through and competed with the hero. openPaywall() stamps
+     .pwCover on #stage (full arm only; the sheet arm is the experiment's control and stays
+     untouched), closePaywall() removes it. visibility, not display: nothing reflows, no
+     enter/exit logic re-runs, and the round underneath is exactly as it was. */
+  /* THE SHARE SHEET IS CHROME TOO — and it was the one thing left out of this list, which is
+     why the paywall opened from the reveal looked like two apps stacked on each other: the
+     hero and the CTA on top, and underneath them "Can they find you?", the challenge card,
+     Challenge a friend and the Instagram button, all fully lit. It is also the LARGEST thing
+     on that screen, so leaving it in was worth more visual noise than everything else in this
+     rule put together. On the reveal the sheet is auto-presented, so this is not an edge case:
+     it is what every single paywall opened from a finished round looked like. */
+  #stage.pwCover .brand,#stage.pwCover #btnBack,#stage.pwCover #btnDone,#stage.pwCover #btnEdit,
+  #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
+  #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
+  #stage.pwCover #poseBar,#stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
+  #stage.pwCover #flip,#stage.pwCover #scoreChip{visibility:hidden!important;}
+  /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
+     #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
+     descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
+     used the descendant form, matched nothing, and shipped looking exactly like a fix.
+     openPaywall() stamps the same class on <body> for this one rule. test-pwfull-dom reads the
+     computed visibility rather than the stylesheet, which is what caught the dead selector. */
+  body.pwCover #shareSheet{visibility:hidden!important;}
+  /* AND THE BOTTOM GETS ITS GROUND BACK. "No bottom scrim" was the call on 2026-08-12, taken
+     when the arm was judged against a plain viewfinder; on the reveal the CTA lands on a
+     photograph, and white-on-anything is a coin flip. Reversed today, deliberately, and kept
+     to the bottom third so the picture — which is the pitch — still reads above it. */
+  #paywall.pwFull .pwCard::after{content:"";position:absolute;left:0;right:0;bottom:0;height:46%;
+    pointer-events:none;z-index:-1;
+    background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.42) 45%,rgba(5,6,10,.72));}
+  #paywall.pwFull .pwCard{isolation:isolate;}
   /* KAMO+ celebration (post-purchase, plan-aware) */
   /* TWO SHEETS, ONE LOOK. #kamoPlus is the one-time welcome after a purchase; #kamoHome is
      what tapping the wordmark opens for a member, every time. They are the same object at
@@ -735,6 +846,31 @@
      keep both; this one is flat. */
   #kamoHome .kpCard{box-shadow:none;}
   #kamoHome .kpCard::before{display:none;}
+  /* THE CARD CANNOT GROW PAST THE TOP OF THE SCREEN.
+     It is anchored to the BOTTOM edge (#kamoHome is align-items:flex-end), so every pixel it
+     gains goes upward — and the results list is the one child whose height is decided by how
+     many challenges the user has sent, up to ten. Expanding the accordion on a full list grew
+     the card by several hundred pixels: the badge, the name and the results header all ended
+     up above y=0. That is the "on voit plus le haut" report, and it is also why "Show each
+     one" read as a dead button — it worked perfectly, it just rendered the rows off-screen.
+     Fixing it needs a bound on the card AND a scroll region inside it, or the bound would only
+     move the clipping somewhere else. The card becomes a column so the leftover space can be
+     handed to exactly one child; align-items:center keeps .kpBadge a pill (an inline-flex
+     child would stretch edge to edge under the default `stretch`), while every button here
+     already declares width:100% and so still fills the card. */
+  /* 70%, NOT 100%. Capping at the viewport stopped the overflow but left the card free to
+     take the WHOLE screen, and at ten challenges it did — the badge ended up under the
+     dynamic island and the thing stopped reading as a sheet at all. A bottom sheet has to
+     show what it is sitting on. 70% of an 844pt screen leaves ~190px for the list once the
+     header and the buttons have taken theirs, which is about three rows and a hint of a
+     fourth — enough to make it obvious the list scrolls. */
+  #kamoHome .kpCard{max-height:70%;display:flex;flex-direction:column;align-items:center;}
+  /* grow:0 — collapsed, this box is one line and must stay one line rather than inflate to
+     fill the card. shrink:1 + min-height:0 is the pair that actually lets it give way: a flex
+     item's default min-height is auto, which refuses to go below its content and hands the
+     overflow back to the card. Expanded, it takes what room is left and scrolls the rest. */
+  #kamoHome .khScore{flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;}
   @keyframes kpRise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
   /* THE KAMO FACE, like everything else that speaks for the brand. The badge and the
      headline were both set in --font (Avenir) while the paywall's kicker and title next
@@ -835,18 +971,25 @@
   .khScore{cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .khScore:active{transform:scale(.985);}
   .khMore{display:block;margin-top:7px;color:var(--mint);font-size:12.5px;font-weight:700;}
+  /* The summary, kept above the list it opened. Separated by the same hairline the rows use so
+     it reads as the head of a table rather than as a first row with no picture. */
+  .khHead{padding-bottom:9px;}
   /* One line per hide, the state on the left and the one action on the right. Bordered rows
      rather than a list with bullets: each row is its own object because each row sends its
      own challenge. */
-  .khRow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--stroke);}
-  .khRow:first-child{border-top:none;padding-top:4px;}
-  .khRowTxt{flex:1;min-width:0;font-size:13px;line-height:1.35;display:block;}
-  .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:13px;color:inherit;}
+  /* TIGHTER, BECAUSE THERE ARE TEN OF THEM. At 40x52 and 10px of padding a row was 72px, so
+     the list alone wanted 720px on an 844px screen — which is how it came to fill the card and
+     push the badge off the top. Two thirds of that height was the thumbnail, and the thumbnail
+     only has to be recognisable to the person who took it. */
+  .khRow{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--stroke);}
+  .khRow:first-child{border-top:none;padding-top:2px;}
+  .khRowTxt{flex:1;min-width:0;font-size:12.5px;line-height:1.3;display:block;}
+  .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:12.5px;color:inherit;}
   /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
      .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
      rather than a canvas, because these hides are on the server, not in this session's memory.
      No ::after play glyph: that one opens a preview, this one is a label. */
-  .khShot{flex:0 0 auto;width:40px;height:52px;border-radius:9px;overflow:hidden;
+  .khShot{flex:0 0 auto;width:31px;height:40px;border-radius:7px;overflow:hidden;
     border:1px solid rgba(255,255,255,.18);background:#0a0f0d;display:block;}
   .khShot img{width:100%;height:100%;object-fit:cover;display:block;}
   .khRowChips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
@@ -1025,6 +1168,43 @@
      No backdrop, no blur, and pointer-events off the container so the reveal handle behind
      it still drags. Only the card itself takes touches. */
   #shareSheet.peek{display:flex;}
+  /* THE THIRD DETENT — collapsed to the handle, so the painting can be looked at whole.
+     A "mini" state existed once and was removed for a RENDERING bug, not a product reason:
+     it swapped classes outside setSheetSize(), so the card jumped instead of animating. It
+     comes back through the same single door as the other two, which is what makes it safe.
+     Reached ONLY by dragging the handle down from the peek — the sheet still ARRIVES in peek,
+     because the send is the flattest number in this app and starting folded would put it one
+     gesture further away. A tap on the handle, or a swipe up, brings it straight back. */
+  #shareSheet.ssMini{display:flex;}
+  #shareSheet.ssMini .ssCard > *:not(.ssGrab){display:none!important;}
+  /* THE SAFE AREA IS APPLIED ONCE, AND ONLY AS MUCH OF IT AS THE HOME INDICATOR NEEDS.
+     .ssCard already ends on calc(16px + var(--safe-b)), so a grabber that also added
+     var(--safe-b) stacked two home-indicator insets and left ~90px of empty green under the
+     bar. Halving that was still not small: a full var(--safe-b) under a 4px bar is 34pt of
+     nothing, which is where "trop d'espace sur la barre, trop de hauteur" came from.
+     Then it was cut too far — to safe-b minus 14 — and that broke something worse than looks.
+     iOS reserves the bottom ~20pt of the screen for the home-indicator swipe, so a grabber
+     sitting inside that band loses the gesture to the system: swiping up on the folded sheet
+     opened the app switcher instead of the sheet, and tapping near it did nothing. THAT is
+     what this inset is for, and it gets all of it back.
+     The space ABOVE the bar now matches the open sheet's (.ssCard's 20px top padding), so the
+     handle sits the same distance from the card's top edge in every state. ~18 + 5 + 34 =
+     ~57px: not the smallest bar that could be drawn, but the smallest one iOS will let us
+     have — the bottom third of it is the home indicator's, not ours. */
+  /* THE HANDLE OWNS THE WHOLE CARD HERE, AND THAT IS A HIT-AREA DECISION, NOT A VISUAL ONE.
+     Hanging this padding on .ssCard looked identical and left .ssGrab five pixels tall — a 5px
+     touch target. Everything above and below it was .ssCard, which has no touch-action and no
+     drag handler, so an upward swipe that missed the strip went unclaimed: from a sheet sitting
+     on the bottom edge, iOS reads that gesture as the app switcher. "Ça ouvre toutes les apps
+     en parallèle" is the system being handed a swipe KAMO never took.
+     The grabber carries the padding instead. Identical on screen, but the target is the full
+     ~57px and every pixel of it is touch-action:none. */
+  #shareSheet.ssMini .ssCard{padding:0;}
+  #shareSheet.ssMini .ssGrab{padding:18px 0 var(--safe-b);}
+  /* Brighter, wider and a touch thicker than the peek's: at this size the grabber IS the
+     control rather than a decoration on a full card, and it is the only thing on screen
+     saying the sheet can come back. */
+  #shareSheet.ssMini .ssGrab::before{width:56px;height:5px;background:rgba(255,255,255,.72);}
   /* ONE RISE, AND IT COMES FROM .pwCard. There used to be a second animation here — a `.rise`
      one-shot class, added on arrival and removed 420ms later — layered on top of the
      `animation:pwUp` that .ssCard already inherits from .pwCard. Two animations on one
@@ -1072,7 +1252,7 @@
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
-  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab{display:block;}
+  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab,#shareSheet.ssMini .ssGrab{display:block;}
   /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
      gradient, same 26px corners, same rise, same breathing mint glow — because the two are
      the only full-width sheets in the app and they were speaking in different voices: the
@@ -1253,12 +1433,6 @@
      as part of the app rather than as a system label. */
   .chPrevTxt b{font-family:var(--display);font-weight:700;font-size:15.5px;letter-spacing:-.2px;color:#fff;}
   .chPrevChips{display:flex;gap:6px;flex-wrap:wrap;}
-  /* The signature reads as one of the terms, because it is one: it is part of what the friend
-     receives. Unsigned it goes grey and dashed — an empty slot asking to be filled rather than
-     a value claiming to be set. */
-  .chChip.chSign{cursor:pointer;font-family:var(--display);-webkit-tap-highlight-color:transparent;}
-  .chChip.chSign.unsigned{color:rgba(255,255,255,.5);background:rgba(255,255,255,.05);
-    border:1px dashed rgba(255,255,255,.28);}
   /* The two numbers are the DEAL being offered, so they stop being grey run-on text and
      become the only coloured thing in the row. "no app needed" is gone: it answered a
      question nobody was asking here and diluted the two that matter. */
@@ -1360,7 +1534,28 @@
     <div id="fx"></div>
 
     <button id="btnPlus" class="topbtn" title="KAMO+" aria-label="KAMO+">
-      <svg viewBox="0 0 24 24"><path d="M12 3l2.1 5.4L19.5 10l-5.4 1.6L12 17l-2.1-5.4L4.5 10l5.4-1.6z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+      <!-- THE APP ICON'S FIGURE, TRACED FROM THE APP ICON. Not drawn, traced: the outline below
+           is the silhouette of ./icon.png, thresholded at luminance 118, boundary-followed and
+           Douglas-Peucker simplified at 0.8/320px, then fitted to this box. It is the artwork,
+           not an impression of it.
+           Three hand-drawn attempts came before it and all three were wrong, because a drawing
+           made from looking at a picture is a guess and looks like one. The pixels were in the
+           repository the whole time. If the icon is ever re-rendered, re-run the trace rather
+           than nudging these numbers by hand.
+           STROKED, NOT FILLED — the body is hollow, the way the reference is. It shipped filled
+           for one deploy on the argument that mass survives 21px better than a line; true, and
+           beside the point, because the reference is an outline and a solid slug is not the
+           mark. 1.3 is where the weight lands: 1.5 starts closing the gap between the arm and
+           the torso at 21px, 1.1 vanishes against a bright viewfinder. The trace epsilon came
+           down from 1.6 to 0.8 for the same reason — the contour IS the drawing now, so its
+           faceting shows where the silhouette's never did.
+           The wall is the one hand-authored part: the icon keeps it in shadow, so it does not
+           survive a luminance threshold, and without it the figure reads as standing rather
+           than as peeking.
+           The mint drop-shadow is the glow, kept low (.5 alpha, 4px) — "subtile" was the word. -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/>
+      </svg>
     </button>
     <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
     <div id="timerBar"></div><div id="timerTag"></div><div id="timerNum"></div>
@@ -1473,6 +1668,18 @@
     <button id="pwClose" class="pwClose" aria-label="Close" title="Close">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
+    <!-- THE FULL-BLEED HERO — arm "full" only, hidden entirely on the sheet arm. Three
+         benefit lines, no figures: "75 SECONDS" was the first draft and it means nothing to
+         someone who has not yet lived the shorter clock. The number moves to #pwHeroCtx,
+         written by pwHeroApply() ONLY for the sources where it has a referent (the clock
+         locks), and interpolated from the constants like every other paywall figure.
+         The struck-through WATERMARK is the one line that sells by deletion. -->
+    <div id="pwHero">
+      <div class="pwHeroLn" data-hero="time">NO CLOCK.</div>
+      <div class="pwHeroLn" data-hero="size">EVERY DETAIL.</div>
+      <div class="pwHeroLn" data-hero="mark"><s>WATERMARK</s>.</div>
+      <div id="pwHeroCtx"></div>
+    </div>
     <div class="pwKick">KAMO<span class="kPlus">+</span></div>
     <!-- Sell the OUTCOME, not the toolbox. The old copy ("Unlock every camo brush / Every
          Pro pattern brush — Dapple · Leaf · Camo — plus the fine brush-size slider") was a
@@ -1502,7 +1709,7 @@
          four things a free user cannot reach by using the app differently: a clean export,
          a clock that stops taking the round away, colours that are not in the photo, and a
          brush fine enough to work an edge.
-         ⚠️ Numbers appear here AND in PAINT_SECONDS/PRO_PAINT_SECONDS. Change them together.
+         ⚠️ The free clock also lives in PAINT_SECONDS. Change them together. KAMO+ has no clocks.
          Keep in sync with the share-sheet line (#ssPlus). -->
     <!-- Generic copy is no longer the feature list: the rows below are, and printing both
          would say the same four things twice. The per-lock pitches in PW_PITCH still
@@ -1512,7 +1719,7 @@
          the "Challenge a friend" invite, and the inbound referral hint — all of which are
          FREE. Printing it next to a price would be selling a feature that does not exist. -->
     <!-- NO NUMBERS IN THE MARKUP. This line is always written by openPaywall() from
-         pwGenericSub(), which interpolates PAINT_SECONDS / PRO_PAINT_SECONDS. The text below
+         pwGenericSub(). The text below
          is only what sits in the DOM before the sheet is ever opened — and it is never shown,
          because opening the sheet is what replaces it. Typing the clocks here once put
          "75s instead of 40s" in a file where nothing could check it. -->
@@ -1547,6 +1754,13 @@
       </button>
     </div>
     <button id="pwBuy" class="pwBuy">Get KAMO+</button>
+    <!-- The OTHER plan, in one line, UNDER the CTA. It went above for a few minutes while it
+         was still a selector — a thing you read before deciding. It buys directly now, so it
+         is a second ACTION, and a second action belongs after the primary one rather than in
+         front of it. Lifetime outsold the weekly 4:3 with zero promotion, so it must stay
+         reachable; it just must not outrank the trial. Written by updatePwLifeLine() from the
+         SAME store-fed price nodes the rows use; never a typed price. -->
+    <button id="pwLifeLine" style="display:none"></button>
     <div id="pwTerms">Renews automatically until cancelled.</div>
     <div class="pwFine">
       <button id="pwRestore">Restore</button>
@@ -1628,7 +1842,6 @@
     <!-- Free users only — see khSetPlus(). Tagged `home`, not `brand`, so the ~9 paywall views
          a day the wordmark used to send can be told apart from the ones this row sends. -->
     <button class="kpPrimary" id="khUpsell" style="display:none">Unlock everything</button>
-    <button class="kpSecondary" id="khDiscord">Join the Discord</button>
     <!-- NO RESTORE HERE. It was added on the argument that this is an account screen and that
          five people had tapped Restore in a week looking for it — but those five taps happened
          on the PAYWALL, which is the only place it existed. They prove people find it there.
@@ -1684,7 +1897,7 @@
       <button class="chPrevShot" id="chPrevShot" aria-label="Preview what they receive"></button>
       <div class="chPrevTxt">
         <b>My challenge</b>
-        <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span><button class="chChip chSign" id="chChipN"></button></div>
+        <div class="chPrevChips"><span class="chChip" id="chChipS">20s</span><span class="chChip" id="chChipT">5 taps</span></div>
       </div>
       <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
     </div>
@@ -1850,6 +2063,27 @@ function trialAdvertised(){
   if(nativeCaps && nativeCaps.eventsV2 && storeAnswered) return storeTrial;
   return true;   // build cannot report, or the store has not answered yet
 }
+
+/* THE PAYWALL DESIGN EXPERIMENT — sheet vs full-bleed. Same shape as the trial arm above:
+   sticky per device, assigned once, stamped on every web event as `design_arm` so the
+   funnels can split paywall_viewed → purchase_initiated → trial by arm without a join.
+   NO assignment event is fired: track() references WEB_ONLY, a const declared much further
+   down, so a track() call during module evaluation is a TDZ crash that takes the whole app
+   with it. The property on the events IS the assignment record.
+   navigator.webdriver pins the harness to "sheet": every DOM test in scripts/ boots this
+   page in headless Chromium, and a coin flipped at load would make the paywall assertions
+   flaky — the exact poison the gate exists to keep out. A harness that wants the full arm
+   seeds localStorage kamo_pw_design="full" before load. */
+const PW_FULL_ROLLOUT=50;
+let pwArm="sheet";
+try{
+  const s=localStorage.getItem("kamo_pw_design");
+  if(s==="sheet"||s==="full") pwArm=s;
+  else if(!navigator.webdriver){
+    pwArm=(Math.random()*100<PW_FULL_ROLLOUT)?"full":"sheet";
+    localStorage.setItem("kamo_pw_design",pwArm);
+  }
+}catch(e){}
 
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
@@ -2324,7 +2558,12 @@ function enterCompose(){
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   clearCharacters(); spawnHider();
-  startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
+  /* KAMO+ COMPOSES AND PAINTS WITH NO CLOCK — founder's call, 2026-08-11. The copy had
+     claimed "no aim clock" since the round_end pitch shipped while aimSeconds() only granted
+     a bonus; the code now matches the words. stopTimer(), not just a skipped start: entering
+     compose must never inherit a running clock from the previous phase. */
+  if(canPro()) stopTimer(); else startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
+  lastShotRender();
   buildPoseBar(); $("#poseBar").style.display="none"; updatePoseBar();  // poses hidden by default — tap the figure to cycle, hold for the wheel
   maybeOnboard();
 }
@@ -2345,7 +2584,11 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
   resumeCamera();   // paused for the whole hide by capture()
-  startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
+  /* KAMO+ COMPOSES AND PAINTS WITH NO CLOCK — founder's call, 2026-08-11. The copy had
+     claimed "no aim clock" since the round_end pitch shipped while aimSeconds() only granted
+     a bonus; the code now matches the words. stopTimer(), not just a skipped start: entering
+     compose must never inherit a running clock from the previous phase. */
+  if(canPro()) stopTimer(); else startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   teachHint("Reposition, then recapture");
 }
 
@@ -2560,7 +2803,11 @@ function capture(){
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
-  startTimer("paint",paintSeconds(),()=>runExpire(()=>{ if(mode==="paint"&&!finished) enterFinished(true); }));
+  /* KAMO+ paints with no clock (was PRO_PAINT_SECONDS=75 until 2026-08-11). The round ends
+     at Done, which was always the other way out of paint mode; the reveal's time chip reads
+     roundStartedAt, not the timer, so timing still reports. Free keeps PAINT_SECONDS and the
+     auto-finish on expiry unchanged. */
+  if(canPro()) stopTimer(); else startTimer("paint",PAINT_SECONDS,()=>runExpire(()=>{ if(mode==="paint"&&!finished) enterFinished(true); }));
   setTimeout(()=>hiderPoints.forEach(p=>{ const s=boardToScreen(p); poof(s.x,s.y); }),70);
   maybeOnboardPaint();
 }
@@ -3303,6 +3550,9 @@ buildSwatches();   // safe here: past the isPro declaration canPro() reads
 { const bp=$("#brandPlus"); if(bp) bp.style.display = isPro ? "inline" : "none"; }
 
 const paywallEl=$("#paywall");
+/* The arm is a class, decided once at load — see the assignment next to trialArm. Everything
+   else about the paywall is shared; this line is the entire divergence point. */
+if(pwArm==="full") paywallEl.classList.add("pwFull");
 /* ANSWER THE TAP. Four different locks opened the same generic sheet, so someone who
    reached for the fine brush was told about the watermark and the clock and had to go find
    their own reason in the list. The sheet now leads with the thing they just tried to use
@@ -3383,9 +3633,9 @@ const pwSourceOpens={};
 const PW_LOCK_HINT={
   color: "Every colour is KAMO+ — tap to unlock",
   round_end:"No aim clock, more paint time, every tool — tap for KAMO+",
-  /* Same rule as PW_PITCH: a function, because PRO_PAINT_SECONDS is declared later, and
+  /* Same rule as PW_PITCH: a function when it quotes a constant declared later, and
      because a hint that quotes a stale clock is a promise the round will not keep. */
-  time:  ()=>`${PRO_PAINT_SECONDS} seconds to paint — tap for KAMO+`,
+  time:  "No paint clock at all — tap for KAMO+",
 };
 /* THE LOCK ANSWERS ON THE CONTROL, NOT IN A SENTENCE. Past its cap, touching the size bar
    pulses the bar and its ✦ mint for 600ms and says nothing. The user gets an unmistakable
@@ -3415,7 +3665,7 @@ function showLockHint(src){
    does. Two had already drifted by the time anyone looked: "Free paints at one size" survived
    the day free got THREE fixed sizes, and "a fixed clock" describes a clock that is derived
    from the round length and clamped to a range. Both were live, on a paywall, next to a price.
-   So the copy interpolates PAINT_SECONDS, PRO_PAINT_SECONDS, FREE_SIZES, FREE_SHADES, CH_TAPS
+   So the copy interpolates PAINT_SECONDS, FREE_SIZES, FREE_SHADES, CH_TAPS
    and the CH_LIMIT bounds instead of quoting them, and check.mjs refuses a push if a bare
    numeral reappears in any of these strings. The value drifting can no longer make the
    sentence false, because there is no longer a sentence to be false — only a template.
@@ -3445,7 +3695,7 @@ const PW_PITCH={
   chset: { t:"Set the challenge yourself",
            s:()=>`Free sends ${CH_TAPS} taps and a clock it picks for you (${CH_LIMIT_MIN}-${CH_LIMIT_MAX}s). KAMO+ lets you choose both — make it easy, or make it impossible.` },
   time:  { t:"Stop losing hides to the clock",
-           s:()=>`Line up your shot with no clock at all, then ${PRO_PAINT_SECONDS} seconds to paint instead of ${PAINT_SECONDS}.` },
+           s:()=>`No clock to line it up, no clock to paint — free gets ${PAINT_SECONDS} seconds.` },
 };
 /* The generic pitch, for entry points that are not a specific locked tool. Built here rather
    than typed into the markup for the same reason as the rest — it carried "75s to paint
@@ -3453,7 +3703,28 @@ const PW_PITCH={
 /* The star answers the same question as the size lock, so it gets the same words. Assigned
    rather than duplicated: two copies of one pitch is how they drift apart. */
 PW_PITCH.size_star=PW_PITCH.size;
-const pwGenericSub=()=>`Any brush and color · no clock to line it up · ${PRO_PAINT_SECONDS}s to paint instead of ${PAINT_SECONDS}s`;
+const pwGenericSub=()=>`Any brush and color · no clock to line it up · no clock to paint`;
+/* THE HERO'S CONTEXT LINE, per SOURCE — not per highlighted line, because the same line can
+   be reached from two different moments that deserve different sentences: `time` fires
+   mid-round (the clock just took the round, which is frozen behind the paywall) and
+   `round_end` fires after it, when "this round is waiting" would be a lie. Sources with no
+   entry here fall through to their PW_PITCH body, so nothing ever renders an empty line.
+   Functions for the same TDZ reason as PW_PITCH, and no typed numerals — check.mjs. */
+const PW_HERO_LINE={ time:"time", round_end:"time", size:"size", size_star:"size", mark:"mark" };
+const PW_HERO_CTX={
+  time:      ()=>`All the time you want — free gets ${PAINT_SECONDS}s.`,
+  round_end: ()=>`All the time you want — free gets ${PAINT_SECONDS}s.`,
+  size:      ()=>"Paint the details, not just the shape.",
+  size_star: ()=>"Paint the details, not just the shape.",
+  mark:      ()=>"Your exports, clean.",
+};
+function pwHeroApply(src){
+  const hero=$("#pwHero"); if(!hero) return;
+  const key=PW_HERO_LINE[src]||"";
+  hero.querySelectorAll(".pwHeroLn").forEach(l=>l.classList.toggle("on",!!key&&l.dataset.hero===key));
+  const ctx=$("#pwHeroCtx");
+  if(ctx) ctx.textContent=pwText(PW_HERO_CTX[src]||(PW_PITCH[src]||{}).s)||pwGenericSub();
+}
 /* Resolves either shape. Copy that needs no number stays a plain string; copy that does is a
    function. Both arrive here. */
 const pwText=(v)=>(typeof v==="function"?v():v);/* Snapshot the markup copy ONCE, before anything can overwrite it. Read lazily instead and
@@ -3508,6 +3779,11 @@ function openPaywall(source,force){
      event NAMES are dropped by the WEB_EVENTS allow-list but properties on an allowed event
      are not. So this answers the question today rather than after the next release. */
   const plansEl=$("#pwPlans");
+  /* The full arm's headline state — which line lights, what the context says. Harmless on
+     the sheet arm (#pwHero is display:none there), and run unconditionally on purpose: a
+     device that switches arm mid-session must never open a stale hero. */
+  pwHeroApply(src);
+  if(pwArm==="full"){ stage.classList.add("pwCover"); document.body.classList.add("pwCover"); }
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
     source:src,
@@ -3535,7 +3811,12 @@ function openPaywall(source,force){
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
   if(!storeReady){ clearTimeout(openPaywall._t); openPaywall._t=setTimeout(()=>{
     if(!storeReady){ storeAnswered=true; updatePwBuy(); } },6000); } }
-function closePaywall(){ paywallEl.classList.remove("show"); setPwBuyLoading(false); stopTermsRotate(); }
+function closePaywall(){ paywallEl.classList.remove("show");
+  /* Both hooks come off together — the sheet's lives on <body> because it is not under #stage.
+     Leaving that one behind would hide the share sheet for the rest of the session, on the one
+     screen where the sheet is the only route to a send. */
+  stage.classList.remove("pwCover"); document.body.classList.remove("pwCover");
+  setPwBuyLoading(false); stopTermsRotate(); }
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
 function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
@@ -3607,6 +3888,13 @@ function setTerms(txt){ const t=$("#pwTerms"); if(t){ t.classList.remove("fade")
    rotation block took it with it. Every buy-label write goes through it — the span exists so
    .pwBuy::after's sheen can sit under the text instead of over it. */
 function setBuyLabel(b,txt){ b.textContent=""; const sp=document.createElement("span"); sp.className="pwBuyTxt"; sp.textContent=txt; b.appendChild(sp); }
+/* THE PRICE IS IN THE LABEL ITSELF — full arm only, one font, one line: "Try 3 days free
+   then $2.99 / week". The two-line sub version lived for an hour on 2026-08-12 and came out
+   on the founder's call. The reasoning that put the price on the button stands (31 Buy taps,
+   12 Apple-sheet cancels, 0 trials — a tap that has not priced the offer dies on the sheet);
+   only the typography changed. "Cancel anytime" moves back OUTSIDE the button, on #pwTerms,
+   which also keeps Apple's auto-renewal disclosure visible. Prices from the store-fed nodes,
+   never typed. */
 function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is written only through setTerms() now */
   /* Buy stays disabled until a real localized price arrives. It used to be live from the
      first frame while the markup showed hardcoded $14.99/$2.99: on any non-USD storefront
@@ -3637,8 +3925,39 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
        a $2.99 impulse rather than lowering it.
        Built from trialLabel, never a typed numeral — the store can report a trial length
        different from TRIAL.days, and check.mjs refuses a bare number in paywall copy. */
-    if(trialAdvertised()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
-    setTerms(trialTermsLine()); } }
+    const wk=(($("#pwWeeklyPrice")||{}).textContent||"").trim();
+    if(pwArm==="full"&&wk){
+      setBuyLabel(b, trialAdvertised() ? `Try ${trialLabel} free then ${wk} / week` : `Get KAMO+ · ${wk} / week`);
+      setTerms("Auto-renews · cancel anytime.");
+    } else {
+      if(trialAdvertised()) setBuyLabel(b,`Try ${trialLabel} free`); else setBuyLabel(b,"Get KAMO+");
+      setTerms(trialTermsLine());
+    } }
+  updatePwLifeLine(); }
+/* THE OTHER PLAN, AS ONE LINE — full arm only. The sheet shows both plans as rows; the full
+   arm shows one CTA and offers whichever plan is NOT selected here, as a quiet toggle. Every
+   price is read from the same store-fed nodes the rows use (#pwLifetimePrice/#pwWeeklyPrice,
+   written by setPrices), and sellability from the rows' display — which applyPlanAvailability
+   still writes even though the full arm never shows the rows. So a plan the store cannot
+   sell can never be offered by this line either, and no price is ever typed.
+   trialAdvertised(), not trialOn(): the "try N free" prefix on this line is the same promise
+   as the CTA's, so it obeys the same rule — only claimed when the build can confirm the
+   store actually returned a trial. */
+function updatePwLifeLine(){
+  /* display:"block", never "". The stylesheet declares #pwLifeLine{display:none} as its
+     resting state, so clearing the INLINE display falls straight back onto that rule and the
+     line stays invisible — which is exactly what shipped from 2026-08-11 to 08-12: every
+     price was right, sellable() said yes, and nothing was ever on screen. The plan ROWS get
+     away with "" because their hidden state is a markup attribute, not a stylesheet rule. */
+  const el=$("#pwLifeLine"); if(!el) return;
+  if(pwArm!=="full"||!storeReady){ el.style.display="none"; return; }
+  const sellable=(plan)=>{ const r=document.querySelector('#pwPlans .pwPlan[data-plan="'+plan+'"]'); return !!r&&r.style.display!=="none"; };
+  const life=($("#pwLifetimePrice")||{}).textContent||"", wk=($("#pwWeeklyPrice")||{}).textContent||"";
+  if(pwPlan!=="lifetime"&&sellable("lifetime")&&life){ el.textContent="or "+life+" once — yours forever"; el.style.display="block"; }
+  else if(pwPlan==="lifetime"&&sellable("weekly")&&wk){
+    el.textContent="or "+(trialAdvertised()?("try "+trialLabel+" free · "):"")+wk+"/week"; el.style.display="block"; }
+  else el.style.display="none";
+}
 /* The plan row's own subtitle. Separate from updatePwBuy() because setPrices() has to be
    able to re-render it on its own once the store reports a real trial length, and because
    updatePwBuy() bails early while the store is still loading — the plan row is on screen
@@ -3657,6 +3976,19 @@ function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
   if(holder) holder.style.display=trialAdvertised()?(fb?"inline-flex":""):"none"; }
 applyTrialCopy();
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
+/* THE LINE IS A BUY BUTTON, NOT A SWITCH. It selects its plan and goes straight to StoreKit
+   — the hidden rows' .active is kept in sync on the way through, because updatePwBuy() and the
+   purchase path read pwPlan and the rows are still the record a returning sheet arm renders
+   from. plan_selected still fires first so the choice and the checkout stay separable in the
+   funnel. */
+/* BUYS, AND CHANGES NOTHING. No pwPlan write, no row highlight, no updatePwBuy() — the plan
+   travels as an argument instead. What the user was reading is still on screen when Apple's
+   sheet opens, and still there unchanged if they cancel it. */
+$("#pwLifeLine").onclick=()=>{
+  const plan = pwPlan==="lifetime" ? "weekly" : "lifetime";
+  track("plan_selected",{plan:plan,via:"line"});
+  pwPurchase(plan);
+};
 /* The native wrapper buys whatever product id we post — it resolves `msg.product` against
    the RevenueCat offering (App.js: `const wanted = msg.product || PRODUCT_ID`). That is
    what lets the trial arm sell a different weekly SKU with no new App Store build. */
@@ -3674,8 +4006,22 @@ document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=
    ⚠️ New event NAMES are dropped by the wrapper's WEB_EVENTS allow-list, so this stays
    invisible until a build shipping the matching analytics.js entry reaches users. It is
    added there in the same change. */
-$("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID);
-  const buyProps={ plan:pwPlan, product_id:prod, source:pwLastSource, nth:pwOpens, trial:trialOn() };
+/* ONE PURCHASE PATH, TWO ENTRY POINTS. The lifetime line used to TOGGLE the CTA and wait for
+   a second tap — two taps to buy, on the screen with 12 Apple-sheet cancels for 0 trials.
+   Someone who taps "$14.99 once — yours forever" has decided; making them find the button
+   again is a leak we invented. Both entry points land here so the tracking, the carrier and
+   the native call cannot drift apart. */
+/* THE PLAN CAN BE PASSED IN, AND THE ONE THAT DOES NEVER TOUCHES THE SCREEN.
+   The lifetime line used to buy by first SELECTING lifetime — pwPlan, the row highlight and
+   updatePwBuy() — and then purchasing. Everything about that is correct except what the user
+   sees: the CTA rewrites itself to the lifetime price and the line flips to offering the
+   weekly, in the same instant StoreKit slides up over it. Tap something, watch the page
+   rearrange behind the sheet, cancel, and land on a paywall that is no longer the one you were
+   reading. The line is a BUY, so it should do nothing but buy. */
+function pwPurchase(planOverride){
+  const plan=planOverride||pwPlan;
+  const prod=plan==="lifetime"?LIFETIME_ID:(trialOn()?TRIAL.productId:WEEKLY_ID);
+  const buyProps={ plan:plan, product_id:prod, source:pwLastSource, nth:pwOpens, trial:trialOn() };
   track("purchase_initiated",buyProps);
   /* CARRIER — the third and LAST of these. purchase_initiated is not on 1.0.2's
      WEB_EVENTS list, so it reports zero on every single day, including the day that
@@ -3688,7 +4034,18 @@ $("#pwBuy").onclick=()=>{ const prod=pwPlan==="lifetime"?LIFETIME_ID:(trialOn()?
      there is no channel left, and anything else new has to wait for a build.
      ⚠️ DELETE when a build ships with purchase_initiated allow-listed. */
   trackCarried("purchase_initiated",buyProps);
-  haptic(16); pwBuyIntent=true; if(window.ReactNativeWebView){ setPwBuyLoading(true); postNative({type:"purchase",product:prod}); } else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } };
+  /* The spinner belongs to the CTA, so it only runs when the CTA is what was pressed. Putting
+     a loading state on the weekly button because someone tapped the lifetime line underneath
+     it points the feedback at the wrong control — the haptic already confirms the tap, and
+     StoreKit is the next thing on screen either way. */
+  haptic(16); pwBuyIntent=true;
+  if(window.ReactNativeWebView){ if(!planOverride) setPwBuyLoading(true); postNative({type:"purchase",product:prod}); }
+  else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } }
+/* Bound through a wrapper, not passed directly: onclick hands the handler a MouseEvent, and
+   pwPurchase's first argument is now the plan — `pwPurchase` as a listener would read the
+   event object as a plan override. It is falsy in neither sense that matters (an object is
+   truthy), so the CTA would have started buying `WEEKLY_ID` regardless of the selected plan. */
+$("#pwBuy").onclick=()=>pwPurchase();
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; }   // the hold already acted
   doRestore(); };
@@ -3718,6 +4075,17 @@ function bindPassHold(b){
       t=null; pwRestoreHeld=true; haptic(14);   // felt before the field appears: the hold registered
       let a=null; try{ a=await secretAsk(); }catch(e){}
       if(a==null) return;                       // cancelled: say nothing
+      /* FOUNDER ARM SWITCH, riding the founder surface that already exists. "pw-full" /
+         "pw-sheet" pins this device's paywall design arm so the 50/50 can be PREVIEWED
+         without touching the rollout for everyone else. It grants nothing — no pass, no
+         entitlement — and applies live: the next paywall open renders the chosen arm.
+         Kept above the hash check on purpose; these are commands, not guesses at the code. */
+      if(a.trim()==="pw-full"||a.trim()==="pw-sheet"){
+        pwArm=a.trim().slice(3);
+        try{ localStorage.setItem("kamo_pw_design",pwArm); }catch(e){}
+        paywallEl.classList.toggle("pwFull",pwArm==="full");
+        updatePwBuy(); showHint("Paywall arm: "+pwArm+" ✓",3200); return;
+      }
       let h=""; try{ const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(a.trim()));
         h=[...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join(""); }catch(e){}
       if(h!==PASS_HASH){ showHint("That code isn't valid",2600); return; }
@@ -3770,8 +4138,8 @@ function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
   /* "Every camo brush" outlived the brushes by two releases. What was actually bought is
      the colour picker, the fine brush and the clock. */
   const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
-    ? "Every color, the fine brush, no aim clock and 75-second rounds — yours forever. Now go disappear."
-    : "Every color, the fine brush, no aim clock and 75-second rounds — cancel anytime.";
+    ? "Every color, the fine brush, and no clocks anywhere — yours forever. Now go disappear."
+    : "Every color, the fine brush, and no clocks anywhere — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
 
@@ -3944,6 +4312,34 @@ function openKamoHome(){
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
+/* SWIPE DOWN CLOSES IT. The card is a bottom sheet in every visual respect — same .pwCard
+   chrome as the paywall and the share sheet — and the share sheet has answered a downward
+   drag since it shipped. This one only ever had a Back button, so the gesture people already
+   use on the sheet 40px away did nothing here.
+   Bound on the CARD, not the backdrop, and only past 40px: this sheet contains a text field
+   and a results list, so a short drag has to stay a scroll and a tap has to stay a tap —
+   nothing is preventDefault()ed before the threshold. */
+(function kamoHomeSwipe(){
+  const el=$("#kamoHome"); if(!el) return;
+  const card=el.querySelector(".kpCard"); if(!card) return;
+  let y0=null, fired=false;
+  /* A DRAG THAT STARTS ON THE RESULTS LIST IS A SCROLL. That box is a scroll container once
+     the accordion is open, and closing the whole card because someone dragged down inside it
+     would make the list unreadable — the gesture to look further down it and the gesture to
+     dismiss the card would be the same one. Only while it can actually scroll: collapsed, it
+     is one line and a drag there means what it means anywhere else on the card. */
+  const inScroller=(t)=>{ const s=t&&t.closest&&t.closest("#khScore");
+    return !!s && s.scrollHeight>s.clientHeight+1; };
+  card.addEventListener("pointerdown",e=>{ y0=inScroller(e.target)?null:e.clientY; fired=false; },{passive:true});
+  card.addEventListener("pointermove",e=>{
+    if(y0===null||fired) return;
+    if(e.clientY-y0<40) return;                 // up, or not far enough down: leave it alone
+    fired=true; haptic(8); closeKamoHome();
+  },{passive:true});
+  const end=()=>{ y0=null; };
+  card.addEventListener("pointerup",end,{passive:true});
+  card.addEventListener("pointercancel",end,{passive:true});
+})();
 function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show");
   /* AND THE SHARE SHEET COMES BACK, SHORT. On the reveal the sheet is the only route to a
      share, and the wordmark now sits over that screen — so opening the card from there and
@@ -4032,7 +4428,17 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
        a field repeating it is the duplicate this collapse exists to remove. If they cleared
        it, the field stays — there is nothing to collapse to. */
     inp.addEventListener("blur",()=>{
+      /* THE REPUBLISH LIVES HERE NOW. The share sheet's name chip owned it until 2026-08-11;
+         with the chip gone, this card is the only place a name is set — and setHandle() alone
+         would change the share message while the published hide's seeker screen still said
+         "Find the body". Same guard the chip's dialog had: only when the name actually
+         changed, and chRepublish() itself bails when nothing is published yet. */
+      const before=getHandle();
       inp.value=setHandle(inp.value);
+      if(getHandle()!==before){
+        track("hide_signed",{had_name:!!before,named:!!getHandle()});
+        chRepublish(); chPrevRender();
+      }
       khRenderName();
       khShowField(!inp.value);
     });
@@ -4044,8 +4450,11 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
      when there is one, so it opens the Discord app rather than a web view of it. */
   const ed=$("#khEdit");
   if(ed) ed.onclick=()=>{ haptic(8); khShowField(true); const i=$("#khHandle"); if(i){ i.focus(); try{ i.setSelectionRange(i.value.length,i.value.length); }catch(_){} } };
-  const d=$("#khDiscord");
-  if(d) d.onclick=()=>{ haptic(12); track("discord_opened",{}); openURL(DISCORD_URL); };
+  /* THE DISCORD BUTTON IS GONE — founder's call, 2026-08-12, and the numbers agree: 10 taps
+     in seven days against ~150 card opens, all of them landing in an empty server. A door to
+     an empty room is worse than no door, because it spends the one thing this card has —
+     a player who came looking for their results. DISCORD_URL stays in one place below; when
+     there is a community to walk into, this is one button and one handler. */
   /* `home`, not `brand`. The wordmark used to send ~9 paywall views a day tagged `brand`;
      this row replaces them, and a separate tag is the only way to see whether repurposing the
      wordmark cost anything or whether these convert better. */
@@ -4539,7 +4948,7 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -4561,7 +4970,7 @@ function track(event,props){
      WITHOUT emit="web" is provably not from this page, and the split shows up within hours
      instead of after another day of reasoning about it.
      Cheap on purpose — one short string on an event that already carries five. */
-  const p={...(props||{}),trial_arm:trialArm,emit:"web"};
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -4751,7 +5160,7 @@ function openShareSheet(via){
      and setSheetSize() plays the current height into the target one by measuring both. */
   setSheetSize("open"); haptic(10);
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","ssMini"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -4775,7 +5184,7 @@ function sheetToFloor(){
    empty green block instead of a tab. Worse, it was a state with nothing in it to act on.
    Short (peek: the round, the headline, Challenge a friend) or long (the full sheet). The
    sheet is one of those two the whole time it is on the reveal, and never anything else. */
-const SHEET_STEPS=["peek","open"];
+const SHEET_STEPS=["mini","peek","open"];
 /* THE ONE PLACE THE SHEET CHANGES SIZE. Three callers used to swap the classes themselves —
  * openShareSheet, sheetToFloor and stepSheet — so animating the change once means routing all
  * three through here rather than transitioning in three places and forgetting the fourth.
@@ -4797,11 +5206,19 @@ const SHEET_STEPS=["peek","open"];
  * never starts, and the timer is the only thing that catches that. */
 let sheetResizeT=null;
 function setSheetSize(next){
-  const cls = next==="open" ? "show" : "peek";
-  const apply=()=>{ shareSheetEl.classList.remove("show","peek"); shareSheetEl.classList.add(cls); };
+  /* THE STATE NAME AND THE CLASS NAME ARE NOT THE SAME WORD, AND "mini" IS WHY.
+     `.mini` was already taken — the app's small underlined text button, ~5000 lines up — so
+     putting the raw state name on the container silently handed the sheet `padding:6px`, an
+     underline and a 13px font. The padding is the one that showed: 6px of dead space under a
+     card whose entire brief is to sit flush on the bottom edge, reported twice as "pas collé
+     au bas de l'écran" and invisible to anyone reading the sheet's own rules, because the
+     offending one names nothing about sheets. Namespaced; test-peek-dom measures the gap. */
+  const cls = next==="open" ? "show" : next==="mini" ? "ssMini" : next;
+  const apply=()=>{ shareSheetEl.classList.remove("show","peek","ssMini"); shareSheetEl.classList.add(cls); };
   const card=shareSheetEl.querySelector(".ssCard");
   const was = shareSheetEl.classList.contains("show") ? "show"
-            : shareSheetEl.classList.contains("peek") ? "peek" : null;
+            : shareSheetEl.classList.contains("peek") ? "peek"
+            : shareSheetEl.classList.contains("ssMini") ? "ssMini" : null;
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   /* `was` is null when the sheet is not on screen at all — the Share CTA's hidden → open path.
      There is no height to animate FROM there; the card's own entrance (pwUp) is the animation. */
@@ -4813,7 +5230,7 @@ function setSheetSize(next){
   apply();
   const to=card.getBoundingClientRect().height;
   if(Math.abs(to-from)<2){ return; }           // same size — nothing worth transitioning
-  if(to<from) { shareSheetEl.classList.remove("show","peek"); shareSheetEl.classList.add(was); }
+  if(to<from) { shareSheetEl.classList.remove("show","peek","ssMini"); shareSheetEl.classList.add(was); }
   card.style.height=from+"px";
   shareSheetEl.classList.add("ssResizing");
   void card.offsetHeight;                      // commit `from` as a style, or the browser only ever sees `to`
@@ -4840,6 +5257,10 @@ function stepSheet(dir){
      still reported, but the sheet stays on screen — the number and the affordance are two
      different questions. */
   if(ssState==="open") track("share_dismissed",{via:"swipe",mode:shareMode,score:Math.round(currentScore||0)});
+  /* THE GUARD ON THIS FEATURE, as a number. Folding to the handle is a comfort — it must not
+     cost sends. sheet_minimized against the invite family per day is the whole test; if sends
+     fall while this climbs, the third detent goes back out. */
+  if(next==="mini") track("sheet_minimized",{score:Math.round(currentScore||0)});
   setSheetSize(next);
   ssState=next;
   haptic(8);
@@ -4936,7 +5357,38 @@ function expandShareSheet(){
      chUpload() is idempotent (`if(!CH_MAKE||chId) return`), so repeated touches cost
      nothing. If it still has not finished by the time they send, the message falls back to
      the honest invite text rather than promising a puzzle that does not exist. */
-  card.addEventListener("pointerdown",e=>{ y0=e.clientY; moved=false; },{passive:true});
+  /* THE CARD FOLLOWS THE FINGER. It used to jump: 24px past a threshold fired ONE stepSheet()
+     and then `moved` locked the gesture out until the finger came up. Two things were wrong
+     with that and the report named both. The sheet never tracked the hand, so a drag felt like
+     a button that had misfired rather than like a sheet being moved. And one gesture could
+     only ever cross ONE detent, so there was no way to pull the open sheet down to the handle
+     — "ça suit pas le doigt pour aller stick vers la position la plus petite" is literally
+     what the code did.
+     All three heights are measured once on pointerdown, by applying each state's class and
+     reading the box. The stylesheet decides them — hardcoding would go stale the first time a
+     button is added to the sheet — and doing it here rather than per-frame keeps the drag to
+     one style write per move. */
+  const cardEl=shareSheetEl.querySelector(".ssCard");
+  let detents=null, dragH=0, dragging=false;
+  const measureDetents=()=>{
+    const prev=shareSheetEl.className, inline=cardEl.style.height;
+    cardEl.style.height="";
+    const out={};
+    for(const [state,cls] of [["mini","ssMini"],["peek","peek"],["open","show"]]){
+      shareSheetEl.classList.remove("show","peek","ssMini");
+      shareSheetEl.classList.add(cls);
+      out[state]=cardEl.getBoundingClientRect().height;
+    }
+    shareSheetEl.className=prev; cardEl.style.height=inline;
+    return out;
+  };
+  card.addEventListener("pointerdown",e=>{
+    y0=e.clientY; moved=false; dragging=false;
+    if(SHEET_STEPS.indexOf(ssState)<0) return;      // hidden: nothing to drag
+    cardEl.style.height="";
+    detents=measureDetents();
+    dragH=cardEl.getBoundingClientRect().height;
+  },{passive:true});
   /* THE UPLOAD LISTENS ON THE WHOLE CARD, THE SWIPE ONLY ON THE HANDLE. These were the same
      listener until the swipe moved to the grabber, and the publish went with it — so the
      link was only being prepared by someone who touched a 38px handle, and everyone else
@@ -4950,14 +5402,75 @@ function expandShareSheet(){
     if(ssState==="peek"||ssState==="open"){ try{ chUpload(); }catch(_){} }
   },{passive:true});
   card.addEventListener("pointermove",e=>{
-    if(y0===null||moved) return;
+    if(y0===null||!detents) return;
     const dy=e.clientY-y0;
-    if(Math.abs(dy)<24) return;
-    moved=true;
-    stepSheet(dy<0?1:-1);
+    /* 6px, not 24: this is only the tap/drag discrimination now, not the whole gesture. The
+       old 24 was the distance you had to travel before ANYTHING happened, which is most of
+       why the control felt dead. */
+    if(!dragging){
+      if(Math.abs(dy)<6) return;
+      dragging=true; moved=true;
+      shareSheetEl.classList.remove("ssResizing");   // no transition while a finger is on it
+      try{ card.setPointerCapture(e.pointerId); }catch(_){}   // the handle is 38px; the drag is not
+    }
+    cardEl.style.height=Math.max(detents.mini,Math.min(detents.open,dragH-dy))+"px";
   },{passive:true});
-  card.addEventListener("pointerup",()=>{ y0=null; },{passive:true});
-  card.addEventListener("pointercancel",()=>{ y0=null; },{passive:true});
+  /* SETTLE TO THE NEAREST DETENT, from wherever the finger left it. The height is already
+     known for all three, so the target is a min-by-distance rather than a guess at intent.
+     Direction is NOT consulted on purpose: the card is under the thumb the whole way, so
+     where it was let go IS the intent — a flick heuristic would only ever overrule what the
+     user could see. */
+  const settle=(e)=>{
+    if(!dragging){ y0=null; return; }
+    dragging=false; y0=null;
+    try{ card.releasePointerCapture(e.pointerId); }catch(_){}
+    const h=cardEl.getBoundingClientRect().height;
+    let best="peek", bd=Infinity;
+    for(const s of SHEET_STEPS){ const d=Math.abs(detents[s]-h); if(d<bd){ bd=d; best=s; } }
+    const was=ssState, cls={mini:"ssMini",peek:"peek",open:"show"}[best];
+    /* GROWING APPLIES THE CLASS FIRST, SHRINKING APPLIES IT LAST — setSheetSize's rule, for
+       setSheetSize's reason: the short states hide the card's children, so committing them on
+       the way down blinks the content out and animates an empty pocket closing. On the way up
+       the content has to exist before the box uncovers it. */
+    const apply=()=>{ shareSheetEl.classList.remove("show","peek","ssMini"); shareSheetEl.classList.add(cls); };
+    /* LANDING ON `open` IS DELEGATED, because opening is not only a size: openShareSheet()
+       publishes the hide, fills the destinations and tracks share_opened, and a second path
+       that "also opens the sheet" is how those three quietly stop happening. The class and the
+       height are handed over first, so the setSheetSize() inside it measures from ≈ to and
+       takes its own early-return instead of animating a second time on top of this gesture. */
+    if(best==="open"&&was!=="open"){
+      apply(); cardEl.style.height=""; shareSheetEl.classList.remove("ssResizing");
+      ssState="open"; openShareSheet(); haptic(8); return;
+    }
+    /* GROWING APPLIES THE CLASS FIRST, SHRINKING APPLIES IT LAST — setSheetSize's rule, for
+       setSheetSize's reason: the short states hide the card's children, so committing them on
+       the way down blinks the content out and animates an empty pocket closing. On the way up
+       the content has to exist before the box uncovers it. */
+    const grow=detents[best]>h;
+    if(grow) apply();
+    shareSheetEl.classList.add("ssResizing");
+    void cardEl.offsetHeight;
+    cardEl.style.height=detents[best]+"px";
+    const done=()=>{ clearTimeout(cardEl._settleT); cardEl._settleT=null;
+      cardEl.style.height=""; shareSheetEl.classList.remove("ssResizing");
+      if(!grow) apply(); };
+    /* Both a transitionend and a timer: transitionend never fires when the height was already
+       correct (settling back into the detent you started from), and the timer is the only
+       thing that puts the inline height back in that case — a card left pinned to an inline
+       height is a dead end on the one screen that can send. */
+    cardEl._settleT=setTimeout(done,380);
+    cardEl.addEventListener("transitionend",function te(ev){
+      if(ev.propertyName!=="height"||ev.target!==cardEl) return;
+      cardEl.removeEventListener("transitionend",te); done(); });
+    if(best===was) return;
+    /* The same reporting stepSheet() does, because this is the same transition by a different
+       gesture — the funnel must not be able to tell the two apart. */
+    if(was==="open") track("share_dismissed",{via:"drag",mode:shareMode,score:Math.round(currentScore||0)});
+    if(best==="mini") track("sheet_minimized",{score:Math.round(currentScore||0)});
+    ssState=best; haptic(8);
+  };
+  card.addEventListener("pointerup",settle,{passive:true});
+  card.addEventListener("pointercancel",settle,{passive:true});
   /* A tap on the grabber is the same intent as a swipe up, and it is the only part of the
      peek that is not already a button. */
   /* A tap on the grabber TOGGLES. It used to only ever step up, so once the sheet was open the
@@ -4968,7 +5481,12 @@ function expandShareSheet(){
      resizing the sheet would fire every time a thumb missed "Challenge a friend" by a few
      pixels — a mis-tap that hides the thing you were reaching for. */
   const grab=$("#ssGrab");
-  if(grab) grab.onclick=()=>{ haptic(10); stepSheet(ssState==="open"?-1:1); };
+  /* NOT AFTER A DRAG. The drag settles on pointerup and a click follows it on the same finger,
+     so without this guard every drag ended by ALSO stepping the sheet one detent past where it
+     was released — the settle and the click fighting over one gesture. `moved` is set the
+     moment the drag threshold is crossed and cleared on the next pointerdown. */
+  if(grab) grab.onclick=()=>{ if(moved){ moved=false; return; }
+    haptic(10); stepSheet(ssState==="open"?-1:1); };
 })();
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
    closeShareSheet(), because nativeShare() calls that too the moment a target IS picked —
@@ -5198,22 +5716,12 @@ function chPrevRender(){
    screen — the two chips ARE the deal the friend gets, so they read like terms. */
     document.getElementById("chChipS").textContent=e.limit+"s";
     document.getElementById("chChipT").textContent=e.taps+(e.taps===1?" tap":" taps");
-    /* THE ASK LIVES HERE, AND NOT IN FRONT OF THE SEND.
-       Only about 3% of hide-makers ever tap the wordmark (9 logo taps a day against ~300
-       hides), so a handle that can only be set on the player card is a handle almost nobody
-       will set — and an unsigned challenge is the thing the whole feature exists to stop.
-       But the send is the one number this app is trying to move and it is flat at 71 a day, so
-       putting a prompt in FRONT of it is the fastest way to make it worse. This is the middle:
-       a third chip on the card the sender is already reading to see what goes out, next to the
-       two numbers that are also part of what goes out. It costs no height and blocks nothing.
-       Signed, it stops being an ask and becomes the answer to "what will they see". */
-    const nChip=document.getElementById("chChipN");
-    if(nChip){
-      const who=getHandle();
-      nChip.textContent = who ? "@"+who : "+ your name";
-      nChip.classList.toggle("unsigned",!who);
-      nChip.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); chSignAsk(); };
-    }
+    /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
+       an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
+       because a third chip made the card read as clutter. What survives it: the share MESSAGE
+       still signs itself when a handle exists, the seeker screen still names the sender, and
+       the player card is the one place to set the name — whose blur handler now owns the
+       republish this chip's dialog used to do. Do not re-add a prompt in front of the send. */
     const shot=document.getElementById("chPrevShot");
     shot.querySelector("canvas")?.remove();
     /* COVER-CROP, NOT FIT — this is what made the thumbnail look broken. `board` is the whole
@@ -5765,7 +6273,7 @@ function maybeOnboardPaint(){ if(!firstRun()) return; try{ localStorage.setItem(
    window it is documented to be, it was 3s shorter than a standard aim.
    Previous pass, for the record: aim 10 -> 8 (band 7-18 -> 6-14), paint 30 -> 22.
    ⚠️ A "the paint clock feels far too long" report was once acted on and had to be reverted:
-   it came from a KAMO+ account, which is on PRO_PAINT_SECONDS=75, not this number. Before
+   it came from a KAMO+ account, which has no paint clock at all, not this number. Before
    touching PAINT_SECONDS again, confirm the report is from a FREE round.
    ⚠️ These numbers are PRINTED at three copy sites — #pwSub, PW_PITCH.time.s and the
    PW_LOCK_HINT line. A silent change here makes the paywall state a false number, which is
@@ -5781,8 +6289,7 @@ const AIM_DEFAULT=18, AIM_MIN=16, AIM_MAX=24, PAINT_SECONDS=40;
    away. What does change is coverage: a 40s auto-Done can end a hide mid-paint, so Pro
    hides will trend better-covered. Accepted deliberately — that IS the perk, though at
    40 vs 75 the gap is 1.9x, down from 2.3x at 32s and 3.4x at 22s. */
-const PRO_PAINT_SECONDS=75, PRO_AIM_BONUS=8, PRO_AIM_MAX=30;
-function paintSeconds(){ return canPro()?PRO_PAINT_SECONDS:PAINT_SECONDS; }
+const PRO_AIM_BONUS=8, PRO_AIM_MAX=30;   // aim-clock tuning for the FREE path history model; KAMO+ has no clocks at all
 function aimHistory(){ try{ return JSON.parse(localStorage.getItem("kamo_aim")||"[]"); }catch(e){ return []; } }
 /* HIDE ONE ONLY. maybeOnboard() spends 7.2s on two hints; this leaves ~18s of aiming after
    they clear, which is a normal round. It replaces "no clock at all on the first hide" —
@@ -6183,21 +6690,22 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      positions exist or that two of them are for sale. The diameter previews the stroke, so
      the locked pair reads as "finer than anything you have" without a word of copy.
      The diameter comes from dotDia(), which the fill also reads so the two cannot drift. */
-  dots.forEach((d,i)=>{
-    d.style.display="none";
-    if(true) return;
-    const size=SIZE_STOPS[i], th=stopTh(size);
-    d.style.height=th+"px"; d.style.marginTop=(-th/2)+"px";
-    d.style.top=stopY(i,h)+"px";
-    d.classList.toggle("on",size===brush);
-  }); }
+  /* STILL NOT DRAWN, AND THAT WAS RE-DECIDED RATHER THAN INHERITED. Turning these back on was
+     the first answer to "the size bar does nothing" — with no marks the control looks
+     continuous, so a press-and-slide that snaps to three values reads as a misfire. But two
+     notes above already killed this exact design for a reason that has not changed: the thumb
+     is a circle too, so three dots beside it make four circles, one of which behaves
+     differently from the others. The real defect was that the gesture did nothing, not that it
+     was unlabelled — the thumb's diameter IS the size, and it moves. Fixing the drag fixed the
+     report; drawing the dots would have re-created a problem four designs died on. */
+  dots.forEach((d)=>{ d.style.display="none"; }); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
   /* No free-user branch here any more: the bar's pointerdown handler turns free users away
      before sizing ever starts, so this only ever runs for a member. The old floor logic
      (drag freely down to FREE_BRUSH_MIN, paywall on crossing) is gone with it. */
   brush=b; renderSizeBar(); }
-let sizing=false;
+let sizing=false, freeSizing=false;
 /* The size slider no longer throws up the paywall. Dragging a slider is not a purchase
    intent — it is someone adjusting their brush who gets a full screen in the face. It was
    one of only three paywall entry points and by far the most irritating: pure interruption
@@ -6276,9 +6784,30 @@ sizeBar.addEventListener("pointerdown",e=>{
       clearTimeout(sizeBar._bt);
       sizeBar._bt=setTimeout(()=>sizeBar.classList.remove("floorBounce"),420);
       return; }
+    /* AND THE FINGER CAN KEEP GOING. This branch used to end here: one snap on pointerdown,
+       no capture, no move handler — `sizing` was deliberately left false so a free user could
+       never leave the three stops. The intent was right and the result was a control that
+       ignored the gesture its own shape asks for. Pressing and sliding did nothing, which is
+       indistinguishable from broken.
+       freeSizing is the narrow version of `sizing`: it re-snaps to the nearest of the THREE
+       free stops on every move, so the paid range is exactly as unreachable as before — the
+       brush can still only ever hold a value from SIZE_STOPS. Sliding into the ✦ zone clamps
+       to the finest free size rather than re-opening the sheet; only a pointerdown down there
+       is a question, and it is still answered once per launch. */
+    freeSizing=true;
+    try{ sizeBar.setPointerCapture(e.pointerId); }catch(_){}
+    freeSnap(t,h);
+    return;
+  }
+  e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+/* Snap to the nearest of the three free stops, by POSITION — the same arithmetic the tap used,
+   factored out so the press and the drag cannot drift apart. Silent when nothing changes: a
+   slow drag across one stop should tick once, not sixty times. */
+function freeSnap(t,h){
     const span=(h-STAR_RESERVE(h))/h;
     let best=Math.round(((1-t)/span)*(SIZE_STOPS.length-1));
     best=Math.max(0,Math.min(SIZE_STOPS.length-1,best));
+    if(brush===SIZE_STOPS[best]) return;
     brush=SIZE_STOPS[best];
     /* haptic(), NOT paintHaptic(). paintHaptic posts {type:"haptic"} with NO style, and the
        wrapper turns a styleless tick into Haptics.selectionAsync() — the faintest thing iOS
@@ -6287,13 +6816,22 @@ sizeBar.addEventListener("pointerdown",e=>{
        strongest the 1.0.2 bridge knows, and 1.0.2 is the whole fleet, so this is the ceiling
        until a build ships. */
     renderSizeBar(); haptic(10);
-    return;
-  }
-  e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+}
 /* Haptics while dragging, not just on grab. paintHaptic() self-throttles to one tick per
    70ms, so a fast drag ticks like a detent instead of buzzing continuously. */
-sizeBar.addEventListener("pointermove",e=>{ if(sizing){ sizeFromEvent(e); paintHaptic(); } });
-sizeBar.addEventListener("pointerup",()=>sizing=false); sizeBar.addEventListener("pointercancel",()=>sizing=false);
+sizeBar.addEventListener("pointermove",e=>{
+  if(sizing){ sizeFromEvent(e); paintHaptic(); return; }
+  /* The free drag re-snaps to the three stops. t is clamped to [0,1] exactly as it is for a
+     member, so sliding below the free floor holds at the finest free size instead of falling
+     into the ✦ zone a second time — that zone is a question asked by a press, not something
+     to be re-asked sixty times on the way past it. */
+  if(freeSizing){
+    const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2;
+    let t=1-((e.clientY-r.top-SB_PAD)/h);
+    freeSnap(Math.max(0,Math.min(1,t)),h);
+  } });
+const endSizing=()=>{ sizing=false; freeSizing=false; };
+sizeBar.addEventListener("pointerup",endSizing); sizeBar.addEventListener("pointercancel",endSizing);
 /* THE ✦ IS A BUTTON, NOT A DECAL. It marks the bar as the premium tool and now sits at the
    locked end of it, so a tap on it is an explicit "show me what this costs" — the clearest
    buying intent the paint screen produces.
@@ -6385,6 +6923,16 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
      know which lock to lead with, because the app just took the hide away mid-paint. */
   lastRoundAuto=!!auto;
   roundMs=roundStartedAt?Date.now()-roundStartedAt:0; stopTimer();
+  /* The last-shot thumbnail. Saved here — the finished board IS the picture the camera-app
+     corner should preview — and small on purpose: a ~120px JPEG is a few KB of localStorage,
+     not a gallery. Every failure is swallowed; a missing thumbnail costs a button, never
+     the reveal. */
+  try{
+    const t=document.createElement("canvas"), sc=120/board.width;
+    t.width=120; t.height=Math.max(1,Math.round(board.height*sc));
+    t.getContext("2d").drawImage(board,0,0,t.width,t.height);
+    localStorage.setItem("kamo_last_shot",t.toDataURL("image/jpeg",.6));
+  }catch(e){}
   /* Allow-listed in kamo-app's source, but NOT in the build users are running: as of
      2026-08-03 `round_finished` does not exist in the Amplitude project at all, while the
      web has been firing it for as long as this line has existed. That is the proof that
@@ -6790,7 +7338,13 @@ async function chTally(){
   const rows=(await Promise.all(ids.map(id=>
     chRpc("get_hide",{p_id:id}).then(r=>r?Object.assign({id:id},r):null).catch(()=>null)
   ))).filter(Boolean);
-  if(!rows.length) return null;
+  /* NO ROWS IS NOT NO HIDES. Every get_hide here can fail — one dead cell, one cold start —
+     and returning null made the card answer "you have never sent anything" to someone holding
+     ten challenge ids in localStorage. That is the whole of the "pas toujours visible"
+     report: the box was not missing, it was being told there was nothing to say by a failed
+     fetch. The ids are local and certain, so the count is reported and the outcome is not
+     claimed; khResults() paints a retry instead of inventing zeroes. */
+  if(!rows.length) return { hides:ids.length, tried:0, found:0, rows:[], offline:true };
   return { hides:rows.length,
     tried:rows.reduce((a,h)=>a+((h&&h.n_attempts)|0),0),
     found:rows.reduce((a,h)=>a+((h&&h.n_found)|0),0),
@@ -6807,7 +7361,11 @@ function chStateLine(h){
   if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>';
   if(h&&h.burned)        return '<span class="khWin">burned all '+taps+' taps</span>';
   if(h&&h.n_attempts>0)  return h.n_attempts+" tried · "+'<span class="khNone">nobody found you</span>';
-  return '<span class="khNone">nobody has played yet</span>';
+  /* SHORTER IN A LIST OF TEN. "nobody has played yet" is the right sentence when it is the
+     ONE line on the card — it is what the summary above still says. Repeated down ten rows it
+     stopped being information and became wallpaper, and it was the widest thing on every row.
+     The summary carries the sentence; the row carries the state. */
+  return '<span class="khNone">not played yet</span>';
 }
 /* SEND A HIDE THAT IS ALREADY PUBLISHED, from the card rather than from the share sheet.
  * 2347 hides published, 197 ever played. Nearly nine in ten die unopened, and the card was
@@ -6882,18 +7440,45 @@ function khRowHtml(h,i){
     + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
     + '</span><button class="khSend" data-i="'+i+'">Send</button></div>';
 }
-function khRenderRows(el,rows){
-  el.innerHTML = '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
+function khRenderRows(el,rows,head){
+  el.innerHTML = (head?'<div class="khHead">'+head+'<span class="khMore">Hide these</span></div>':'')
+    + '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
   el.querySelectorAll(".khSend").forEach((b)=>{
     b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
   });
 }
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
-  el.style.display="none"; khOpen=false;
+  /* IT ONLY GOES DARK IF IT WAS DARK — OR IF THERE IS DEMONSTRABLY NOTHING. Blanking the box
+     at the top of every open meant one slow or failed round trip took away a row that was on
+     screen a second ago: the user closed the card, reopened it, and their results were gone.
+     The last true render stays up until a new one replaces it.
+     The one case that must still clear INSTANTLY is the never-sent user, and it can, because
+     the ids are local — chMine() answers without a network, before the first await. Deciding
+     it here rather than after the fetch is what keeps a cached row off a card that has no
+     hides behind it. */
+  const hasIds=chMine().length>0;
+  if(!hasIds||el.dataset.filled!=="1") el.style.display="none";
+  if(!hasIds){ el.innerHTML=""; el.onclick=null; delete el.dataset.filled; }
+  khOpen=false;
   try{
-    const t=await chTally(); if(!t) return;
+    /* null means NO IDS — the one answer that is certain without a network, and the one that
+       must still be able to take the box away: someone who has never sent a challenge, or who
+       cleared this device, cannot be left looking at a cached row about hides they do not
+       have. Every other failure now arrives as t.offline instead. */
+    const t=await chTally();
+    if(!t){ el.style.display="none"; el.innerHTML=""; el.onclick=null; delete el.dataset.filled; return; }
     const {tried,found}=t, rows=t.rows;
+    /* THE FETCH FAILED AND THE IDS DID NOT. Say the half that is known, offer the half that
+       is not, and do not touch the unread dot — those results have not been read. */
+    if(t.offline){
+      el.innerHTML = "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")
+        + ' sent · <span class="khNone">results didn\'t load</span>'
+        + '<span class="khMore">Tap to retry</span>';
+      el.onclick=()=>{ khResults(); };
+      el.style.display="block";
+      return;
+    }
     /* NOTHING PLAYED IS NOT NOTHING TO SAY. This used to return here, and an absent row is
        ambiguous in exactly the wrong direction: someone who sent three challenges and sees
        no row cannot tell "nobody has opened them" from "this is broken". They DID act — they
@@ -6914,15 +7499,23 @@ async function khResults(){
        the reveal: a share sheet that opens without being asked for is indistinguishable from a
        misfire. One hide expands to one row; the extra tap buys the user the chance to see WHAT
        they are about to re-send. */
+    /* THE HEADLINE SURVIVES THE EXPANSION. Opening used to REPLACE the two numbers with the
+       list, so the one fact the card exists to deliver — "12 played your hides" — was on
+       screen only while the thing it summarises was closed. It rides along as the first line
+       of the open state now, which also gives the collapse a visible word instead of leaving
+       "tap anything" as folklore. scrollTop resets on both directions: the box is a scroll
+       container now and it would otherwise reopen halfway down where it was left. */
     const paint=()=>{
-      if(khOpen){ khRenderRows(el,rows); return; }
-      el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+      if(khOpen) khRenderRows(el,rows,head);
+      else el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+      el.scrollTop=0;
     };
     paint();
     el.onclick=()=>{
       khOpen=!khOpen; paint();
       if(khOpen) track("home_results_expanded",{hides:rows.length,tried:tried});
     };
+    el.dataset.filled="1";
     el.style.display="block";
     track("home_results_shown",{hides:rows.length,tried:tried,found:found});
   }catch(e){}
@@ -6935,6 +7528,13 @@ async function khResults(){
  * Two places saying the same thing, one of them worse.
  * So the camera keeps a dot and nothing else: it says there is something to read, the wordmark
  * it sits on is what you tap to read it, and the card clears it. */
+/* The picker's face: the last reveal KAMO captured, saved as a local thumb by
+   enterFinished(). Read fresh on every compose entry so a new round updates the corner. */
+function lastShotRender(){
+  const b=$("#btnPhoto"); if(!b) return;
+  let d=null; try{ d=localStorage.getItem("kamo_last_shot"); }catch(e){}
+  if(d){ b.style.backgroundImage='url("'+d+'")'; b.classList.add("hasShot"); }
+}
 function brandDot(on){
   const b=document.querySelector(".brand"); if(!b) return;
   b.classList.toggle("hasNews",!!on);
@@ -6960,49 +7560,6 @@ async function chNewsCheck(){
  * — that friend accepted the deal that was advertised when they got it.
  * The previous id is restored if the new upload fails, because a link with stale settings
  * is a playable round and no link at all is a dead share. */
-/* SIGNING FROM THE SHARE SHEET.
- * Its own small overlay rather than opening the player card: that card is a second full sheet
- * and stacking one on top of the share sheet is how you lose both — the file already learned
- * that with the paywall.
- *
- * REPUBLISHES IF THE HIDE IS ALREADY OUT. chUpload() runs on the first touch of the sheet, so
- * by the time anyone taps this chip the row usually exists on the server WITHOUT a name, and
- * setHandle() alone would change the message text while the seeker screen still said "Find the
- * body". chRepublish() is exactly the machinery the gear already uses when taps or the clock
- * change, and it keeps the remembered-id list straight. */
-function chSignAsk(){
-  const w=document.createElement("div");
-  w.style.cssText="position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px";
-  w.innerHTML='<div style="width:min(88vw,340px);background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);border:1px solid rgba(255,255,255,.22);border-radius:22px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:20px">'
-    +'<div style="font-family:var(--display);font-size:20px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px">Who is hiding?</div>'
-    +'<div style="font-size:13.5px;color:rgba(255,255,255,.6);text-align:center;margin-bottom:14px">They will see this on your challenge.</div>'
-    +'<div style="display:flex;align-items:center;justify-content:center;gap:2px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid var(--stroke)">'
-    +'<span style="font-family:var(--display);font-size:22px;font-weight:900;color:rgba(95,230,164,.75);line-height:1">@</span>'
-    +'<input id="csIn" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="16" placeholder="yourname" '
-    +'style="width:100%;max-width:220px;background:none;border:none;outline:none;font-family:var(--display);font-size:22px;font-weight:900;color:#fff;line-height:1;padding:0;-webkit-user-select:text;user-select:text;caret-color:var(--mint)">'
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-top:14px">'
-    +'<button id="csNo" style="flex:1;height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:none;color:rgba(255,255,255,.6);font-size:15px;font-weight:700">Not now</button>'
-    +'<button id="csOk" style="flex:1;height:44px;border-radius:12px;border:none;background:#fff;color:#04120c;font-size:15px;font-weight:800">Save</button>'
-    +'</div></div>';
-  document.body.appendChild(w);
-  const inp=w.querySelector("#csIn");
-  inp.value=getHandle();
-  setTimeout(()=>{ try{ inp.focus(); }catch(e){} },60);
-  const close=()=>{ try{ w.remove(); }catch(e){} };
-  const save=()=>{
-    const before=getHandle(), after=setHandle(inp.value);
-    close();
-    chPrevRender();
-    track("hide_signed",{had_name:!!before,named:!!after});
-    /* Only when it actually changed, and only when there is something published to change. */
-    if(after!==before) chRepublish();
-  };
-  w.querySelector("#csNo").onclick=close;
-  w.querySelector("#csOk").onclick=save;
-  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.keyCode===13) save(); });
-  w.onclick=e=>{ if(e.target===w) close(); };
-}
 function chRepublish(){
   if(!CH_MAKE||!chId) return;   // nothing published yet: chUpload() will read the new values
   const prev=chId;
@@ -7042,7 +7599,7 @@ function chSeek(){
        gets a big target and a short one still shows the button without scrolling — and
        nothing here scrolls, body is overflow:hidden. */
     ".chS{position:fixed;inset:0;height:100dvh;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;"
-      +"justify-content:center;gap:clamp(8px,2.2vh,16px);padding:calc(12px + var(--safe-t)) 16px calc(14px + var(--safe-b));font-family:var(--font);color:var(--text);}"
+      +"justify-content:center;gap:clamp(6px,1.6vh,12px);padding:calc(10px + var(--safe-t)) 12px calc(12px + var(--safe-b));font-family:var(--font);color:var(--text);}"
     +".chBrand{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.4px;color:#fff;opacity:.9;}"
     +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(21px,6.2vw,27px);letter-spacing:-.4px;line-height:1.18;text-align:center;margin:0;max-width:18ch;}"
     +".chSub{font-size:13.5px;opacity:.62;text-align:center;margin:0;}"
@@ -7063,7 +7620,13 @@ function chSeek(){
     +"@media (prefers-reduced-motion:reduce){.chFrame.found{animation:foundFade .3s ease-out}@keyframes foundFade{from{outline-color:transparent}to{}}}"
     /* object-fit:contain inside a flexed frame: the box never exceeds the space left,
        and the tap coordinates stay honest because the frame shrink-wraps the pixels. */
-    +".chFrame img{display:block;max-width:100%;max-height:56dvh;width:auto;height:auto;touch-action:manipulation;}"
+    +".chFrame img{display:block;max-width:100%;max-height:72dvh;width:auto;height:auto;touch-action:manipulation;}"
+    /* THE CAP IS STATE-DEPENDENT, and it has to be. 56dvh left a portrait photo floating in
+       black on a tall phone — this is a FIND-THE-FIGURE game, so pixels are the product and
+       the picture should own the screen. 72dvh while playing. The ending state mounts a card
+       with the install CTA under the frame, so it drops back to 46dvh there: a photo nobody
+       is playing any more must never push the one button this screen exists to show. */
+    +".chS.chEnd .chFrame img{max-height:46dvh;}"
     /* Taps left, as pips rather than a number: readable at a glance mid-game, and an empty
        row reads as "you are out" without anyone having to parse a zero. */
     +".chPip{width:7px;height:7px;border-radius:50%;background:var(--mint);transition:background .2s,transform .2s;}"
@@ -7158,6 +7721,7 @@ function chSeek(){
     /* The frame stops growing once the game is over, or on a short phone the card would
        be pushed off the bottom by a photo nobody is playing any more. */
     const fr=$$("chFrame"); if(fr) fr.style.flex="0 1 auto";
+    w.classList.add("chEnd");   // drops the picture's cap — see .chS.chEnd in the styles above
     $$("chFoot").innerHTML='<div class="chCard"><button class="chCta" id="chGo">'+label+'</button>'
       +'<button class="chR" id="chRep">Report this photo</button></div>';
     /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
