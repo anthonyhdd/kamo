@@ -718,6 +718,21 @@ try {
   bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12c. The spectator seat ------------------------------------------------------------
+   The replay animates a recorded transform into a travelling viewport, and its ending has
+   to differ by outcome. One assertion there is a security boundary rather than a polish
+   check: a round that ended in a FIND must end with NO buzz marker, because
+   get_seek_traces strips the winning coordinates server-side so this screen can never be
+   turned into a cheat sheet by someone holding a challenge link. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-replay-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · REPLAY TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the replay plays and never leaks the winning spot (node scripts/test-replay-dom.mjs)');
+} catch (e) {
+  bad('THE REPLAY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* The handle crosses a trust boundary: one user types it, another user's phone renders it.
    It is narrowed in the page and again in create_hide, and this is the assertion that the
    third layer never becomes markup. A single innerHTML here would undo both. */
