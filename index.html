@@ -5868,25 +5868,59 @@ function confettiBurst(originEl){
     })();
   }catch(e){}
 }
+/* THE REHEARSAL, NOT THE ROUND. This is the sender trying their own hide, and the first
+   one-buzz version treated it like the real thing: one miss and the overlay froze on a
+   dead card — no retry, no motion, a grey sub nobody could read. Wrong stakes: the ONE
+   buzz belongs to the friend, who has never seen the answer; the sender is REHEARSING,
+   and a rehearsal you can only run once is a punishment. So this now plays like the
+   seeker screen it previews — the same reticle held above the finger, release commits,
+   marks, sparks, shake — but with infinite tries, and the headline (never a sub) narrates
+   each result. The CTA and Back never move: the send stays one tap away from the first
+   frame to the last. */
 function chPrevPlay(){
   try{
     const g=chGeom(); if(!g) return;
     track("challenge_preview_opened",{});
     document.getElementById("chPP")?.remove();
+    /* The seeker's visual vocabulary, scoped to this overlay. The seeker page injects its
+       own copies of these names — but chSeek() only runs on ?h= loads, where this overlay
+       cannot exist, so they never meet. */
+    if(!document.getElementById("chPPfx")){
+      const fx=document.createElement("style"); fx.id="chPPfx";
+      fx.textContent=
+        ".chPP{animation:ppFade .22s ease-out;}"
+        +"@keyframes ppFade{from{opacity:0}to{opacity:1}}"
+        +".chPPin{animation:ppUp .38s cubic-bezier(.2,.9,.3,1);}"
+        +"@keyframes ppUp{from{transform:translateY(26px);opacity:0}to{transform:translateY(0);opacity:1}}"
+        +".chRet{position:fixed;z-index:95;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);pointer-events:none;}"
+        +".chRet i{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}"
+        +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
+        +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
+        +".chMark.stay{animation:chHold 1.6s ease-in-out infinite;opacity:1;}"
+        +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
+        +"@keyframes chHold{0%,100%{transform:scale(1);box-shadow:0 0 0 6px rgba(95,230,164,.22)}50%{transform:scale(1.12);box-shadow:0 0 0 12px rgba(95,230,164,.05)}}"
+        +".chWin{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:hidden;}"
+        +".chRing{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:3px solid var(--mint);animation:chRing .72s cubic-bezier(.2,.7,.3,1) forwards;}"
+        +"@keyframes chRing{0%{transform:scale(1);opacity:.95}100%{transform:scale(9);opacity:0}}"
+        +".chFlash{position:absolute;inset:0;background:radial-gradient(circle at var(--fx) var(--fy),rgba(95,230,164,.45),transparent 60%);animation:chFlash .6s ease-out forwards;}"
+        +"@keyframes chFlash{0%{opacity:1}100%{opacity:0}}"
+        +".chSpark{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--mint);animation:chSpark .8s cubic-bezier(.15,.8,.3,1) forwards;}"
+        +"@keyframes chSpark{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx),var(--sy)) scale(.2);opacity:0}}"
+        /* The headline replaces the grey sub as the narrator, and each change lands with a
+           small rise so the words visibly answer the buzz instead of mutating in place. */
+        +".chPPh.swap{animation:ppUp .3s cubic-bezier(.2,.9,.3,1);}";
+      document.head.appendChild(fx);
+    }
     const w=document.createElement("div"); w.id="chPP"; w.className="chPP";
-    /* KICKER FIRST, THEN A CLAIM. "What they see" was a caption — it described the screen to
-       someone already looking at it. The paywall never does that: it leads with an uppercase
-       kicker carrying the terms, then a line that asserts something. The terms are the whole
-       offer, and the offer is one line now: one buzz, no clock, no bar, no pips. */
+    /* KICKER = the terms, headline = the invitation to play. */
     w.innerHTML='<div class="chPPin">'
       +'<div class="pwKick">ONE BUZZ · NO CLOCK</div>'
-      +'<div class="chPPh" id="chPPh">Good luck to them.</div>'
+      +'<div class="chPPh" id="chPPh">Try their buzz.</div>'
       +'<div class="chPPframe" id="chPPframe"></div>'
       +'<div class="chPPfoot" id="chPPfoot">'
-      /* THE SEND IS AVAILABLE FROM THE FIRST FRAME, not only after the round ends. Making
-         someone finish — or lose — a preview before they can send is a toll on the one
-         action this sheet exists to produce. They opened it to check what the other person
-         gets; the moment they are satisfied is theirs to choose, not ours. */
+      /* THE SEND IS AVAILABLE FROM THE FIRST FRAME, not only after a result. Making someone
+         finish a rehearsal before they can send is a toll on the one action this sheet
+         exists to produce. */
       +'<button class="pwBuy" id="chPPsend"><span class="pwBuyTxt">Challenge a friend</span></button>'
       +'<button class="chPPclose" id="chPPx0">Back</button>'
       +'</div></div>';
@@ -5899,59 +5933,90 @@ function chPrevPlay(){
     frame.style.aspectRatio=board.width+" / "+board.height;
     frame.style.maxHeight="46vh";
     frame.style.margin="0 auto";
+    frame.style.touchAction="none";
     const img=document.createElement("canvas");
     img.width=board.width; img.height=board.height;
     img.getContext("2d").drawImage(board,0,0);
     frame.appendChild(img);
 
-    let over=false;
-
-    function end(head,sub,won){
-      if(over) return; over=true;
-      document.getElementById("chPPh").textContent=head;
-      /* The frame goes green and the screen celebrates. Both hang off the same flag rather
-         than off the headline text, so a reworded ending cannot silently stop celebrating. */
-      if(won){ frame.classList.add("found"); confettiBurst(frame); }
-      document.getElementById("chPPfoot").innerHTML=
-        /* `sub` is optional now. The win used to caption itself — "That is the screen they get"
-           described the screen to someone looking straight at it, which is the same mistake
-           the kicker above was moved to fix. The green frame and the confetti say it. */
-        (sub ? '<div class="chPPsub">'+sub+'</div>' : '')
-        +'<button class="pwBuy" id="chPPgo"><span class="pwBuyTxt">Challenge a friend</span></button>'
-        +'<button class="chPPclose" id="chPPx">Back</button>';
-      document.getElementById("chPPgo").onclick=send;
-      document.getElementById("chPPx").onclick=close;
+    const say=(t)=>{ const h=document.getElementById("chPPh"); if(!h) return;
+      h.textContent=t; h.classList.remove("swap"); void h.offsetWidth; h.classList.add("swap"); };
+    function ppCelebrate(x,y){
+      const win=document.createElement("div"); win.className="chWin";
+      const fl=document.createElement("div"); fl.className="chFlash";
+      fl.style.setProperty("--fx",x+"px"); fl.style.setProperty("--fy",y+"px"); win.appendChild(fl);
+      const ring=document.createElement("div"); ring.className="chRing";
+      ring.style.left=x+"px"; ring.style.top=y+"px"; win.appendChild(ring);
+      for(let i=0;i<8;i++){
+        const a=(Math.PI*2*i)/8+Math.random()*0.4, d=60+Math.random()*50;
+        const sp=document.createElement("div"); sp.className="chSpark";
+        sp.style.left=x+"px"; sp.style.top=y+"px";
+        sp.style.setProperty("--sx",Math.round(Math.cos(a)*d)+"px");
+        sp.style.setProperty("--sy",Math.round(Math.sin(a)*d)+"px");
+        win.appendChild(sp);
+      }
+      frame.appendChild(win); setTimeout(()=>win.remove(),900);
     }
-    function close(){ over=true; w.remove(); }
-    /* `send` lived in that same misplaced block, so end()'s "Challenge a friend" button was
-       referencing an identifier that did not exist in this scope — a ReferenceError the
-       moment a preview round finished. Defined where it is used. */
+
+    function close(){ w.remove(); }
     const send=()=>{ close(); document.getElementById("ssInvite")?.click(); };
-    /* WIRED HERE, where these two elements exist. They were being bound inside
-       secretAsk() — the shared passphrase prompt — which is a different overlay
-       entirely. getElementById returned null there, .onclick threw, and the throw landed
-       BEFORE that prompt assigned its own OK and Cancel handlers, so both of its buttons
-       were dead. One misplaced paste, two broken screens: the preview could not send and
-       the passphrase could not be answered. */
     document.getElementById("chPPsend").onclick=send;
     document.getElementById("chPPx0").onclick=close;
 
-    img.onclick=(ev)=>{
-      if(over) return;
+    /* THE SAME GESTURE THE FRIEND GETS: finger down raises the reticle above the finger,
+       drag adjusts, release buzzes. Rehearsing the real move is the whole preview — a plain
+       tap taught the sender a game that does not exist on the other side. */
+    let ret=null, aimId=-1, found=false;
+    const RET_OFF=56;
+    const retMove=(x,y)=>{
+      if(!ret) return;
       const r=img.getBoundingClientRect();
-      const x=(ev.clientX-r.left)/r.width, y=(ev.clientY-r.top)/r.height;
-      const d=Math.hypot(x-g.cx,y-g.cy);
-      /* NOT A CAPTION THIS TIME. "That is the screen they get" described the screen to
-         someone staring at it. This says the one thing the sender does not know they know:
-         the preview was rigged — they painted it, so of course they found it — and the
-         person they send it to will not have that. It is the argument for pressing the
-         button underneath it. */
-      if(d<=g.r){ haptic(18); end("Found you","You knew where it was. They won't.",true); return; }
-      haptic(8);
-      img.classList.remove("chPPshake"); void img.offsetWidth; img.classList.add("chPPshake");
-      /* One buzz is the whole game now — the first miss IS the round. */
-      end("That was their buzz","One shot. They just spent it.");
+      const cx=Math.max(r.left,Math.min(r.right,x)), cy=Math.max(r.top,Math.min(r.bottom,y-RET_OFF));
+      ret.style.left=cx+"px"; ret.style.top=cy+"px"; ret._x=cx; ret._y=cy;
     };
+    frame.addEventListener("pointerdown",e=>{
+      try{ frame.setPointerCapture(e.pointerId); }catch(_){}
+      aimId=e.pointerId;
+      ret=document.createElement("div"); ret.className="chRet"; ret.innerHTML="<i></i>";
+      w.appendChild(ret);
+      retMove(e.clientX,e.clientY);
+      haptic(8);
+    });
+    frame.addEventListener("pointermove",e=>{ if(ret&&e.pointerId===aimId) retMove(e.clientX,e.clientY); });
+    const ppUp=e=>{
+      if(!ret||e.pointerId!==aimId) return;
+      const sx=ret._x, sy=ret._y;
+      ret.remove(); ret=null; aimId=-1;
+      if(e.type!=="pointerup") return;
+      const r=img.getBoundingClientRect();
+      const x=(sx-r.left)/r.width, y=(sy-r.top)/r.height;
+      const fx=x*(r.width), fy=y*(r.height);
+      const hit=Math.hypot(x-g.cx,y-g.cy)<=g.r;
+      const mk=document.createElement("div");
+      mk.style.left=fx+"px"; mk.style.top=fy+"px";
+      frame.appendChild(mk);
+      if(hit){
+        mk.className="chMark hit stay";
+        haptic(18);
+        ppCelebrate(fx,fy);
+        /* NOT A CAPTION. The one thing the sender does not know they know: the rehearsal
+           is rigged — they painted it. The person on the other end will not have that. */
+        say(found?"Again. They still won't.":"You knew. They won't.");
+        if(!found){ frame.classList.add("found"); confettiBurst(frame); }
+        found=true;
+      }else{
+        mk.className="chMark";
+        setTimeout(()=>mk.remove(),500);
+        haptic(8);
+        img.classList.remove("chPPshake"); void img.offsetWidth; img.classList.add("chPPshake");
+        /* The stake, said at the moment it is felt — and then the finger is free to try
+           again, because this is a rehearsal and the ONE buzz is the friend's problem. */
+        say("Missed — they only get one.");
+        frame.classList.remove("found"); found=false;
+      }
+    };
+    frame.addEventListener("pointerup",ppUp);
+    frame.addEventListener("pointercancel",ppUp);
     w.onclick=(ev)=>{ if(ev.target===w) close(); };
   }catch(e){}
 }
