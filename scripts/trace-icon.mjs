@@ -111,7 +111,9 @@ console.log('components:', paths.map(p => p.n).join(', '));
 const pts = paths.flatMap(p => p.d.slice(1, -1).split('L').map((t) => t.trim().split(/\s+/).map(Number)));
 const x0 = Math.min(...pts.map(q => q[0])), x1 = Math.max(...pts.map(q => q[0]));
 const y0 = Math.min(...pts.map(q => q[1])), y1 = Math.max(...pts.map(q => q[1]));
-const M = 1.3, LEFT = 2.6;
+/* No gap reserved on the left any more: the hand-drawn panel is gone, so the figure gets the
+   whole box and the same margin on all four sides. */
+const M = 1.3, LEFT = 1.3;
 const k = Math.min((24 - LEFT - M) / (x1 - x0), (24 - 2 * M) / (y1 - y0));
 const ox = LEFT - x0 * k, oy = (24 - (y1 - y0) * k) / 2 - y0 * k;
 const f = (v) => Number(v.toFixed(2));
@@ -119,7 +121,39 @@ const fitted = paths.map((p) => 'M' + p.d.slice(1, -1).split('L')
   .map((t) => { const [a, c] = t.trim().split(/\s+/).map(Number); return `${f(a * k + ox)} ${f(c * k + oy)}`; })
   .join('L') + 'Z');
 
+/* THE CUT EDGE IS STRAIGHT, AND THE THRESHOLD DOES NOT KNOW THAT. Where the figure is hidden
+   by the panel, its boundary is a straight vertical line — but the panel's shadow falls across
+   the body there, so a luminance cut nibbles two shallow notches out of it, one at chest height
+   and one at the belly. At 21px they are invisible; at any size where the outline reads, they
+   are a stray tick on the one edge that should be perfectly flat, and they are not in the
+   artwork.
+   Flattened here rather than in index.html, so a re-run reproduces the shipped path instead of
+   re-introducing them. The edge is found as the MEDIAN x of the left-hand boundary points, not
+   the minimum — the raised hand pokes further left than the body does, so a minimum would drag
+   the whole edge over to the hand. Only wobble within 0.9 of that line is snapped; the hand
+   (1.2 out) and the foot (1.4 out) are real and survive. */
+const flatten = (d) => {
+  const q = d.slice(1, -1).split('L').map((t) => t.trim().split(/\s+/).map(Number));
+  const xs = q.map((v) => v[0]), lo = Math.min(...xs), hi = Math.max(...xs);
+  /* The MODE of the left-hand x values, in 0.25 buckets — not their median. A median is pulled
+     by the hand and the foot, which are left-side points too and stick out further than the
+     body; it landed half a pixel to the right of the real edge and bent the whole cut. The cut
+     is the value that RECURS, because it is a straight line and everything else is a corner. */
+  const left = xs.filter((x) => x < lo + (hi - lo) * 0.28);
+  const bins = new Map();
+  left.forEach((x) => { const k = Math.round(x * 4) / 4; (bins.get(k) || bins.set(k, []).get(k)).push(x); });
+  let bin = [];
+  bins.forEach((v) => { if (v.length > bin.length) bin = v; });
+  const edge = Math.min(...bin);
+  const snapped = q.map(([x, y]) => [Math.abs(x - edge) < 0.9 ? edge : x, y]);
+  const out = snapped.filter((v, i) => {
+    if (i === 0 || i === snapped.length - 1) return true;
+    const [px, py] = snapped[i - 1], [cx, cy] = v, [nx, ny] = snapped[i + 1];
+    return !(px === cx && cx === nx);   // collinear on the flat cut — including the notch it just swallowed
+  }).filter((v, i, a) => i === 0 || v[0] !== a[i - 1][0] || v[1] !== a[i - 1][1]);
+  return 'M' + out.map(([x, y]) => `${f(x)} ${f(y)}`).join('L') + 'Z';
+};
+
 console.log('\n--- paste into #btnPlus in index.html ---');
-console.log(`<path d="M${f(LEFT - 0.75)} ${f(M - 0.2)}V${f(24 - M + 0.2)}" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>`);
-fitted.forEach((d) => console.log(`<path d="${d}"/>`));
+fitted.map(flatten).forEach((d) => console.log(`<path d="${d}"/>`));
 await b.close(); server.close();
