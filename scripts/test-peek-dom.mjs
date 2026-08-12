@@ -545,9 +545,9 @@ console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
      hauteur": the state is meant to be a handle, its breathing room, and nothing else, so the
      assertion is absolute. 24px here is measured with NO safe-area inset (headless reports
      none); on a device the grabber adds ~20px more to clear the home pill. */
-  folded.h < arrived.h && folded.h <= 24
+  folded.h < arrived.h && folded.h <= 62
     ? ok(`and the card is a bar, not a box (${Math.round(folded.h)}px, peek is ${Math.round(arrived.h)}px)`)
-    : bad(`folded height ${Math.round(folded.h)}px — must be under 24px (peek: ${Math.round(arrived.h)}px). `
+    : bad(`folded height ${Math.round(folded.h)}px — must be under 62px (peek: ${Math.round(arrived.h)}px). `
         + 'Check for a doubled var(--safe-b) between .ssCard and .ssGrab.');
   /* AND IT IS AGAINST THE EDGE. "Pas collé au bas de l'écran" is a different defect from
      "too tall" — a bar of the right height floating above the bottom edge looks like a bug in

@@ -237,7 +237,12 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
      override would pass a file that had quietly put the dim-and-blur back on .show. The
      invariant is "this sheet never darkens the reveal", and the base rule is where that is
      true or false. */
-  const baseCss = html.match(/#shareSheet\{[^}]*\}/);
+  /* Anchored to the start of a line, because "#shareSheet{" is not a unique string: any
+     DESCENDANT selector ending in the sheet — `#stage.pwCover #shareSheet{...}` — ends with
+     the same six characters, and an unanchored match happily returned that one instead and
+     failed the file for not declaring a background it was never supposed to declare. The base
+     rule is the one that starts its own line. */
+  const baseCss = html.match(/^\s*#shareSheet\{[^}]*\}/m);
   if (!baseCss) bad('#shareSheet rule missing');
   else if (!/background:transparent/.test(baseCss[0]) || !/backdrop-filter:none/.test(baseCss[0])) {
     bad(`#shareSheet must not dim or blur the reveal in any state: ${baseCss[0]}`);
@@ -267,6 +272,23 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       ? bad('#shareSheet.ssMini takes pointer events — the folded sheet sits over a live reveal and '
           + 'the wipe handle behind it stops responding')
       : ok('the folded state stays transparent to touch');
+    /* AND IT KEEPS THE WHOLE HOME-INDICATOR INSET. The folded card was once trimmed to
+       `calc(var(--safe-b) - 14px)` to make it shorter, which put the grabber inside the bottom
+       ~20pt band iOS reserves for its own swipe — the system took the gesture and the sheet
+       would not come back up. No DOM test can catch it: headless reports no safe area at all,
+       so the arithmetic that breaks a phone is 0px either way here. The declaration is the
+       only place the mistake is visible, so the declaration is what gets checked. */
+    {
+      const cardCss = rule('#shareSheet.ssMini .ssCard');
+      const pad = (cardCss.match(/padding\s*:\s*([^;}]+)/) || [])[1] || '';
+      !/var\(--safe-b\)/.test(pad)
+        ? bad(`#shareSheet.ssMini .ssCard pads "${pad.trim()}" — the folded bar needs the full `
+            + 'var(--safe-b) beneath it or iOS eats the swipe that reopens the sheet')
+        : /--safe-b\)\s*-/.test(pad)
+          ? bad(`#shareSheet.ssMini .ssCard subtracts from the safe area ("${pad.trim()}") — that `
+              + 'is exactly what put the grabber inside the home-indicator band')
+          : ok('the folded bar sits clear of the home indicator');
+    }
     /pointer-events\s*:\s*auto/.test(peekCss)
       ? bad('#shareSheet.peek takes pointer events — the short sheet sits over a live reveal and '
           + 'the wipe handle behind it stops responding')

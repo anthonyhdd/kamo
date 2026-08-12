@@ -328,11 +328,12 @@
   #btnLight.on svg{stroke:#04120b;fill:#04120b;}
   /* KAMO+ entry point, mirrors #flip on the other side of the wordmark */
   #btnPlus{left:14px;width:44px;border:none;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
-  /* Stroked now, not filled — the star was a solid glyph, the figure is line art. Same 21px
-     so the corner's weight does not move. Two shadows: the black one keeps it readable over a
-     bright viewfinder, the mint one is the glow. */
-  #btnPlus svg{width:21px;height:21px;fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;
-    filter:drop-shadow(0 1px 4px rgba(0,0,0,.55)) drop-shadow(0 0 5px rgba(95,230,164,.75));}
+  /* Filled, like the star it replaces — the outlined version disappeared at this size. Same
+     21px so the corner's weight does not move. The edge path opts back out to a stroke on the
+     element itself. Two shadows: the black one keeps it readable over a bright viewfinder, the
+     mint one is the glow. */
+  #btnPlus svg{width:21px;height:21px;fill:#fff;stroke:none;
+    filter:drop-shadow(0 1px 4px rgba(0,0,0,.55)) drop-shadow(0 0 4px rgba(95,230,164,.5));}
   /* Apple-camera-style shutter: white ring + gap + white inner disc, no colour */
   .shutter{position:relative;width:78px;height:78px;border-radius:50%;border:none;background:transparent;cursor:pointer;padding:0;}
   .shutter .ring{position:absolute;inset:0;border-radius:50%;border:4px solid #fff;box-shadow:0 6px 22px rgba(0,0,0,.5);}
@@ -793,11 +794,33 @@
      .pwCover on #stage (full arm only; the sheet arm is the experiment's control and stays
      untouched), closePaywall() removes it. visibility, not display: nothing reflows, no
      enter/exit logic re-runs, and the round underneath is exactly as it was. */
+  /* THE SHARE SHEET IS CHROME TOO — and it was the one thing left out of this list, which is
+     why the paywall opened from the reveal looked like two apps stacked on each other: the
+     hero and the CTA on top, and underneath them "Can they find you?", the challenge card,
+     Challenge a friend and the Instagram button, all fully lit. It is also the LARGEST thing
+     on that screen, so leaving it in was worth more visual noise than everything else in this
+     rule put together. On the reveal the sheet is auto-presented, so this is not an edge case:
+     it is what every single paywall opened from a finished round looked like. */
   #stage.pwCover .brand,#stage.pwCover #btnBack,#stage.pwCover #btnDone,#stage.pwCover #btnEdit,
   #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #poseBar,#stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
   #stage.pwCover #flip,#stage.pwCover #scoreChip{visibility:hidden!important;}
+  /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
+     #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
+     descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
+     used the descendant form, matched nothing, and shipped looking exactly like a fix.
+     openPaywall() stamps the same class on <body> for this one rule. test-pwfull-dom reads the
+     computed visibility rather than the stylesheet, which is what caught the dead selector. */
+  body.pwCover #shareSheet{visibility:hidden!important;}
+  /* AND THE BOTTOM GETS ITS GROUND BACK. "No bottom scrim" was the call on 2026-08-12, taken
+     when the arm was judged against a plain viewfinder; on the reveal the CTA lands on a
+     photograph, and white-on-anything is a coin flip. Reversed today, deliberately, and kept
+     to the bottom third so the picture — which is the pitch — still reads above it. */
+  #paywall.pwFull .pwCard::after{content:"";position:absolute;left:0;right:0;bottom:0;height:46%;
+    pointer-events:none;z-index:-1;
+    background:linear-gradient(180deg,rgba(5,6,10,0),rgba(5,6,10,.42) 45%,rgba(5,6,10,.72));}
+  #paywall.pwFull .pwCard{isolation:isolate;}
   /* KAMO+ celebration (post-purchase, plan-aware) */
   /* TWO SHEETS, ONE LOOK. #kamoPlus is the one-time welcome after a purchase; #kamoHome is
      what tapping the wordmark opens for a member, every time. They are the same object at
@@ -1148,16 +1171,21 @@
      var(--safe-b) stacked two home-indicator insets and left ~90px of empty green under the
      bar. Halving that was still not small: a full var(--safe-b) under a 4px bar is 34pt of
      nothing, which is where "trop d'espace sur la barre, trop de hauteur" came from.
-     The inset exists for ONE reason here — the system's home pill lives about 8pt off the
-     bottom edge and our grabber is also a centred pill, so they must not collide. Clearing it
-     costs ~20pt, not 34. `max()` keeps a floor for the devices that report no inset at all
-     (any browser, and the DOM harness), where the bar would otherwise sit on the screen edge.
-     Total: ~7 + 4 + ~20 = 31px of card, hard against the bottom edge. */
-  #shareSheet.ssMini .ssCard{padding:0;}
-  #shareSheet.ssMini .ssGrab{padding:7px 0 max(9px,calc(var(--safe-b) - 14px));}
-  /* Brighter and wider than the peek's: at this size the grabber IS the control, not a
-     decoration on a full card. */
-  #shareSheet.ssMini .ssGrab::before{width:52px;background:rgba(255,255,255,.55);}
+     Then it was cut too far — to safe-b minus 14 — and that broke something worse than looks.
+     iOS reserves the bottom ~20pt of the screen for the home-indicator swipe, so a grabber
+     sitting inside that band loses the gesture to the system: swiping up on the folded sheet
+     opened the app switcher instead of the sheet, and tapping near it did nothing. THAT is
+     what this inset is for, and it gets all of it back.
+     The space ABOVE the bar now matches the open sheet's (.ssCard's 20px top padding), so the
+     handle sits the same distance from the card's top edge in every state. ~18 + 5 + 34 =
+     ~57px: not the smallest bar that could be drawn, but the smallest one iOS will let us
+     have — the bottom third of it is the home indicator's, not ours. */
+  #shareSheet.ssMini .ssCard{padding:18px 0 var(--safe-b);}
+  #shareSheet.ssMini .ssGrab{padding:0;}
+  /* Brighter, wider and a touch thicker than the peek's: at this size the grabber IS the
+     control rather than a decoration on a full card, and it is the only thing on screen
+     saying the sheet can come back. */
+  #shareSheet.ssMini .ssGrab::before{width:56px;height:5px;background:rgba(255,255,255,.72);}
   /* ONE RISE, AND IT COMES FROM .pwCard. There used to be a second animation here — a `.rise`
      one-shot class, added on arrival and removed 420ms later — layered on top of the
      `animation:pwUp` that .ssCard already inherits from .pwCard. Two animations on one
@@ -1489,14 +1517,20 @@
     <button id="btnPlus" class="topbtn" title="KAMO+" aria-label="KAMO+">
       <!-- THE FIGURE PEEKING PAST AN EDGE — the app icon's pose, in outline. It replaces a
            generic sparkle: the ✦ said "premium" in the same voice as every other app's ✦,
-           while this says KAMO and nothing else. Stroked, not filled, so it stays legible at
-           21px over a bright viewfinder; the mint drop-shadow is the glow. -->
+           while this says KAMO and nothing else.
+           TRACED FROM THE REFERENCE, at its proportions: the edge runs the full height on the
+           LEFT, the head clears it to the RIGHT and sits high, the body hooks down the far side
+           and one leg steps out at the bottom. The first attempt was drawn from memory as thin
+           strokes and read as a stick figure — five hairlines at 21px are five hairlines, not a
+           person. FILLED, because the mass is what survives the size: the reference is closed
+           contours, and the eye reads their weight long before it reads any line.
+           The edge keeps its own stroke — it is a line in the reference too, not a slab. The
+           mint drop-shadow is the glow, kept low (.5 alpha, 4px) — "subtile" was the word. -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6.6 2.4v19.2"/>
-        <circle cx="14.6" cy="7.2" r="4.4"/>
-        <path d="M6.6 4.9c1.5-.5 2.6.1 3.1 1 .4.8.2 1.7-.5 2.3"/>
-        <path d="M11.3 10.6c-1.1 1.5-1.9 3.4-2.3 5.5-.3 1.7-.3 3.4 0 5.1"/>
-        <path d="M17.4 10.7c1 1.6 1.5 3.3 1.4 5-.1 1.2-.5 2.3-1.2 3.2"/>
+        <path d="M6.3 3.2v17.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="14" cy="6.7" r="4.1"/>
+        <path d="M12.5 10.5c2.8.9 4.5 2.7 4.7 5 .2 2.4-1.3 4.5-3.6 5.3-.7.2-1.4-.1-1.6-.8-.2-.7.1-1.4.8-1.6 1.3-.5 2.1-1.5 2-2.7-.1-1.2-1.2-2.2-2.9-2.7-.7-.2-1.1-.9-.9-1.6.2-.6.9-1 1.5-.9z"/>
+        <path d="M6.9 12.9c2.1.4 3.6 1.4 4.4 2.9.8 1.5.6 3.2-.5 4.6-.4.5-1.1.6-1.6.2-.5-.4-.6-1.1-.2-1.6.6-.8.7-1.6.3-2.3-.4-.8-1.4-1.4-2.8-1.7-.6-.1-1-.7-.9-1.3.1-.6.7-.9 1.3-.8z"/>
       </svg>
     </button>
     <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
@@ -3725,7 +3759,7 @@ function openPaywall(source,force){
      the sheet arm (#pwHero is display:none there), and run unconditionally on purpose: a
      device that switches arm mid-session must never open a stale hero. */
   pwHeroApply(src);
-  if(pwArm==="full") stage.classList.add("pwCover");
+  if(pwArm==="full"){ stage.classList.add("pwCover"); document.body.classList.add("pwCover"); }
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
     source:src,
@@ -3753,7 +3787,12 @@ function openPaywall(source,force){
      on "Loading…" forever. After 6s with no answer, say "unavailable" instead of lying. */
   if(!storeReady){ clearTimeout(openPaywall._t); openPaywall._t=setTimeout(()=>{
     if(!storeReady){ storeAnswered=true; updatePwBuy(); } },6000); } }
-function closePaywall(){ paywallEl.classList.remove("show"); stage.classList.remove("pwCover"); setPwBuyLoading(false); stopTermsRotate(); }
+function closePaywall(){ paywallEl.classList.remove("show");
+  /* Both hooks come off together — the sheet's lives on <body> because it is not under #stage.
+     Leaving that one behind would hide the share sheet for the rest of the session, on the one
+     screen where the sheet is the only route to a send. */
+  stage.classList.remove("pwCover"); document.body.classList.remove("pwCover");
+  setPwBuyLoading(false); stopTermsRotate(); }
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
 function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
