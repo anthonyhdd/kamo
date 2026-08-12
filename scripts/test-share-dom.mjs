@@ -104,7 +104,7 @@ async function round(label,dwell){
   return {msg,waited};
 }
 const r1=await round('ROUND 1 — tapped early (dwell 1.2s < 3s upload)',1200);
-/@tony is hidden/.test(r1.msg) ? ok('message is personalised') : bad('generic message: '+JSON.stringify(r1.msg.slice(0,60)));
+/@tony hid a body/.test(r1.msg) ? ok('message is personalised') : bad('generic message: '+JSON.stringify(r1.msg.slice(0,60)));
 /\?h=|\/h\//.test(r1.msg) && /hide1/.test(await page.evaluate(()=>window.__msgs[0])) ? ok('and carries the round-1 link') : ok('link present: '+/hide1/.test(r1.msg));
 /* The dwell must be DEDUCTED from the wait: whatever of the upload happened while the
    sender looked at the reveal is time they never spend staring at a disabled button. */
