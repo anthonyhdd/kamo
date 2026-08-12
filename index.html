@@ -2385,6 +2385,16 @@ function fullPose(i){ const o=JSON.parse(JSON.stringify(REST)); const p=POSES[i]
 /* NO NAME PILL ON POSE CHANGE. Tapping the figure cycles the pose and the figure itself is
    the feedback — it visibly changes shape. Announcing "Stand" over it labelled something the
    user was already looking at, once per tap, on the screen where they are framing a shot. */
+/* Cycled by a tap on the figure (see onUp). No UI describes the poses any more — the
+   character IS the feedback, which is the one thing both bodies can do identically. The
+   v2 branch crossfades between clips; the original eases into a rest-pose target. */
+function setPose(char,i){
+  char.poseIdx=(i%POSES.length+POSES.length)%POSES.length;
+  haptic();
+  track("pose_changed",{pose:char.poseIdx,of:POSES.length});
+  if(char.mixer){ v2Pose(char,char.poseIdx,false); return; }
+  char.target=fullPose(char.poseIdx);
+}
 function setPoseInstant(char,i){ if(char.mixer){ v2Pose(char,i,true); return; }
   char.poseIdx=(i%POSES.length+POSES.length)%POSES.length; char.target=fullPose(char.poseIdx); for(const k in REST){ if(k==="rootDY"){ char.charG.position.y=char.target.rootDY; continue;} char.parts[k].rotation.set(char.target[k][0],char.target[k][1],char.target[k][2]); } }
 function lerpChar(char){ const s=0.18; const g=char.group;
@@ -2802,14 +2812,14 @@ function onDown(e){
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pointers.size===1){ downT=performance.now(); downX=e.clientX; downY=e.clientY; moved=false; dragging=false;
     downHit=pickChar(e.clientX,e.clientY); if(downHit>=0) selIdx=downHit;
-    /* NO POSE PICKER ON THE FIGURE ANY MORE (founder, 2026-08-12). A tap cycled the pose
-       and a hold opened a radial wheel of six — drawn from the ORIGINAL rig, which is not
-       what the new body does: its six clips are animations, they read differently, and the
-       wheel's little icons promised poses the character no longer strikes. Two avatars, one
-       menu, and the menu was lying about one of them.
-       The figure keeps everything that is about placing it: drag to move, pinch to scale
-       and rotate. What is gone is a control that had to describe the character to be usable
-       — and could not describe both. */
+    /* NO LONG-PRESS WHEEL ANY MORE (founder, 2026-08-12). Holding the figure used to open
+       a radial menu of six poses drawn from the ORIGINAL rig — little outline icons of
+       stand / wave / arms up / sit / run / point. The new body does not strike those poses,
+       it plays clips, so the wheel was advertising a character one of the two avatars is
+       not. A menu cannot be shown without describing what it offers, and nothing here could
+       describe both. The TAP survives (see onUp): it changes the pose without promising one.
+       Everything about PLACING the figure is untouched — drag to move, pinch to scale and
+       rotate. */
   } else if(pointers.size===2){ clearTimeout(lpTimer); const p=[...pointers.values()]; pinchStart=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1; scaleStart=sel()?sel().group.scale.x:1; rotStart=Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x); rotBaseY=sel()?sel().group.rotation.y:0; }
 }
 function onMove(e){
@@ -2821,6 +2831,12 @@ function onMove(e){
 }
 function onUp(e){
   clearTimeout(lpTimer); pointers.delete(e.pointerId);
+  /* TAP THE FIGURE, IT CHANGES POSE. This is the gesture people already know and it says
+     nothing about the character in advance — it just moves them, which is honest for both
+     bodies (the original strikes a pose, the new one plays a clip). Only the HOLD is gone:
+     the wheel had to DRAW the six options to be usable, and its icons were the original
+     rig's, so it was describing a character the new body is not. */
+  if(!moved && performance.now()-downT<450 && mode==="compose" && pointers.size===0 && downHit>=0){ selIdx=downHit; setPose(sel(),sel().poseIdx+1); }
   if(pointers.size===0){ dragging=false; downHit=-1; flushExpire(); }
 }
 glCanvas.addEventListener("pointerdown",onDown);
@@ -2829,10 +2845,10 @@ glCanvas.addEventListener("pointerup",onUp);
 glCanvas.addEventListener("pointercancel",onUp);
 
 /* THE RADIAL POSE WHEEL, THE POSE BAR AND THEIR ICONS ARE GONE — see onDown(). They were
-   one menu describing two different characters, and it could only ever be honest about the
-   original rig. setPose() went with them: nothing changes a pose at runtime any more.
-   setPoseInstant() stays and is load-bearing — it is how the wave frame of the reveal is
-   struck (chUploadReveal) and how a freshly spawned figure gets its rest pose. */
+   one menu describing two different characters, and a menu has to DRAW its options to be
+   usable: the icons were the original rig's, so it advertised poses the new body never
+   strikes. The tap that CYCLES the pose stays — it shows nothing in advance, so it cannot
+   misdescribe either body (founder's correction, 2026-08-12). */
 
 /* ===== FX: poof particles ===== */
 function poof(sx,sy){
@@ -8502,7 +8518,10 @@ const CH_NOTIF={
 if(!CH_SEEK) setTimeout(()=>{ try{ chNewsCheck(); }catch(e){} },1200);
 
 if(location.search.includes("debug")){
-  window.HIDEY={ charPos:()=>{ const c=sel(); return c?{x:+c.group.position.x.toFixed(2),y:+c.group.position.y.toFixed(2),tx:c._tx,ty:c._ty,svx:c._svx,sx:+c.charG.scale.x.toFixed(2),sy:+c.charG.scale.y.toFixed(2)}:null; },
+  /* poseIdx rides along because the pose is otherwise unobservable from outside: the new
+     body's change is a crossfade between clips, which a screenshot diff cannot tell from
+     the idle it is already playing. */
+  window.HIDEY={ charPos:()=>{ const c=sel(); return c?{x:+c.group.position.x.toFixed(2),y:+c.group.position.y.toFixed(2),tx:c._tx,ty:c._ty,svx:c._svx,sx:+c.charG.scale.x.toFixed(2),sy:+c.charG.scale.y.toFixed(2),poseIdx:c.poseIdx,clip:c.mixer?"mixer":"rig"}:null; },
     step:(n)=>{ for(let i=0;i<(n||1);i++){ characters.forEach(lerpChar); } renderer.render(scene,camera3); },
     setTarget:(x,y)=>{ const c=sel(); if(c){ c._tx=x; c._ty=y; } },
     setBg:(url)=>{ photo.onload=()=>syncPreviewFit(); photo.src=url; photo.style.display="block"; cam.style.display="none"; bgKind="photo"; enterCompose(); },
