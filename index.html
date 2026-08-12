@@ -7505,7 +7505,19 @@ function chPrepare(){
     /* Cleared, so the tap can try again rather than inheriting a dead promise for the
        rest of the round. */
     chPrep=null;
-    track("hide_prepare_failed",{reason:String((e&&e.message)||e).slice(0,120)});
+    const why=String((e&&e.message)||e).slice(0,120);
+    track("hide_prepare_failed",{reason:why});
+    /* AND ONE RETRY, BECAUSE THE REVEAL IS WHERE THE TIME IS. Every one of these failures
+       reads "Load failed" — WebKit for a fetch that died: the radio dropped, or the app
+       went to the background mid-upload. Left alone the round is not lost, but the recovery
+       lands on the tap, which is the exact wait this split was built to remove. The sender
+       is looking at their reveal for a median 154 seconds; spending 2.5 of them on a second
+       attempt is free. Once only, and reset per round — a phone with no signal must not
+       spend the round retrying. */
+    if(!chPrepare._retried){
+      chPrepare._retried=true;
+      setTimeout(()=>{ if(!chId&&!chPrep&&finished) chPrepare(); },2500);
+    }
     return null;
   });
   return chPrep;
@@ -7524,7 +7536,7 @@ function chPrepare(){
    id landed 900ms after the reset. So every round carries a number, and a publish that
    comes back to a round that no longer exists drops its answer instead of installing it. */
 let chRound=0;
-function chResetRound(){ chId=""; chPrep=null; chRound++; }
+function chResetRound(){ chId=""; chPrep=null; chPrepare._retried=false; chRound++; }
 async function chUpload(){
   if(!CH_MAKE||chId) return;
   /* Concurrent calls raced past the chId guard — the peek's pointerdown and the sheet
