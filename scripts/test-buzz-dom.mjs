@@ -15,7 +15,12 @@
  *
  *   PW_CORE=<dir with node_modules> node scripts/test-buzz-dom.mjs
  */
-import { readFileSync, globSync } from 'node:fs';
+/* globSync is NOT imported here: it landed in node:fs in Node 22, and the sync-mirror
+   workflow runs the gate on Node 20 — a static named import of a missing export is a
+   SyntaxError BEFORE the playwright-core skip can run, which turned this whole test into
+   "THE ONE-BUZZ SEEKER IS BROKEN" on a machine that was only supposed to skip it. It is
+   resolved dynamically below, after the skip guard, exactly like the other DOM tests. */
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,8 +60,10 @@ const JPG = Buffer.from(
   'WmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXG' +
   'x8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oACAEBAAA/AL9f/9k=', 'base64');
 
-const exe = (globSync('/opt/pw-browsers/chromium-*/chrome-linux/chrome') || [])[0]
-  || (globSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') || [])[0];
+const { globSync } = await import('node:fs');
+const glob = (p) => { try { return (typeof globSync === 'function' ? globSync(p) : []) || []; } catch { return []; } };
+const exe = glob('/opt/pw-browsers/chromium-*/chrome-linux/chrome')[0]
+  || glob('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')[0];
 if (!exe) { console.log('· no chromium found — skipping the buzz test'); server.close(); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
 let failed = 0;
