@@ -237,7 +237,12 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
      override would pass a file that had quietly put the dim-and-blur back on .show. The
      invariant is "this sheet never darkens the reveal", and the base rule is where that is
      true or false. */
-  const baseCss = html.match(/#shareSheet\{[^}]*\}/);
+  /* Anchored to the start of a line, because "#shareSheet{" is not a unique string: any
+     DESCENDANT selector ending in the sheet — `#stage.pwCover #shareSheet{...}` — ends with
+     the same six characters, and an unanchored match happily returned that one instead and
+     failed the file for not declaring a background it was never supposed to declare. The base
+     rule is the one that starts its own line. */
+  const baseCss = html.match(/^\s*#shareSheet\{[^}]*\}/m);
   if (!baseCss) bad('#shareSheet rule missing');
   else if (!/background:transparent/.test(baseCss[0]) || !/backdrop-filter:none/.test(baseCss[0])) {
     bad(`#shareSheet must not dim or blur the reveal in any state: ${baseCss[0]}`);
@@ -260,6 +265,41 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     const rule = (sel) => (html.match(new RegExp(sel.replace(/[.#]/g, '\\$&') + '\\{[^}]*\\}')) || [])[0] || '';
     const peekCss = rule('#shareSheet.peek');
     const showCss = rule('#shareSheet.show');
+    /* The third detent answers to the same rule as the short one: it is even smaller and sits
+       over the same live reveal, so it must never swallow a touch either. */
+    const miniCss = rule('#shareSheet.ssMini');
+    /pointer-events\s*:\s*auto/.test(miniCss)
+      ? bad('#shareSheet.ssMini takes pointer events — the folded sheet sits over a live reveal and '
+          + 'the wipe handle behind it stops responding')
+      : ok('the folded state stays transparent to touch');
+    /* AND IT KEEPS THE WHOLE HOME-INDICATOR INSET. The folded card was once trimmed to
+       `calc(var(--safe-b) - 14px)` to make it shorter, which put the grabber inside the bottom
+       ~20pt band iOS reserves for its own swipe — the system took the gesture and the sheet
+       would not come back up. No DOM test can catch it: headless reports no safe area at all,
+       so the arithmetic that breaks a phone is 0px either way here. The declaration is the
+       only place the mistake is visible, so the declaration is what gets checked. */
+    /* ON THE GRABBER, NOT ON THE CARD, and the difference is a bug that already shipped twice.
+       The padding has to hang off .ssGrab: that element is the only one in the folded sheet
+       with touch-action:none and a drag handler, so whatever it does NOT cover is a strip of
+       .ssCard that swallows a touch and hands it to the system — and from a sheet sitting on
+       the bottom edge, an unclaimed upward swipe is the iOS app switcher. On .ssCard it looked
+       identical and left a 5px handle. */
+    {
+      const grabCss = rule('#shareSheet.ssMini .ssGrab');
+      const cardCss = rule('#shareSheet.ssMini .ssCard');
+      const pad = (grabCss.match(/padding\s*:\s*([^;}]+)/) || [])[1] || '';
+      const cardPad = (cardCss.match(/padding\s*:\s*([^;}]+)/) || [])[1] || '';
+      !/var\(--safe-b\)/.test(pad)
+        ? bad(`#shareSheet.ssMini .ssGrab pads "${pad.trim()}" — the folded bar needs the full `
+            + 'var(--safe-b) beneath it, ON THE GRABBER, or iOS takes the swipe that reopens the sheet')
+        : /--safe-b\)\s*-/.test(pad)
+          ? bad(`#shareSheet.ssMini .ssGrab subtracts from the safe area ("${pad.trim()}") — that `
+              + 'is exactly what put the handle inside the home-indicator band')
+          : /[1-9]/.test(cardPad)
+            ? bad(`#shareSheet.ssMini .ssCard still pads "${cardPad.trim()}" — every padded pixel `
+                + 'there is outside the grabber, so it is a dead strip that leaks the gesture to iOS')
+            : ok('the folded bar clears the home indicator, and the grabber owns the whole target');
+    }
     /pointer-events\s*:\s*auto/.test(peekCss)
       ? bad('#shareSheet.peek takes pointer events — the short sheet sits over a live reveal and '
           + 'the wipe handle behind it stops responding')
@@ -268,7 +308,7 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       ? ok('the long state takes the backdrop, so a tap outside collapses it')
       : bad('#shareSheet.show does not take pointer events — the container is pointer-events:none, '
           + 'so shareSheetEl.onclick can never fire and tap-outside-to-dismiss is dead code');
-    [['peek', peekCss], ['show', showCss]].forEach(([n, css]) => {
+    [['peek', peekCss], ['show', showCss], ['mini', miniCss]].forEach(([n, css]) => {
       if (/backdrop-filter\s*:\s*(?!none)/.test(css) || /background\s*:\s*(?!transparent)/.test(css)) {
         bad(`#shareSheet.${n} puts a scrim back over the reveal: ${css}`);
       }
@@ -635,10 +675,22 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-handle-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · HANDLE TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? console.log('  \u00b7 HANDLE TEST SKIPPED \u2014 ' + out.trim().split('\n').pop())
     : ok('the name is typed once and survives the next launch (node scripts/test-handle-dom.mjs)');
 } catch (e) {
-  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+}
+
+/* ---- 11c. The full-bleed paywall arm ---------------------------------------------------- */
+/* Half of a 50/50 revenue experiment. Every other DOM test boots pinned to the sheet arm
+   (navigator.webdriver), so without this one the arm real users see would ship untested. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-pwfull-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  \u00b7 FULL-ARM PAYWALL TEST SKIPPED \u2014 ' + out.trim().split('\n').pop())
+    : ok('the full-bleed paywall arm renders and sells only real prices (node scripts/test-pwfull-dom.mjs)');
+} catch (e) {
+  bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
