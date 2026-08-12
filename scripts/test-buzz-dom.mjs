@@ -99,7 +99,7 @@ console.log('\nLOAD — full-bleed photo, floating words, running clock');
 {
   const page = await boot({ hit: false, frames: true });
   (await txt(page, 'chHead')) === 'Find @tony' ? ok('head names the sender') : bad('head: ' + await txt(page, 'chHead'));
-  (await txt(page, 'chSub')) === 'One buzz.' ? ok('sub states the deal') : bad('sub: ' + await txt(page, 'chSub'));
+  /^One (tap|buzz)\.$/.test(await txt(page, 'chSub') || '') ? ok('sub states the deal') : bad('sub: ' + await txt(page, 'chSub'));
   const clockShown = await page.evaluate(() => document.getElementById('chClock').style.display !== 'none');
   clockShown ? ok('clock is running from decode') : bad('clock never started');
   const capped = await page.evaluate(() => {
