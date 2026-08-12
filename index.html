@@ -1108,6 +1108,19 @@
      No backdrop, no blur, and pointer-events off the container so the reveal handle behind
      it still drags. Only the card itself takes touches. */
   #shareSheet.peek{display:flex;}
+  /* THE THIRD DETENT — collapsed to the handle, so the painting can be looked at whole.
+     A "mini" state existed once and was removed for a RENDERING bug, not a product reason:
+     it swapped classes outside setSheetSize(), so the card jumped instead of animating. It
+     comes back through the same single door as the other two, which is what makes it safe.
+     Reached ONLY by dragging the handle down from the peek — the sheet still ARRIVES in peek,
+     because the send is the flattest number in this app and starting folded would put it one
+     gesture further away. A tap on the handle, or a swipe up, brings it straight back. */
+  #shareSheet.mini{display:flex;}
+  #shareSheet.mini .ssCard > *:not(.ssGrab){display:none!important;}
+  /* Roomier than the peek's handle: at this size the grabber IS the control, so it gets a
+     thumb-sized target and a brighter bar than the one that only decorates a full card. */
+  #shareSheet.mini .ssGrab{padding:10px 0 calc(10px + var(--safe-b));}
+  #shareSheet.mini .ssGrab::before{width:52px;background:rgba(255,255,255,.55);}
   /* ONE RISE, AND IT COMES FROM .pwCard. There used to be a second animation here — a `.rise`
      one-shot class, added on arrival and removed 420ms later — layered on top of the
      `animation:pwUp` that .ssCard already inherits from .pwCard. Two animations on one
@@ -1155,7 +1168,7 @@
   /* The grabber is the affordance AND the swipe target: up opens, down steps it down. */
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
-  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab{display:block;}
+  #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab,#shareSheet.mini .ssGrab{display:block;}
   /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
      gradient, same 26px corners, same rise, same breathing mint glow — because the two are
      the only full-width sheets in the app and they were speaking in different voices: the
@@ -4733,7 +4746,7 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_publish_failed","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -4945,7 +4958,7 @@ function openShareSheet(via){
      and setSheetSize() plays the current height into the target one by measuring both. */
   setSheetSize("open"); haptic(10);
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","mini"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -4969,7 +4982,7 @@ function sheetToFloor(){
    empty green block instead of a tab. Worse, it was a state with nothing in it to act on.
    Short (peek: the round, the headline, Challenge a friend) or long (the full sheet). The
    sheet is one of those two the whole time it is on the reveal, and never anything else. */
-const SHEET_STEPS=["peek","open"];
+const SHEET_STEPS=["mini","peek","open"];
 /* THE ONE PLACE THE SHEET CHANGES SIZE. Three callers used to swap the classes themselves —
  * openShareSheet, sheetToFloor and stepSheet — so animating the change once means routing all
  * three through here rather than transitioning in three places and forgetting the fourth.
@@ -4991,11 +5004,12 @@ const SHEET_STEPS=["peek","open"];
  * never starts, and the timer is the only thing that catches that. */
 let sheetResizeT=null;
 function setSheetSize(next){
-  const cls = next==="open" ? "show" : "peek";
-  const apply=()=>{ shareSheetEl.classList.remove("show","peek"); shareSheetEl.classList.add(cls); };
+  const cls = next==="open" ? "show" : next;   // "mini" and "peek" are their own class names
+  const apply=()=>{ shareSheetEl.classList.remove("show","peek","mini"); shareSheetEl.classList.add(cls); };
   const card=shareSheetEl.querySelector(".ssCard");
   const was = shareSheetEl.classList.contains("show") ? "show"
-            : shareSheetEl.classList.contains("peek") ? "peek" : null;
+            : shareSheetEl.classList.contains("peek") ? "peek"
+            : shareSheetEl.classList.contains("mini") ? "mini" : null;
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   /* `was` is null when the sheet is not on screen at all — the Share CTA's hidden → open path.
      There is no height to animate FROM there; the card's own entrance (pwUp) is the animation. */
@@ -5007,7 +5021,7 @@ function setSheetSize(next){
   apply();
   const to=card.getBoundingClientRect().height;
   if(Math.abs(to-from)<2){ return; }           // same size — nothing worth transitioning
-  if(to<from) { shareSheetEl.classList.remove("show","peek"); shareSheetEl.classList.add(was); }
+  if(to<from) { shareSheetEl.classList.remove("show","peek","mini"); shareSheetEl.classList.add(was); }
   card.style.height=from+"px";
   shareSheetEl.classList.add("ssResizing");
   void card.offsetHeight;                      // commit `from` as a style, or the browser only ever sees `to`
@@ -5034,6 +5048,10 @@ function stepSheet(dir){
      still reported, but the sheet stays on screen — the number and the affordance are two
      different questions. */
   if(ssState==="open") track("share_dismissed",{via:"swipe",mode:shareMode,score:Math.round(currentScore||0)});
+  /* THE GUARD ON THIS FEATURE, as a number. Folding to the handle is a comfort — it must not
+     cost sends. sheet_minimized against the invite family per day is the whole test; if sends
+     fall while this climbs, the third detent goes back out. */
+  if(next==="mini") track("sheet_minimized",{score:Math.round(currentScore||0)});
   setSheetSize(next);
   ssState=next;
   haptic(8);
