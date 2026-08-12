@@ -2754,6 +2754,38 @@ async function startCamera(auto){
   else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera on this device — use a photo instead.");
   else camFail("Couldn’t reach the camera — use a photo instead.");
 }
+/* ONE DOOR FOR "GIVE ME A PHOTO", and on iOS it matters which one opens.
+ * <input type="file"> raises the system sheet: Photo Library, Take Photo, Choose File. Two
+ * of those are wrong here — "Take Photo" duplicates the shutter sitting right behind the
+ * menu, and "Choose File" offers the Files app to someone hiding a figure in a snapshot —
+ * and HTML cannot trim the list (`capture` forces the camera rather than removing it,
+ * `accept` has no "library only"). So when the wrapper can present the library on its own,
+ * it does; everywhere else the input stays exactly as it was.
+ * Inert until a build announces `photoPicker`, which is the point: no released binary can
+ * answer this message yet, and the fallback is the behaviour shipping today. */
+function pickPhoto(){
+  if(nativeCaps && nativeCaps.photoPicker && postNative({type:"pick-photo"})) return;
+  $("#fileInput").click();
+}
+/* The native picker hands back a data URL; the input hands back a File. Same destination,
+   two doors — this is the one usePhoto() reaches through after createObjectURL. */
+function usePhotoSrc(src){
+  if(!src) return;
+  photo.onload=()=>syncPreviewFit();
+  photo.src=src; photo.style.display="block";
+  stopCamView(); cam.style.display="none";
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  bgKind="photo"; torchOn=false;
+  enterCompose();
+}
+/* THE NAMESPACE IS CREATED HERE, not assumed. The declaration further down runs AFTER this
+   line, and the wrapper does not necessarily inject window.KAMO before the page's own
+   script: assigning into an undefined object throws at module scope, which is a blank app
+   for everyone. */
+window.KAMO=window.KAMO||{};
+window.KAMO.usePickedPhoto=(src)=>{ try{ usePhotoSrc(src); }catch(e){} };
+/* The native sheet never opened. Fall through to the input rather than leaving a dead tap. */
+window.KAMO.pickPhotoFailed=()=>{ try{ $("#fileInput").click(); }catch(e){} };
 function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
@@ -6753,7 +6785,7 @@ function startTimer(phase,seconds,onExpire){
 /* Backdrop tap. Once camBlocked is latched, retrying getUserMedia is guaranteed to fail
    the same way, so the backdrop hands over to the path that works rather than being a
    third control that appears to do nothing. */
-startEl.onclick=()=>{ if(camBlocked){ $("#fileInput").click(); return; } startCamera(); };
+startEl.onclick=()=>{ if(camBlocked){ pickPhoto(); return; } startCamera(); };
 // The tap must ALWAYS visibly do something — App Review called this button
 // "unresponsive" when getUserMedia hung silently behind it.
 $("#heroStart").onclick=async e=>{
@@ -6769,7 +6801,7 @@ $("#heroStart").onclick=async e=>{
   }
   /* Belt and braces: camFail hides this button when it has nothing to offer, but the handler
      must not depend on that CSS staying true. A blocked camera never un-blocks. */
-  if(camBlocked){ track("hero_tap",{action:"photo_fallback"}); $("#fileInput").click(); return; }
+  if(camBlocked){ track("hero_tap",{action:"photo_fallback"}); pickPhoto(); return; }
   track("hero_tap",{action:"camera"});
   const b=b0; if(b.dataset.busy==="1") return;
   const BUSY="Opening camera…";
@@ -6787,8 +6819,8 @@ $("#heroStart").onclick=async e=>{
 };
 // photo path never touches the camera — this is what keeps the app usable when
 // the camera is denied/unavailable (App Review devices hit exactly that).
-$("#heroPick").onclick=e=>{ e.stopPropagation(); $("#fileInput").click(); };
-$("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); $("#fileInput").click(); };
+$("#heroPick").onclick=e=>{ e.stopPropagation(); pickPhoto(); };
+$("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); pickPhoto(); };
 /* No pitch key for "plus": the ✦ button is not a refusal, so there is no tool to answer —
    it keeps the generic copy. The source still rides on paywall_viewed. */
 $("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall("plus"); };
