@@ -596,17 +596,18 @@
      the press state above .mid and the wordmark stops reacting to taps on the paint screen,
      which is precisely where a member is most likely to reach for it. */
   .brand:active{transform:translateX(-50%) scale(.94);}
-  /* ONE RULE FOR EVERY KAMO+ MARK IN THE APP: the word is white, only the + is green.
-     Not the whole mark mint (that made KAMO+ read as a badge rather than the logo), and not
-     the whole mark white (that lost the one bit of colour identifying what was paid for).
-     The + is the thing you bought, so the + is the thing that is coloured — here, on .pwKick
-     and on .kpBadge. Change one and change all three.
-     Kept slightly smaller and raised so it is still a suffix, not a fourth letter. Hidden by
-     default; revealed at load from the stored entitlement and again by refreshProUI() on
-     purchase and on restore. */
-  .brandPlus{display:none;color:var(--mint);font-size:.72em;font-weight:700;vertical-align:super;
-    margin-left:1px;text-shadow:0 0 12px rgba(95,230,164,.55);}
-  /* The + inside the two card marks. Same rule, so it gets the mint the word gives up. */
+  /* THE CAPTURE-SCREEN MARK IS FULL WHITE, + INCLUDED — founder's call, 2026-08-12. This
+     used to follow the card marks' rule (word white, + mint), but a mint + on the camera
+     made the app's own logo two-tone on the screen where it is chrome, not a pitch. The +
+     still appears for members — same size, same lift, still a suffix — it just stops being
+     coloured here. The CARD marks (.pwKick, .kpBadge) keep the mint +: there the + IS the
+     thing being sold/celebrated, so it keeps the one bit of colour. This block and .kPlus
+     are no longer a matched set — that divergence is the point.
+     Hidden by default; revealed at load from the stored entitlement and again by
+     refreshProUI() on purchase and on restore. */
+  .brandPlus{display:none;color:#fff;font-size:.72em;font-weight:700;vertical-align:super;
+    margin-left:1px;text-shadow:0 2px 10px rgba(0,0,0,.7);}
+  /* The + inside the two card marks stays mint — see the .brandPlus note above. */
   .kPlus{color:var(--mint);}
   /* Retake as a top-left nav button, aligned with Done */
   #btnBack{position:absolute;top:calc(var(--safe-t) + 10px);left:16px;z-index:18;height:40px;padding:0 15px 0 10px;border-radius:20px;border:1px solid var(--stroke);background:rgba(16,16,20,.5);backdrop-filter:blur(10px);color:#fff;font-size:15px;font-weight:700;display:none;align-items:center;gap:2px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);}
