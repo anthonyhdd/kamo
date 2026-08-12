@@ -19,15 +19,16 @@ import { createServer } from 'node:http';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { pwBases, chromeExe, PW_SETUP } from './lib/pw.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
 let chromium = null;
-for (const base of [process.env.PW_CORE, ROOT, process.cwd()]) {
+for (const base of pwBases(ROOT)) {
   try { ({ chromium } = req(base ? join(base, 'node_modules/playwright-core') : 'playwright-core')); break; } catch {}
 }
 if (!chromium) {
-  console.log('· playwright-core not installed — skipping the replay test (set PW_CORE=<dir with node_modules>)');
+  console.log('· playwright-core not installed — skipping the replay test — run: ' + PW_SETUP);
   process.exit(0);
 }
 const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
@@ -58,9 +59,8 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { globSync } = await import('node:fs');
 const glob = (p) => { try { return (typeof globSync === 'function' ? globSync(p) : []) || []; } catch { return []; } };
-const exe = glob('/opt/pw-browsers/chromium-*/chrome-linux/chrome')[0]
-  || glob('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')[0];
-if (!exe) { console.log('· no chromium found — skipping the replay test'); server.close(); process.exit(0); }
+const exe = chromeExe();
+if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
 let failed = 0;
 const ok = m => console.log('  ✓ ' + m), bad = m => { failed++; console.error('  ✗ ' + m); };

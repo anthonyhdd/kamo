@@ -36,15 +36,16 @@ import { createServer } from 'node:http';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { pwBases, chromeExe, PW_SETUP } from './lib/pw.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
 let chromium = null;
-for (const base of [process.env.PW_CORE, ROOT, process.cwd()]) {
+for (const base of pwBases(ROOT)) {
   try { ({ chromium } = req(base ? join(base, 'node_modules/playwright-core') : 'playwright-core')); break; } catch {}
 }
 if (!chromium) {
-  console.log('· playwright-core not installed — skipping the referral-link test (set PW_CORE=<dir with node_modules>)');
+  console.log('· playwright-core not installed — skipping the referral-link test — run: ' + PW_SETUP);
   process.exit(0);
 }
 const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
@@ -58,8 +59,8 @@ let failed = 0;
 const ok = (m) => console.log('  ✓ ' + m), bad = (m) => { failed++; console.error('  ✗ ' + m); };
 
 const { globSync } = await import('node:fs');
-const exe = (globSync('/opt/pw-browsers/chromium-*/chrome-linux/chrome') || [])[0];
-if (!exe) { console.log('· no chromium under /opt/pw-browsers — skipping'); process.exit(0); }
+const exe = chromeExe();
+if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
 
 /* Serve one page, open it as a seeker, tap the CTA, and return the URL the browser was
