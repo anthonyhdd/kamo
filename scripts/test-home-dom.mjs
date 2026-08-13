@@ -286,6 +286,49 @@ console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
   /^1 played your hide ·/.test(none.scoreText.trim()) && /nobody found you/.test(none.scoreText)
     ? ok('one player, none found → singular, and the loss is stated plainly')
     : bad(`the singular / nobody-found case reads: ${JSON.stringify(none.scoreText)}`);
+
+  /* THE ROW IS A BUTTON, AND TAPPING IT MUST NOT DISMISS THE CARD.
+     Reported from the field: "quand on tap sur la card ça ferme au lieu d'ouvrir le preview
+     ou le watch". Two faults met on the same gesture. The row had no handler at all, so a tap
+     that missed the three small controls did nothing — and the card's drag-to-close armed
+     INSIDE the list whenever it was too short to scroll, so the few pixels of travel in a
+     normal press cleared the 40px threshold and shut the card instead.
+     Asserted through a real press with movement rather than a bare .click(), because a
+     synthetic click has no travel and would pass against the very code that failed. */
+  await page.evaluate(() => window.__h.expand());
+  const tapped = await page.evaluate(async () => {
+    const row = document.querySelector('#khScore .khRow');
+    if (!row) return { err: 'no row' };
+    const r = row.getBoundingClientRect();
+    const x = Math.round(r.left + 12), y = Math.round(r.top + r.height / 2);
+    const o = (cy) => ({ bubbles: true, cancelable: true, pointerId: 3, pointerType: 'touch', clientX: x, clientY: cy });
+    /* Down, then 44px of drift — past the dismiss threshold — then up: a thumb reaching for
+       a control on a 46px row, which is exactly the gesture that was closing the card. */
+    row.dispatchEvent(new PointerEvent('pointerdown', o(y)));
+    row.dispatchEvent(new PointerEvent('pointermove', o(y + 44)));
+    row.dispatchEvent(new PointerEvent('pointerup', o(y + 44)));
+    await new Promise((r2) => setTimeout(r2, 150));
+    return { shown: document.getElementById('kamoHome').classList.contains('show'),
+             live: row.classList.contains('khRowTap') };
+  });
+  tapped.shown
+    ? ok('a press with travel on a row leaves the card open — the list is not a dismiss surface')
+    : bad('pressing a row closed the card: the drag-to-close still arms inside #khScore');
+  tapped.live
+    ? ok('and a played row is marked live, so the whole row is the target rather than three chips')
+    : bad('the row carries no tap affordance — only the small controls are reachable');
+
+  /* ONE SENTENCE, NOT THE SAME NUMBERS TWICE. The chips under the state line restated it word
+     for word ("1 tried" under "1 tried · nobody found you") and held the width that was
+     pushing the sentence onto a third line. */
+  const dup = await page.evaluate(() => {
+    const row = document.querySelector('#khScore .khRow');
+    return { txt: (row.querySelector('.khRowTxt') || {}).textContent || '',
+             chips: row.querySelectorAll('.khRowChips .chChip').length };
+  });
+  dup.chips === 0 && /1 tried/.test(dup.txt)
+    ? ok('and it states the count once, in the sentence, with no chip repeating it')
+    : bad(`the row repeats itself: ${dup.chips} chip(s) under ${JSON.stringify(dup.txt)}`);
 }
 
 /* TEN CHALLENGES IS THE MAXIMUM chMine() KEEPS, SO TEN IS THE SIZE THE CARD MUST SURVIVE.
