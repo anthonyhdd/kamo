@@ -748,6 +748,22 @@ try {
   bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12b-ter. The feed ---------------------------------------------------------------------
+   The feed does not reimplement the round — it mounts a real chSeek into each slide — so the
+   two ways it can be wrong are both invisible in a diff: the mount landing on document.body
+   (a fullscreen round with a dead scroller under it) and the previous round never being
+   destroyed (a clock per swipe, forever). The third assertion is the visibility default: a
+   row that flips its own label without calling set_hide_public reads as a setting that was
+   honoured, which is worse than having no row at all. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-feed-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · FEED TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('the feed plays real rounds and states where a photo goes (node scripts/test-feed-dom.mjs)');
+} catch (e) {
+  bad('THE FEED IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 12b-bis. The share sends THIS round's hide, and sends it now -------------------------
    Two field-reported bugs that hid each other: the upload starting on the same gesture as
    the tap (an 8s wait, then the generic invite), and chId surviving capture() so the second

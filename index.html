@@ -322,7 +322,15 @@
   /* No underlines on Restore / Terms / Privacy here — founder's call. On the photo they read
      as three scratches; white weight alone carries "tappable" on this arm. */
   #paywall.pwFull .pwFine a,#paywall.pwFull .pwFine button{color:rgba(255,255,255,.9);text-decoration:none;}
-  #btnLight{right:24px;}
+  /* THE FEED LIVES IN THE RIGHT CORNER, opposite the picker. Both corners now answer the
+     same question — "I don't want to make one right now" — in the two directions that exist:
+     use a photo you already have, or play somebody else's hide.
+     The torch shifts inboard rather than sharing the slot. It is display:none in the app by
+     construction (TORCH_EXPOSED_TO_WEB is false — see kamo-app/App.js for the camera blackout
+     that killed it), so this only ever separates two visible buttons in a plain browser. */
+  #btnFeed{right:24px;}
+  #btnFeed .kfDot{position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}
+  #btnLight{right:80px;}
   /* torch on = the button itself lights up */
   #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
   #btnLight.on svg{stroke:#04120b;fill:#04120b;}
@@ -1550,6 +1558,27 @@
      the 14px of air used to do. */
   .ssBtn:active{transform:scale(.96);}
   .ssMore{background:rgba(255,255,255,.06);}
+  /* WHERE THE PHOTO GOES, SAID BEFORE IT GOES THERE.
+     This row is the entire consent surface for the feed, so it is a row and not a setting
+     behind the gear: a default that publishes somebody's living room to strangers is only
+     defensible if the sentence saying so is on the screen they are already looking at, at
+     the size of everything else on it. It sits directly above the send buttons for the same
+     reason — it has to be read before the tap, not found after it. */
+  .ssVis{display:flex;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:10px 11px;border-radius:15px;
+    border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.045);cursor:pointer;text-align:left;
+    -webkit-tap-highlight-color:transparent;}
+  .ssVis:active{transform:scale(.98);}
+  .ssVisIco{flex:0 0 auto;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(95,230,164,.14);}
+  .ssVisIco svg{width:19px;height:19px;fill:none;stroke:var(--mint);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .ssVis[aria-pressed="false"] .ssVisIco{background:rgba(255,255,255,.08);}
+  .ssVis[aria-pressed="false"] .ssVisIco svg{stroke:rgba(255,255,255,.7);}
+  .ssVisTxt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .ssVisTxt b{font-family:var(--display);font-size:14.5px;font-weight:700;letter-spacing:-.2px;}
+  .ssVisTxt i{font-style:normal;font-size:11.5px;line-height:1.3;opacity:.62;}
+  .ssVisSw{flex:0 0 auto;width:42px;height:25px;border-radius:999px;background:var(--mint);position:relative;transition:background .15s;}
+  .ssVisSw i{position:absolute;top:3px;left:20px;width:19px;height:19px;border-radius:50%;background:#04120b;transition:left .15s;}
+  .ssVis[aria-pressed="false"] .ssVisSw{background:rgba(255,255,255,.22);}
+  .ssVis[aria-pressed="false"] .ssVisSw i{left:3px;background:rgba(255,255,255,.9);}
   /* Same quiet dismiss as the paywall's "Maybe later". */
   .ssClose{display:block;width:100%;margin-top:2px;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;font-weight:700;cursor:pointer;padding:8px;}
   /* QUIET WAS TOO QUIET. This was mint text on nothing — no slab, no border — sitting last
@@ -1641,6 +1670,10 @@
     <button id="btnPhoto" class="camBtn" aria-label="Pick a photo" title="Pick a photo">
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.4"/><circle cx="8.6" cy="10.2" r="1.7"/><path d="M21 16.5l-5-4.6L7 19"/></svg>
     </button>
+    <!-- the feed: everybody else's hides, playable without making one first -->
+    <button id="btnFeed" class="camBtn" aria-label="Play other hides" title="Play other hides">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+    </button>
     <!-- torch: only shown where it actually works (see setupTorch) -->
     <button id="btnLight" class="camBtn" aria-label="Light" title="Light">
       <svg viewBox="0 0 24 24"><path d="M13 2L4.5 13.2h6L9.8 22l8.7-11.2h-6z"/></svg>
@@ -1708,7 +1741,12 @@
              nothing is uploaded, shares hand a local file to the iOS share sheet.
              camFail() hides this: once the camera has already failed, neither sentence is
              answering the question the user now has. -->
-        <div id="heroNote">iOS will ask for camera access. Your photos never leave your phone.</div>
+        <!-- THIS LINE HAD TO CHANGE THE DAY THE FEED SHIPPED. "Your photos never leave your
+             phone" was already only true up to the share sheet — the finished JPEG is
+             uploaded so a friend can play it in a browser — and the feed makes it plainly
+             wrong: a public hide is shown to strangers. A priming note that reassures people
+             with something the app does not do is worse than no note at all. -->
+        <div id="heroNote">iOS will ask for camera access. Nothing is uploaded until you share — and you choose who sees it.</div>
         <div id="heroMsg"></div>
       </div>
       <div class="heroFoot">kamo app</div>
@@ -1976,6 +2014,17 @@
          gear. It has to be a direct child of .ssCard (a column), and the peek rule below only
          reveals direct children. check.mjs now asserts both, because this is invisible in a
          diff and obvious on a phone. -->
+    <!-- PUBLIC OR NOT, decided here, in front of the send. Declared in markup rather than
+         built in JS for the same reason as the preview card above it: check.mjs can see its
+         ids, and a JS failure leaves a row that says nothing rather than a hide that has
+         quietly gone public with no row to say so. Free either way — nothing about this is
+         behind KAMO+, because charging somebody to NOT be published is a toll on a default
+         they did not choose. -->
+    <button class="ssVis" id="ssVis" aria-pressed="true">
+      <span class="ssVisIco" id="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
+      <span class="ssVisTxt"><b id="ssVisT">Public</b><i id="ssVisS">Anyone can play it in the KAMO feed</i></span>
+      <span class="ssVisSw"><i></i></span>
+    </button>
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Challenge a friend</button>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
     <!-- SNAPCHAT AND TIKTOK ARE GONE AS BUTTONS, not as destinations. This sheet had nine
@@ -2878,7 +2927,7 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
+  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
@@ -2904,7 +2953,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
-  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
+  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
   resumeCamera();   // paused for the whole hide by capture()
@@ -3090,7 +3139,7 @@ function capture(){
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   resetZoom();   // every round starts framed as shot — a leftover zoom would silently crop the next hide
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; kfShowBtn(false); $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
   /* Reset to the roller on every capture for a non-member. Nothing hands the slider over any
      more now that the free round is gone, but this stays as belt and braces: a small brush
@@ -5336,7 +5385,27 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed"]);
+const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+/* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
+   the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
+   released build knows any of these, so through the bridge they would be dropped in total
+   silence while the feed looked like it was producing no behaviour at all. This page deploys
+   to GitHub Pages on its own; the binary does not. Routing direct is what makes the feed
+   measurable on the day it ships instead of after the next App Store review.
+   They land on the WEB Amplitude user, same as hide_published and hide_sent, so
+   feed_opened → feed_slide → hide_published joins at user level without a build. */
+"feed_opened","feed_closed","feed_slide","feed_empty","feed_empty_cta","feed_next_tapped",
+"feed_load_failed","hide_visibility_set",
+/* AND THE SEEKER'S OWN EVENTS, which have never needed routing before and now do. Every
+   seek_* event in this file's history fired in a plain browser — a ?h= link opens in Safari,
+   never inside the wrapper — so postNative() returned false and they went direct by accident
+   rather than by decision. The feed plays the same rounds INSIDE the app, where postNative()
+   succeeds and hands them to a binary whose allow-list has never contained a single seek_*
+   name. That is a silent drop of the entire round funnel: opened, found, missed, revealed.
+   Naming them here makes the routing the decision it always should have been, and keeps a
+   feed round and a link round on the same Amplitude user so they stay comparable. */
+"seek_opened","seek_missing","seek_found","seek_failed","seek_reveal_shown","seek_flip",
+"seek_rehide_tapped","seek_cta_tapped","seek_reported"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -6983,6 +7052,10 @@ $("#heroStart").onclick=async e=>{
 // the camera is denied/unavailable (App Review devices hit exactly that).
 $("#heroPick").onclick=e=>{ e.stopPropagation(); pickPhoto(); };
 $("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); pickPhoto(); };
+/* The other way out of "I don't want to make one right now" — see chFeed. stopPropagation
+   for the same reason as the picker: the stage under these buttons is the shutter's tap
+   target, so a click that bubbles takes a photo on the way past. */
+$("#btnFeed").onclick=e=>{ e.stopPropagation(); haptic(10); chFeed(); };
 /* No pitch key for "plus": the ✦ button is not a refusal, so there is no tool to answer —
    it keeps the generic copy. The source still rides on paywall_viewed. */
 $("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall("plus"); };
@@ -7706,6 +7779,55 @@ function chPrepare(){
    comes back to a round that no longer exists drops its answer instead of installing it. */
 let chRound=0;
 function chResetRound(){ chId=""; chPrep=null; chPrepare._retried=false; chRound++; }
+/* PUBLIC OR PRIVATE — the device's standing answer, and how it reaches the row.
+ *
+ * Public is the default because a feed with no supply is not a feed, and because the thing
+ * being published is a photo the author has just spent two minutes painting a figure into —
+ * it is made to be looked at. But it is a DEFAULT, not a policy: the switch is on the share
+ * sheet, in front of the send, free, and it sticks. Somebody who turns it off once never has
+ * to think about it again.
+ *
+ * The choice is applied AFTER create_hide rather than passed into it. create_hide already
+ * exists at three arities and PostgREST resolves overloads by the exact set of keys sent —
+ * a fourth would have to be added to all three, and a page that ships before the migration
+ * would 404 on every publish. A separate call can fail on its own, and its failure costs a
+ * hide its feed slot rather than costing the user their hide.
+ *
+ * Which way that failure falls is not an accident either: the column defaults to FALSE
+ * server-side, so a set_hide_public that never lands leaves the hide PRIVATE. The failure
+ * mode is "this did not get published to strangers", never "this got published to strangers
+ * without being asked".
+ */
+const KF_VIS_KEY="kamo_hide_public";
+function kfWantPublic(){ try{ return localStorage.getItem(KF_VIS_KEY)!=="0"; }catch(e){ return true; } }
+function kfSetWantPublic(on){ try{ localStorage.setItem(KF_VIS_KEY,on?"1":"0"); }catch(e){} }
+function kfApplyVisibility(id,pub){
+  if(!id) return;
+  try{ chRpc("set_hide_public",{p_id:id,p_public:!!pub}).catch(()=>{}); }catch(e){}
+}
+function kfRenderVis(){
+  const b=$("#ssVis"); if(!b) return;
+  const pub=kfWantPublic();
+  b.setAttribute("aria-pressed",pub?"true":"false");
+  const t=$("#ssVisT"), s=$("#ssVisS");
+  if(t) t.textContent=pub?"Public":"Private";
+  if(s) s.textContent=pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to";
+}
+try{
+  const vb=$("#ssVis");
+  if(vb) vb.onclick=(e)=>{
+    e.stopPropagation();
+    const on=!kfWantPublic();
+    kfSetWantPublic(on); kfRenderVis(); haptic(10);
+    track("hide_visibility_set",{public:on,published:!!chId});
+    /* Retroactive within the round: the sheet is often already open (and the hide already
+       published) when this is tapped, and a switch that only applied to the NEXT hide would
+       be a switch that does nothing at the moment it is used. */
+    if(chId) kfApplyVisibility(chId,on);
+  };
+  kfRenderVis();
+}catch(e){}
+
 async function chUpload(){
   if(!CH_MAKE||chId) return;
   /* Concurrent calls raced past the chId guard — the peek's pointerdown and the sheet
@@ -7747,7 +7869,11 @@ async function chUpload(){
        will ever open, which is strictly cheaper than sending a friend the wrong picture. */
     if(myRound!==chRound){ chId=""; track("hide_published_stale",{}); return; }
     chRemember(chId);
-    track("hide_published",{});
+    /* Straight after the row exists, so the window in which a hide is published but has no
+       visibility set is a single round trip wide — and on the private side of the default
+       for every millisecond of it. */
+    kfApplyVisibility(chId,kfWantPublic());
+    track("hide_published",{public:kfWantPublic()});
     chAttachPush();
     /* WHICH POPULATION MADE THIS, so the loop can still be read once a second country is
        running. Fire-and-forget and after the id exists, exactly like the push token: no
@@ -8361,7 +8487,38 @@ function chRepublish(){
  *   no install. The loop turns between two people of whom only one has the app; the
  *   install comes later, when they want their own photo. */
 const CH_TAPS=5;   // legacy: chStateLine still narrates pre-buzz hides in taps
-function chSeek(){
+/* ONE ROUND, AND IT NO LONGER ASSUMES IT OWNS THE PAGE.
+ *
+ * This was written for exactly one caller: a ?h= link, one hide, one screen, mounted on
+ * document.body and never taken down. The feed needs the SAME round — same aim, same buzz,
+ * same server answer, same reveal — mounted inside a slide and destroyed on the next swipe.
+ * Rewriting it for the feed would have produced a second implementation of the only thing
+ * this app does, and the two would have drifted the first time one was touched.
+ *
+ * So the three things that were hardcoded are now arguments:
+ *   hideId  — was the CH_SEEK constant. Defaults back to it, so the link path is unchanged.
+ *   host    — was document.body.
+ *   feed    — swaps the ending's "Get KAMO" CTA for "Next", since a player already inside
+ *             the app does not need to be sent to the App Store.
+ * Everything between the first touch and the reveal is untouched.
+ *
+ * Returns a handle with destroy(), because a feed that cannot unmount a round leaks a
+ * setInterval and a full-screen listener per swipe.
+ */
+function chSeek(hideId,opts){
+  opts=opts||{};
+  const HID=String(hideId||CH_SEEK);
+  const HOST=opts.host||document.body;
+  const FEED=!!opts.feed;
+  /* ALIASED, because ending() takes a parameter called `opts` too and shadows this one.
+     Reaching for the caller's callbacks in there under the name `opts` would silently read
+     the ending's own {rehide, camoSrc} bag and do nothing. */
+  const OPT=opts;
+  /* WHICH SURFACE THE ROUND WAS PLAYED ON. chWebTrack stamps `surface` off CH_SEEK, which is
+     empty for every feed round — so without this the feed's funnel would land in the same
+     bucket as the compose screen and "do feed players convert" would have no way to be asked. */
+  const TP=(o)=>FEED?Object.assign({src:"feed"},o||{}):(o||{});
+  const ctl={destroy:()=>{}};
   const st=document.createElement("style");
   st.textContent=
     ".chS{position:fixed;inset:0;height:100dvh;z-index:9000;background:var(--bg);overflow:hidden;font-family:var(--font);color:var(--text);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}"
@@ -8425,18 +8582,58 @@ function chSeek(){
     +".chCta2{width:100%;max-width:340px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.2px;}"
     +".chCta2:active{transform:scale(.98);}"
     +".chNum{color:var(--mint);font-weight:800;}"
-    +".chR{background:none;border:none;color:rgba(255,255,255,.3);font-size:11px;text-decoration:underline;margin-top:2px;font-family:var(--font);}";
-  document.head.appendChild(st);
+    +".chR{background:none;border:none;color:rgba(255,255,255,.3);font-size:11px;text-decoration:underline;margin-top:2px;font-family:var(--font);}"
+    /* MOUNTED IN A SLIDE, the round stops being the viewport and becomes the slide: absolute
+       instead of fixed, and out of the 9000 layer so the feed's own chrome sits above it.
+       .chRet stays position:fixed on purpose — the reticle tracks a finger on the SCREEN,
+       not a box, and nothing between it and the viewport is transformed. */
+    +".chS.chIn{position:absolute;height:100%;z-index:1;background:transparent;}"
+    /* CLEARS THE FEED'S CLOSE BUTTON. The round's headline is centred at the very top of the
+       screen, which is exactly where the feed puts its ✕ — the first build had "@tony hid a
+       body in here" printed straight through it. The round moves down rather than the ✕
+       moving in: the headline is the thing that has to be readable, and the corner is the
+       thing that has to be findable in the same place on every slide. */
+    +".chS.chIn .chTop{padding-top:calc(56px + var(--safe-t));}"
+    +".chS.chIn .chBrand{display:none;}"
+    /* THE ONE GESTURE THAT HAD TO BE GIVEN BACK. The stage owns every touch on the link
+       screen (touch-action:none) because there is nothing to scroll. In the feed there is,
+       and a photo that swallows the swipe is a feed nobody can get out of.
+       pan-y hands VERTICAL drags to the browser: a swipe scrolls to the next hide and the
+       stage gets a pointercancel, which closeAim() already treats as an ABANDONED aim rather
+       than a buzz — so scrolling can never spend somebody's one tap. A touch that does not
+       move never starts a scroll, so it still commits.
+       Pinch survives: pan-y does not include pinch-zoom, so the browser stays out of
+       two-finger gestures and the zoom code still runs — which matters, because zoom is how
+       a 40px figure gets found at all. */
+    +".chS.chIn .chStage{touch-action:pan-y;}";
+  /* ONE STYLESHEET PER PAGE, not per round. The feed mounts and destroys a round on every
+     swipe and these rules are identical every time, so the first call owns them and the rest
+     are dropped — otherwise the document grows by ~4KB of duplicate CSS per hide played. */
+  if(!document.getElementById("chSeekCSS")){ st.id="chSeekCSS"; document.head.appendChild(st); }
 
-  const w=document.createElement("div"); w.className="chS";
+  const w=document.createElement("div"); w.className="chS"+(FEED?" chIn":"");
   w.innerHTML='<div class="chStage" id="chStage"><div class="chZoom" id="chZoom"><div class="chFrame" id="chFrame"></div></div></div>'
     +'<div class="chTop"><div class="chBrand">KA<b>MO</b></div>'
     +'<h1 class="chHead" id="chHead">Loading…</h1>'
     +'<p class="chSub" id="chSub"></p></div>'
     +'<div class="chClock" id="chClock" style="display:none">0.0s</div>'
     +'<div id="chFoot"></div>';
-  document.body.appendChild(w);
-  const $$=(id)=>document.getElementById(id);
+  HOST.appendChild(w);
+  /* SCOPED TO THIS ROUND'S WRAPPER, not to the document. The feed keeps a neighbouring
+     slide's finished round in the DOM while the next one mounts, so #chFrame and #chFoot
+     exist twice for a beat — getElementById would hand the new round the old round's
+     elements and the buzz would land on the wrong photo. */
+  const $$=(id)=>w.querySelector("#"+id);
+  /* DESTROYABLE FROM THE INSTANT IT IS MOUNTED, not from the instant it is ready.
+     A round spends its first moments awaiting get_hide, and in the feed a fast swipe outruns
+     that request every time — on a slow network, most of the time. Arming destroy() only
+     after the response arrived meant those rounds could never be torn down: the wrapper
+     stayed in the slide forever and the clock that started on image load kept ticking
+     against a screen nobody was looking at. `killed` is then checked on the far side of the
+     await, so a cancelled round stops building instead of quietly finishing into a detached
+     tree. */
+  let killed=false;
+  ctl.destroy=()=>{ killed=true; try{ clearInterval(ctl._clock); }catch(_){} try{ w.remove(); }catch(_){} };
   const buzzHaptic=(p)=>{ try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){} };
 
   /* Self-removing on purpose: the ending card mounts a moment later, and an effect layer
@@ -8466,9 +8663,10 @@ function chSeek(){
   }
 
   (async()=>{
-    let h; try{ h=await chRpc("get_hide",{p_id:CH_SEEK}); }catch(e){}
-    if(!h||!h.img_path){ track("seek_missing",{}); ending("This hide is gone.","Expired, or taken down.",{}); return; }
-    track("seek_opened",{});
+    let h; try{ h=await chRpc("get_hide",{p_id:HID}); }catch(e){}
+    if(killed) return;                 // swiped past before the hide arrived — build nothing
+    if(!h||!h.img_path){ track("seek_missing",TP()); ending("This hide is gone.","Expired, or taken down.",{}); return; }
+    track("seek_opened",TP());
 
     const camoSrc=CH_URL+"/storage/v1/object/public/hides/"+h.img_path;
     const img=document.createElement("img");
@@ -8483,7 +8681,8 @@ function chSeek(){
     const trace={v:1,vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
     const clockEl=$$("chClock");
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
-      clock=setInterval(()=>{ clockEl.textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100); };
+      clock=setInterval(()=>{ clockEl.textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100);
+      ctl._clock=clock; };   // the handle destroy() clears — see `killed` above
     /* THE CLOCK STARTS AT DECODE, not at the first touch. With one buzz there is no
        "first tap" to start from, and every player must be measured from the same moment
        or the percentile lies. The deal line is two words; nobody is punished for reading. */
@@ -8594,7 +8793,7 @@ function chSeek(){
 
     function sendTrace(why){
       if(traceSent) return; traceSent=true;
-      try{ trace.why=why; chRpc("save_seek_trace",{p_id:CH_SEEK,p_trace:trace}).catch(()=>{}); }catch(_){}
+      try{ trace.why=why; chRpc("save_seek_trace",{p_id:HID,p_trace:trace}).catch(()=>{}); }catch(_){}
     }
 
     async function buzz(sx,sy){
@@ -8615,14 +8814,14 @@ function chSeek(){
       $$("chFrame").appendChild(mk);
       buzzHaptic(20);
       let res=null;
-      try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:ms,p_v:2}); }
-      catch(e){ try{ res=await chRpc("submit_attempt",{p_id:CH_SEEK,p_x:x,p_y:y,p_ms:ms}); }catch(_){}}
+      try{ res=await chRpc("submit_attempt",{p_id:HID,p_x:x,p_y:y,p_ms:ms,p_v:2}); }
+      catch(e){ try{ res=await chRpc("submit_attempt",{p_id:HID,p_x:x,p_y:y,p_ms:ms}); }catch(_){}}
       if(res&&res.hit){
         mk.className="chMark hit stay";
         chCelebrate($$("chFrame"),fx,fy);
         $$("chFrame").classList.add("found");
         confettiBurst($$("chFrame"));
-        track("seek_found",{ms:ms,pct:(res.pct==null?-1:res.pct),others:res.others|0});
+        track("seek_found",TP({ms:ms,pct:(res.pct==null?-1:res.pct),others:res.others|0}));
         sendTrace("hit");
         const frames=await snapReveal(false);
         /* ④ — the chrono noted, now it speaks: rank among everyone who buzzed this hide
@@ -8641,7 +8840,7 @@ function chSeek(){
         if(frames) armFlipUI();
       } else {
         img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
-        track("seek_failed",{reason:"miss",ms:ms});
+        track("seek_failed",TP({reason:"miss",ms:ms}));
         sendTrace("miss");
         const frames=await snapReveal(true);
         ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
@@ -8655,7 +8854,7 @@ function chSeek(){
       quit.remove(); closeAim(false);
       const ms=t0?Date.now()-t0:0;
       trace.end={ms:ms,x:-1,y:-1};
-      track("seek_failed",{reason:"giveup",ms:ms});
+      track("seek_failed",TP({reason:"giveup",ms:ms}));
       sendTrace("giveup");
       const frames=await snapReveal(true);
       ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
@@ -8685,7 +8884,7 @@ function chSeek(){
          exactly as before, and only a LOSS needs it (a finder is already staring at it). */
       if(lost){
         try{
-          const g=await chRpc("reveal_hide",{p_id:CH_SEEK});
+          const g=await chRpc("reveal_hide",{p_id:HID});
           if(g&&g.cx!=null){
             const mk2=document.createElement("div"); mk2.className="chMark hit";
             mk2.style.left=(g.cx*img.offsetWidth)+"px"; mk2.style.top=(g.cy*img.offsetHeight)+"px";
@@ -8718,8 +8917,13 @@ function chSeek(){
        runs from here: place, paint, send. crossOrigin, or the board taints and the
        publish dies at toBlob — storage answers ACAO:* (verified). */
     function chRehide(src){
-      track("seek_rehide_tapped",{});
-      try{ w.remove(); st.remove(); }catch(_){}
+      track("seek_rehide_tapped",FEED?{src:"feed"}:{});
+      /* THE STYLESHEET IS NOT TORN DOWN ANY MORE. It is shared by every round on the page
+         now (see the chSeekCSS guard above), so removing it here would leave the next hide
+         in the feed rendering unstyled markup. ~4KB of .ch-prefixed rules sitting against a
+         screen that has no .ch elements costs nothing. */
+      try{ ctl.destroy(); }catch(_){}
+      if(OPT.onClose) OPT.onClose();
       photo.crossOrigin="anonymous";
       photo.onload=()=>syncPreviewFit();
       photo.src=src;
@@ -8730,27 +8934,286 @@ function chSeek(){
     /* One ending, three ways in — found, missed, given up — because the reveal is the
        product, not a punishment, and a second ending screen would be a second thing to
        maintain and diverge. */
-    function ending(head,sub,opts){
+    function ending(head,sub,eopts){
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
       const q=$$("chQuit"); if(q) q.remove();
+      /* THE CARD SAYS SOMETHING DIFFERENT INSIDE THE APP, because "Get KAMO" is being said
+         to somebody who already has it. In the feed the round ends on the two moves that
+         are actually available: make one out of this photo, or go to the next hide. */
       $$("chFoot").innerHTML='<div class="chCard">'
-        +(opts.rehide?'<button class="chCta" id="chReh">Send one back</button>':'')
-        +'<button class="'+(opts.rehide?'chCta2':'chCta')+'" id="chGo">'+(opts.rehide?'Get KAMO':'Play KAMO')+'</button>'
+        +(eopts.rehide?'<button class="chCta" id="chReh">'+(FEED?'Hide one in this photo':'Send one back')+'</button>':'')
+        +(FEED
+            ? '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chNext">Next hide ↑</button>'
+            : '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+'</button>')
         +'<button class="chR" id="chRep">Report this photo</button></div>';
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
          failure this change exists to end. Split seek_cta_tapped by tier and a template that
          stopped resolving shows up as a column, not as a slow drift in "organic". */
-      $$("chGo").onclick=()=>{ const u=refLink("seek_cta",CH_SEEK);
+      if($$("chGo")) $$("chGo").onclick=()=>{ const u=refLink("seek_cta",HID);
         track("seek_cta_tapped",{tier:u===appLink?"plain":"onelink"});
         location.href=u; };
-      if(opts.rehide){ $$("chReh").onclick=()=>chRehide(opts.camoSrc); }
-      $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:CH_SEEK}).catch(()=>{}); track("seek_reported",{});
+      if($$("chNext")) $$("chNext").onclick=()=>{ track("feed_next_tapped",{}); if(OPT.onNext) OPT.onNext(); };
+      if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
+      $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
+        /* Out of THIS device's feed straight away, not only out of everyone else's on the
+           next page. n_reported=1 already excludes it server-side (see feed_page), but the
+           page the reporter is holding was fetched before they tapped. */
+        if(OPT.onReported) OPT.onReported(HID);
         $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
     }
   })();
+  /* The handle, returned SYNCHRONOUSLY while the round above is still fetching its hide.
+     That is deliberate: the feed has to be able to destroy a round it only just mounted —
+     a fast swipe outruns get_hide every time — and a caller that had to await the round
+     before it could cancel it would have no way to cancel exactly the rounds worth
+     cancelling. destroy() is a no-op until the round has something to tear down. */
+  return ctl;
 }
+
+/* ========================================================================================
+ * THE FEED — everybody else's hides, played without making one first.
+ *
+ * WHY THIS EXISTS, in one number: in the first seven days this app published 2980 hides and
+ * 271 of them were ever opened by anybody. Nine percent. The other 2709 are finished
+ * puzzles — painted, uploaded, sitting in a bucket — that no human being has looked at,
+ * because the only way to reach one was to be personally sent a link. The supply was never
+ * the problem. The distribution was, and it was 1:1.
+ *
+ * It also removes the wall on the other side. Until now the app asked for a camera
+ * permission, a photo, and a completed paint before it gave anything back, which is a lot to
+ * ask of somebody who has not yet seen what the game is. Now the second button on the camera
+ * screen goes straight to a round.
+ *
+ * THE SHAPE IS THE ROUND, NOT A GALLERY. Each slide is a real chSeek — same aim, same buzz,
+ * same server answer, same reveal — mounted into the slide instead of the page. One is alive
+ * at a time and the previous one is destroyed on the way past, so the cost of a long scroll
+ * is one round, not thirty.
+ *
+ * WHAT IS NOT HERE, deliberately: nothing retroactive. Every hide made before this shipped
+ * stays out of the feed forever (see the is_public migration) because it was made under a
+ * promise that it was going to one person. The feed is built out of hides whose author was
+ * told, in words, on the share sheet, that it would play here.
+ */
+const KF_PAGE=8;
+/* PostgREST returns a SET-returning function as a JSON ARRAY, and chRpc unwraps arrays to
+   their first element — correct for every RPC that existed before this one, and silently
+   wrong here: the feed would have loaded exactly one hide per page and looked like an empty
+   table. Same headers, different unwrap. */
+async function kfRpc(fn,body){
+  const r=await fetch(CH_URL+"/rest/v1/rpc/"+fn,{method:"POST",
+    headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(fn+" "+r.status);
+  const j=await r.json(); return Array.isArray(j)?j:(j?[j]:[]);
+}
+/* ALREADY PLAYED IS ALREADY SPOILED. One buzz is the whole game, so a hide you have seen
+   has no round left in it — serving it again is serving a photo whose answer you know.
+   Capped: this is a skip list, not a history, and an unbounded array in localStorage is a
+   slow leak that eventually costs more than it saves. */
+const KF_SEEN_KEY="kamo_feed_seen";
+function kfSeen(){ try{ const a=JSON.parse(localStorage.getItem(KF_SEEN_KEY)||"[]"); return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }catch(e){ return []; } }
+function kfMarkSeen(id){
+  if(!id) return;
+  try{ const a=kfSeen().filter(x=>x!==id); a.unshift(id);
+       localStorage.setItem(KF_SEEN_KEY,JSON.stringify(a.slice(0,400))); }catch(e){}
+}
+function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b.style.display=on?"flex":"none"; }catch(e){} }
+
+const KF_CSS=
+  "#kfeed{position:fixed;inset:0;height:100dvh;z-index:9400;background:#04060a;overflow:hidden;font-family:var(--font);color:var(--text);-webkit-user-select:none;user-select:none;}"
+  /* scroll-snap does the paging. scroll-snap-stop:always is the difference between a feed
+     and a fling: without it one hard flick skips four hides, and each of those is somebody's
+     photo that will now never be looked at. */
+  +".kfScroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;}"
+  +".kfSlide{position:relative;height:100dvh;scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;background:#04060a;}"
+  /* The slide paints its own photo before the round mounts, so a swipe lands on a picture
+     instead of on black. Dimmed, because it is a placeholder and the round's own <img>
+     arrives on top of it a beat later — the same file, already in cache. */
+  +".kfPrev{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:.5;}"
+  +".kfHost{position:absolute;inset:0;}"
+  +".kfBar{position:absolute;left:0;right:0;top:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(8px + var(--safe-t)) 12px 22px;background:linear-gradient(180deg,rgba(4,6,10,.72),rgba(4,6,10,0));pointer-events:none;}"
+  +".kfBar>*{pointer-events:auto;}"
+  +".kfClose{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;}"
+  +".kfClose:active{transform:scale(.92);}"
+
+  /* The swipe affordance. Shown on the first slide only and killed by the first scroll — an
+     instruction that stays on screen after it has been obeyed is a permanent obstruction. */
+  +".kfHint{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;bottom:calc(84px + var(--safe-b));z-index:25;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.82);background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:7px 14px;border-radius:999px;pointer-events:none;animation:kfBob 1.9s ease-in-out infinite;}"
+  +"@keyframes kfBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-6px)}}"
+  +".kfMid{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}"
+  +".kfMid .kfCard{width:min(90vw,380px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:22px 20px 18px;display:flex;flex-direction:column;gap:12px;align-items:center;}"
+  +".kfMid h2{font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:-.3px;margin:0;}"
+  +".kfMid p{font-size:13.5px;line-height:1.45;opacity:.8;margin:0;}"
+  +".kfMid button{width:100%;height:50px;border:none;border-radius:15px;background:#fff;color:#0a0b0e;font-family:var(--display);font-size:16px;font-weight:700;}"
+  +".kfSpin{width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:var(--mint);animation:kfSpin .8s linear infinite;}"
+  +"@keyframes kfSpin{to{transform:rotate(360deg)}}";
+
+let kfState=null;
+function chFeed(){
+  if(kfState) return;
+  if(!document.getElementById("kfCSS")){
+    const st=document.createElement("style"); st.id="kfCSS"; st.textContent=KF_CSS; document.head.appendChild(st);
+  }
+  const root=document.createElement("div"); root.id="kfeed";
+  root.innerHTML='<div class="kfScroll" id="kfScroll"></div>'
+    /* THE BAR IS THE ✕ AND NOTHING ELSE. It carried a centred "Hides from everyone" and the
+       round's own headline is centred at the top of the same screen — the two printed
+       through each other. The label was orientation for a screen that does not need any:
+       the player is looking at somebody's photo with "@tony hid a body in here" over it. */
+    +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button></div>'
+    +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
+  document.body.appendChild(root);
+  const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
+  const S={cursor:null,loading:false,done:false,slides:[],active:-1,round:null,played:0,hinted:false};
+  kfState=S;
+  track("feed_opened",{});
+
+  const midCard=(title,body,cta,onCta)=>{
+    mid.style.display="flex";
+    mid.innerHTML='<div class="kfCard"><h2></h2><p></p>'+(cta?'<button id="kfCta"></button>':'')+'</div>';
+    mid.querySelector("h2").textContent=title;
+    mid.querySelector("p").textContent=body;
+    if(cta){ const b=mid.querySelector("#kfCta"); b.textContent=cta; b.onclick=onCta; }
+  };
+  const midOff=()=>{ mid.style.display="none"; mid.innerHTML=""; };
+
+  function close(silent){
+    if(kfState!==S) return;
+    kfState=null;
+    try{ if(S.round) S.round.destroy(); }catch(_){}
+    try{ io.disconnect(); }catch(_){}
+    try{ root.remove(); }catch(_){}
+    if(!silent) track("feed_closed",{played:S.played,slides:S.slides.length});
+  }
+
+  /* ONE ROUND ALIVE AT A TIME. The previous slide's round is destroyed on the way past
+     rather than left mounted: each one holds a 10Hz clock and a set of pointer listeners,
+     and a feed that keeps them is a feed that gets slower the longer it is used. The photo
+     stays (kfPrev), so scrolling back shows the picture — just not a second playable round
+     on a hide whose answer this device has already spent. */
+  function activate(i){
+    if(i<0||i>=S.slides.length||i===S.active) return;
+    if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
+    S.active=i;
+    const s=S.slides[i];
+    kfMarkSeen(s.row.id);
+    S.played++;
+    track("feed_slide",{n:S.played});
+    S.round=chSeek(s.row.id,{
+      host:s.host, feed:true,
+      onNext:()=>goNext(),
+      onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
+      onReported:(id)=>drop(id),
+    });
+    if(i>=S.slides.length-3) load();
+  }
+
+  function goNext(){
+    const nxt=S.slides[S.active+1];
+    if(nxt){ nxt.el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
+    load().then(()=>{ const n2=S.slides[S.active+1]; if(n2) n2.el.scrollIntoView({behavior:"smooth",block:"start"}); });
+  }
+
+  /* A REPORTED PHOTO LEAVES THIS SCREEN NOW. feed_page already excludes anything with a
+     report on it, but the page in the reporter's hand was fetched before they tapped — so
+     without this the photo they just objected to stays under their thumb until they close
+     the feed. */
+  function drop(id){
+    const i=S.slides.findIndex(s=>s.row.id===id);
+    if(i<0) return;
+    const wasActive=(i===S.active);
+    try{ S.slides[i].el.remove(); }catch(_){}
+    S.slides.splice(i,1);
+    if(wasActive){ S.active=-1; setTimeout(()=>activate(Math.min(i,S.slides.length-1)),350); }
+    else if(i<S.active) S.active--;
+  }
+
+  function addSlide(row){
+    const el=document.createElement("section"); el.className="kfSlide";
+    const img=document.createElement("img");
+    img.className="kfPrev"; img.alt=""; img.decoding="async"; img.draggable=false;
+    img.src=CH_URL+"/storage/v1/object/public/hides/"+row.img_path;
+    const host=document.createElement("div"); host.className="kfHost";
+    el.appendChild(img); el.appendChild(host);
+    scroll.appendChild(el);
+    const s={el,host,row}; S.slides.push(s);
+    io.observe(el);
+    return s;
+  }
+
+  async function load(){
+    if(S.loading||S.done) return;
+    S.loading=true;
+    try{
+      const rows=await kfRpc("feed_page",{p_before:S.cursor,p_limit:KF_PAGE});
+      if(kfState!==S) return;                        // closed while the request was in flight
+      if(!rows.length){ S.done=true; }
+      else{
+        /* The cursor advances on the RAW page, before filtering. Advancing it on the kept
+           rows instead would re-request the same window forever the moment a whole page was
+           filtered out — which is the normal case for anyone who has played a while. */
+        S.cursor=rows[rows.length-1].created_at;
+        if(rows.length<KF_PAGE) S.done=true;
+        const skip=new Set(kfSeen().concat(chMine()));
+        rows.filter(r=>r&&r.id&&r.img_path&&!skip.has(r.id)).forEach(addSlide);
+      }
+    }catch(e){
+      track("feed_load_failed",{reason:String((e&&e.message)||e).slice(0,120)});
+      if(kfState===S&&!S.slides.length){
+        midCard("Couldn't load the feed.","Check your connection and try again.","Retry",()=>{ midOff(); S.done=false; load().then(paint); });
+      }
+      S.done=true;
+    }
+    finally{ if(kfState===S) S.loading=false; }
+  }
+
+  const io=new IntersectionObserver((ents)=>{
+    if(kfState!==S) return;
+    ents.forEach(en=>{
+      if(!en.isIntersecting||en.intersectionRatio<0.6) return;
+      const i=S.slides.findIndex(s=>s.el===en.target);
+      if(i>=0) activate(i);
+    });
+  },{root:scroll,threshold:[0.6]});
+
+  scroll.addEventListener("scroll",()=>{
+    if(S.hinted) return;
+    S.hinted=true;
+    const h=root.querySelector("#kfHint"); if(h) h.remove();
+  },{passive:true});
+
+  root.querySelector("#kfClose").onclick=()=>close();
+
+  function paint(){
+    if(kfState!==S) return;
+    if(!S.slides.length){
+      /* THE COLD START, SAID HONESTLY. On day one this is what everybody sees, and it is not
+         an error: the feed is empty because nothing has been published to it yet, and the
+         only thing that fills it is the next hide somebody makes. So the empty state is the
+         invitation, not an apology. */
+      midCard("Nothing here yet.",
+        "The feed plays hides people chose to share publicly. Make one and it can be the first — you pick public or private when you send it.",
+        "Make a hide",()=>{ track("feed_empty_cta",{}); close(); });
+      track("feed_empty",{});
+      return;
+    }
+    midOff();
+    if(!S.hinted&&!root.querySelector("#kfHint")){
+      const h=document.createElement("div"); h.className="kfHint"; h.id="kfHint"; h.textContent="Swipe up for the next hide ↑";
+      root.appendChild(h);
+    }
+    activate(0);
+  }
+  load().then(paint);
+}
+/* TEST HOOK, and deliberately not on window.KAMO. That object is the wrapper's bridge
+   contract — everything on it is something App.js calls — and a test affordance has no
+   business in a contract. scripts/test-feed-dom.mjs opens the feed the way a phone does, by
+   clicking #btnFeed; what it cannot reach from the DOM is kfApplyVisibility, because the id
+   it acts on lives in a module-scoped `chId` that only exists after a real publish. */
+window.KAMOFEED={ open:chFeed, setVisibility:kfApplyVisibility, wantPublic:kfWantPublic };
 
 /* THE SEEKER NEVER MEETS THE CAMERA. Arriving on ?h= means someone sent you a hide to
    find: no permission sheet, no hero, no three.js scene — just the photo and a tap. The
