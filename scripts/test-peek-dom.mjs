@@ -47,7 +47,13 @@ const html = real.slice(0, at)
   + 'copy(){return{generic:pwGenericSub(),'
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
-  + 'facts:{paint:PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS,lo:CH_LIMIT_MIN,hi:CH_LIMIT_MAX}};},'
+  /* CH_LIMIT_MIN / CH_LIMIT_MAX ARE GONE, and reading them here is what turned this suite
+     from FAILING into CRASHING — a ReferenceError inside page.evaluate aborts the run, so
+     check.mjs printed "IS BROKEN" with no detail and the real failures underneath were
+     invisible. They were the round-settings bounds; the seeker plays one buzz on no clock
+     now, so there is no clock to bound and no paywall line left that quotes one. CH_TAPS
+     survives only because chStateLine() still narrates pre-buzz hides with it. */
+  + 'facts:{paint:PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS}};},'
   /* chGeom() needs a hider projected from the 3D scene, and this harness has no camera — so
      the preview would bail on its first line for a reason that has nothing to do with what is
      being tested. Stubbed to a hider dead centre. chGeom is a function DECLARATION, so it is
@@ -303,7 +309,16 @@ console.log('\nTHE PRIMARY LOOKS PRIMARY');
 }
 
 console.log('\nTHE SHORT SHEET IS STILL SHORT');
-seen.tabs && seen.tabs.display === 'none' ? ok('the Challenge / Before-After tabs are hidden') : bad('the tabs are showing — this is not the short state');
+/* THE TABS ARE NOT HIDDEN, THEY ARE DELETED. #ssMode is no longer in the markup at all — the
+   Challenge / Before-After switch went with the tab removal, and only its CSS survives as an
+   orphan rule. The old assertion asked whether the element was display:none, so an element
+   that does not exist read as "the tabs are showing", which is the exact opposite of the
+   truth and sent the next reader looking for a peek-state CSS bug that was never there.
+   What is worth asserting is that they have not come back: a share sheet that regrows a mode
+   switch in the peek state is the design this whole state was built to replace. */
+seen.tabs === null
+  ? ok('the Challenge / Before-After tabs are gone from the sheet entirely')
+  : bad(`#ssMode is back in the DOM (display ${seen.tabs && seen.tabs.display}) — the peek state does not have a mode switch`);
 /* Instagram is DELIBERATELY in the short state — 7 taps in 7 days told us the destinations were
    unreachable, not unwanted. What must stay true is that it is second: below the CTA, never
    above it. If that order ever flips, the loudest thing on the sheet becomes the share that

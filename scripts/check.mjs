@@ -789,7 +789,19 @@ try {
     ? skipped('test-peek-dom.mjs', 'DOM TEST', out)
     : ok('the short sheet renders correctly (node scripts/test-peek-dom.mjs for the detail)');
 } catch (e) {
-  stale('the short sheet (test-peek-dom.mjs)', 'asserts the share-sheet TABS, which were removed — 13 assertions describe the pre-tab-removal design');
+  /* STILL QUARANTINED, but it no longer CRASHES, and the reason is now accurate rather than
+     a guess. It read CH_LIMIT_MIN/CH_LIMIT_MAX in page.evaluate — constants deleted with the
+     round settings — and a ReferenceError there aborts the run, so this printed "IS BROKEN"
+     with no detail and hid everything underneath. That is fixed, along with the tabs
+     assertion, which asked whether #ssMode was display:none when the element is gone from the
+     markup entirely and so reported "the tabs are showing" — the opposite of the truth.
+     WHAT IS ACTUALLY LEFT is not tabs at all: the sheet's LONG state measures 25px against a
+     372px peek in this harness, which cascades into most of the remaining failures (the drag,
+     the tap-outside handler, the third detent, the card-follows-finger assertions). Either
+     the long state genuinely regressed or the harness stopped building the content it
+     measures — and those are different bugs with different fixes, so it is not being guessed
+     at here. Run it and read the first failure; the rest follow from it. */
+  stale('the short sheet (test-peek-dom.mjs)', 'the LONG state measures 25px against a 372px peek — one root cause under most of its 14 failures. No longer crashes: the failures are readable now');
 }
 
 /* ---- 9. The results chip ---------------------------------------------------------------
@@ -801,7 +813,11 @@ try {
     ? skipped('test-mine-dom.mjs', 'RESULTS-CHIP DOM TEST', out)
     : ok('the results chip behaves (node scripts/test-mine-dom.mjs for the detail)');
 } catch (e) {
-  stale('the results chip (test-mine-dom.mjs)', 'requires the share message to quote the round terms, which was deliberately rewritten');
+  /* OUT OF QUARANTINE. It required the resend message to quote "30 sec and 5 taps"; the round
+     settings are retired and the seeker plays one buzz on no clock, so the assertion was
+     inverted rather than deleted — neither a hide storing those values nor one storing none
+     may quote them, and both must state the deal actually on offer. */
+  bad('THE RESULTS CHIP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
 /* ---- 10. The creator pass --------------------------------------------------------------
@@ -828,7 +844,11 @@ try {
     ? skipped('test-home-dom.mjs', 'PLAYER-CARD TEST', out)
     : ok('the player card keeps a clean handle and claims only what is true (node scripts/test-home-dom.mjs)');
 } catch (e) {
-  stale('the player card (test-home-dom.mjs)', 'clicks #khEdit, which no longer exists — the headline became the edit control');
+  /* OUT OF QUARANTINE. It clicked #khEdit, a pencil control that no longer exists — the
+     headline itself became the way back into the field. The assertion it carried is the one
+     that matters (there has to be a way to fix a typo after the field collapses), so it moved
+     onto #khTitle rather than being dropped. */
+  bad('THE PLAYER CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
 /* ---- 11b. The name has to survive the next launch ---------------------------------------

@@ -930,7 +930,12 @@
      box (founder, 2026-08-12). The chips are taller and quieter at rest; the selected one
      carries the mint ring, and the New chip's figure inherits its text colour so the mark
      lights up with the selection. */
-  .khChar{display:flex;gap:10px;justify-content:center;margin:16px 0 18px;}
+  /* TIGHTER TO THE SUBLINE ABOVE IT. 16px on top of the subline's own bottom margin left a
+     gap wide enough to read as a section break, so "Original / New" floated between the name
+     and the rest of the card belonging to neither. It is the first control under the
+     headline; it should sit with it. The bottom margin stays — the swatch row underneath is
+     a different choice and does want the separation. */
+  .khChar{display:flex;gap:10px;justify-content:center;margin:8px 0 14px;}
   .khCharOpt{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:40px;
     font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:-.2px;color:rgba(255,255,255,.55);
     background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:0 18px;cursor:pointer;
@@ -1116,7 +1121,19 @@
      only has to be recognisable to the person who took it. */
   .khRow{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--stroke);}
   .khRow:first-child{border-top:none;padding-top:2px;}
-  .khRowTxt{flex:1;min-width:0;font-size:12.5px;line-height:1.3;display:block;}
+  /* THE WHOLE ROW IS LIVE (see khRenderRows), so it has to say so and it has to answer a
+     press. Cursor and the tap-highlight suppression are the same treatment every other
+     control on this card wears; the active state is deliberately a background rather than a
+     scale, because scaling a row inside a scroller fights the scroll. */
+  .khRowTap{cursor:pointer;-webkit-tap-highlight-color:transparent;border-radius:10px;
+    transition:background .12s ease;}
+  .khRowTap:active{background:rgba(255,255,255,.05);}
+  /* TWO LINES, NEVER THREE. The state line is the widest thing on the row and it was wrapping
+     to three in the middle column — the row then grew past the thumbnail and the list read as
+     ragged. Dropping the duplicate chips gave the sentence its width back; this stops it
+     running away again if a longer state line is ever added. */
+  .khRowTxt{flex:1;min-width:0;font-size:12.5px;line-height:1.3;display:-webkit-box;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:12.5px;color:inherit;}
   /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
      .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
@@ -5279,8 +5296,18 @@ function openKamoHome(){
      would make the list unreadable — the gesture to look further down it and the gesture to
      dismiss the card would be the same one. Only while it can actually scroll: collapsed, it
      is one line and a drag there means what it means anywhere else on the card. */
-  const inScroller=(t)=>{ const s=t&&t.closest&&t.closest("#khScore");
-    return !!s && s.scrollHeight>s.clientHeight+1; };
+  /* THE LIST IS CONTENT, NOT A DISMISS SURFACE — and the `scrollHeight>clientHeight` half of
+     this guard is what made the card close under a finger that was only trying to tap a row.
+     The idea was that a list too short to scroll cannot be scrolled, so a drag inside it is
+     unambiguous. It is not: a tap on a phone is a press with a few pixels of travel, the rows
+     are 46px tall with three live controls on each, and the closing gesture only needs 40px
+     downward — which a thumb reaching for Watch produces without its owner intending a drag
+     at all. So the card dismissed itself instead of playing the replay, which is the reported
+     bug and also what "tapping the card did nothing" in the peek suite was really describing.
+     Now: anywhere inside #khScore never arms the dismiss, whether it scrolls or not. The
+     card's own chrome — the name, the character row, the finishes, the padding — is still a
+     drag-to-close surface, which is what that gesture was added for. */
+  const inScroller=(t)=>!!(t&&t.closest&&t.closest("#khScore"));
   card.addEventListener("pointerdown",e=>{ y0=inScroller(e.target)?null:e.clientY; fired=false; },{passive:true});
   card.addEventListener("pointermove",e=>{
     if(y0===null||fired) return;
@@ -9319,9 +9346,15 @@ function khRowHtml(h,i){
      did, which is the only news this surface exists to deliver. The share message still quotes
      the terms when the hide stores them (inventing them would promise a deal the round does
      not honour — that rule is unchanged). */
+  /* AND NOW THE COUNTS ARE GONE TOO, because they were the SAME FACTS TWICE. chStateLine()
+     already opens with "1 tried · nobody found you"; a "1 tried" chip underneath it restates
+     the first half word for word and a "3 found" chip restates the second. Two lines saying
+     one thing, on the narrowest column on the card — which is also why the state line was
+     wrapping to three lines: the chips were holding width the sentence needed.
+     The row now carries one sentence and its controls. Nothing is lost: every number the
+     chips showed is in the line above them, in a form that reads as news rather than as a
+     dashboard. */
   const chips=[];
-  if(h&&h.n_attempts>0) chips.push('<span class="chChip">'+h.n_attempts+' tried</span>');
-  if(h&&h.n_found>0)    chips.push('<span class="chChip">'+h.n_found+' found</span>');
   /* WATCH comes before SEND on a hide somebody has already played. The row's job is to
      report what other people did; until now it could only say it in numbers. */
   const watch = (h&&h.n_attempts>0) ? '<button class="khWatch" data-w="'+i+'">Watch</button>' : '';
@@ -9346,6 +9379,26 @@ function khRowHtml(h,i){
 function khRenderRows(el,rows,head){
   el.innerHTML = (head?'<div class="khHead">'+head+'<span class="khMore">Hide these</span></div>':'')
     + '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
+  /* THE WHOLE ROW IS THE TAP TARGET, not the three small controls on it. Until now a tap
+     anywhere else on the row did nothing at all — and because the card's drag-to-close armed
+     inside the list, "nothing" was often "the card shut". A 46px row with a photo on it looks
+     tappable, so it has to be.
+     IT DOES WHAT WATCH DOES, and deliberately not what Send does: Watch is the row's own
+     story — what other people did with this hide — and it is reversible, while Send opens a
+     share sheet, which is not a thing to trigger from a stray tap on a sentence. A row with
+     nothing to watch stays inert rather than inventing a second meaning for the same gesture.
+     Delegated through the button so there is exactly one path into khReplay(), and so a row
+     whose Watch is absent cannot reach it at all. */
+  el.querySelectorAll(".khRow").forEach((row)=>{
+    const w=row.querySelector(".khWatch:not(.khHeatBtn)");
+    if(!w) return;
+    row.classList.add("khRowTap");
+    row.addEventListener("click",(ev)=>{
+      /* The controls own their own taps — this only catches what falls between them. */
+      if(ev.target.closest("button")) return;
+      w.click();
+    });
+  });
   el.querySelectorAll(".khSend").forEach((b)=>{
     b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
   });
