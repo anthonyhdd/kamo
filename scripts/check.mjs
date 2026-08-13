@@ -963,6 +963,39 @@ try {
   else ok('the seeker CTA still routes through refLink(), not the bare listing');
 }
 
+/* THE ID MUST NOT GO BACK BEHIND THE BYTES.
+   This has now shipped broken twice, and both times it read as a share bug rather than an
+   ordering bug: create_hide was reachable only after `await chPrepare()`, so the link did not
+   exist until a ~200KB JPEG had crossed the network, and every send inside that window went
+   out as the generic invite with a ?i=1 link and no game behind it. On the web path — which
+   cannot wait at all, because navigator.share needs the tap's activation — that was 6 sends
+   in 10 across 12-13 Aug.
+   The runtime assertion lives in test-share-dom (ROUND 4) and is the real one. This is the
+   cheap one that fires without a browser, because the reordering it guards against is a
+   two-line refactor that reads perfectly reasonably in a diff. */
+{
+  const up = html.match(/async function chUpload\(\)\{[\s\S]*?\n\}/);
+  if (!up) bad('chUpload() is gone — the publish path cannot be checked');
+  else {
+    /* Sliced at the CALL, not at the string: "create_hide" is named in three comments inside
+       this function, the first of them 196 characters in, and slicing there cut the window
+       off before the code it exists to read. */
+    const call = up[0].indexOf('chRpc("create_hide"');
+    const head = call < 0 ? '' : up[0].slice(0, call);
+    if (call < 0)
+      bad('chUpload() no longer calls chRpc("create_hide", …) — the publish path cannot be checked');
+    else if (/await\s+chPrepare\s*\(/.test(head))
+      bad('chUpload() awaits chPrepare() BEFORE create_hide — the hide id is queued behind the\n'
+        + '    image upload again, so every share in that 3-6s window sends the generic invite\n'
+        + '    and a ?i=1 link with no hide in it. Take the name from chSlot() and let the bytes\n'
+        + '    travel on their own; see the note above chSlot().');
+    else if (!/const\s+slot\s*=\s*chSlot\(\)/.test(head))
+      bad('chUpload() no longer takes its storage name from chSlot() — the id is only as fast\n'
+        + '    as whatever now produces that name.');
+    else ok('the hide id is taken from chSlot(), not awaited behind the upload');
+  }
+}
+
 /* ---- 15. The claim App Review rejected --------------------------------------------------
    1.0.9 (42) was rejected on guideline 2.1(b): the paywall advertised a 3-day trial while
    Apple's payment sheet showed none. The screen must never promise an offer the store did
