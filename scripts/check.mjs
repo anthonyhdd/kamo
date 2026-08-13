@@ -43,6 +43,28 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
    entry that outlives the drift it describes is how this file lied in the first place. */
 const staleSuites = [];
 const stale = (name, why) => { staleSuites.push(name); console.log(`  ! STALE — ${name}: ${why}`); };
+/* ===== AND A SKIP IS STILL A PASS, WHICH IS THE OTHER HALF OF THE SAME HOLE ==================
+   scripts/lib/pw.mjs made the browser findable, and `stale` made drift loud. Neither closes
+   the original hole: a machine with no playwright-core still prints a `·` line, still exits 0,
+   and still ends on "all checks passed" having run nothing. On a laptop that is correct —
+   playwright-core is deliberately not a dependency of a repo that ships one HTML file.
+   In CI it cannot be: that is the one place the browser is installed on purpose, so "not
+   installed" can only mean the setup step broke. KAMO_CI=1 says so, and turns a skip into a
+   failure. Unset, behaviour is exactly what it was.
+   test-pass-dom is exempt: it skips for want of the live creator-pass phrase, which is a
+   secret and not a browser, and no CI setup can conjure it. */
+const CI = process.env.KAMO_CI === '1';
+const SECRET_GATED = new Set(['test-pass-dom.mjs']);
+function skipped(file, label, out) {
+  const why = out.trim().split('\n').pop();
+  if (CI && !SECRET_GATED.has(file)) {
+    bad(`${label} DID NOT RUN — ${why}\n`
+      + '    KAMO_CI=1 is set, so the browser was supposed to be there. That makes this a broken\n'
+      + '    setup step rather than a skippable test.');
+    return;
+  }
+  console.log(`  · ${label} SKIPPED — ${why}`);
+}
 
 /* ---- 1. Every inline script must parse -------------------------------------------------
    The one failure that takes the entire app down at once, for everyone, in two minutes. */
@@ -652,7 +674,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-peek-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · DOM TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-peek-dom.mjs', 'DOM TEST', out)
     : ok('the short sheet renders correctly (node scripts/test-peek-dom.mjs for the detail)');
 } catch (e) {
   stale('the short sheet (test-peek-dom.mjs)', 'asserts the share-sheet TABS, which were removed — 13 assertions describe the pre-tab-removal design');
@@ -664,7 +686,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-mine-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · RESULTS-CHIP DOM TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-mine-dom.mjs', 'RESULTS-CHIP DOM TEST', out)
     : ok('the results chip behaves (node scripts/test-mine-dom.mjs for the detail)');
 } catch (e) {
   stale('the results chip (test-mine-dom.mjs)', 'requires the share message to quote the round terms, which was deliberately rewritten');
@@ -678,7 +700,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-pass-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · CREATOR-PASS TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-pass-dom.mjs', 'CREATOR-PASS TEST', out)
     : ok('the creator pass unlocks, persists and can be revoked (node scripts/test-pass-dom.mjs)');
 } catch (e) {
   bad('THE CREATOR PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
@@ -691,7 +713,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-home-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · PLAYER-CARD TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-home-dom.mjs', 'PLAYER-CARD TEST', out)
     : ok('the player card keeps a clean handle and claims only what is true (node scripts/test-home-dom.mjs)');
 } catch (e) {
   stale('the player card (test-home-dom.mjs)', 'clicks #khEdit, which no longer exists — the headline became the edit control');
@@ -706,7 +728,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-handle-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  \u00b7 HANDLE TEST SKIPPED \u2014 ' + out.trim().split('\n').pop())
+    ? skipped('test-handle-dom.mjs', 'HANDLE TEST', out)
     : ok('the name is typed once and survives the next launch (node scripts/test-handle-dom.mjs)');
 } catch (e) {
   bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
@@ -718,7 +740,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-pwfull-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  \u00b7 FULL-ARM PAYWALL TEST SKIPPED \u2014 ' + out.trim().split('\n').pop())
+    ? skipped('test-pwfull-dom.mjs', 'FULL-ARM PAYWALL TEST', out)
     : ok('the full-bleed paywall arm renders and sells only real prices (node scripts/test-pwfull-dom.mjs)');
 } catch (e) {
   bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
@@ -728,7 +750,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-seek-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · SEEKER TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-seek-dom.mjs', 'SEEKER TEST', out)
     : ok('the seeker screen names the sender (node scripts/test-seek-dom.mjs)');
 } catch (e) {
   bad('THE SEEKER SCREEN IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
@@ -742,7 +764,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-buzz-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · BUZZ TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-buzz-dom.mjs', 'BUZZ TEST', out)
     : ok('the one-buzz round behaves end to end (node scripts/test-buzz-dom.mjs)');
 } catch (e) {
   bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
@@ -772,7 +794,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-share-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · SHARE-TIMING TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-share-dom.mjs', 'SHARE-TIMING TEST', out)
     : ok('the share is instant and always its own hide (node scripts/test-share-dom.mjs)');
 } catch (e) {
   bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
@@ -787,7 +809,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-replay-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · REPLAY TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-replay-dom.mjs', 'REPLAY TEST', out)
     : ok('the replay plays and never leaks the winning spot (node scripts/test-replay-dom.mjs)');
 } catch (e) {
   bad('THE REPLAY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
@@ -812,7 +834,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-brush-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · BRUSH TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-brush-dom.mjs', 'BRUSH TEST', out)
     : ok('members get the brush range they paid for (node scripts/test-brush-dom.mjs)');
 } catch (e) {
   bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
@@ -827,7 +849,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-reflink-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · REFERRAL-LINK TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-reflink-dom.mjs', 'REFERRAL-LINK TEST', out)
     : ok('the seeker CTA is attributed (node scripts/test-reflink-dom.mjs)');
 } catch (e) {
   bad('THE REFERRAL LINK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
@@ -854,7 +876,7 @@ try {
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-trial-copy-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? console.log('  · TRIAL-COPY TEST SKIPPED — ' + out.trim().split('\n').pop())
+    ? skipped('test-trial-copy-dom.mjs', 'TRIAL-COPY TEST', out)
     : ok('the paywall promises only what the store returned (node scripts/test-trial-copy-dom.mjs)');
 } catch (e) {
   bad('THE TRIAL COPY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
