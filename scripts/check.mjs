@@ -947,7 +947,14 @@ try {
    It is narrowed in the page and again in create_hide, and this is the assertion that the
    third layer never becomes markup. A single innerHTML here would undo both. */
 {
-  const seek = html.match(/\$\$\("chHead"\)\.textContent\s*=\s*h\.name\s*\?/);
+  /* MATCHED ON THE INTENT, NOT ON THE SHAPE. This pinned the exact expression
+     `textContent = h.name ?`, so the day the headline gained a second branch (the first feed
+     slide says the sentence, the rest say the name) it went red on a change that kept both
+     properties it exists to protect. What must stay true is narrower and worth stating: the
+     headline is written with textContent, it still reads h.name, and chHead never takes
+     innerHTML anywhere in the file. */
+  const assign = html.match(/\$\$\("chHead"\)\.textContent\s*=([\s\S]{0,400}?);/);
+  const seek = assign && /h\.name/.test(assign[1]) && !/\$\$\("chHead"\)\.innerHTML/.test(html);
   seek
     ? ok('the seeker headline names the sender, via textContent')
     : bad('the seeker headline no longer branches on h.name through textContent — either the '

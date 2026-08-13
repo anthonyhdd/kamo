@@ -6948,7 +6948,7 @@ function chPrevPlay(){
       +'</div></div>';
     document.body.appendChild(w);
     const who=getHandle();
-    document.getElementById("chPPh").textContent = who ? "@"+who+" hid a body in here" : "Someone hid a body in here";
+    document.getElementById("chPPh").textContent = who ? "@"+who+" hid a kamo here" : "Someone hid a kamo here";
 
     const frame=document.getElementById("chPPframe");
     /* The frame takes the BOARD's shape, so the hide fills it edge to edge instead of sitting
@@ -7215,7 +7215,7 @@ $("#ssInvite").onclick=async()=>{
      line that has always shipped. */
   const who=getHandle();
   const text = link
-    ? (who ? "🫥 @"+who+" hid a body in this photo." : "🫥 There's a body hidden in this photo.")
+    ? (who ? "@"+who+" hid a kamo in this pic." : "Someone hid a kamo in this pic.")
       +"\nOne tap to find it."
       +"\n\n"+link
     : "🫥 KAMO — paint yourself into the background until nobody can find you."
@@ -9877,7 +9877,13 @@ function chSeek(hideId,opts){
     /* THE NAME IS THE HEADLINE. "Someone hid a body in here" spent the widest line on the
        screen saying nothing about who — and in a feed of strangers, who is the only thing
        that makes the next photo different from the last. The sentence moves to the sub. */
-    $$("chHead").textContent = h.name ? "@"+h.name : "Someone hid a body in here";
+    /* FIRST SLIDE SAYS THE SENTENCE, THE REST SAY THE NAME. Somebody meeting the feed needs
+       to be told what they are looking at once; by the second photo the only thing that
+       differs between slides is who made it, and repeating the sentence spends the widest
+       line on the screen saying what they already know. */
+    $$("chHead").textContent = (OPT.firstInFeed||!FEED)
+      ? (h.name ? "@"+h.name+" hid a kamo here" : "Someone hid a kamo here")
+      : (h.name ? "@"+h.name : "Someone hid a kamo here");
 /* WHICH ROUND THIS IS, and it is not decoration. "Send one back" hands the answered hide's
        own camouflaged photo to the next round, so a chain accumulates figures: by round six the
        picture holds six hidden people. Saying so is what makes that legible instead of eerie —
@@ -10433,7 +10439,8 @@ function chFeed(){
        (n_reported = 0 in the filter), so this is the fastest lever in the product and it
        was behind the slowest gesture. Right-hand side, away from the ✕. */
     +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button>'
-    +'<span style="flex:1"></span>'
+    /* NEXT TO THE ✕, NOT OPPOSITE IT. On the right it landed on top of the round's own clock
+       chip, which sits in that corner on every slide — the count showed through the flag. */
     +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
@@ -10474,7 +10481,7 @@ function chFeed(){
     S.played++;
     track("feed_slide",{n:S.played,replay:!!s.replay});
     S.round=chSeek(s.row.id,{
-      host:s.host, feed:true, replay:!!s.replay,
+      host:s.host, feed:true, replay:!!s.replay, firstInFeed:(S.played===1),
       onNext:()=>goNext(),
       onEnded:()=>{ if(S.killHint) S.killHint(); },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
