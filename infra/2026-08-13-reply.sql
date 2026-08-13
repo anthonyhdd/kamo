@@ -128,3 +128,159 @@ drop trigger if exists trg_notify_hide_reply on public.hides;
 create trigger trg_notify_hide_reply
   after insert on public.hides
   for each row execute function notify_hide_reply();
+
+
+-- ============================================================================================
+-- ROUND TWO OF THE SAME DAY: SIX ROUNDS, SIX FIGURES, AND FIVE OF THEM SCORED AS WRONG.
+--
+-- "Send one back" hands the answered hide's own camouflaged JPEG to the next round, because the
+-- figure painted into it is invisible by construction and the image can carry another. True for
+-- round two. By round six the photo holds six hidden people and submit_attempt tests the tap
+-- against exactly one of them — so a player who correctly spots a camouflaged figure is told
+-- they missed. In a hide-and-seek game that is the worst feedback available, and it gets more
+-- likely the longer a chain runs: it lands hardest on the most engaged players.
+--
+-- The fix is not to forbid the accumulation. It is to recognise it: the chain is a linked list
+-- through reply_to and every link carries its own answer key, so an "old" find can be named.
+-- Applied as migration `reply_rounds_and_old_finds`. The DDL is reproduced here in full
+-- rather than referenced: this directory is the only record of this database that lives in
+-- version control, and a pointer to a migration name in a dashboard is not a record.
+
+alter table public.hides add column if not exists round integer not null default 1;
+
+-- Depth computed once at insert rather than walked on every read: a chain is read far more
+-- often than it is extended, and a recursive CTE per seeker load is a cost paid forever to
+-- avoid storing one integer.
+create or replace function public.create_hide(
+  p_img_path text, p_cx real, p_cy real, p_r real, p_secs integer, p_coverage integer,
+  p_limit_s integer, p_max_taps integer, p_name text, p_reply_to text)
+returns text
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare v_id text; v_name text; v_parent text; v_round int := 1;
+begin
+  v_id := encode(gen_random_bytes(8), 'hex');
+  v_name := nullif(regexp_replace(coalesce(p_name, ''), '[^A-Za-z0-9_.]', '', 'g'), '');
+  select h.id, h.round + 1 into v_parent, v_round from hides h where h.id = p_reply_to;
+  insert into hides (id, img_path, cx, cy, r, secs, coverage, limit_s, max_taps, name,
+                     reply_to, round)
+  values (v_id, p_img_path, p_cx, p_cy, p_r, p_secs, p_coverage, p_limit_s, p_max_taps,
+          left(v_name, 16), v_parent, coalesce(v_round, 1));
+  return v_id;
+end $function$;
+
+-- get_hide is DROPPED to gain a column: Postgres cannot widen a set-returning function's row
+-- type in place. Safe in the deploy gap either way — a page loaded a minute ago reads the
+-- columns it knows and ignores `round`.
+drop function if exists public.get_hide(text);
+create function public.get_hide(p_id text)
+returns table(img_path text, secs integer, n_attempts integer, n_found integer,
+              limit_s integer, max_taps integer, name text, found_tap integer,
+              burned boolean, sent boolean, round integer)
+language sql
+stable
+security definer
+set search_path to 'public'
+as $function$
+  select h.img_path, h.secs, h.n_attempts, h.n_found, h.limit_s, h.max_taps, h.name,
+    (select cnt from (
+       select count(*)::int as cnt
+       from attempts a
+       where a.hide_id = h.id
+         and a.created_at <= (select min(a2.created_at) from attempts a2
+                              where a2.hide_id = h.id and a2.hit)
+     ) t where exists (select 1 from attempts a3 where a3.hide_id = h.id and a3.hit)
+    ) as found_tap,
+    (not exists (select 1 from attempts a4 where a4.hide_id = h.id and a4.hit)
+     and (select count(*) from attempts a5 where a5.hide_id = h.id) >= coalesce(h.max_taps, 5)
+    ) as burned,
+    (h.sent_at is not null) as sent,
+    h.round
+  from hides h
+  where h.id = p_id and not h.blocked and h.expires_at > now()
+    and coalesce(h.coverage, 100) >= 30;
+$function$;
+
+-- Same drop-and-recreate, same reason. The 4-argument form is deliberately left alone: it is
+-- the fallback the page uses when this one 404s mid-deploy, and it must keep answering the old
+-- shape.
+drop function if exists public.submit_attempt(text, real, real, integer, integer);
+create function public.submit_attempt(p_id text, p_x real, p_y real, p_ms integer, p_v integer)
+returns table(hit boolean, tries integer, missed integer, secs integer,
+              pct integer, others integer, scope text,
+              old_round integer, old_name text)
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  h public.hides%rowtype;
+  v_hit boolean; v_tries int; v_found int;
+  v_others int; v_worse int; v_ms int; v_scope text; v_pct int;
+  v_old_round int; v_old_name text;
+  MIN_FIELD constant int := 5;   -- below this the hide's own field is noise, not a ranking
+begin
+  select * into h from hides where id = p_id and not blocked and expires_at > now();
+  if not FOUND then raise exception 'no such hide'; end if;
+
+  v_ms := greatest(0, coalesce(p_ms, 0));
+  v_hit := sqrt(power(p_x - h.cx, 2) + power(p_y - h.cy, 2)) <= h.r;
+
+  /* THE TAP THAT FOUND THE WRONG PERSON. Only on a miss, and only up the chain: the answer for
+     THIS round is untouched, so nothing here can turn a miss into a hit or leak where the
+     current figure is. All it can do is name a figure the player has already found with their
+     own eyes — the difference between "wrong" and "wrong one".
+     Deepest ancestor first: the most recent one is the likeliest thing they were looking at.
+     The depth cap is a cycle guard — reply_to can only point at a row that already existed, so
+     a loop should be impossible, and "should be impossible" is not a reason to let recursion
+     run unbounded inside a function on the tap path. */
+  if not v_hit and h.reply_to is not null then
+    with recursive chain(id, cx, cy, r, round, name, reply_to, depth) as (
+      select p.id, p.cx, p.cy, p.r, p.round, p.name, p.reply_to, 1
+        from hides p where p.id = h.reply_to
+      union all
+      select p.id, p.cx, p.cy, p.r, p.round, p.name, p.reply_to, c.depth + 1
+        from hides p join chain c on p.id = c.reply_to
+       where c.depth < 20
+    )
+    select c.round, c.name into v_old_round, v_old_name
+      from chain c
+     where sqrt(power(p_x - c.cx, 2) + power(p_y - c.cy, 2)) <= c.r
+     order by c.round desc
+     limit 1;
+  end if;
+
+  -- Ranked BEFORE the insert, so "others" is everyone who played before me.
+  select count(*),
+         count(*) filter (where (not a.hit) or (a.hit and a.ms > v_ms))
+    into v_others, v_worse
+  from attempts a where a.hide_id = p_id and a.v >= 2;
+
+  if v_others >= MIN_FIELD then
+    v_scope := 'hide';
+  else
+    v_scope := 'all';
+    select count(*),
+           count(*) filter (where (not a.hit) or (a.hit and a.ms > v_ms))
+      into v_others, v_worse
+    from attempts a where a.v >= 2;
+  end if;
+
+  insert into attempts(hide_id, hit, ms, v) values (p_id, v_hit, v_ms, least(greatest(coalesce(p_v,2),2),9));
+
+  update hides h2
+     set n_attempts = h2.n_attempts + 1,
+         n_found    = h2.n_found + (case when v_hit then 1 else 0 end)
+   where h2.id = p_id
+   returning h2.n_attempts, h2.n_found into v_tries, v_found;
+
+  if v_hit and v_others > 0 then v_pct := round(100.0 * v_worse / v_others)::int; end if;
+
+  return query select v_hit, v_tries, (v_tries - v_found), h.secs, v_pct, v_others, v_scope,
+                      v_old_round, v_old_name;
+end $function$;
+
+grant execute on function public.get_hide(text) to anon, authenticated;
+grant execute on function public.submit_attempt(text, real, real, integer, integer) to anon, authenticated;

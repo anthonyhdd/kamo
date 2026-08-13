@@ -73,11 +73,13 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
 /* Open a challenge, give up, take the "Send one back" exit. Giving up rather than buzzing:
    both endings mount the same card and a miss needs a real pointer gesture on a real image,
    which is the seeker's own test's job, not this one's. */
-async function replyFrom(name) {
+async function openHide(name, extra) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-  await page.addInitScript((n) => {
+  await page.addInitScript((a) => {
+    const [n, x] = a;
     window.__seed = {
-      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: n },
+      get_hide: Object.assign({ img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: n }, (x && x.hide) || {}),
+      submit_attempt: (x && x.attempt) || { hit: false, tries: 1, missed: 1, secs: 9 },
       create_hide: 'newhide00000000',
       set_hide_lang: null,
       /* Stubbed so the ending card is not waiting on a network call that this container
@@ -86,10 +88,14 @@ async function replyFrom(name) {
       reveal_hide: null,
       save_seek_trace: null,
     };
-  }, name);
+  }, [name, extra || {}]);
   await page.goto(base + '?h=abc123def4567890', { waitUntil: 'load' });
-  await page.waitForTimeout(900);
   await page.waitForSelector('#chQuit', { timeout: 10000 });
+  return page;
+}
+
+async function replyFrom(name) {
+  const page = await openHide(name);
   await page.evaluate(() => document.getElementById('chQuit').click());
   /* Waited for, never slept on: the ending card mounts behind the reveal frames, whose load
      time is not a constant. A fixed sleep here is a test that fails on a slow morning. */
@@ -160,6 +166,70 @@ console.log('\nAND THE ADDRESS REACHES THE SERVER');
     ? ok(`it falls back to a plain hide rather than to nothing (${forms.length} forms)`)
     : bad('fallback ladder: ' + JSON.stringify(forms));
   await page.close();
+}
+
+console.log('\nA CHAIN SAYS HOW DEEP IT IS');
+{
+  const page = await openHide('tony', { hide: { round: 6 } });
+  const sub = await page.evaluate(() => document.getElementById('chSub').textContent);
+  sub === 'Round 6 · One tap to find it.'
+    ? ok(`the seeker is told which round it is ("${sub}")`)
+    : bad('round 6 subtitle reads ' + JSON.stringify(sub));
+  await page.close();
+
+  const first = await openHide('tony', { hide: { round: 1 } });
+  const sub1 = await first.evaluate(() => document.getElementById('chSub').textContent);
+  sub1 === 'One tap to find it.'
+    ? ok('and a hide that is not an answer says nothing about rounds')
+    : bad('round 1 subtitle reads ' + JSON.stringify(sub1));
+  await first.close();
+}
+
+console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
+{
+  /* THE BUG THIS WHOLE MIGRATION EXISTS FOR. By round six the photo holds six camouflaged
+     people and the answer key is one of them, so five correct finds were being scored as
+     failures — and the deeper the chain, the likelier that is, which means it landed hardest
+     on the players who had gone furthest. Driven with a real tap, because the copy is chosen
+     inside buzz() off the server's answer. */
+  const page = await openHide('tony', {
+    hide: { round: 4 },
+    attempt: { hit: false, tries: 2, missed: 2, secs: 9, pct: null, others: 0, scope: 'all', old_round: 2, old_name: 'tony' },
+  });
+  await page.mouse.move(200, 500); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
+  await page.waitForSelector('#chReh', { timeout: 10000 });
+  const t = await page.evaluate(() => ({
+    head: document.getElementById('chHead').textContent,
+    sub: document.getElementById('chSub').textContent,
+  }));
+  /^That one/.test(t.head) && /@tony's from round 2/.test(t.sub) && /still in there/.test(t.sub)
+    ? ok(`a wrong-one tap is named, not failed ("${t.sub}")`)
+    : bad('old-find ending reads ' + JSON.stringify(t));
+  await page.close();
+
+  /* Unsigned is the common case and must not print "@'s". */
+  const anon = await openHide(null, {
+    hide: { round: 3 },
+    attempt: { hit: false, tries: 2, missed: 2, secs: 9, pct: null, others: 0, scope: 'all', old_round: 1, old_name: null },
+  });
+  await anon.mouse.move(200, 500); await anon.mouse.down(); await anon.waitForTimeout(80); await anon.mouse.up();
+  await anon.waitForSelector('#chReh', { timeout: 10000 });
+  const sub = await anon.evaluate(() => document.getElementById('chSub').textContent);
+  /the one from round 1/.test(sub) && !/@/.test(sub)
+    ? ok(`and an unsigned one is named without inventing a handle ("${sub}")`)
+    : bad('unsigned old-find reads ' + JSON.stringify(sub));
+  await anon.close();
+
+  /* A PLAIN MISS MUST STAY A PLAIN MISS. Without this, any regression that always reports an
+     old find would still pass the two assertions above. */
+  const plain = await openHide('tony', { hide: { round: 2 } });
+  await plain.mouse.move(200, 500); await plain.mouse.down(); await plain.waitForTimeout(80); await plain.mouse.up();
+  await plain.waitForSelector('#chReh', { timeout: 10000 });
+  const head = await plain.evaluate(() => document.getElementById('chHead').textContent);
+  head === 'They were right there.'
+    ? ok('a miss that hit nothing still reads as a miss')
+    : bad('plain miss reads ' + JSON.stringify(head));
+  await plain.close();
 }
 
 await browser.close(); server.close();
