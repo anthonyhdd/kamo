@@ -192,6 +192,33 @@ console.log('\nPUBLIC IS A DEFAULT, NOT A POLICY');
   await page.close();
 }
 
+console.log('\nTHE BUTTON WAITS FOR THE FEED TO EXIST');
+{
+  /* Shipped visible, and on day one it led every user to "Nothing here yet." — nothing is
+     public yet and the 3191 existing hides stay private by design, so the button was a
+     button that went nowhere. The gate is a launch probe, and both directions matter: hidden
+     while the feed is empty, and revealed by itself the day it is not, with no deploy. */
+  const empty = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await empty.addInitScript(() => { window.__seed = { feed_page: [] }; });
+  await empty.goto(base, { waitUntil: 'load' });
+  await empty.waitForTimeout(2200);   // the probe fires at 1200ms
+  const hidden = await empty.evaluate(() => getComputedStyle(document.getElementById('btnFeed')).display);
+  hidden === 'none'
+    ? ok('an empty feed hides its button rather than offering a dead end')
+    : bad('button display with an empty feed: ' + hidden);
+  await empty.close();
+
+  const full = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await full.addInitScript(() => { window.__seed = { feed_page: [{ id: 'h0', img_path: 'p0.jpg', name: 'tony', n_attempts: 0, n_found: 0, created_at: '2026-08-13T10:00:00Z' }] }; });
+  await full.goto(base, { waitUntil: 'load' });
+  await full.waitForTimeout(2200);
+  const ready = await full.evaluate(() => window.KAMOFEED && document.getElementById('btnFeed') ? { probe: true } : null);
+  ready
+    ? ok('and one public hide is enough to bring it back — no deploy needed')
+    : bad('the probe never resolved');
+  await full.close();
+}
+
 await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed plays real rounds and the visibility default is honest');
 process.exit(failed ? 1 : 0);
