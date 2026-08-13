@@ -9953,6 +9953,9 @@ function chSeek(hideId,opts){
       if($$("chGo")) $$("chGo").onclick=()=>{ const u=refLink("seek_cta",HID);
         track("seek_cta_tapped",TP({tier:u===appLink?"plain":"onelink",round:chRoundsPlayed()}));
         location.href=u; };
+      /* The feed is told the moment this card exists, so it can drop the swipe hint before
+         the pill and the card's own buttons occupy the same 40 pixels. */
+      if(OPT.onEnded) try{ OPT.onEnded(); }catch(_){}
       if($$("chNext")) $$("chNext").onclick=()=>{ track("feed_next_tapped",{}); if(OPT.onNext) OPT.onNext(); };
       if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
       $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
@@ -10193,6 +10196,7 @@ function chFeed(){
     S.round=chSeek(s.row.id,{
       host:s.host, feed:true, replay:!!s.replay,
       onNext:()=>goNext(),
+      onEnded:()=>{ if(S.killHint) S.killHint(); },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       onReported:(id)=>drop(id),
       onBlocked:(id,stored)=>blockDrop(id,stored),
@@ -10328,10 +10332,17 @@ function chFeed(){
     });
   },{root:scroll,threshold:[0.6]});
 
+  /* THE HINT ALSO DIES WHEN THE ROUND DOES. It only ever left on the first scroll, so a
+     player who finished a round without scrolling kept a floating pill at bottom:84px — and
+     once the ending card grew a second link (the block), the pill landed exactly on top of
+     the card's "Next hide ↑" button. It reads as if the button says "Swipe up for the next
+     hide", and it is pointer-events:none, so the tap goes through to a button nobody can
+     read. An instruction that outlives the moment it describes is an obstruction. */
+  const killHint=()=>{ S.hinted=true; const h=root.querySelector("#kfHint"); if(h) h.remove(); };
+  S.killHint=killHint;
   scroll.addEventListener("scroll",()=>{
     if(S.hinted) return;
-    S.hinted=true;
-    const h=root.querySelector("#kfHint"); if(h) h.remove();
+    killHint();
   },{passive:true});
 
   root.querySelector("#kfClose").onclick=()=>close();
