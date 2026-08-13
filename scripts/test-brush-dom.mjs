@@ -98,6 +98,16 @@ const html = real.slice(0, at)
   + 'const o={clientY:y,clientX:r.left+5,bubbles:true,pointerId:1};'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));return brush;},'
+  + 'lock(){const l=document.getElementById("sizeLock");if(!l)return{shown:false,top:0,h:0};'
+  + 'return{shown:getComputedStyle(l).display!=="none",top:parseFloat(l.style.top)||0,'
+  + 'h:parseFloat(l.style.height)||0};},'
+  /* What the floor answer is actually painted on. flashSizeLock() spent weeks pulsing
+     #sizeStar and #sizeBar — one display:none, the other an invisible box — so the
+     control answered with nothing and no test noticed. This reads back visibility. */
+  + 'answerVisible(){const l=document.getElementById("sizeLock");'
+  + 'const e=sizeBar.querySelector(".sizeDot.floorEdge");'
+  + 'const vis=n=>!!n&&getComputedStyle(n).display!=="none";'
+  + 'return{region:vis(l),edge:vis(e),thumb:vis(sizeThumb),star:vis(sizeStar)};},'
   + 'starShown(){return getComputedStyle(sizeStar).display!=="none";},'
   + 'thumb(){return{shown:getComputedStyle(sizeThumb).display!=="none",dia:parseFloat(sizeThumb.style.width)||0};},'
   + 'setBrush(b){brush=b;renderSizeBar();return{dia:parseFloat(sizeThumb.style.width)||0};},'
@@ -199,24 +209,48 @@ console.log('\nTHE THREE FREE SIZES READ AS THREE');
    thumb was hidden, and the bar never opened the paywall at all. Trials per new customer
    went 3.19% → 0.77% across that change. These are the assertions that would have caught it.
 */
-console.log('\nNOTHING IS DRAWN THAT A FREE USER CANNOT HAVE');
+/* THE RULE, NOT THE ARRANGEMENT. This block used to assert "no stops are drawn" AND "the
+   thumb is visible" — two descriptions of one particular layout, not of the thing 6 August
+   broke. That day one dot was drawn, the thumb was hidden and the bar never opened the
+   paywall: a free user was shown NOTHING. The rule is that the control must never be empty,
+   not that the thumb in particular is what fills it.
+   Asserting the layout instead of the rule is also what let a SECOND failure through
+   underneath it. With the thumb as the only object, 10/20/36 render at 19/23/27px — a 3.6x
+   range of brush drawn as 1.4x — and players report that the three sizes look the same.
+   That is now its own assertion, because it is the failure that was actually reported. */
+console.log('\nA FREE USER CAN SEE THE WHOLE FREE SET');
 {
   await page.evaluate(() => { window.__b.reset(); window.__b.setPro(false); });
-  const dots = (await page.evaluate(() => window.__b.dots())).filter((d) => d.shown);
-  dots.length === 0
-    ? ok('no stops are rendered — four designs died drawing sizes the control would refuse')
-    : bad(`${dots.length} stops are drawn (${dots.map((d) => d.size).join(', ')}) — a size picker `
-        + 'that shows what it refuses is a frustration machine, whatever it is styled like');
+  const dots = await page.evaluate(() => window.__b.dots());
+  const shown = dots.filter((d) => d.shown);
+  const t = await page.evaluate(() => window.__b.thumb());
+
+  (shown.length > 0 || t.shown)
+    ? ok(shown.length ? `${shown.length} stops are drawn (${shown.map((d) => d.size).join(', ')})`
+                      : `the thumb stands in for them (${t.dia}px)`)
+    : bad('a free user faces an EMPTY control — no stops and no thumb. That is the 6 August '
+        + 'bug, the one that took trials per new customer from 3.19% to 0.77%.');
+
+  const refused = shown.filter((d) => !FREE.includes(d.size));
+  refused.length === 0
+    ? ok('and nothing is drawn that a tap would be refused')
+    : bad(`${refused.length} unavailable sizes are drawn (${refused.map((d) => d.size).join(', ')}) — `
+        + 'a size picker that shows what it refuses is a frustration machine, whatever it is styled like');
+
+  if (shown.length > 1) {
+    const dias = shown.map((d) => d.dia);
+    const spread = Math.max(...dias) / Math.max(0.01, Math.min(...dias));
+    const brushSpread = Math.max(...FREE) / Math.min(...FREE);
+    new Set(dias).size === dias.length && spread >= 2
+      ? ok(`and they look like different sizes (${dias.join(' / ')}px — ${spread.toFixed(1)}x across a ${brushSpread.toFixed(1)}x range)`)
+      : bad(`the free sizes are drawn at ${dias.join(' / ')}px — ${spread.toFixed(1)}x, for a brush range of `
+          + `${brushSpread.toFixed(1)}x. Players cannot see three levels because three levels are not being drawn.`);
+  }
 
   const st = await page.evaluate(() => window.__b.starShown());
   st ? bad('the ✦ is still on the paint screen — the fading rail already says "there is more", '
         + 'and a second signal is the last piece of furniture left on the photo')
      : ok('and the ✦ is gone with them');
-
-  const t = await page.evaluate(() => window.__b.thumb());
-  t.shown ? ok(`the thumb is the only object, and it is visible to free users (${t.dia}px)`)
-          : bad('the thumb is hidden from free users — that was the 6 August bug, where the '
-              + 'control showed a free user nothing at all');
 }
 
 console.log('\nTHE THUMB IS THE PREVIEW');
@@ -258,9 +292,51 @@ console.log('\nREACHING UNDER THE FLOOR STILL ASKS TO BUY');
   await page.evaluate(() => window.__b.closePw());
   const second = await page.evaluate(() => { window.__b.tapFoot(); return window.__b.pw(); });
   !second.open && second.bouncing
-    ? ok('and asking again bounces the thumb instead of a second full screen mid-round')
+    ? ok('and asking again bounces instead of a second full screen mid-round')
     : bad(`the second reach left open=${second.open} bouncing=${second.bouncing} — it either floods `
         + '(824 views, one tap) or refuses in silence, and both have shipped before');
+
+  /* AND THE BOUNCE HAS TO LAND ON SOMETHING THAT IS ON SCREEN. This is the assertion that was
+     missing for weeks. flashSizeLock() animates #sizeStar, which renderSizeBar sets to
+     display:none on every call, and #sizeBar, which its own stylesheet calls "an invisible
+     34x212 box" — so "the bar answers on itself, without words", the stated reason the `size`
+     line was deleted from PW_LOCK_HINT, answered with nothing at all. The floorBounce dip then
+     rode #sizeThumb, which is hidden for free users, who are the only ones with a floor.
+     Setting a class is not feedback. Something visible has to carry it. */
+  const paint = await page.evaluate(() => window.__b.answerVisible());
+  (paint.region || paint.edge || paint.thumb || paint.star)
+    ? ok(`and it is painted on something visible (${Object.keys(paint).filter((k) => paint[k]).join(', ')})`)
+    : bad('the floor answer animates nothing that is on screen — region, edge, thumb and ✦ are '
+        + 'all hidden. That is exactly how flashSizeLock() pulsed two display:none elements for '
+        + 'weeks while the control "answered on itself".');
+}
+
+console.log('\nTHE LOCKED RANGE IS A REGION, AND ONLY FREE USERS SEE ONE');
+{
+  await page.evaluate(() => { window.__b.reset(); window.__b.setPro(false); });
+  const l = await page.evaluate(() => window.__b.lock());
+  const dots = (await page.evaluate(() => window.__b.dots())).filter((d) => d.shown);
+  const finest = dots.length ? Math.min(...dots.map((d) => d.top)) : 0;
+  const lowest = dots.length ? Math.max(...dots.map((d) => d.top)) : 0;
+
+  l.shown && l.h > 0
+    ? ok(`a free user gets a marked-off region (${l.h.toFixed(0)}px from y=${l.top.toFixed(0)})`)
+    : bad('nothing marks the locked range — the --floorPct gradient alone reads as "a bit dark '
+        + 'down there", which is the report this change answers');
+  /* Below every stop it draws. A region overlapping a size you can pick would be claiming
+     something that is already yours. */
+  l.top >= lowest
+    ? ok(`and it starts at or below the finest free stop (y=${lowest.toFixed(0)})`)
+    : bad(`the region starts at y=${l.top.toFixed(0)}, above the finest free stop at ${lowest.toFixed(0)} — `
+        + 'it is marking sizes the user already owns as locked');
+
+  await page.evaluate(() => window.__b.setPro(true));
+  const m = await page.evaluate(() => window.__b.lock());
+  !m.shown
+    ? ok('and a member sees none of it — nothing below is locked for them')
+    : bad('a member is shown a locked region for a range they have bought');
+  await page.evaluate(() => window.__b.setPro(false));
+  void finest;
 }
 
 await browser.close();
