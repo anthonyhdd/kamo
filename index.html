@@ -4306,6 +4306,26 @@ function closePaywall(){ paywallEl.classList.remove("show");
      screen where the sheet is the only route to a send. */
   stage.classList.remove("pwCover"); document.body.classList.remove("pwCover");
   setPwBuyLoading(false); stopTermsRotate(); }
+/* THE PAYWALL'S FACE, FETCHED BEFORE THE PAYWALL NEEDS IT.
+   .pwHeroLn is the only user of KamoHero (Anton, 18KB) and nothing on the launch path
+   touches it, so the FIRST paywall of an install fetches the font while the sheet is already
+   animating in. font-display:swap then does what it says: the headline paints in the fallback
+   for a beat and snaps to Anton mid-animation. Every later open is cached and clean, which is
+   exactly the report — "ça saute au premier open".
+   NOT a <link rel=preload> in <head>: that puts 18KB in front of the first frame of an app
+   whose launch screen is the thing it is judged on, to fix a flash on a screen most users
+   never reach. Warmed on idle instead — by the time any paywall can open, the fetch is long
+   done, and the launch path is untouched.
+   Not font-display:block either. The note on the @font-face weighed that and chose swap: the
+   hero is three words over a photo, and three words of Space Grotesk for one frame beats
+   three words of nothing. Loading it early makes that choice moot rather than reversing it. */
+(function warmHeroFont(){
+  const go=()=>{ try{ if(document.fonts&&document.fonts.load) document.fonts.load('400 1em KamoHero'); }catch(_){} };
+  /* The timeout is the point of requestIdleCallback here: on a busy launch idle may never
+     arrive, and a font warmed after the paywall opened has warmed nothing. */
+  try{ if(window.requestIdleCallback) requestIdleCallback(go,{timeout:3000}); else setTimeout(go,2000); }
+  catch(_){ setTimeout(go,2000); }
+})();
 /* buy button loading state — bridges the delay before the native StoreKit sheet appears */
 let _pwBuyTimer=null;
 function setPwBuyLoading(on){ const b=$("#pwBuy"); if(!b) return;
