@@ -126,7 +126,14 @@ failure mode is "this did not reach the feed", never "this reached strangers wit
 asked". Everything published before 2026-08-13 is private permanently — it was made when a
 hide went to one person and nothing on screen said otherwise. Do not backfill it.
 
-`create_hide` has **three overloads** (6, 8 and 9 arguments) and that is deliberate. This file
+`hides.reply_to` is how "send one back" reaches a person iOS never named. The share sheet never
+says who a challenge went to, but the recipient of a *reply* is knowable — it is the creator of
+the hide just played — so `chRehide()` captures that id and `chUpload()` stamps it. Two
+deliveries, and the order matters: `my_replies()` + the wordmark dot reach **100%** of creators
+on their next launch, and `notify_hide_reply` reaches the **~3%** who have a push token, now.
+The row is the mechanism; the notification is the accelerant. Do not invert them.
+
+`create_hide` has **four overloads** (6, 8, 9 and 10 arguments) and that is deliberate. This file
 deploys on push and the database does not, so during a deploy both are live: a page loaded a
 minute ago calls the old signature. Add an overload, never change one. `get_hide` is the
 exception — Postgres cannot widen a set-returning function's row type in place, so it has to be
