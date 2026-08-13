@@ -1120,6 +1120,37 @@
   .khWatch{flex:none;background:rgba(255,255,255,.06);border:1px solid var(--stroke);color:rgba(255,255,255,.72);
     font-family:var(--display);font-size:12px;font-weight:700;border-radius:999px;padding:6px 11px;margin-right:6px;}
   .khWatch:active{transform:scale(.94);}
+  /* WHERE THEY LOOKED — the aggregate of every hunt on one hide, which is the only view in
+     this app that gets better while its owner does nothing. One dot per seeker's final tap,
+     laid on the photo they were looking at; the answer key itself is never drawn, because a
+     hide is still playable after its creator has seen this. */
+  .khHeatWrap{position:relative;width:100%;border-radius:16px;overflow:hidden;background:#080c0a;
+    border:1px solid rgba(255,255,255,.14);}
+  .khHeatWrap img{width:100%;display:block;}
+  .khHeatDot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,92,92,.85) 0%,rgba(255,92,92,.28) 55%,rgba(255,92,92,0) 72%);
+    pointer-events:none;}
+  .khHeatDot.hit{background:radial-gradient(circle,rgba(95,230,164,.9) 0%,rgba(95,230,164,.3) 55%,rgba(95,230,164,0) 72%);}
+  /* A WHITE CORE ON EVERY TAP, because the halo alone cannot be trusted to be visible. The
+     find was drawn in mint — the app's own accent — and the first render put it straight on
+     top of a mint-camouflaged figure, where it vanished completely. These dots land on
+     photographs nobody chose, so the mark that says "a tap happened here" must not depend on
+     what is underneath it; only the COLOUR of the halo encodes hit or miss. */
+  .khHeatDot::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;
+    margin:-3px 0 0 -3px;border-radius:50%;background:#fff;
+    box-shadow:0 0 0 1.5px rgba(4,6,10,.6);}
+  .khHeatDot.hit::after{box-shadow:0 0 0 2px rgba(4,18,12,.8),0 0 12px rgba(95,230,164,1);}
+  /* FREE USERS SEE THE SHAPE, NOT THE PLACES. The count is the honest half and it is the hook:
+     "16 people searched your photo" is true and is worth the tap. Blurring the dots rather
+     than hiding them is what makes the offer legible — you can see there IS something. */
+  .khHeatWrap.locked .khHeatDot{filter:blur(9px);opacity:.8;}
+  .khHeatLock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:flex-end;gap:10px;padding:16px;text-align:center;
+    background:linear-gradient(180deg,rgba(4,6,10,0) 40%,rgba(4,6,10,.86));}
+  .khHeatLock b{font-family:var(--display);font-size:15px;font-weight:800;letter-spacing:-.2px;}
+  .khHeatLock button{width:100%;height:48px;border:none;border-radius:14px;background:#fff;
+    color:#04120c;font-family:var(--display);font-size:15.5px;font-weight:800;cursor:pointer;}
+  .khHeatSub{font-size:12.5px;opacity:.72;margin-top:9px;text-align:center;}
   /* The replay stage: the photo, the travelling viewport, the doubts. */
   .khRpFrame{position:relative;width:100%;max-height:52vh;aspect-ratio:9/16;margin:2px auto 10px;border-radius:16px;overflow:hidden;
     border:1px solid var(--stroke);background:#05060a;}
@@ -9031,6 +9062,10 @@ function khRowHtml(h,i){
   /* WATCH comes before SEND on a hide somebody has already played. The row's job is to
      report what other people did; until now it could only say it in numbers. */
   const watch = (h&&h.n_attempts>0) ? '<button class="khWatch" data-w="'+i+'">Watch</button>' : '';
+  /* ONLY FROM TWO. One hunt is a replay and Watch already tells that story better; a heat map
+     of a single dot is a dot. From two upward the picture starts saying something no counter
+     can — that they all looked in the same wrong place, or that nobody came near. */
+  const heat = (h&&h.n_attempts>1) ? '<button class="khWatch khHeatBtn" data-h="'+i+'">Heat</button>' : '';
   /* THE ONE ROW WHERE THE BUTTON IS THE POINT. On a hide that was played, Send is a re-send
      and sits quietly next to Watch. On a hide that never left the phone it is the only thing
      the creator can usefully do, so it gets the filled treatment and says so — the row above
@@ -9040,7 +9075,9 @@ function khRowHtml(h,i){
   return '<div class="khRow'+(unsent?' khRowUnsent':'')+'">'+shot
     + '<span class="khRowTxt"><b>'+chStateLine(h)+'</b>'
     + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
-    + '</span>'+watch+'<button class="khSend'+(unsent?' khSendNow':'')+'" data-i="'+i+'">'
+    /* WATCH FIRST, and not only for looks: it is the established control, and the replay
+       suite reaches for the first .khWatch on the row. Heat is the newcomer and sits after. */
+    + '</span>'+watch+heat+'<button class="khSend'+(unsent?' khSendNow':'')+'" data-i="'+i+'">'
     + (unsent?'Send it':'Send')+'</button></div>';
 }
 function khRenderRows(el,rows,head){
@@ -9050,7 +9087,11 @@ function khRenderRows(el,rows,head){
     b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); };
   });
   el.querySelectorAll(".khWatch").forEach((b)=>{
+    if(b.dataset.h!=null) return;   // the heat button is wired below
     b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); khReplay(rows[+b.dataset.w],b); };
+  });
+  el.querySelectorAll(".khHeatBtn").forEach((b)=>{
+    b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); khHeat(rows[+b.dataset.h],b); };
   });
 }
 
@@ -9087,6 +9128,78 @@ function khReplay(h,btn){
     if(!t){ showHint("No replay for this one yet"); track("replay_empty",{}); return; }
     khPlayTrace(h,t);
   }).catch(()=>{ if(btn){ btn.textContent=label; btn.disabled=false; } showHint("Couldn't load the replay"); });
+}
+/* ===== WHERE THEY LOOKED ====================================================================
+ * The one thing a creator wants that no counter can say: not how many tried, but WHERE they
+ * went. Every hunt has been recording it since save_seek_trace shipped — `end:{x,y}` is the
+ * committed tap, normalised against the image, with `why` saying whether it landed.
+ *
+ * WHY THIS IS THE KAMO+ SURFACE AND THE BRUSH SIZES ARE NOT. A brush gate sells precision to
+ * somebody who does not yet know they want precision, and it is worth the same on the day you
+ * install as on your hundredth hide. This is worth nothing on day one and more every time a
+ * stranger plays your photo — so the thing being sold grows while the owner sleeps, and the
+ * only way to make it grow is to publish into the feed. The paywall and the loop pull the
+ * same direction for once.
+ *
+ * THE ANSWER IS NEVER DRAWN. cx/cy stay where they have always stayed — the creator seeing a
+ * heat map must not turn their own hide into a spoiled one, because they can still send it.
+ * Only other people's taps are on this screen. */
+function khHeat(h,btn){
+  const id=h&&h.id; if(!id) return;
+  const label=btn?btn.textContent:"";
+  if(btn){ btn.textContent="…"; btn.disabled=true; }
+  chRpc("get_seek_traces",{p_id:id}).then((rows)=>{
+    if(btn){ btn.textContent=label; btn.disabled=false; }
+    const list=Array.isArray(rows)?rows:(rows?[rows]:[]);
+    /* A trace with no `end` is a hunt that was abandoned before any tap — real, and nothing
+       to plot. Filtered here rather than drawn at 0,0, which is a lie in the corner. */
+    const pts=list.map(r=>r&&r.trace&&r.trace.end)
+                  .filter(e=>e&&typeof e.x==="number"&&typeof e.y==="number")
+                  .map((e,i)=>({x:e.x,y:e.y,hit:(list[i]&&list[i].why==="hit")||e.hit===true}));
+    if(!pts.length){ showHint("No hunts recorded on this one yet"); track("heat_empty",{}); return; }
+    khShowHeat(h,pts);
+  }).catch(()=>{ if(btn){ btn.textContent=label; btn.disabled=false; } showHint("Couldn't load it"); });
+}
+function khShowHeat(h,pts){
+  try{
+    document.getElementById("khHeat")?.remove();
+    const w=document.createElement("div"); w.id="khHeat"; w.className="chPP";
+    const found=pts.filter(p=>p.hit).length, n=pts.length;
+    /* SAID FROM THE CREATOR'S SIDE, like every other line on this card. "16 tried" is a
+       statistic; "16 people searched your photo" is what happened to them. */
+    const head=n+(n===1?" person searched":" people searched")+" your photo";
+    const sub=found?(found+" found you"):"Nobody found you";
+    const pro=isPro;
+    w.innerHTML='<div class="chPPin">'
+      +'<div class="pwKick">WHERE THEY LOOKED</div>'
+      +'<div class="chPPh"></div>'
+      +'<div class="khHeatWrap'+(pro?"":" locked")+'" id="khHeatW">'
+      +  '<img alt="" src="'+CH_URL+'/storage/v1/object/public/hides/'+encodeURIComponent(h.img_path||"")+'">'
+      +  (pro?"":'<div class="khHeatLock"><b></b>'
+              +'<button id="khHeatGo">See where they looked</button></div>')
+      +'</div>'
+      +'<div class="khHeatSub" id="khHeatS"></div>'
+      +'<button class="kpClose" id="khHeatX">Back</button>'
+      +'</div>';
+    document.body.appendChild(w);
+    /* textContent for anything that came off the wire or off a count — the same rule the
+       seeker headline follows. */
+    w.querySelector(".chPPh").textContent=head;
+    w.querySelector("#khHeatS").textContent=sub;
+    if(!pro) w.querySelector(".khHeatLock b").textContent="KAMO+ shows every tap";
+    const wrap=w.querySelector("#khHeatW");
+    pts.forEach((p)=>{
+      const d=document.createElement("i");
+      d.className="khHeatDot"+(p.hit?" hit":"");
+      d.style.left=(Math.max(0,Math.min(1,p.x))*100)+"%";
+      d.style.top=(Math.max(0,Math.min(1,p.y))*100)+"%";
+      wrap.appendChild(d);
+    });
+    const go=w.querySelector("#khHeatGo");
+    if(go) go.onclick=()=>{ track("heat_paywall_tapped",{n:pts.length}); w.remove(); openPaywall("heatmap"); };
+    w.querySelector("#khHeatX").onclick=()=>w.remove();
+    track("heat_opened",{n:pts.length,found:found,pro:!!pro});
+  }catch(e){}
 }
 function khPlayTrace(h,rec){
   try{
