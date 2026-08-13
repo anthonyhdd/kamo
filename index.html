@@ -1040,9 +1040,14 @@
     animation:pwShimmer 3.4s linear infinite;}
   /* WHITE, NOT GREY — founder's call, 2026-08-13. This line carries the offer's one sentence
      and it was being read at .72 against a photo, which is where grey text goes to die. */
-  .kpSub{font-size:14.5px;color:#fff;line-height:1.45;margin:0 auto 20px;max-width:320px;}
+  /* White, and LIGHTER: the weight was doing the shouting that the title is already doing.
+     Full white keeps it readable; 400 lets the headline above it lead. */
+  .kpSub{font-size:14.5px;color:#fff;font-weight:400;line-height:1.45;margin:0 auto 20px;max-width:320px;}
   .kpChips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:28px;}
-  .kpChip{font-size:12.5px;color:rgba(255,255,255,.82);padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
+  /* FULL WHITE — founder's call. These three name what KAMO+ actually is, and they were
+     set at .82 over a photo, which is where grey text goes to die (the same call already
+     made for .kpSub above). */
+  .kpChip{font-size:12.5px;color:#fff;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
   .kpGo{width:100%;padding:16px;border:none;border-radius:16px;background:var(--mint);color:#06231a;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(95,230,164,.32);}
   #kpBurst{position:absolute;left:50%;top:-8px;width:0;height:0;pointer-events:none;}
   /* The numbers are the point of the home sheet, so they get the display face and the size.
@@ -1568,7 +1573,12 @@
      edge to exist at all. */
   .ssBtn.tiktok{background:#000;color:#fff;border-color:rgba(255,255,255,.26);}
   .ssRow2{display:flex;gap:9px;}
-  .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;}
+  /* EQUAL HEIGHT, ONE LINE EACH. These are siblings in a flex row, so a label that wraps
+     makes its button taller than the others and the whole row loses its baseline — which
+     is exactly what "Remove mark" did at three-across. Two buttons have the width to stay
+     on one line; the fixed height and nowrap keep it true if a label ever grows. */
+  .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;height:48px;font-size:15px;
+    white-space:nowrap;line-height:1;}
   /* NO SHEEN ON INSTAGRAM. It carried the paywall CTA's pwBuySheen — added when it was "the one
      destination we most want tapped", which is no longer true: the sheet leads with the send,
      and Instagram is second on purpose. Two moving highlights side by side made the sheet
@@ -2325,7 +2335,11 @@
          session. This is the one action that reloads the loop, and it only appears once
          something has actually been sent — an unearned button on a sheet nobody has used yet
          is noise. -->
-    <button class="ssBtn ssAgain" id="ssAgain" style="display:none">Hide another</button>
+    <!-- "Hide another" is GONE — founder's call. It was the third pill in a row built for
+         two: at flex:1 in a 350px sheet, "Remove mark" wrapped to two lines while its
+         neighbours stayed on one, so the row read as three buttons of different heights
+         with their labels on different baselines. It was also redundant — "Not now" below
+         already leaves the sheet, and going again has always been one tap from there. -->
       <button class="ssBtn ssPlus" id="ssPlus" style="display:none"><span class="ic">✦</span>Remove mark</button>
     </div>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
@@ -7295,8 +7309,23 @@ $("#ssInvite").onclick=async()=>{
     if(!chSlotLink() && !chInviteNudged && b0){
       chInviteNudged=true;
       const back=b0.innerHTML;
-      b0.textContent="One moment — preparing your challenge";
-      setTimeout(()=>{ if(b0.textContent==="One moment — preparing your challenge") b0.innerHTML=back; },2200);
+      /* IT SPEAKS WHILE IT WAITS instead of printing one flat sentence and freezing.
+         "One moment — preparing your challenge" told the truth and told it badly: it is the
+         longest label on the sheet, it wraps on a narrow phone, and a line that does not move
+         for two seconds reads as a button that has hung. These are shorter, they are about
+         the ROUND rather than about the software, and they advance — a label that changes is
+         the cheapest proof that something is still happening.
+         Sequential, not shuffled: they narrate a progression, so a random order would have
+         the photo being sent before it was hidden. The last one holds, because that is where
+         the wait actually ends. Every restore is guarded on the label still being one of
+         ours, so a tap that changed it in the meantime is never overwritten. */
+      const NUDGE=["Hiding you in the photo…","Almost invisible…","Nearly there…"];
+      let ni=0; b0.textContent=NUDGE[0];
+      const spin=setInterval(()=>{
+        if(ni>=NUDGE.length-1||b0.textContent!==NUDGE[ni]){ clearInterval(spin); return; }
+        ni++; b0.textContent=NUDGE[ni]; },700);
+      setTimeout(()=>{ clearInterval(spin);
+        if(NUDGE.indexOf(b0.textContent)>=0) b0.innerHTML=back; },2200);
       track("share_deferred",{reason:"no_link",score:sc});
       return;
     }
@@ -10822,7 +10851,7 @@ const KF_CSS=
 
   /* The swipe affordance. Shown on the first slide only and killed by the first scroll — an
      instruction that stays on screen after it has been obeyed is a permanent obstruction. */
-  +".kfHint{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;bottom:calc(84px + var(--safe-b));z-index:25;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.82);background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:7px 14px;border-radius:999px;pointer-events:none;animation:kfBob 1.9s ease-in-out infinite;}"
+  +".kfHint{position:absolute;left:50%;transform:translateX(-50%);max-width:88vw;white-space:normal;text-align:center;bottom:calc(84px + var(--safe-b));z-index:25;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.82);background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:7px 14px;border-radius:999px;pointer-events:none;animation:kfBob 1.9s ease-in-out infinite;}"
   +"@keyframes kfBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-6px)}}"
   +".kfMid{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}"
   +".kfMid .kfCard{width:min(90vw,380px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:22px 20px 18px;display:flex;flex-direction:column;gap:12px;align-items:center;}"
