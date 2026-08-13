@@ -46,8 +46,18 @@ const html = real.slice(0, at)
   + 'plus:g("#khPlus"),upsell:g("#khUpsell"),title:(document.getElementById("khTitle")||{}).textContent,'
   + 'value:(document.getElementById("khHandle")||{}).value,stored:(()=>{try{return localStorage.getItem("kamo_handle")||"";}catch(e){return"";}})(),'
   + 'discord:DISCORD_URL,chips:document.querySelectorAll("#kamoHome .kpChip").length,'
-  + 'restore:g("#khRestore"),field:g("#khName"),edit:g("#khEdit"),'
+  /* THE NAME IS THE BUTTON NOW. #khEdit was a separate pencil control and it no longer
+     exists: once a handle is set the field collapses and the HEADLINE ("@name") is what
+     reopens it, caret at the end. So there is no distinct edit affordance whose display can
+     be read — #khTitle is always on screen. `edit` is therefore gone from this snapshot, and
+     what replaces it is the assertion that tapping the headline actually brings the field
+     back, which is the behaviour the pencil used to provide. */
+  + 'restore:g("#khRestore"),field:g("#khName"),'
   + 'score:g("#khScore"),scoreText:(document.getElementById("khScore")||{}).textContent||""};},'
+  /* Tapping the headline, through its OWN click handler rather than by calling khShowField()
+     directly — the guard that makes it a no-op when no handle is set lives in that handler,
+     and calling past it would assert a path no finger can take. */
+  + 'tapName(){document.getElementById("khTitle").click();return this.state();},'
   /* chRpc is a function DECLARATION, so it is replaceable from inside the module. Stubbed per
      id so the aggregate can be checked against known rows — and so a null (an expired or
      blocked hide, which get_hide answers with nothing) is exercised rather than assumed. */
@@ -185,12 +195,25 @@ console.log('\nIT SWITCHES OVER AS SOON AS YOU ARE DONE');
 
   await page.evaluate(() => document.getElementById('khHandle').blur());
   const done = await page.evaluate(() => window.__h.state());
-  done.field === 'none' && done.edit !== 'none'
-    ? ok('and stands down on blur, without reopening the card')
-    : bad(`after blur the field is ${done.field} and the edit button is ${done.edit}`);
+  /* The headline carries the name once the field stands down — that IS the edit control, so
+     asserting it holds "@name" asserts both that the collapse happened and that the way back
+     in is on screen. */
+  /* Against the shape, not a literal: the headline carries whatever was typed, and pinning
+     the exact name here would break the next time the fixture changes without the behaviour
+     changing at all. What matters is that it collapsed AND the name is on screen — that is
+     both halves of the edit control existing. */
+  done.field === 'none' && /^@\w+/.test(done.title || '')
+    ? ok('and stands down on blur, leaving the name itself as the way back in')
+    : bad(`after blur the field is ${done.field} and the headline is ${JSON.stringify(done.title)}`);
 
-  /* Clearing it must NOT collapse to a button offering to change nothing. */
-  await page.evaluate(() => { document.getElementById('khEdit').click(); });
+  /* THE PENCIL'S JOB, DONE BY THE NAME. This is the assertion #khEdit used to carry: there
+     has to be a way back to the field after it collapses, or a typo is permanent. */
+  const reopened = await page.evaluate(() => window.__h.tapName());
+  reopened.field !== 'none'
+    ? ok('tapping the name reopens the field — the headline is the edit control')
+    : bad('tapping the headline did not bring the field back; the name cannot be changed');
+
+  /* Clearing it must NOT collapse to a headline offering to change nothing. */
   await page.evaluate(() => { const i = document.getElementById('khHandle'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); });
   const cleared = await page.evaluate(() => window.__h.state());
   cleared.field !== 'none' && cleared.title === 'Sign your hides'

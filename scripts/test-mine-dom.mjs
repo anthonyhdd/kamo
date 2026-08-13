@@ -216,17 +216,26 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
     ? ok('and never falls through to the empty invite link')
     : bad('the row sent the ?i=1 invite — the friend opens the app and finds no game');
 
-  /* A hide with no stored limit must not invent one: 195 of 197 published hides carry null
-     limit_s and max_taps, and the seeker derives them instead. Quoting a number here would
-     promise a deal the round does not honour. */
+  /* NO ROUND IS QUOTED ANY MORE, AND THAT IS THE PRODUCT, NOT A REGRESSION.
+     This block used to require the opposite — a hide carrying limit_s 30 / max_taps 5 had to
+     say "30 sec and 5 taps" — and it is why this suite sat quarantined. The settings are
+     retired: the seeker plays ONE buzz on no clock regardless of what an old row stores, so
+     quoting those numbers would promise a deal the round does not honour. 195 of 197
+     published hides carry null for both, and the two that do not are older than the change.
+     So the assertion inverts. Neither shape may quote a clock or a tap count, and BOTH must
+     state the deal the seeker actually gets. Checked on the row that stores nothing and on
+     the row that stores both, because it is the stored one that would leak the dead
+     settings back into the message. */
   const bare = await page.evaluate(() => window.__m.send(2));
-  !/\d+ sec/.test(String(bare || ''))
-    ? ok('a hide with no stored round quotes no clock')
-    : bad(`the message invented a round for a hide that has none: ${JSON.stringify(bare)}`);
   const full = await page.evaluate(() => window.__m.send(0));
-  /30 sec and 5 taps/.test(String(full || ''))
-    ? ok('and one that has both states them exactly')
-    : bad(`a hide with limit_s 30 / max_taps 5 sent: ${JSON.stringify(full)}`);
+  for (const [label, msg] of [['a hide with no stored round', bare], ['one storing limit_s 30 / max_taps 5', full]]) {
+    !/\d+\s*sec|\d+\s*taps/.test(String(msg || ''))
+      ? ok(`${label} quotes no clock and no tap count`)
+      : bad(`${label} leaked the retired settings: ${JSON.stringify(msg)}`);
+  }
+  /One tap to find it/.test(String(full || ''))
+    ? ok('and both state the one-buzz deal the seeker is actually offered')
+    : bad(`the resend does not state the deal: ${JSON.stringify(full)}`);
 }
 
 /* THE DOT MUST NOT MOVE THE WORDMARK IT SITS ON, and it did.
