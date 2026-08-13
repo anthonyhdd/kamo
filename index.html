@@ -857,6 +857,11 @@
   .khCharOpt.on{color:var(--mint);border-color:rgba(95,230,164,.55);background:rgba(95,230,164,.08);
     box-shadow:0 0 0 1px rgba(95,230,164,.25),0 0 16px rgba(95,230,164,.16);}
   .khCharOpt:active{transform:scale(.96);}
+  /* FROZEN ONCE THE PAINTING HAS STARTED. Not hidden: the choice is still real, it is just
+     no longer this round's to make, and a control that vanishes mid-round reads as a bug.
+     Dimmed and inert, with the tap answered by a line saying what to do instead. */
+  .khCharOpt.frozen{opacity:.42;}
+  .khCharOpt.frozen:active{transform:none;}
   /* Same mark, same corner as the locked swatches — one vocabulary for "this is KAMO+". */
   .khCharOpt.lock{position:relative;}
   .khCharOpt.lock::after{content:"✦";position:absolute;right:6px;top:2px;font-size:11px;line-height:1;
@@ -4840,14 +4845,33 @@ function openKamoHome(){
   const paintChar=()=>{ const v=wantsV2();
     $("#khCharA").classList.toggle("on",!v);
     $("#khCharB").classList.toggle("on",v);
-    $("#khCharB").classList.toggle("lock",!canChar()); };
+    $("#khCharB").classList.toggle("lock",!canChar());
+    /* Read at paint time, not stored: the card is rebuilt on every open, and a round can
+       start between two opens. */
+    const froze=undoStack.length>1;
+    $("#khCharA").classList.toggle("frozen",froze);
+    $("#khCharB").classList.toggle("frozen",froze); };
   paintChar();
   /* THE PREFERENCE IS STORED EVEN WHEN IT IS LOCKED, and that is deliberate. wantsV2() and
      curFinish() both fall back on their own when membership is missing, so writing the choice
      costs nothing today and means a purchase applies the thing they actually wanted instead
      of dropping them back on stock white with nothing to show for it. */
+  /* THE CHOICE CLOSES AT THE FIRST BRUSH STROKE, and until now it did not — it only stopped
+     having any EFFECT. respawn() is gated on mode==="compose", so tapping these chips while
+     painting stored the preference, reloaded the model and left the figure on screen exactly
+     as it was: a control that looks like it works and does nothing, which is the report.
+     Swapping the figure for real would be worse than doing nothing, not better — the paint
+     layer is clipped to the silhouette captured at shutter time, so a different body would
+     leave the strokes floating against a mask that no longer matches them.
+     undoStack.length>1 is not a new flag: it is this file's existing definition of "something
+     has been painted", the one #btnUndo already tests, and it is cleared with the stack on
+     every capture and on enterCompose(). One definition, no second thing to reset. */
+  const paintLocked=()=>undoStack.length>1;
   const respawn=()=>{ if(mode==="compose"){ clearCharacters(); spawnHider(); } };
-  const pickChar=(c)=>{ try{ localStorage.setItem(CHAR_KEY,c); }catch(e){}
+  const pickChar=(c)=>{
+    if(paintLocked()){ haptic(10);
+      showHint("Painting started — Retake to change character",3000); return; }
+    try{ localStorage.setItem(CHAR_KEY,c); }catch(e){}
     haptic(10); paintChar(); track("char_selected",{c:c});
     if(c==="v2"&&!wantsV2()){ closeKamoHome(); openPaywall("char",true); return; }
     loadKamoV2(); respawn(); };
