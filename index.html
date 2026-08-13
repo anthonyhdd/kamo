@@ -7233,7 +7233,16 @@ $("#ssInvite").onclick=async()=>{
   if(!bare && !(nativeCaps&&nativeCaps.invite) && !chLink()){
     try{ chUpload(); }catch(e){}
     const b0=$("#ssInvite");
-    if(!chInviteNudged && b0){
+    /* THE NUDGE IS THE FALLBACK NOW, NOT THE PATH — and this is the other half of the cost
+       those 7 sends a day were paying. This branch does not merely send a worse message: it
+       RETURNS, spending the user's first tap on "One moment" and sending nothing at all. That
+       was the right trade when there was no link to be had. chSlotLink() is one, known with
+       no round trip, so asking somebody to wait for something they already have is now pure
+       loss — the second tap is where the link-less invite actually went out.
+       It still fires when no id could be minted (crypto unavailable), which is the only case
+       left where the honest invite really is all there is. chUpload() above is unconditional
+       either way: whatever the button does next, the upload has to be moving. */
+    if(!chSlotLink() && !chInviteNudged && b0){
       chInviteNudged=true;
       const back=b0.innerHTML;
       b0.textContent="One moment — preparing your challenge";
@@ -7311,7 +7320,14 @@ $("#ssInvite").onclick=async()=>{
      leaves that id in place. Branching the message on `link` alone then announces a body in a
      photo where the figure is standing in plain sight — and the link preview shows exactly
      that, in the thread, before anyone taps. The send stays; only the promise is withdrawn. */
-  const link=bare?"":chLink();
+  /* THE WEB BRANCH GETS THE OPTIMISTIC LINK; THE NATIVE ONE NEVER DOES.
+     Above, `useNative` has already waited up to 8s for the real id, so chLink() is populated
+     in all but the failing cases — and where a real link is coming, a guessed one is strictly
+     worse (see chSlotLink: create_hide fails ~2.7% of the time and those 404).
+     The web branch cannot wait at all, so its choice is not "guess or wait", it is "guess or
+     send the generic invite this instant". A link that is right ~97% of the time beats one
+     that is absent 100% of the time, which is what 7 sends a day were getting. */
+  const link=bare?"":(chLink()||(useNative?"":chSlotLink()));
   /* SIGNED, WHEN THERE IS A NAME TO SIGN IT WITH. An anonymous dare is a weaker ask than one
      with a person behind it, and this is the loop that is flat — 71 shares a day, roughly one
      in eight ever played. It is also what stops the handle from being decoration: without
@@ -7381,7 +7397,12 @@ $("#ssInvite").onclick=async()=>{
     if(navigator.share){ await navigator.share({text:text}); shared=true; }
   }catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
   if(shared||cancelled){
-    track("invite_shared",{ok:shared,cancelled:cancelled,link:!!link});
+    /* `optimistic` SEPARATES THE FIX FROM THE THING IT FIXED. link=false was the symptom and
+       it should now be ~0 on this path; what replaces it is a link that was guessed before
+       create_hide answered, and those are not the same claim. Without this property a guessed
+       link that 404s is indistinguishable from a real one, and the 2.7% this trade accepts
+       could not be measured against the 7 sends a day it buys. */
+    track("invite_shared",{ok:shared,cancelled:cancelled,link:!!link,optimistic:!!link&&!chLink()});
     if(shared&&typeof ssShowAgain==="function") ssShowAgain();
     if(b){
       b.innerHTML = shared ? '<span class="ic">✅</span>Sent' : original;
@@ -8648,9 +8669,36 @@ function chSlot(){
   if(Math.round(currentScore||0)<CH_MIN_COVERAGE) return null;
   const g=chGeom(); if(!g) return null;
   const name=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).replace(/[^a-z0-9]/g,"")+".jpg";
-  chSlotV={name,g};
+  /* THE ID, MINTED HERE FOR THE SAME REASON THE NAME IS. create_hide used to be the only
+     thing that could say what this hide is called, so the link did not exist until a round
+     trip came back — and the web share path cannot wait for a round trip (navigator.share
+     needs the activation the first await spends). That race is what sends a friend an invite
+     with no game in it; see infra/2026-08-13-client-hide-id.sql.
+     16 lowercase hex, because that is exactly what the Worker parses out of /h/<id> and what
+     the server now validates. crypto.getRandomValues where it exists — 64 bits of collision
+     space, and the server rejects a duplicate anyway rather than letting one row shadow
+     another. */
+  let id="";
+  try{
+    const a=new Uint8Array(8);
+    if(self.crypto&&self.crypto.getRandomValues) self.crypto.getRandomValues(a);
+    else for(let i=0;i<8;i++) a[i]=Math.floor(Math.random()*256);
+    id=Array.from(a).map(b=>b.toString(16).padStart(2,"0")).join("");
+  }catch(e){ id=""; }
+  chSlotV={name,g,id};
   return chSlotV;
 }
+/* THE LINK BEFORE THE ROW EXISTS, AND THE ONE CALLER ALLOWED TO USE IT.
+   chLink() answers "this hide is published"; this answers "this hide is going to be called
+   that". The two are the same string once create_hide lands, and only this one is available
+   during the 3-6s the upload takes.
+   IT IS NOT A DROP-IN FOR chLink(), and must not become one. create_hide fails on roughly
+   2.7% of publishes (82 against 3009 over 2026-08-06..13), and on those this link 404s. That
+   is a bad trade wherever a real link would otherwise arrive a moment later — the native
+   share path waits 8s precisely because it can — and a good one only where the alternative
+   is the generic invite going out RIGHT NOW with no game in it, which is the web branch and
+   nothing else. Roughly 16 web sends a day, of which 7 currently carry no link at all. */
+function chSlotLink(){ const s=chSlot(); return (s&&s.id)?(SHARE_HOST+"/"+s.id):""; }
 function chPrepare(){
   if(chPrep) return chPrep;
   if(!CH_MAKE) return Promise.resolve(null);
@@ -8785,7 +8833,15 @@ function chCreateForms(base,who){
      one 11-argument overload and it takes both, with nulls for whichever does not apply.
      The rungs below are untouched: a page loaded before this deploy still climbs them, and a
      hide with no author is a hide that publishes and simply cannot be blocked. */
+  /* THE NEW WIDEST RUNG — 12 arguments, adding the client-chosen id. Same discipline as the
+     11-argument rung below it: ADDED, never edited, so a page loaded before the migration
+     still climbs the shorter forms and publishes exactly as it does today.
+     The id rides on top of the author key rather than replacing a rung, because losing the
+     author key to gain a fast link would trade a blockable hide for a share — and a hide
+     nobody can block is a worse thing to publish than a link that arrives a second late. */
   const key=kfAuthorKey();
+  const slot=chSlot();
+  if(key&&slot&&slot.id) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id});
   if(key) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key});
   if(chReplyTo) forms.push({...signed,p_reply_to:chReplyTo});
   if(who) forms.push(signed);
@@ -8843,7 +8899,22 @@ function kfApplyVisibility(id,pub){
 const KF_ASKED_KEY="kamo_vis_asked";
 function kfAsked(){ try{ return localStorage.getItem(KF_ASKED_KEY)==="1"; }catch(e){ return false; } }
 function kfMarkAsked(){ try{ localStorage.setItem(KF_ASKED_KEY,"1"); }catch(e){} }
-/* Resolves to the answer. Resolves FALSE if it cannot be shown at all rather than assuming
+/* NOT WIRED, AND NOT DEAD EITHER — read this before deleting it.
+   Nothing in the app calls this. The sheet was removed from the flow on purpose (founder's
+   call): the disclosure now lives on the share sheet's own .ssVis row, which is visible in
+   the peek state, and a modal in front of the reveal was costing the send. That decision
+   stands, and this is deliberately NOT being re-wired.
+   It is kept, and kept TESTED (scripts/test-feed-dom.mjs drives it through
+   window.KAMOFEED.askConsent), because of what it is: the one-time, explicit, in-words opt-in
+   for a product whose default publishes a stranger's photo to a public feed. That default is
+   defensible today because the row states it before the send. If that ever stops being
+   enough — a store review, a regulator, a jurisdiction with a different answer, or simply a
+   change of mind — the fix must be one line re-enabling a path that already works, not a
+   rebuild under time pressure. Dead code that cannot run is drift; this is a switch with the
+   wiring already run to it, and the wiring is what takes the time.
+   If it is ever deleted, delete its tests in the same commit, and say in the message that the
+   opt-in path is gone rather than letting it disappear as a cleanup.
+   Resolves to the answer. Resolves FALSE if it cannot be shown at all rather than assuming
    consent nobody gave. */
 function kfAskConsent(){
   if(kfAsked()) return Promise.resolve(kfWantPublic());
