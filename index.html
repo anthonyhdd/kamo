@@ -9007,6 +9007,26 @@ function chSeek(hideId,opts){
      empty for every feed round — so without this the feed's funnel would land in the same
      bucket as the compose screen and "do feed players convert" would have no way to be asked. */
   const TP=(o)=>FEED?Object.assign({src:"feed"},o||{}):(o||{});
+  /* HOW MANY ROUNDS THIS BROWSER HAS FINISHED — measurement only, nothing branches on it.
+     The question it exists to answer: does anybody play a SECOND stranger's hide? The reveal
+     currently sells "Send one back" first and "Get KAMO" second, deliberately, and the case
+     for promoting the app on a later round is a hunch — 383 browser landings arrived on
+     2026-08-12 and in-app DAU did not move (237 → 238), but nothing says how many of those
+     people ever came back for a second round. If the answer is "a handful", the swap is noise
+     on the one screen every non-user sees, and this number is what stops it being tried.
+     GATED ON THERE BEING NO WRAPPER, which is the condition that actually matters and is not
+     the same as "not the feed". Inside the app there is nobody to sell the app to: the feed
+     already replaces Get KAMO with Next hide, and a ?h= deep link opened in the app does not,
+     which is a wart of its own. window.ReactNativeWebView is true in every wrapper ever
+     shipped, so one test covers all three cases. Same reasoning as `host` on chWebTrack.
+     localStorage is per-origin and every challenge link lands on the same one; this path only
+     ever runs where there is no wrapper, so the 1.0.2 launch wipe cannot reach it. */
+  const CH_ROUNDS_KEY="kamo_rounds";
+  const chCountsRounds=()=>{ try{ return !window.ReactNativeWebView; }catch(_){ return false; } };
+  const chRoundsPlayed=()=>{ if(!chCountsRounds()) return 0;
+    try{ return parseInt(localStorage.getItem(CH_ROUNDS_KEY)||"0",10)||0; }catch(_){ return 0; } };
+  const chBumpRounds=(n)=>{ if(!chCountsRounds()) return;
+    try{ localStorage.setItem(CH_ROUNDS_KEY,String(n)); }catch(_){} };
   const ctl={destroy:()=>{}};
   const st=document.createElement("style");
   st.textContent=
@@ -9155,7 +9175,10 @@ function chSeek(hideId,opts){
     let h; try{ h=await chRpc("get_hide",{p_id:HID}); }catch(e){}
     if(killed) return;                 // swiped past before the hide arrived — build nothing
     if(!h||!h.img_path){ track("seek_missing",TP()); ending("This hide is gone.","Expired, or taken down.",{}); return; }
-    track("seek_opened",TP());
+    /* Read, not incremented: `round` is which round THIS is, so a seeker's second hide
+       reports 2 at the moment it opens. Grouping seek_opened by it answers the question
+       directly — no funnel, no joins. 0 inside the app, where the counter is not kept. */
+    track("seek_opened",TP({round:chRoundsPlayed()+1}));
 
     const camoSrc=CH_URL+"/storage/v1/object/public/hides/"+h.img_path;
     const img=document.createElement("img");
@@ -9438,7 +9461,7 @@ function chSeek(hideId,opts){
        runs from here: place, paint, send. crossOrigin, or the board taints and the
        publish dies at toBlob — storage answers ACAO:* (verified). */
     function chRehide(src){
-      track("seek_rehide_tapped",FEED?{src:"feed"}:{});
+      track("seek_rehide_tapped",TP({round:chRoundsPlayed()}));
       /* THE ANSWER'S ADDRESS, captured at the only moment it is knowable. From here on the
          user is making a hide, and the app has no other way to learn who it is for — the
          share sheet will never say. `h.name` is what the button and the notification print;
@@ -9466,6 +9489,13 @@ function chSeek(hideId,opts){
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
       const q=$$("chQuit"); if(q) q.remove();
+      /* THE ROUND IS BANKED HERE, and only where there is something to send back — which is
+         also the only shape that IS a round. "This hide is gone" arrives with no opts, and a
+         visitor who met an expired link must not be counted as somebody who played.
+         After this, chRoundsPlayed() is the round that just ended, which is what the two exit
+         events below report. Nothing branches on the number: this changes no button, no order
+         and no copy. */
+      if(eopts.rehide) chBumpRounds(chRoundsPlayed()+1);
       /* THE CARD SAYS SOMETHING DIFFERENT INSIDE THE APP, because "Get KAMO" is being said
          to somebody who already has it. In the feed the round ends on the two moves that
          are actually available: make one out of this photo, or go to the next hide. */
@@ -9480,7 +9510,7 @@ function chSeek(hideId,opts){
          failure this change exists to end. Split seek_cta_tapped by tier and a template that
          stopped resolving shows up as a column, not as a slow drift in "organic". */
       if($$("chGo")) $$("chGo").onclick=()=>{ const u=refLink("seek_cta",HID);
-        track("seek_cta_tapped",{tier:u===appLink?"plain":"onelink"});
+        track("seek_cta_tapped",TP({tier:u===appLink?"plain":"onelink",round:chRoundsPlayed()}));
         location.href=u; };
       if($$("chNext")) $$("chNext").onclick=()=>{ track("feed_next_tapped",{}); if(OPT.onNext) OPT.onNext(); };
       if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
