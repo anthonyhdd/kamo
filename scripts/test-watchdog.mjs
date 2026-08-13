@@ -25,9 +25,45 @@ const CARD = '<!doctype html><html><head><meta property="og:title" content="@ton
   + '<meta property="og:image" content="https://qpztlobbnjyjbxqyuzgg.supabase.co/storage/v1/object/public/hides/x.jpg">'
   + '</head><body style="background:#000"><script>location.replace("/?h=abc")</script></body></html>';
 
+/* The association file, and the ways it is served wrong. Every one of these answers 200 with
+   plausible bytes except the 404 — which is the point: from a browser, from curl and from the
+   repo they are indistinguishable from working, and Apple rejects them. */
+const AASA_GOOD = JSON.stringify({
+  applinks: {
+    apps: [],
+    details: [{
+      appID: 'J55T97M8XV.com.blisscoach.kamo',
+      appIDs: ['J55T97M8XV.com.blisscoach.kamo'],
+      paths: ['/h/*'],
+      components: [{ '/': '/h/*' }],
+    }],
+  },
+});
+
 let mode = 'healthy';
 let chMode = 'ch-healthy';
+let aasaMode = 'aasa-healthy';
 const server = createServer((req, res) => {
+  /* The Universal Links association file — a static file on a THIRD origin again (the Pages
+     site behind the playkamo.com apex), failing independently of the app and of the challenge
+     link. Matched before /h/* so the two never collide. */
+  if (req.url.startsWith('/.well-known/apple-app-site-association')) {
+    // The Jekyll trap: .well-known/ was never published because /.nojekyll is missing.
+    if (aasaMode === 'aasa-404') { res.writeHead(404); return res.end('404: Not Found'); }
+    if (aasaMode === 'aasa-redirect') { res.writeHead(301, { Location: 'https://playkamo.com/' }); return res.end(); }
+    // GitHub Pages typing an extensionless file. 200, correct bytes, rejected by Apple.
+    if (aasaMode === 'aasa-octet') {
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      return res.end(AASA_GOOD);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    if (aasaMode === 'aasa-wrongapp') {
+      return res.end(AASA_GOOD.replace(/J55T97M8XV\.com\.blisscoach\.kamo/g, 'ABCDE12345.com.someone.else'));
+    }
+    if (aasaMode === 'aasa-nopath') return res.end(AASA_GOOD.replace(/\/h\/\*/g, '/x/*'));
+    if (aasaMode === 'aasa-badjson') return res.end('{ not json');
+    return res.end(AASA_GOOD);
+  }
   /* /h/* is the challenge link, served by a different thing in production (a Cloudflare
      Worker in front of a Supabase edge function) and therefore failing independently. */
   if (req.url.startsWith('/h/')) {
@@ -143,6 +179,57 @@ for (const [m, re, why] of chCases) {
     : bad(`NOT CAUGHT — ${why} (exit ${r.code})\n${r.out.split('\n').slice(0, 8).join('\n')}`);
 }
 
+/* ---- UNIVERSAL LINKS ----------------------------------------------------------------------
+   Driven separately for the same reason as the challenge link: a third origin, failing on its
+   own. The origins are held healthy throughout, so a non-zero exit here can only have come
+   from the association check.
+
+   THE CASE THAT MATTERS MOST IS aasa-octet, and it is worth being explicit about why it needs
+   a test at all. A 200 carrying byte-perfect JSON under the wrong Content-Type looks correct
+   everywhere a human would look — the browser renders it, curl prints it, the repo diff is
+   clean — and Apple silently declines it, then iOS caches the decline. There is no symptom to
+   notice and no second chance at the next build. The only thing that can see it is a machine
+   reading the header, so that machine has to be proven to actually fail. */
+function runAasa(m) {
+  mode = 'healthy'; chMode = 'ch-healthy'; aasaMode = m;
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [join(ROOT, 'scripts', 'watchdog.mjs')], {
+      env: {
+        ...process.env,
+        KAMO_WATCH_ORIGINS: JSON.stringify([{ name: 'test origin', url }]),
+        KAMO_WATCH_AASA: JSON.stringify({ name: 'test aasa', url: `${url}.well-known/apple-app-site-association` }),
+      },
+    });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('close', (code) => resolve({ code, out }));
+  });
+}
+
+console.log('\nA CORRECTLY SERVED ASSOCIATION FILE PASSES');
+{
+  const r = await runAasa('aasa-healthy');
+  r.code === 0 ? ok('200, application/json, right app, claims /h/* → exit 0')
+    : bad(`a healthy association file failed, so every run would cry wolf:\n${r.out}`);
+}
+
+console.log('\nEVERY WAY IT SILENTLY FAILS IS CAUGHT');
+const aasaCases = [
+  ['aasa-octet', /not application\/json/, 'served as octet-stream — the GitHub Pages extension trap, invisible to curl'],
+  ['aasa-404', /JEKYLL TRAP/, 'Jekyll dropped .well-known/ because /.nojekyll is missing'],
+  ['aasa-redirect', /REDIRECTS \(301\)/, 'a redirect, which Apple does not follow'],
+  ['aasa-wrongapp', /does not name the app/, 'the wrong team or bundle id — associates nothing'],
+  ['aasa-nopath', /does not claim \/h\/\*/, 'stopped claiming /h/*, the only path that matters'],
+  ['aasa-badjson', /not valid JSON/, 'malformed JSON, which Apple discards without a word'],
+];
+for (const [m, re, why] of aasaCases) {
+  const r = await runAasa(m);
+  r.code === 1 && re.test(r.out)
+    ? ok(`${why}`)
+    : bad(`NOT CAUGHT — ${why} (exit ${r.code})\n${r.out.split('\n').slice(0, 8).join('\n')}`);
+}
+
 /* THE CHECK MUST NOT FIRE WHEN IT CANNOT MEAN ANYTHING. Every case above this one overrides
    the origins, and the challenge default points at the real playkamo.com — so without this
    skip a unit test would reach the internet and go red on a train. Assert the skip, or the
@@ -155,6 +242,10 @@ console.log('\nAND IT STAYS OUT OF THE WAY OF THE LOCAL TESTS');
   r.code === 0 && !/challenge link/i.test(r.out)
     ? ok('overriding the origins alone leaves the challenge check silent')
     : bad(`the challenge check ran against production from a local test:\n${r.out}`);
+  /* Same skip, same reason: the association default points at the real playkamo.com. */
+  !/universal links/i.test(r.out)
+    ? ok('and leaves the universal-links check silent too')
+    : bad(`the association check ran against production from a local test:\n${r.out}`);
 }
 
 server.close();

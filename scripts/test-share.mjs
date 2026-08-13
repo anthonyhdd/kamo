@@ -39,7 +39,7 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  * Run the handler in one simulated environment.
  * `share` describes what navigator.share does: 'ok' | 'abort' | 'throw' | null (absent).
  */
-async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40 }) {
+async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40, slotId = 'dddddddddddddddd' }) {
   const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0, sheetClosed: 0, hints: [] };
   const btn = { innerHTML: 'Challenge a friend', onclick: null };
 
@@ -58,6 +58,14 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
     postNative: (o) => { calls.native++; calls.text = o.message; return true; },
     chEffective: () => ({ limit: settings.limit || 20, taps: settings.taps || 5, custom: false }),
     chLink: () => (chId ? 'https://anthonyhdd.github.io/kamo/?h=' + chId : ''),
+    /* The one-per-hide "One moment" deferral. A parameter rather than a closure variable
+       because the handler ASSIGNS to it, and `new Function` parameters are assignable — a
+       const in this object would throw the moment the fallback fired. */
+    chInviteNudged: false,
+    /* The id the client minted at chSlot(), available before create_hide answers. Distinct
+       from chLink() on purpose: these tests need to prove WHICH of the two a given branch
+       reached for, and a shared stub could not tell them apart. */
+    chSlotLink: () => (slotId ? 'https://playkamo.com/h/' + slotId : ''),
     /* The upload wait. Counted, not silently stubbed: which path is allowed to await is the
        whole point of it. The native sheet goes through postNative and carries no
        user-activation debt, so it CAN hold for the id. navigator.share cannot — the first
@@ -346,6 +354,61 @@ console.log('\nTHE INVITE CARRIES THE HANDLE');
   /One tap/.test(calls.text || '') && /\?h=abc123/.test(calls.text || '')
     ? ok('the stake and the link survive the signature')
     : bad(`signing displaced the stake or the link: ${JSON.stringify(calls.text)}`);
+}
+
+/* ---- THE RACE THE WEB BRANCH CANNOT ENTER -------------------------------------------------
+   `invite_shared` with link=false ran 13 times on 2026-08-12 and 7 on 08-13, and those are
+   NOT the deliberate under-the-floor sends — share_target_tapped with bare=true was zero on
+   both days. They are this: the thumb landing inside the 3-6s create_hide takes, on the one
+   branch that cannot wait for it, because navigator.share needs the user activation the first
+   await spends.
+   chSlot() now mints the id up front, so the link is knowable with no round trip.
+   WHICH BRANCH MAY USE IT IS THE WHOLE DESIGN, and it is what these four cases pin down.
+   create_hide fails on ~2.7% of publishes and the guessed link 404s on exactly those, so it
+   is only ever the right call where the alternative is the generic invite going out this
+   instant with no game in it. The native branch has already waited 8s and must never touch
+   it. */
+console.log('\nTHE WEB SHARE STOPS LOSING THE RACE TO create_hide');
+{
+  const { calls } = await run({ nativeInvite: false, share: 'ok', chId: '', handle: 'tony' });
+  /playkamo\.com\/h\/dddddddddddddddd/.test(calls.text || '')
+    ? ok('no id yet, web branch → sends the minted link instead of the generic invite')
+    : bad(`the web branch still sent a link-less invite: ${JSON.stringify(calls.text)}`);
+  /hid a kamo in this pic/.test(calls.text || '')
+    ? ok('...and promises the puzzle, because there really is one coming')
+    : bad(`the message did not describe a challenge: ${JSON.stringify(calls.text)}`);
+  const ev = calls.events.find((e) => e[0] === 'invite_shared');
+  ev && ev[1].link === true && ev[1].optimistic === true
+    ? ok('...and reports it as optimistic, so a guessed link stays separable from a real one')
+    : bad(`invite_shared did not mark the guess: ${JSON.stringify(ev && ev[1])}`);
+}
+{
+  /* THE NATIVE BRANCH MUST NOT. It waited 8s for the real id; reaching for a guess here would
+     trade a link that is certainly right for one that is 97% right, for nothing. */
+  const { calls } = await run({ nativeInvite: true, share: null, chId: '', handle: 'tony' });
+  !/playkamo\.com\/h\//.test(calls.text || '')
+    ? ok('the native branch never guesses — it waited for the real id and takes the invite')
+    : bad(`the native path used the optimistic link: ${JSON.stringify(calls.text)}`);
+}
+{
+  /* A REAL LINK ALWAYS WINS. The guess exists to fill a hole, not to replace the answer. */
+  const { calls } = await run({ nativeInvite: false, share: 'ok', chId: 'abc123', handle: 'tony' });
+  /\?h=abc123/.test(calls.text || '') && !/playkamo\.com\/h\//.test(calls.text || '')
+    ? ok('once the id has landed the published link wins over the guess')
+    : bad(`the guess displaced a real link: ${JSON.stringify(calls.text)}`);
+  const ev = calls.events.find((e) => e[0] === 'invite_shared');
+  ev && ev[1].optimistic === false
+    ? ok('...and is reported as not optimistic')
+    : bad(`a real link was marked optimistic: ${JSON.stringify(ev && ev[1])}`);
+}
+{
+  /* UNDER THE FLOOR, NOTHING IS COMING. chSlot() returns null below CH_MIN_COVERAGE, so there
+     is no id to guess with — and a bare hide must still go out as the honest invite rather
+     than promising a puzzle that was never published. */
+  const { calls } = await run({ nativeInvite: false, share: 'ok', chId: '', slotId: '', score: 10 });
+  !/playkamo\.com\/h\//.test(calls.text || '') && /paint yourself into the background/.test(calls.text || '')
+    ? ok('a bare hide still sends the honest invite — no link is guessed under the floor')
+    : bad(`a bare hide promised a puzzle: ${JSON.stringify(calls.text)}`);
 }
 
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ share paths behave');
