@@ -1,5 +1,15 @@
 -- APPLIED 2026-08-13 to Supabase project qpztlobbnjyjbxqyuzgg.
 --
+-- ⚠️ THE ID LINE IS gen_random_uuid(), NOT gen_random_bytes(). The first version of this
+-- overload used gen_random_bytes(), which lives in the `extensions` schema — and every
+-- create_hide sets `search_path TO 'public'`, so it raised "function gen_random_bytes(integer)
+-- does not exist" on EVERY reply. Worse than a plain error: chUpload()'s fallback ladder would
+-- have caught the throw and quietly published the 9-argument form, so replies would have gone
+-- out looking normal with no reply_to, no notification, and no reply on anyone's card — the
+-- feature failing completely and silently while every screen said it had worked. The other
+-- three overloads have always used gen_random_uuid(). Copy the existing line; do not invent an
+-- equivalent one.
+--
 -- SENDING ONE BACK, WITHOUT ASKING WHO TO SEND IT TO.
 --
 -- iOS never tells us who a share went to, and there is no API to message a contact the user
@@ -34,7 +44,7 @@ set search_path to 'public'
 as $function$
 declare v_id text; v_name text;
 begin
-  v_id := encode(gen_random_bytes(8), 'hex');
+  v_id := substr(replace(gen_random_uuid()::text, '-', ''), 1, 16);
   -- Narrowed here as well as in the page: this string is rendered on a stranger's device.
   v_name := nullif(regexp_replace(coalesce(p_name, ''), '[^A-Za-z0-9_.]', '', 'g'), '');
   insert into hides (id, img_path, cx, cy, r, secs, coverage, limit_s, max_taps, name, reply_to)
@@ -161,7 +171,7 @@ set search_path to 'public'
 as $function$
 declare v_id text; v_name text; v_parent text; v_round int := 1;
 begin
-  v_id := encode(gen_random_bytes(8), 'hex');
+  v_id := substr(replace(gen_random_uuid()::text, '-', ''), 1, 16);
   v_name := nullif(regexp_replace(coalesce(p_name, ''), '[^A-Za-z0-9_.]', '', 'g'), '');
   select h.id, h.round + 1 into v_parent, v_round from hides h where h.id = p_reply_to;
   insert into hides (id, img_path, cx, cy, r, secs, coverage, limit_s, max_taps, name,
