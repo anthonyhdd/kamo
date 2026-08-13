@@ -2794,6 +2794,10 @@ function camTick(){
     coverInto(g,camView.width,camView.height);
   }catch(_){ return; }                          // never hand over on a blit that didn't land
   if(camView.style.display!=="block"){ camView.style.display="block"; cam.classList.add("headless"); }
+  /* AFTER the handover, never before: sessPre() samples camView, so sampling it while the
+     blit above may still be failing would bank frames of a blank canvas. Self-throttled and
+     capability-gated — on a browser or an older wrapper this returns on its first line. */
+  sessPre();
 }
 function startCamView(){ if(!camRaf) camTick(); }
 function stopCamView(){
@@ -3116,6 +3120,7 @@ function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{
 
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
+  sessReset();   // the pre-roll belongs to the hide about to be shot — a Retake starts aiming again, and the old seconds are not that round's
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
   shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
@@ -3339,6 +3344,7 @@ function capture(){
   sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none"; finished=false; renderSizeBar();  // slider visible for all; KAMO+ only — tapping it opens the paywall, and the free preset dots that used to sit under it are gone
   $("#actionRow").style.display="none"; $("#btnBack").style.display="flex"; $(".brand").classList.add("mid");  // captured screen: Retake top-left, KAMO centered, actions hidden until Done
   tlReset();   // the timelapse belongs to THIS hide — see tlCapture()
+  tlCaptureOpen();   // ...and it opens on the untouched shot, which is where the round starts — see tlCaptureOpen()
   chResetRound();   // ...and so does the published hide — see chResetRound()
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
@@ -3810,8 +3816,22 @@ board.addEventListener("pointermove",e=>{ if(mode!=="paint")return;
    round. When the cap is hit we drop every OTHER frame and halve the sampling rate, which
    keeps the whole round represented instead of only its first half. */
 const TL_W=720, TL_MAX=14;
-let tlFrames=[], tlEvery=1, tlCount=0;
-function tlReset(){ tlFrames=[]; tlEvery=1; tlCount=0; }
+/* tlTimes IS PARALLEL TO tlFrames AND HAS TO STAY THAT WAY. It carries the wall-clock
+   moment each frame was taken, which is what turns a fixed-pace slideshow into a recording
+   of the round at the speed it actually happened (see sessionPayload()). Every mutation of
+   tlFrames below is mirrored on it in the same statement, deliberately — a decimation that
+   forgot the times would not throw, it would just play the round back at the wrong speed,
+   and nothing downstream could tell. */
+let tlFrames=[], tlTimes=[], tlEvery=1, tlCount=0;
+function tlReset(){ tlFrames=[]; tlTimes=[]; tlEvery=1; tlCount=0; }
+/* THE ROUND DOES NOT START AT THE FIRST STROKE. tlCapture() only fires from endPaint(), so
+   the timelapse used to open on a figure that was already partly painted — the shutter, and
+   the beat before the first stroke, were never in it. Called once from capture() with the
+   untouched board, so the clip opens where the round does. Costs one frame. */
+function tlCaptureOpen(){
+  if(!sceneCanvas||!board) return;
+  try{ tlFrames.push(composeShare(TL_W,board).toDataURL("image/jpeg",0.55)); tlTimes.push(Date.now()); }catch(e){}
+}
 function tlCapture(){
   if(!sceneCanvas||!board) return;
   if((tlCount++ % tlEvery)!==0) return;
@@ -3823,10 +3843,10 @@ function tlCapture(){
        mismatch against a 9:16 closing frame; once coverInto() started letterboxing the
        board it became visible, because the timelapse carried dark bands the closing frame
        had cropped away. One composer for every frame of the video, opening to closing. */
-    tlFrames.push(composeShare(TL_W,board).toDataURL("image/jpeg",0.55));
+    tlFrames.push(composeShare(TL_W,board).toDataURL("image/jpeg",0.55)); tlTimes.push(Date.now());
     /* Halve the resolution of TIME, not of the picture: keep frames 0,2,4… and from here
        on take every other stroke. The round stays evenly covered as it gets longer. */
-    if(tlFrames.length>TL_MAX){ tlFrames=tlFrames.filter((_,i)=>i%2===0); tlEvery*=2; }
+    if(tlFrames.length>TL_MAX){ tlFrames=tlFrames.filter((_,i)=>i%2===0); tlTimes=tlTimes.filter((_,i)=>i%2===0); tlEvery*=2; }
   }catch(e){}   // a tainted or oversized canvas must never break painting
 }
 /* THE LAST FRAME IS NOT A TIMELAPSE FRAME — IT IS THE ANSWER.
@@ -3851,11 +3871,84 @@ function tlCaptureFinal(){
   try{
     const f=composeShare(TL_W,board).toDataURL("image/jpeg",0.55);
     if(tlFrames.length && tlFrames[tlFrames.length-1]===f) return;
-    tlFrames.push(f);
+    tlFrames.push(f); tlTimes.push(Date.now());
     /* Trim from the FRONT if this pushes past the cap: the opening frames are the most
        redundant part of a timelapse, and the closing one is the one thing that cannot go. */
-    while(tlFrames.length>TL_MAX) tlFrames.shift();
+    while(tlFrames.length>TL_MAX){ tlFrames.shift(); tlTimes.shift(); }
   }catch(e){}
+}
+
+/* ===== THE PRE-ROLL: the seconds BEFORE the shutter ==============================
+   The share is meant to be the session, and the session does not begin at the shutter — it
+   begins with someone walking a phone around a room looking for a wall worth hiding against.
+   That hunt is the most human part of the whole thing and it was never in the export.
+
+   A ROLLING WINDOW, NOT A RECORDING. Frames are kept only while they are younger than
+   SESS_PRE_MS; everything older is dropped as it ages out. Someone who leaves the aim screen
+   open for four minutes therefore costs the same memory as someone who shoots immediately,
+   which matters in a content process this app has been jetsammed in before. The window is
+   what gets prepended at share time, so what ships is "the last few seconds before they
+   pressed it" however long they were there.
+
+   SAMPLED OFF #camView, NOT THE <video>. camView is already the cover-cropped frame the user
+   is looking at (see camTick), so a pre-roll frame is literally what was on screen — and
+   reading it costs no second decode of the camera track.
+
+   IT ONLY RUNS FOR A BINARY THAT CAN USE IT. Encoding a 720x1280 JPEG is 15-25ms of main
+   thread, and spending that against a wrapper whose renderer would throw the frames away
+   would be a stutter on the aim screen bought for nothing. So the sampler is gated on the
+   capability, and it BACKS OFF on top of that: the interval is re-derived from how long the
+   last encode actually took, so a slow device samples less rather than dropping frames on
+   the floor of a rAF loop it is already inside. */
+const SESS_PRE_MS=3000, SESS_PRE_EVERY=420, SESS_PRE_MAX=9;
+let preFrames=[], prePrevAt=0, preEvery=SESS_PRE_EVERY;
+const sessWanted=()=>{ try{ return !!(nativeCaps && nativeCaps.sessionVideo); }catch(_){ return false; } };
+function sessReset(){ preFrames=[]; prePrevAt=0; preEvery=SESS_PRE_EVERY; }
+function sessPre(){
+  if(!sessWanted()) return;
+  if(!camView.width||camView.width<2) return;              // preview not up yet — nothing to sample
+  const now=performance.now();
+  if(prePrevAt && now-prePrevAt<preEvery) return;
+  prePrevAt=now;
+  try{
+    /* composeShare, for the same reason tlCapture() uses it: every frame of the clip, from
+       the first second of aiming to the closing wipe, has to come out of ONE composer or the
+       picture changes shape mid-play. It is also what puts the wordmark on the pre-roll. */
+    const t=performance.now();
+    preFrames.push({d:composeShare(TL_W,camView).toDataURL("image/jpeg",0.5),t:Date.now()});
+    preEvery=Math.max(SESS_PRE_EVERY,Math.round((performance.now()-t)*14));   // 14x the encode → ≤7% of a frame budget
+  }catch(_){ return; }                                      // a tainted canvas must never break the preview
+  const cut=Date.now()-SESS_PRE_MS;
+  while(preFrames.length>1 && preFrames[0].t<cut) preFrames.shift();
+  while(preFrames.length>SESS_PRE_MAX) preFrames.shift();
+}
+/* THE WHOLE SESSION, ON ONE CLOCK. Returns null for anything that cannot honour it, and every
+   caller then falls back to exactly the payload it sends today — an older wrapper, a browser,
+   or a round with nothing to replay all take the untouched path.
+   The times are RELATIVE MILLISECONDS from the first frame, not timestamps: native holds each
+   frame until the next one's mark, so a five-second pause spent choosing a colour plays back
+   as five seconds. That is the "aussi long que le user a pris" part, and it is free — it needs
+   no extra frames, only the marks we already have.
+   CEILING, because Instagram Stories cuts a segment at 60s and a story that gets truncated
+   mid-reveal is worse than one that is slightly sped up. Past SESS_MAX_MS the whole timeline
+   is scaled uniformly, so a long round still reads as long, just faster. */
+const SESS_MAX_MS=42000;
+function sessionPayload(){
+  if(!sessWanted()) return null;
+  if(tlFrames.length<2) return null;
+  const frames=[], times=[];
+  preFrames.forEach(f=>{ frames.push(f.d); times.push(f.t); });
+  tlFrames.forEach((d,i)=>{ frames.push(d); times.push(tlTimes[i]||Date.now()); });
+  if(frames.length<2) return null;
+  const t0=times[0];
+  let rel=times.map(t=>Math.max(0,t-t0));
+  /* MONOTONIC, ENFORCED. Two frames can carry the same millisecond (a fast stroke, or the
+     opening frame and the first stroke on a tap), and a zero-length frame is one native would
+     never draw — the round would silently lose it. 60ms is two frames at 30fps: visible. */
+  for(let i=1;i<rel.length;i++) if(rel[i]<=rel[i-1]) rel[i]=rel[i-1]+60;
+  const span=rel[rel.length-1];
+  if(span>SESS_MAX_MS){ const k=SESS_MAX_MS/span; rel=rel.map(v=>Math.round(v*k)); }
+  return {frames,times:rel,pre:preFrames.length,span};
 }
 function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
 /* Lifting a finger has to drop it from the pinch set FIRST, or a two-finger gesture leaves
@@ -5609,6 +5702,11 @@ function trackCarried(kind,props){
    into the web, which needs a build.
    It also means one extra Amplitude user per install, because the WebView had no reason to
    mint a web id before. Watch the user totals for a step change. */
+/* `session_video_sent` reports a payload the WRAPPER is about to render, and it still belongs
+   here rather than in the allow-list: it has to land from the binaries that CANNOT render it
+   too, because the number worth knowing is what share of Instagram shares got the session clip
+   versus the fixed-pace timelapse — and a name only the new binary can emit answers half of
+   that question with silence. Direct, so it reports from every build. */
 /* `pose_changed` and `sheet_presented` are NEW NAMES, and 1.0.2's WEB_EVENTS allow-list is
    compiled into the binary — an unknown name is dropped silently. 1.0.2 is 99.7% of the
    fleet, so a new event that is not routed direct measures nothing at all. */
@@ -5635,7 +5733,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -6304,10 +6402,20 @@ async function nativeShare(target){
        ignores the key and renders exactly the video it renders today. Two frames minimum
        before it is worth sending — one stroke is not a timelapse, it is a still. */
     const frames = tlFrames.length>=2 ? tlFrames : null;
+    /* THE SESSION, IF THIS BINARY CAN RENDER ONE. sessionPayload() prepends the seconds
+       before the shutter and hands native a mark per frame, so the clip runs at the pace the
+       round actually ran at instead of a fixed 0.30s a stroke. It returns null for a browser,
+       for a wrapper without the capability, and for a round with nothing to replay — and in
+       every one of those cases `frames`/`times` below collapse to exactly the two lines above
+       this comment, which is what ships today. */
+    const sess = sessionPayload();
     /* `seconds` is the round time, burned into the reveal as "VANISHED IN 14S". Sent
        separately from `score` because score is COVERAGE — the two have always been different
        numbers and the caption wants the one the player was racing. */
-    postNative({type:"reveal-video",target,hidden,revealed,message,frames,seconds:roundSeconds(),score:Math.round(currentScore||0)}); return;
+    if(sess) track("session_video_sent",{frames:sess.frames.length,pre:sess.pre,span_ms:sess.span,seconds:roundSeconds()});
+    postNative({type:"reveal-video",target,hidden,revealed,message,
+      frames:sess?sess.frames:frames, times:sess?sess.times:null, pre:sess?sess.pre:0,
+      seconds:roundSeconds(),score:Math.round(currentScore||0)}); return;
   }
   const b=await shareBlob(); const d=await blobToDataURL(b);
   postNative({type:"share-target",target,ext:"jpg",mime:"image/jpeg",data:d,message,score:Math.round(currentScore||0)}); }
