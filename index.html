@@ -5655,7 +5655,25 @@ function chWebTrack(event,props){
         event_type:event, device_id:chDeviceId(), time:Date.now(), platform:"Web",
         /* app_variant matches the user property the native SDK sets, so KAMO's web traffic
            lands in the same segment as its app traffic instead of a nameless bucket. */
-        event_properties:Object.assign({app_variant:"kamo",surface:CH_SEEK?"seek":"web"},props||{})
+        /* `host` — WHICH SIDE OF THE WRAPPER THIS CAME FROM, the one dimension the WEB_ONLY
+           set has never carried. Those events bypass the bridge, so they land on the web
+           Amplitude user, which has no `version` user property — the note above says so, and
+           saveWrapperTag() exists because of it. What that costs in practice: `hide_published`,
+           the loop's entire creation number, cannot be split between somebody publishing
+           INSIDE the app and somebody publishing from plain Safari.
+           `surface` does not answer it. It separates the seeker screen from everything else,
+           so a hide published in the app and one published on the web home BOTH read "web".
+           On 2026-08-12, 383 browser landings arrived and in-app DAU did not move (237 → 238);
+           whether any of them published anything is exactly the question ⑤ shipped to answer
+           that same afternoon, and it could not be read.
+           window.ReactNativeWebView AND NOT nativeCaps, deliberately, against the rule in
+           CLAUDE.md — that rule is about gating FEATURES, where the wrapper being present
+           says nothing about whether it implements the handler. This is not a gate. The
+           question is "is there a wrapper at all"; ReactNativeWebView is true in every
+           wrapper ever shipped, including the oldest, while nativeCaps answers a different
+           question (which build) and would read "browser" for any wrapper that never
+           announced itself. */
+        event_properties:Object.assign({app_variant:"kamo",surface:CH_SEEK?"seek":"web",host:window.ReactNativeWebView?"app":"browser"},props||{})
       }]})}).then(r=>{ if(!r.ok) console.warn("kamo: analytics rejected",r.status); })
         .catch(e=>console.warn("kamo: analytics failed",e&&e.message));
   }catch(e){}   // includes the TDZ case if this ever fires before the CH block evaluates
