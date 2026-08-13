@@ -1131,7 +1131,13 @@
      body size, which fits two segments and overflows on the third — see the note in the head
      builder. A step down plus tighter tracking buys the width; .khSeg keeps any break that
      does happen on a separator instead of inside a number. */
-  .khHead{padding-bottom:9px;font-size:13px;line-height:1.35;letter-spacing:-.1px;}
+  /* STICKY, because it is a summary and a summary that scrolls away is a caption that left
+     its picture. The head lives INSIDE the scroller, so opening the accordion pushed it out
+     of view on the first flick and the list became a column of rows about nothing — which is
+     the "le top est bloqué caché quand on scroll" report. It now holds the top of the box.
+     Its own background, or the rows would slide under it and show through. */
+  .khHead{position:sticky;top:-13px;z-index:2;margin:-13px -14px 0;padding:13px 14px 9px;
+    background:#0e1a16;font-size:13px;line-height:1.35;letter-spacing:-.1px;}
   .khSeg{white-space:nowrap;}
   /* One line per hide, the state on the left and the one action on the right. Bordered rows
      rather than a list with bullets: each row is its own object because each row sends its
@@ -1143,7 +1149,11 @@
   /* flex-start, not center: the row is two stacked lines now, so centring would float the
      thumbnail against the middle of the block instead of aligning it with the sentence it
      belongs to. */
-  .khRow{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--stroke);
+  /* CENTRED, not top-aligned. The body is two stacked lines now, so hanging the thumbnail
+     from the top left it floating against the sentence with its bottom half beside nothing.
+     On the centre line the photo reads as belonging to the whole row, and Send — which sits
+     on the second line — lines up with the middle of the picture it will send. */
+  .khRow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--stroke);
     scroll-snap-align:start;}
   .khRow:first-child{border-top:none;padding-top:2px;}
   /* THE CONTROLS, ON THEIR OWN LINE AND IN THE ORDER THEY MATTER. Watch and Heat report what
@@ -1309,12 +1319,18 @@
      with a band moving through it, not as dimmed secondary text.
      26 -> 24px: "Disappear faster, better, stronger" wraps to two lines in the card, and
      24 keeps that second line from crowding the subtitle. */
+  /* SOLID WHITE — founder's call, and the shimmer is gone with the gradient that carried it.
+     The band was painted by clipping a moving gradient to the glyphs, which means the text
+     itself is `transparent` and only the gradient is visible: on a three-line headline over a
+     photo, the mint stop lands mid-word and that word drops to the lowest contrast on the
+     screen for a third of every cycle. A headline that dims part of itself on a paywall is
+     the wrong thing to be clever about. Plain #fff reads at full contrast on every line, all
+     the time. */
   .pwTitle{font-family:var(--display);font-size:24px;font-weight:700;letter-spacing:-.3px;margin-top:4px;line-height:1.18;
-    background:linear-gradient(100deg,#fff 26%,#eafff5 45%,var(--mint) 52%,#eafff5 59%,#fff 78%);
-    background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
-    -webkit-text-fill-color:transparent;color:transparent;
-    animation:pwShimmer 3.4s linear infinite;}
-  .pwSub{font-size:14px;color:#fff;opacity:1;margin-top:6px;line-height:1.4;}
+    color:#fff;-webkit-text-fill-color:#fff;}
+  /* Lighter, so the headline above leads. It was inheriting the card's weight and competing
+     with the line it is supposed to support — white and heavy reads as a second headline. */
+  .pwSub{font-size:14px;color:#fff;font-weight:400;opacity:1;margin-top:6px;line-height:1.4;}
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
@@ -5301,7 +5317,13 @@ function openKamoHome(){
        start between two opens. */
     const froze=undoStack.length>1;
     $("#khCharA").classList.toggle("frozen",froze);
-    $("#khCharB").classList.toggle("frozen",froze); };
+    $("#khCharB").classList.toggle("frozen",froze);
+    /* THE SWATCHES BELONG TO THE NEW BODY, so they only exist while it is chosen. On
+       Original they painted nothing anybody could see — a row of five taps with no visible
+       consequence, sitting between the name and the results, which reads as a broken control
+       rather than as an inapplicable one. Hidden rather than disabled: a dimmed row still
+       occupies the space and still invites the tap it will refuse. */
+    const fin=$("#khFin"); if(fin) fin.style.display = v ? "" : "none"; };
   paintChar();
   /* THE PREFERENCE IS STORED EVEN WHEN IT IS LOCKED, and that is deliberate. wantsV2() and
      curFinish() both fall back on their own when membership is missing, so writing the choice
@@ -9513,6 +9535,11 @@ function khRenderRows(el,rows,head){
     row.addEventListener("click",(ev)=>{
       /* The controls own their own taps — this only catches what falls between them. */
       if(ev.target.closest("button")) return;
+      /* STOPPED HERE, AND THIS IS THE REPORTED BUG. #khScore is itself the accordion toggle,
+         so a tap on a row bubbled up and COLLAPSED the list — the replay opened and the thing
+         it opened from shut underneath it. The row is a control in its own right; its tap
+         belongs to it and must not also be read as a tap on the box that contains it. */
+      ev.stopPropagation();
       w.click();
     });
   });
