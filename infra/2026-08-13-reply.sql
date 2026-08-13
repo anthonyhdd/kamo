@@ -220,7 +220,7 @@ drop function if exists public.submit_attempt(text, real, real, integer, integer
 create function public.submit_attempt(p_id text, p_x real, p_y real, p_ms integer, p_v integer)
 returns table(hit boolean, tries integer, missed integer, secs integer,
               pct integer, others integer, scope text,
-              old_round integer, old_name text)
+              old_round integer, old_name text, old_id text)
 language plpgsql
 security definer
 set search_path to 'public'
@@ -229,7 +229,7 @@ declare
   h public.hides%rowtype;
   v_hit boolean; v_tries int; v_found int;
   v_others int; v_worse int; v_ms int; v_scope text; v_pct int;
-  v_old_round int; v_old_name text;
+  v_old_round int; v_old_name text; v_old_id text;
   MIN_FIELD constant int := 5;   -- below this the hide's own field is noise, not a ranking
 begin
   select * into h from hides where id = p_id and not blocked and expires_at > now();
@@ -255,7 +255,7 @@ begin
         from hides p join chain c on p.id = c.reply_to
        where c.depth < 20
     )
-    select c.round, c.name into v_old_round, v_old_name
+    select c.round, c.name, c.id into v_old_round, v_old_name, v_old_id
       from chain c
      where sqrt(power(p_x - c.cx, 2) + power(p_y - c.cy, 2)) <= c.r
      order by c.round desc
@@ -289,8 +289,25 @@ begin
   if v_hit and v_others > 0 then v_pct := round(100.0 * v_worse / v_others)::int; end if;
 
   return query select v_hit, v_tries, (v_tries - v_found), h.secs, v_pct, v_others, v_scope,
-                      v_old_round, v_old_name;
+                      v_old_round, v_old_name, v_old_id;
 end $function$;
 
 grant execute on function public.get_hide(text) to anon, authenticated;
 grant execute on function public.submit_attempt(text, real, real, integer, integer) to anon, authenticated;
+
+-- ============================================================================================
+-- WHY submit_attempt ALSO RETURNS old_id (migration `old_find_returns_id`).
+--
+-- The first old-find copy was wrong in three ways, two of them factual:
+--   "That one's already been found."  — may simply not be true; the ancestor can have zero
+--                                       finds, because the seeker before them gave up.
+--   "You found @tony's from round 1." — a chain ping-pongs between two people, so the
+--                                       ancestor's author is very often the person READING
+--                                       the line. It told them they had found somebody
+--                                       else's figure when it was their own.
+--   "Mine is still in there."         — first person for someone who is not speaking.
+--
+-- The server cannot know whose figure it is: there are no accounts. The client can — chMine()
+-- holds the ids this device published — so the ancestor's id travels back and the page picks
+-- between "the one you hid in round N" and "@tony's, from round N". One column, and the
+-- sentence stops guessing.
