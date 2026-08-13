@@ -51,6 +51,10 @@ const stub = (src, anchor) => {
 };
 let html = stub(real, 'async function kfRpc(fn,body){');
 html = stub(html, 'async function chRpc(fn,body){');
+/* THE THIRD DOOR. chRpcRows exists because PostgREST returns a set-returning function as an
+   ARRAY and chRpc unwraps to the first element — the reaction counts come through it, so a
+   harness that stubs only the other two sends them at the real network and paints nothing. */
+html = stub(html, 'async function chRpcRows(fn,body){');
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.css': 'text/css' };
 const server = createServer((rq, rs) => {
@@ -132,6 +136,33 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
     ? ok('feed_page is called with a cursor and nothing else')
     : bad('feed_page called with ' + JSON.stringify(args));
 
+  await page.close();
+}
+
+console.log('\nTHE FEED CAN SAY SOMETHING BACK');
+{
+  const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [{ emoji: '\u{1F525}', n: 4 }],
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
+  const n = await page.evaluate(() => document.querySelectorAll('#chRx .chRxB').length);
+  n === 4 ? ok('the ending card offers four reactions and no keyboard') : bad(`reactions: ${n}`);
+  await page.waitForTimeout(500);
+  const counts = await page.evaluate(() => { const e=document.querySelector('#chRx .chRxN'); return e?e.textContent:''; });
+  counts === '4' ? ok("and it shows everybody's count, not this phone's") : bad('count shows ' + JSON.stringify(counts));
+  await page.evaluate(() => document.querySelector('.chRxB').click());
+  await page.waitForTimeout(400);
+  const sent = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide').length);
+  sent === 1 ? ok('a tap reaches the wire') : bad(`react_to_hide called ${sent}x`);
+  await page.evaluate(() => document.querySelectorAll('.chRxB')[1].click());
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide').length);
+  after === 1 ? ok('and the second one does not — one per hide') : bad(`a second tap sent ${after} calls`);
   await page.close();
 }
 

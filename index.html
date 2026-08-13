@@ -1124,6 +1124,17 @@
   .khWatch{flex:none;background:rgba(255,255,255,.06);border:1px solid var(--stroke);color:rgba(255,255,255,.72);
     font-family:var(--display);font-size:12px;font-weight:700;border-radius:999px;padding:6px 11px;margin-right:6px;}
   .khWatch:active{transform:scale(.94);}
+  /* REACTIONS. The feed gave a player exactly two things to do with somebody else's photo —
+     find it, or leave — and nothing to say back. Four emoji, no keyboard, no thread: the
+     cheapest possible signal, on the one screen where the round is already over. */
+  .chRx{display:flex;gap:8px;justify-content:center;margin:2px 0 4px;}
+  .chRxB{display:flex;align-items:center;gap:5px;min-width:52px;justify-content:center;
+    background:rgba(255,255,255,.07);border:1px solid var(--stroke);border-radius:999px;
+    padding:7px 11px;font-size:16px;line-height:1;cursor:pointer;color:#fff;
+    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+  .chRxB:active{transform:scale(.9);}
+  .chRxB.on{background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.45);}
+  .chRxN{font-family:var(--font);font-size:12.5px;font-weight:700;opacity:.75;}
   /* WHERE THEY LOOKED — the aggregate of every hunt on one hide, which is the only view in
      this app that gets better while its owner does nothing. One dot per seeker's final tap,
      laid on the photo they were looking at; the answer key itself is never drawn, because a
@@ -10058,10 +10069,15 @@ function chSeek(hideId,opts){
          to somebody who already has it. In the feed the round ends on the two moves that
          are actually available: make one out of this photo, or go to the next hide. */
       $$("chFoot").innerHTML='<div class="chCard">'
-        +(eopts.rehide?'<button class="chCta" id="chReh">'+(FEED?'Hide one in this photo':'Send one back')+'</button>':'')
+        +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">'+(FEED?'Hide one in this photo':'Send one back')+'</button>':'')
         +(FEED
             ? '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chNext">Next hide ↑</button>'
-            : '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+'</button>')
+            /* THE SECOND ROUND SELLS THE APP — the half of #175 whose measurement shipped
+               and whose product change never did. Somebody opening a SECOND stranger's hide
+               has already answered the question the store page asks, so the store stops being
+               the secondary action. Round 1 is unchanged and still sells the loop. */
+            : '<button class="'+((eopts.rehide&&chRoundsPlayed()<1)?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+'</button>')
+        +(FEED?'<div class="chRx" id="chRx"></div>':'')
         +'<button class="chR" id="chRep">Report this photo</button>'
         /* ONLY IN THE FEED. "Don't show me this person" is an instruction about what the
            feed serves, and there is no feed behind a hide somebody was personally sent — a
@@ -10079,6 +10095,31 @@ function chSeek(hideId,opts){
       /* The feed is told the moment this card exists, so it can drop the swipe hint before
          the pill and the card's own buttons occupy the same 40 pixels. */
       if(OPT.onEnded) try{ OPT.onEnded(); }catch(_){}
+      /* FOUR TAPS, ONE PER HIDE. Capped locally rather than server-side: there are no
+         accounts here, so a cap is a courtesy and not a guarantee — and the honest place for
+         a courtesy is the device that owes it. The counts come back from the server so the
+         number is everybody's, not this phone's. */
+      if($$("chRx")){
+        const EM=["🔥","😂","😱","👏"], KEY="kamo_rx_"+HID;
+        let spent=false; try{ spent=localStorage.getItem(KEY)==="1"; }catch(e){}
+        const box=$$("chRx");
+        box.innerHTML=EM.map(e=>'<button class="chRxB" data-e="'+e+'">'+e
+          +'<span class="chRxN" data-n="'+e+'"></span></button>').join("");
+        const paint=(rows)=>{ (rows||[]).forEach(r=>{ const el=box.querySelector('[data-n="'+r.emoji+'"]');
+          if(el) el.textContent=r.n>0?String(r.n):""; }); };
+        try{ chRpcRows("hide_reactions_of",{p_id:HID}).then(paint).catch(()=>{}); }catch(e){}
+        box.querySelectorAll(".chRxB").forEach(b=>{
+          b.onclick=()=>{
+            if(spent) return; spent=true;
+            try{ localStorage.setItem(KEY,"1"); }catch(e){}
+            b.classList.add("on"); haptic(10);
+            const n=b.querySelector(".chRxN");
+            if(n) n.textContent=String((parseInt(n.textContent||"0",10)||0)+1);
+            track("hide_reacted",TP({emoji:b.dataset.e}));
+            try{ chRpc("react_to_hide",{p_id:HID,p_emoji:b.dataset.e}).catch(()=>{}); }catch(e){}
+          };
+        });
+      }
       if($$("chNext")) $$("chNext").onclick=()=>{ track("feed_next_tapped",{}); if(OPT.onNext) OPT.onNext(); };
       if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
       $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
