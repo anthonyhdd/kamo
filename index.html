@@ -5562,7 +5562,7 @@ const WEB_ONLY=new Set(["camera_lenses","pose_changed","sheet_presented","sheet_
    allow-list knows any of them and the bridge would drop all three in silence — while the
    features looked like they were producing no behaviour at all. Direct, for the same reason
    the share tap above is: this page deploys on its own and the binary does not. */
-"reply_started","reply_pending","prev_blocked_tapped"]);
+"reply_started","reply_pending","prev_blocked_tapped","feed_available"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -9309,7 +9309,41 @@ function kfMarkSeen(id){
   try{ const a=kfSeen().filter(x=>x!==id); a.unshift(id);
        localStorage.setItem(KF_SEEN_KEY,JSON.stringify(a.slice(0,400))); }catch(e){}
 }
-function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b.style.display=on?"flex":"none"; }catch(e){} }
+/* THE BUTTON DOES NOT EXIST UNTIL THE FEED DOES.
+ *
+ * Shipped visible, and on day one it led every single user to "Nothing here yet." — because
+ * nothing is public yet and nothing was ever going to be: the 3191 hides already in the
+ * database were made under a 1:1 promise and stay private forever by design. So the feed
+ * fills only as people publish NEW public hides, and until the first one lands the button is
+ * a button that goes nowhere. That is worse than no button: it spends the one bit of
+ * curiosity a new control gets, on an empty room.
+ *
+ * `kfHasContent` is set by a single cheap probe at launch (see kfProbe). Not cached across
+ * launches: a stale `true` would put the dead end back, and the probe costs one request
+ * against a page that already makes several.
+ *
+ * This is a gate, not a kill switch — the day somebody publishes publicly, the button appears
+ * by itself, for everybody, with no deploy. */
+let kfHasContent=false;
+function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b.style.display=(on&&kfHasContent)?"flex":"none"; }catch(e){} }
+/* Asked once per launch, and only where a feed could be opened at all. `limit 1` because the
+   question is "is there anything", not "what is there" — the page itself is fetched when the
+   button is actually tapped. Silent on failure: an unreachable probe leaves the button hidden,
+   which is the same outcome as an empty feed and the safe direction to fail in. */
+async function kfProbe(){
+  if(kfHasContent) return;
+  try{
+    const rows=await kfRpc("feed_page",{p_before:null,p_limit:1});
+    if(rows&&rows.length){
+      kfHasContent=true;
+      track("feed_available",{});
+      /* Only reveal it if the camera screen is the thing on screen — the same condition
+         every other caller of kfShowBtn is already gated on. */
+      const sw=document.getElementById("shutterWrap");
+      if(sw&&sw.style.display!=="none") kfShowBtn(true);
+    }
+  }catch(e){}
+}
 
 const KF_CSS=
   "#kfeed{position:fixed;inset:0;height:100dvh;z-index:9400;background:#04060a;overflow:hidden;font-family:var(--font);color:var(--text);-webkit-user-select:none;user-select:none;}"
@@ -9622,7 +9656,7 @@ const CH_NOTIF={
 /* AFTER EVERYTHING, AND NEVER ON THE SEEKER SCREEN. A stranger opening a challenge link has
    no hides of their own, and CH_SEEK is exactly that case. Delayed a beat so the launch path
    — camera permission, first frame — never waits on this. */
-if(!CH_SEEK) setTimeout(()=>{ try{ chNewsCheck(); }catch(e){} },1200);
+if(!CH_SEEK) setTimeout(()=>{ try{ chNewsCheck(); }catch(e){} try{ kfProbe(); }catch(e){} },1200);
 
 if(location.search.includes("debug")){
   /* poseIdx rides along because the pose is otherwise unobservable from outside: the new
