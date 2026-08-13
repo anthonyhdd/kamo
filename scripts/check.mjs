@@ -540,12 +540,77 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     ['renaming the handle republishes the signed hide', 'inp.addEventListener("blur"', 'chRepublish()',
       'the handle blur handler no longer calls chRepublish() — a renamed sender keeps '
       + 'signing the OLD name on the hide behind the link'],
+    /* THE PRE-ROLL BELONGS TO THE HIDE ABOUT TO BE SHOT. Without this reset a Retake carries
+       the previous round's framing seconds into the next share — footage of a wall the user
+       walked away from, opening a clip about a photo that was thrown away. */
+    ['each round aims fresh', 'function enterCompose(', 'sessReset()',
+      'enterCompose() does not call sessReset() — a Retake keeps the PREVIOUS round\'s '
+      + 'pre-roll, so the session clip opens on footage of a photo that was discarded'],
+    /* tlCapture() only fires at the END of a stroke, so without this the replay opens on a
+       figure that is already part-painted. The opening frame is what makes the clip a
+       recording of the round rather than of the second half of it. */
+    ['the round is recorded from the shutter', 'function capture(', 'tlCaptureOpen()',
+      'capture() does not call tlCaptureOpen() — the clip opens on a part-painted figure, '
+      + 'skipping the shot the round started from'],
   ];
   for (const [label, start, needs, why] of wiring) {
     const body = bodyOf(start);
     if (body === null) bad(`could not locate ${start} — this check needs updating`);
     else if (!body.includes(needs)) bad(why);
     else ok(label);
+  }
+}
+
+/* ---- 5d-bis. tlFrames and tlTimes are one array wearing two names -------------------------
+ * tlTimes carries the wall-clock mark for tlFrames[i], and sessionPayload() zips them by
+ * index to hand native the pace the round actually ran at. So the pairing IS the feature, and
+ * it is held together by nothing but discipline: separate places push, decimate and shift
+ * tlFrames, and every one of them has to do the same to tlTimes.
+ *
+ * WHY A CHECK AND NOT A COMMENT. Getting this wrong does not throw and does not look broken.
+ * The clip still renders, with every frame present and every mark present — they are simply
+ * offset, so the replay speeds up and slows down at the wrong moments. No error, no failed
+ * render, nothing in Amplitude. The only witness is someone watching a video and feeling that
+ * it is a bit off.
+ *
+ * The rule is deliberately crude — same LINE, not same scope — because the fix for a violation
+ * is always to put the mirror mutation next to its twin, which is also what keeps the pairing
+ * readable. If a refactor ever needs them apart, rewrite this check to follow it; do not
+ * delete it.
+ */
+{
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  const lines = strip(html).split('\n');
+  const MUTATES = /tlFrames\s*(?:=[^=]|\.push\(|\.shift\(|\.pop\(|\.splice\()/;
+  const sites = lines.filter((l) => MUTATES.test(l));
+  const offenders = [];
+  lines.forEach((ln, i) => {
+    if (MUTATES.test(ln) && !/tlTimes/.test(ln)) offenders.push(`${i + 1}: ${ln.trim().slice(0, 110)}`);
+  });
+  offenders.length
+    ? bad('tlFrames is mutated without tlTimes on the same line — the session clip would play\n'
+      + '    the round back out of sync, with nothing anywhere reporting it:\n      ' + offenders.join('\n      '))
+    : ok(`tlFrames and tlTimes are mutated together (${sites.length} sites)`);
+}
+
+/* ---- 5d-ter. The pre-roll sampler stays behind its capability -----------------------------
+ * sessPre() encodes a 720x1280 JPEG off the camera preview and is called from camTick — i.e.
+ * from inside a requestAnimationFrame loop, on the aim screen, which is the one screen where a
+ * stutter is most visible. That cost is only worth paying for a binary that can actually
+ * render the session clip, so the first thing the function does is ask.
+ *
+ * Deleting the guard would break nothing a test can see. It would just make every user on
+ * every older build pay 15-25ms of main thread, several times a second, for frames no
+ * renderer will ever read.
+ */
+{
+  const at = html.indexOf('function sessPre(');
+  if (at < 0) bad('could not locate sessPre() — this check needs updating');
+  else {
+    /sessWanted\(\)/.test(html.slice(at, at + 220))
+      ? ok('the pre-roll sampler asks for the capability before it encodes anything')
+      : bad('sessPre() no longer opens on sessWanted() — every build without the session\n'
+        + '    renderer now encodes JPEGs off the camera preview for frames nobody reads');
   }
 }
 
@@ -856,6 +921,20 @@ try {
   bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 13b. The clock the session clip runs on --------------------------------------------
+   The Instagram share is the round played back at its real length, and every way of getting
+   that wrong still produces a video: marks offset from frames, a stroke held for zero
+   milliseconds, a four-minute clip Stories will truncate mid-reveal. Nothing throws, nothing
+   is logged, and the only witness is someone watching the output. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-session-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-session-dom.mjs', 'SESSION TEST', out)
+    : ok('the session clip runs at the length of the round (node scripts/test-session-dom.mjs)');
+} catch (e) {
+  bad('THE SESSION CLIP\'S TIMELINE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 14. The end of the viral loop ------------------------------------------------------
    The seeker's "Play KAMO" is the only link in this file that leads to an install, and it is
    the one App Store link the native wrapper can never improve — the seeker screen runs in a
@@ -882,6 +961,39 @@ try {
   else if (!/refLink\(/.test(cta[0]))
     bad('the seeker CTA no longer routes through refLink() — attribution on the viral loop is gone');
   else ok('the seeker CTA still routes through refLink(), not the bare listing');
+}
+
+/* THE ID MUST NOT GO BACK BEHIND THE BYTES.
+   This has now shipped broken twice, and both times it read as a share bug rather than an
+   ordering bug: create_hide was reachable only after `await chPrepare()`, so the link did not
+   exist until a ~200KB JPEG had crossed the network, and every send inside that window went
+   out as the generic invite with a ?i=1 link and no game behind it. On the web path — which
+   cannot wait at all, because navigator.share needs the tap's activation — that was 6 sends
+   in 10 across 12-13 Aug.
+   The runtime assertion lives in test-share-dom (ROUND 4) and is the real one. This is the
+   cheap one that fires without a browser, because the reordering it guards against is a
+   two-line refactor that reads perfectly reasonably in a diff. */
+{
+  const up = html.match(/async function chUpload\(\)\{[\s\S]*?\n\}/);
+  if (!up) bad('chUpload() is gone — the publish path cannot be checked');
+  else {
+    /* Sliced at the CALL, not at the string: "create_hide" is named in three comments inside
+       this function, the first of them 196 characters in, and slicing there cut the window
+       off before the code it exists to read. */
+    const call = up[0].indexOf('chRpc("create_hide"');
+    const head = call < 0 ? '' : up[0].slice(0, call);
+    if (call < 0)
+      bad('chUpload() no longer calls chRpc("create_hide", …) — the publish path cannot be checked');
+    else if (/await\s+chPrepare\s*\(/.test(head))
+      bad('chUpload() awaits chPrepare() BEFORE create_hide — the hide id is queued behind the\n'
+        + '    image upload again, so every share in that 3-6s window sends the generic invite\n'
+        + '    and a ?i=1 link with no hide in it. Take the name from chSlot() and let the bytes\n'
+        + '    travel on their own; see the note above chSlot().');
+    else if (!/const\s+slot\s*=\s*chSlot\(\)/.test(head))
+      bad('chUpload() no longer takes its storage name from chSlot() — the id is only as fast\n'
+        + '    as whatever now produces that name.');
+    else ok('the hide id is taken from chSlot(), not awaited behind the upload');
+  }
 }
 
 /* ---- 15. The claim App Review rejected --------------------------------------------------
