@@ -46,8 +46,18 @@ const html = real.slice(0, at)
   + 'plus:g("#khPlus"),upsell:g("#khUpsell"),title:(document.getElementById("khTitle")||{}).textContent,'
   + 'value:(document.getElementById("khHandle")||{}).value,stored:(()=>{try{return localStorage.getItem("kamo_handle")||"";}catch(e){return"";}})(),'
   + 'discord:DISCORD_URL,chips:document.querySelectorAll("#kamoHome .kpChip").length,'
-  + 'restore:g("#khRestore"),field:g("#khName"),edit:g("#khEdit"),'
+  /* THE NAME IS THE BUTTON NOW. #khEdit was a separate pencil control and it no longer
+     exists: once a handle is set the field collapses and the HEADLINE ("@name") is what
+     reopens it, caret at the end. So there is no distinct edit affordance whose display can
+     be read — #khTitle is always on screen. `edit` is therefore gone from this snapshot, and
+     what replaces it is the assertion that tapping the headline actually brings the field
+     back, which is the behaviour the pencil used to provide. */
+  + 'restore:g("#khRestore"),field:g("#khName"),'
   + 'score:g("#khScore"),scoreText:(document.getElementById("khScore")||{}).textContent||""};},'
+  /* Tapping the headline, through its OWN click handler rather than by calling khShowField()
+     directly — the guard that makes it a no-op when no handle is set lives in that handler,
+     and calling past it would assert a path no finger can take. */
+  + 'tapName(){document.getElementById("khTitle").click();return this.state();},'
   /* chRpc is a function DECLARATION, so it is replaceable from inside the module. Stubbed per
      id so the aggregate can be checked against known rows — and so a null (an expired or
      blocked hide, which get_hide answers with nothing) is exercised rather than assumed. */
@@ -185,12 +195,25 @@ console.log('\nIT SWITCHES OVER AS SOON AS YOU ARE DONE');
 
   await page.evaluate(() => document.getElementById('khHandle').blur());
   const done = await page.evaluate(() => window.__h.state());
-  done.field === 'none' && done.edit !== 'none'
-    ? ok('and stands down on blur, without reopening the card')
-    : bad(`after blur the field is ${done.field} and the edit button is ${done.edit}`);
+  /* The headline carries the name once the field stands down — that IS the edit control, so
+     asserting it holds "@name" asserts both that the collapse happened and that the way back
+     in is on screen. */
+  /* Against the shape, not a literal: the headline carries whatever was typed, and pinning
+     the exact name here would break the next time the fixture changes without the behaviour
+     changing at all. What matters is that it collapsed AND the name is on screen — that is
+     both halves of the edit control existing. */
+  done.field === 'none' && /^@\w+/.test(done.title || '')
+    ? ok('and stands down on blur, leaving the name itself as the way back in')
+    : bad(`after blur the field is ${done.field} and the headline is ${JSON.stringify(done.title)}`);
 
-  /* Clearing it must NOT collapse to a button offering to change nothing. */
-  await page.evaluate(() => { document.getElementById('khEdit').click(); });
+  /* THE PENCIL'S JOB, DONE BY THE NAME. This is the assertion #khEdit used to carry: there
+     has to be a way back to the field after it collapses, or a typo is permanent. */
+  const reopened = await page.evaluate(() => window.__h.tapName());
+  reopened.field !== 'none'
+    ? ok('tapping the name reopens the field — the headline is the edit control')
+    : bad('tapping the headline did not bring the field back; the name cannot be changed');
+
+  /* Clearing it must NOT collapse to a headline offering to change nothing. */
   await page.evaluate(() => { const i = document.getElementById('khHandle'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); });
   const cleared = await page.evaluate(() => window.__h.state());
   cleared.field !== 'none' && cleared.title === 'Sign your hides'
@@ -263,6 +286,49 @@ console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
   /^1 played your hide ·/.test(none.scoreText.trim()) && /nobody found you/.test(none.scoreText)
     ? ok('one player, none found → singular, and the loss is stated plainly')
     : bad(`the singular / nobody-found case reads: ${JSON.stringify(none.scoreText)}`);
+
+  /* THE ROW IS A BUTTON, AND TAPPING IT MUST NOT DISMISS THE CARD.
+     Reported from the field: "quand on tap sur la card ça ferme au lieu d'ouvrir le preview
+     ou le watch". Two faults met on the same gesture. The row had no handler at all, so a tap
+     that missed the three small controls did nothing — and the card's drag-to-close armed
+     INSIDE the list whenever it was too short to scroll, so the few pixels of travel in a
+     normal press cleared the 40px threshold and shut the card instead.
+     Asserted through a real press with movement rather than a bare .click(), because a
+     synthetic click has no travel and would pass against the very code that failed. */
+  await page.evaluate(() => window.__h.expand());
+  const tapped = await page.evaluate(async () => {
+    const row = document.querySelector('#khScore .khRow');
+    if (!row) return { err: 'no row' };
+    const r = row.getBoundingClientRect();
+    const x = Math.round(r.left + 12), y = Math.round(r.top + r.height / 2);
+    const o = (cy) => ({ bubbles: true, cancelable: true, pointerId: 3, pointerType: 'touch', clientX: x, clientY: cy });
+    /* Down, then 44px of drift — past the dismiss threshold — then up: a thumb reaching for
+       a control on a 46px row, which is exactly the gesture that was closing the card. */
+    row.dispatchEvent(new PointerEvent('pointerdown', o(y)));
+    row.dispatchEvent(new PointerEvent('pointermove', o(y + 44)));
+    row.dispatchEvent(new PointerEvent('pointerup', o(y + 44)));
+    await new Promise((r2) => setTimeout(r2, 150));
+    return { shown: document.getElementById('kamoHome').classList.contains('show'),
+             live: row.classList.contains('khRowTap') };
+  });
+  tapped.shown
+    ? ok('a press with travel on a row leaves the card open — the list is not a dismiss surface')
+    : bad('pressing a row closed the card: the drag-to-close still arms inside #khScore');
+  tapped.live
+    ? ok('and a played row is marked live, so the whole row is the target rather than three chips')
+    : bad('the row carries no tap affordance — only the small controls are reachable');
+
+  /* ONE SENTENCE, NOT THE SAME NUMBERS TWICE. The chips under the state line restated it word
+     for word ("1 tried" under "1 tried · nobody found you") and held the width that was
+     pushing the sentence onto a third line. */
+  const dup = await page.evaluate(() => {
+    const row = document.querySelector('#khScore .khRow');
+    return { txt: (row.querySelector('.khRowTxt') || {}).textContent || '',
+             chips: row.querySelectorAll('.khRowChips .chChip').length };
+  });
+  dup.chips === 0 && /1 tried/.test(dup.txt)
+    ? ok('and it states the count once, in the sentence, with no chip repeating it')
+    : bad(`the row repeats itself: ${dup.chips} chip(s) under ${JSON.stringify(dup.txt)}`);
 }
 
 /* TEN CHALLENGES IS THE MAXIMUM chMine() KEEPS, SO TEN IS THE SIZE THE CARD MUST SURVIVE.
