@@ -6544,28 +6544,30 @@ function chCopy(text){
 function chPrevRender(){
   try{
     const row=document.getElementById("chPrev"); if(!row) return;
-    /* UNDER THE PUBLISH FLOOR, THE CARD IS THE FIX-IT AFFORDANCE. chUpload() refuses a
-       hide this bare (see CH_MIN_COVERAGE), so "Challenge a friend" would send the
-       generic invite — and nothing on the sheet said why. The card now says it, and
-       tapping it goes straight back to the brush instead of opening a preview of a game
-       that will not be published. */
-    const blocked=Math.round(currentScore||0)<CH_MIN_COVERAGE;
+    /* UNDER THE PUBLISH FLOOR, THE CARD IS AN OFFER — NOT A REFUSAL ANY MORE.
+       It used to be the explanation for a send that was blocked. The send is no longer
+       blocked (see #ssInvite): a bare hide goes out as the invite, immediately. So what is
+       left for this card to say is not "you may not" but "this one is not a puzzle yet, and
+       here is what would make it one" — with the tap still going back to the brush, because
+       that remains the only thing that changes the answer.
+       The distinction is not pedantry. The copy below used to read "needs 30%" and the hint
+       "…before you can send it", and both were statements of a rule. Leaving them in place
+       over a send that now works would be the app describing a wall that is not there. */
+    const bare=Math.round(currentScore||0)<CH_MIN_COVERAGE;
     /* The two chips ARE the deal the friend gets, and the deal is fixed now: one tap,
        no clock. Constants, so the card can never disagree with the seeker screen. */
-    /* WHEN IT IS BLOCKED, THE CARD HAS ONE JOB: say how far off you are, and in what unit.
-       "not hidden yet" / "paint them first" said neither. They named a state the user could
-       already see and gave an instruction with no target — no idea whether one more stroke
-       was needed or twenty — on the same card whose tap silently closes the sheet. Taken
-       together that reads as "the modal shut for no reason", which is exactly what it was
-       reported as.
-       Numbers instead: what you have, and what it takes. Both interpolated — CH_MIN_COVERAGE
-       is the same constant chUpload() actually refuses on, so this card can never promise a
-       floor the publish does not enforce. */
+    /* WHEN IT IS BARE, THE CARD SAYS HOW FAR OFF YOU ARE AND IN WHAT UNIT — that part was
+       right and stays. "not hidden yet" / "paint them first" named a state the user could
+       already see and gave an instruction with no target: no idea whether one more stroke was
+       needed or twenty. Numbers instead, both interpolated from CH_MIN_COVERAGE so the card
+       can never quote a floor the publish does not use.
+       "to challenge", not "needs": the number is now the price of a PUZZLE, not the price of
+       being allowed to press the button. */
     const pct=Math.round(currentScore||0);
     const title=row.querySelector(".chPrevTxt b");
-    if(title) title.textContent=blocked?"Too easy to spot":"My challenge";
-    document.getElementById("chChipS").textContent=blocked?(pct+"% painted"):"1 tap";
-    document.getElementById("chChipT").textContent=blocked?("needs "+CH_MIN_COVERAGE+"%"):"no clock";
+    if(title) title.textContent=bare?"Too easy to spot":"My challenge";
+    document.getElementById("chChipS").textContent=bare?(pct+"% painted"):"1 tap";
+    document.getElementById("chChipT").textContent=bare?(CH_MIN_COVERAGE+"% to challenge"):"no clock";
     /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
        an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
        because a third chip made the card read as clutter. What survives it: the share MESSAGE
@@ -6597,15 +6599,19 @@ function chPrevRender(){
        and to be about to be shown. onclick (not addEventListener) on purpose — chPrevRender
        runs again on every share sheet open, and a listener would stack a duplicate each
        time, so the preview would open twice, then three times. */
-    /* THE BLOCKED TAP CLOSES THE SHEET ON PURPOSE — it is taking you back to the brush, which
-       is the only thing that fixes the card. It was reported as "tapping the card closes the
-       modal instead of opening the share", and that report was right about the experience: the
-       card gave no reason, so the close read as a dismissal rather than as a destination.
-       The copy above is what makes it legible; the hint is what names it before the tap. */
-    const go=blocked
+    /* THE BARE TAP CLOSES THE SHEET ON PURPOSE — it is taking you back to the brush, which is
+       the only thing that turns this into a challenge. It was reported as "tapping the card
+       closes the modal instead of opening the share", and that report was right about the
+       experience: the card gave no reason, so the close read as a dismissal rather than as a
+       destination. The copy above is what makes it legible; the hint names it before the tap.
+       THE HINT NO LONGER STATES A RULE. It said "…before you can send it", which was true of
+       a send that refused and is a lie about the one that ships now. Send is always available
+       — the sheet the user just left has the button — so the line offers the alternative
+       instead of gating on it. */
+    const go=bare
       ? ()=>{ haptic(10); track("prev_blocked_tapped",{coverage:pct}); closeShareSheet();
               if($("#btnEdit").style.display!=="none") $("#btnEdit").click();
-              showHint("Keep painting — "+CH_MIN_COVERAGE+"% covered before you can send it"); }
+              showHint("Paint them out and it becomes a challenge — or send it as is",3600); }
       : ()=>{ haptic(10); chPrevPlay(); };
     shot.onclick=(ev)=>{ ev.stopPropagation(); go(); };
     /* THE WHOLE ROW OPENS IT, not just the 46px thumbnail. The card is one object that says
@@ -6932,18 +6938,21 @@ function chAwaitId(ms){
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
-  /* UNDER THE PUBLISH FLOOR THERE IS NOTHING TO SEND AND NOTHING TO WAIT FOR. chUpload()
-     refuses a hide this bare (CH_MIN_COVERAGE — the link card was spoiling the answer), so
-     the 8s wait below would burn in full and then send the generic invite: "Preparing your
-     challenge…" for eight seconds, followed by the wrong thing, with the reason nowhere on
-     screen. That is exactly what the founder hit. FIRST, before the sent stamp — a blocked
-     hide is not sent. Blocked is SAID, instantly, and the tap goes to the fix. */
-  if(sc<CH_MIN_COVERAGE){
-    showHint("🖌️ Paint them invisible first");
-    closeShareSheet();
-    const be=$("#btnEdit"); if(be&&be.style.display!=="none") be.click();
-    return;
-  }
+  /* THE FLOOR STOPS BEING A DOOR — founder's call, 2026-08-13, stated as a rule: there is
+     never a mandatory paint percentage to share. This used to refuse the send outright —
+     "🖌️ Paint them invisible first", sheet closed, straight back to the brush — and it fired
+     on over a third of everyone who finished a round. The only thing it ever produced was a
+     share that did not happen.
+     WHAT THE FLOOR IS FOR SURVIVES UNTOUCHED. chUpload() still refuses to PUBLISH a hide this
+     bare, for a reason that has nothing to do with permission: the challenge link's og:image
+     would show the figure standing in plain sight and spoil the answer in the thread before
+     anyone taps it. So under the floor there is no challenge — and the send goes out as the
+     INVITE, which promises no puzzle and is honest about what it is.
+     `bare` IS THAT FACT, computed once at the tap: no id is coming, so nothing below may WAIT
+     for one. That wait is the whole reason the refusal existed — an 8s "Preparing your
+     challenge…" would burn in full and then send the invite anyway, which is worse than
+     sending it immediately. Skipping the wait is what makes removing the door safe. */
+  const bare = sc<CH_MIN_COVERAGE;
   /* THE WEB PATH CANNOT WAIT, SO IT ASKS FOR ONE MORE TAP RATHER THAN SENDING A DUD.
      navigator.share needs the user activation this tap granted and the first await spends
      it — that rule is why the 8s ceiling below is native-only, and why a browser has been
@@ -6956,7 +6965,11 @@ $("#ssInvite").onclick=async()=>{
      falls through and sends that instead. Reset per round, so the offer is per hide.
      BEFORE chMarkSent() and the tap event, deliberately: nothing was sent, so nothing may
      be stamped as sent. */
-  if(!(nativeCaps&&nativeCaps.invite) && !chLink()){
+  /* `!bare` FIRST: this nudge spends a tap asking the user to try again once the link lands,
+     and under the floor no link is ever going to land. Without this guard a bare hide would
+     read "One moment — preparing your challenge", send nothing, and only go out on the second
+     tap — the same dead end as the refusal, wearing a politer sentence. */
+  if(!bare && !(nativeCaps&&nativeCaps.invite) && !chLink()){
     try{ chUpload(); }catch(e){}
     const b0=$("#ssInvite");
     if(!chInviteNudged && b0){
@@ -6977,7 +6990,13 @@ $("#ssInvite").onclick=async()=>{
   /* ONE NAME FOR ONE TAP. `seconds` moves onto it — the carrier was the only thing carrying
      that property, and it is how "people who spent longer painting are likelier to send" is
      asked. See the WEB_ONLY entry for why the carrier that used to sit here is gone. */
-  track("share_target_tapped",{target:"invite",mode:shareMode,score:sc,seconds:secs});
+  /* `bare` IS THE WHOLE POINT OF THIS BEING MEASURABLE. These sends did not exist until today
+     — the floor refused them — so the question the change has to answer is whether a share
+     with no puzzle behind it is worth having. Without this property they are indistinguishable
+     from the challenges, and the honest answer would be unavailable in either direction: if
+     bare invites convert as well as challenges, the floor was pure loss; if they convert to
+     nothing, the send is a courtesy and the card should push harder toward painting. */
+  track("share_target_tapped",{target:"invite",mode:shareMode,score:sc,seconds:secs,bare});
   /* THE LINK GOES TO THE WEB, NOT STRAIGHT TO THE APP STORE. 25 people sent a challenge
      today and we cannot say whether one of them was opened: 1.0.2 never calls setAppLink or
      setReferral, so shareUrl() hands back the bare store URL — an install from it is
@@ -7015,13 +7034,23 @@ $("#ssInvite").onclick=async()=>{
      dead, hence the button state. The web branch below is unchanged and unwaitable:
      navigator.share dies on the first await, that rule still stands. */
   const inviteBtn=$("#ssInvite"), inviteHtml=inviteBtn?inviteBtn.innerHTML:"";
-  if(useNative){
+  /* `&& !bare`: the wait exists to let a challenge finish uploading. Under the floor nothing
+     was ever queued — chSlot() returns null and chUpload() returns early — so this would hold
+     the button at "Preparing your challenge…" for the full eight seconds and then send the
+     invite. A bare hide goes out now, on this tap. */
+  if(useNative && !bare){
     const pending=!chLink();
     if(pending && inviteBtn){ inviteBtn.textContent="Preparing your challenge…"; inviteBtn.disabled=true; }
     await chAwaitId(8000);
     if(pending && inviteBtn){ inviteBtn.innerHTML=inviteHtml; inviteBtn.disabled=false; }
   }
-  const link=chLink();
+  /* `&& !bare` — AND THIS IS NOT BELT AND BRACES, IT IS THE HOLE THE TEST FOUND.
+     chLink() answers "has this round ever been published", not "is this round a puzzle now".
+     A hide painted past the floor publishes and takes a chId; erasing back under the floor
+     leaves that id in place. Branching the message on `link` alone then announces a body in a
+     photo where the figure is standing in plain sight — and the link preview shows exactly
+     that, in the thread, before anyone taps. The send stays; only the promise is withdrawn. */
+  const link=bare?"":chLink();
   /* SIGNED, WHEN THERE IS A NAME TO SIGN IT WITH. An anonymous dare is a weaker ask than one
      with a person behind it, and this is the loop that is flat — 71 shares a day, roughly one
      in eight ever played. It is also what stops the handle from being decoration: without
@@ -7063,7 +7092,11 @@ $("#ssInvite").onclick=async()=>{
        a send carried a playable challenge or the empty ?i=1 invite, so a share that reached
        a friend with no game in it looked identical to one that worked. With it, the share
        that produces no challenge_preview_opened is finally separable from the one that does. */
-    track("invite_native",{score:sc,link:!!link});
+    /* `bare` rides here too, and not only on share_target_tapped: that one goes through the
+       WRAPPER, so it lands under a different Amplitude user than anything in WEB_ONLY, and a
+       ratio built across the two is the mixed funnel this file warns about elsewhere.
+       invite_native is WEB_ONLY, so bare-vs-challenge is answerable from one id, on 1.0.2. */
+    track("invite_native",{score:sc,link:!!link,bare});
     return;
   }
   /* THE ANSWER LANDS ON THE BUTTON, not in a toast 700ms after the sheet closed. The thumb
