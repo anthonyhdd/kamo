@@ -6907,8 +6907,21 @@ function invitePreview(){ chPrevRender(); }
    absorbed a timing bug in silence.
    Resolves the moment chId lands, gives up after `ms` and lets the caller send the honest
    invite rather than hanging on the share. */
+/* One "give it a second" per hide, on the web path only — see the nudge in the invite
+   handler. Declared here rather than beside chId because chResetRound() clears it and the
+   handler reads it, and both live further down. */
+let chInviteNudged=false;
 function chAwaitId(ms){
   if(chId||!CH_MAKE) return Promise.resolve(chId);
+  /* KICK, DO NOT ONLY WAIT. This polled a variable and hoped. That was survivable while the
+     only reason for a missing id was an upload still in flight — something already on its
+     way, which waiting genuinely resolves. Since chSlot() the id is one database round trip
+     from the reveal, so an id that is STILL missing here does not mean "not yet", it means
+     the publish failed or never ran; and polling a publish that is not happening burns the
+     whole ceiling and then sends the generic invite anyway.
+     chUpload() is idempotent — it guards on chId and its own in-flight flag — so calling it
+     here either starts the publish that never happened or does nothing at all. */
+  try{ chUpload(); }catch(e){}
   return new Promise((done)=>{
     const t0=Date.now();
     const tick=()=>{ if(chId||Date.now()-t0>=ms) return done(chId);
@@ -6930,6 +6943,30 @@ $("#ssInvite").onclick=async()=>{
     closeShareSheet();
     const be=$("#btnEdit"); if(be&&be.style.display!=="none") be.click();
     return;
+  }
+  /* THE WEB PATH CANNOT WAIT, SO IT ASKS FOR ONE MORE TAP RATHER THAN SENDING A DUD.
+     navigator.share needs the user activation this tap granted and the first await spends
+     it — that rule is why the 8s ceiling below is native-only, and why a browser has been
+     sending the generic invite whenever the id was not ready. With chSlot() that window is
+     one round trip instead of a whole upload, so reaching here without a link now means the
+     publish genuinely has not happened. Kick it, say so, and let the NEXT tap carry the
+     challenge — a tap is cheaper than a friend opening a link and finding no game.
+     ONE nudge only. If the second tap still has no link the database is unreachable, and
+     trapping somebody behind a button that never arms is worse than the honest invite: it
+     falls through and sends that instead. Reset per round, so the offer is per hide.
+     BEFORE chMarkSent() and the tap event, deliberately: nothing was sent, so nothing may
+     be stamped as sent. */
+  if(!(nativeCaps&&nativeCaps.invite) && !chLink()){
+    try{ chUpload(); }catch(e){}
+    const b0=$("#ssInvite");
+    if(!chInviteNudged && b0){
+      chInviteNudged=true;
+      const back=b0.innerHTML;
+      b0.textContent="One moment — preparing your challenge";
+      setTimeout(()=>{ if(b0.textContent==="One moment — preparing your challenge") b0.innerHTML=back; },2200);
+      track("share_deferred",{reason:"no_link",score:sc});
+      return;
+    }
   }
   /* STAMPED HERE, at the tap, not after the share reports back. iOS never tells the web
      whether the sheet was sent or cancelled — invite_native is the last thing we see — so
@@ -8368,7 +8405,7 @@ window.KAMOREPLY={
      find out. Same function the publish path calls — not a copy of it. */
   forms:()=>chCreateForms({p_img_path:"x.jpg",p_cx:0.5,p_cy:0.5,p_r:0.1,p_secs:9,p_coverage:80},getHandle()),
 };
-function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chPrepare._retried=false; chRound++; }
+function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chRound++; }
 /* THE FALLBACK LADDER, PULLED OUT SO IT CAN BE READ AND TESTED.
    Inline, this was four lines nobody could exercise without a painted board, a mask canvas
    and a storage round trip — which is precisely why the thing it decides (does the reply
