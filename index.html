@@ -9185,8 +9185,11 @@ function khHeat(h,btn){
        follows about outcomes it does not know. */
     const fromFeed=list.filter(r=>r&&r.trace&&r.trace.src==="feed").length;
     const fromLink=list.filter(r=>r&&r.trace&&r.trace.src==="link").length;
+    const finders=list.filter(r=>r&&r.why==="hit"&&r.trace&&r.trace.who)
+                      .map(r=>String(r.trace.who).replace(/[^A-Za-z0-9_.]/g,"").slice(0,16))
+                      .filter(Boolean);
     if(!pts.length){ showHint("No hunts recorded on this one yet"); track("heat_empty",{}); return; }
-    khShowHeat(h,pts,{feed:fromFeed,link:fromLink});
+    khShowHeat(h,pts,{feed:fromFeed,link:fromLink,finders:finders});
   }).catch(()=>{ if(btn){ btn.textContent=label; btn.disabled=false; } showHint("Couldn't load it"); });
 }
 function khShowHeat(h,pts,src){
@@ -9201,7 +9204,15 @@ function khShowHeat(h,pts,src){
        creator their photo is working on strangers, which is the only reason to publish. Said
        only when it is known: hunts recorded before the trace carried a source stay silent
        rather than being guessed into one bucket. */
-    let sub=found?(found+" found you"):"Nobody found you";
+    /* NAMED WHEN THERE IS A NAME. One finder is the sentence; two or more become a name and
+       a number, because a list of five handles is a list, not news. Unsigned finders fall
+       back to the count, which is what most of them will be. */
+    const fnd=(src&&src.finders)||[];
+    let sub;
+    if(!found) sub="Nobody found you";
+    else if(fnd.length===1&&found===1) sub="@"+fnd[0]+" found you";
+    else if(fnd.length>=1) sub="@"+fnd[0]+" and "+(found-1)+" other"+(found-1===1?"":"s")+" found you";
+    else sub=found+" found you";
     const known=(src&&(src.feed+src.link))||0;
     if(known>0){
       const bits=[];
@@ -9774,7 +9785,15 @@ function chSeek(hideId,opts){
        submit_attempt: that function is the hottest path in the product and this is a
        reporting nicety, not a reason to touch it. The trace is already written on every hunt
        and already read back by the heat map, so the split costs one key. */
-    const trace={v:1,src:(FEED?"feed":"link"),vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
+    /* WHO WAS HUNTING. "1 found you" is a count; "@marie found you" is the thing that
+       actually happened, and it is the only line on that card somebody would screenshot.
+       Same ride as `src` — on the trace, not on submit_attempt.
+       EMPTY WHEN UNSIGNED, which is most people: 117 of 3191 hides carry a name, so the
+       count stays the fallback rather than the exception. Narrowed by cleanHandle() when it
+       was typed and rendered with textContent on the other side, the same two-sided rule the
+       seeker headline already follows for the author's name. */
+    const trace={v:1,src:(FEED?"feed":"link"),who:(getHandle()||"").slice(0,16),
+                 vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
     const clockEl=$$("chClock");
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
       clock=setInterval(()=>{ clockEl.textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100);
