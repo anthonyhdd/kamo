@@ -114,7 +114,17 @@ production. Read the comment before you decide one is being fussy. A few worth k
 
 ## The database
 
-Supabase `qpztlobbnjyjbxqyuzgg`. Two tables: `hides` and `attempts`.
+Supabase `qpztlobbnjyjbxqyuzgg`. Two tables: `hides` and `attempts` (plus `seek_traces`).
+
+Schema changes are applied through the dashboard and mirrored into `infra/*.sql` as a dated
+file. The database has no migration history of its own, so that directory is the only record
+of what changed and why.
+
+`hides.is_public` drives the feed and **defaults to FALSE**. That default is a safety property,
+not a preference: a `set_hide_public` call that never lands leaves the hide private, so the
+failure mode is "this did not reach the feed", never "this reached strangers without being
+asked". Everything published before 2026-08-13 is private permanently — it was made when a
+hide went to one person and nothing on screen said otherwise. Do not backfill it.
 
 `create_hide` has **three overloads** (6, 8 and 9 arguments) and that is deliberate. This file
 deploys on push and the database does not, so during a deploy both are live: a page loaded a
