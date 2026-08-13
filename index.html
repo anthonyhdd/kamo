@@ -1422,7 +1422,15 @@
      is the whole argument for putting it where it can be seen. */
   /* `.pwKick` is out of this list with the element it protected — the sheet has no kicker any
      more, and an exemption for something that cannot exist is a note about the past. */
-  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssInvite):not(.chPrev):not(.ig){display:none!important;}
+  /* .ssVis JOINS THE PEEK. The sheet presents itself on every reveal in this state, and this
+     rule hid everything except the grabber, the title, the send button and the preview — so
+     the one row that says the photo will play in a public feed sat behind a drag most people
+     never perform, while the hide went public on its own a second later.
+     It was answered with a separate sheet, which is a modal in front of the one action the
+     product exists to produce. Founder's call, 2026-08-13: seamless, and capture the maximum
+     of photos. So the disclosure moves to where the eyes already are — the control itself,
+     visible before the send, on the screen everybody sees. */
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssInvite):not(.chPrev):not(.ig):not(.ssVis){display:none!important;}
   /* RESIZING BETWEEN THE TWO STATES IS A TRANSITION, NOT A CUT. Short and long differ by a few
      hundred pixels and the card used to jump between them in one frame, which on a bottom sheet
      reads as a glitch rather than as a change of size.
@@ -1487,6 +1495,8 @@
   .ssRow3 .ssBtn{flex:1 1 0;min-width:0;height:48px;font-size:15px;gap:8px;}
   .ssRow3 .ssBtn svg{width:20px;height:20px;}
   .ssBtn.ig{height:48px;font-size:15px;}
+  .ssBtn.ssAgain{height:48px;font-size:15px;margin-top:8px;background:rgba(95,230,164,.13);
+    border:1px solid rgba(95,230,164,.34);color:#c9ffe4;}
   /* TikTok is black on a dark card, so unlike IG's gradient and Snap's yellow it needs an
      edge to exist at all. */
   .ssBtn.tiktok{background:#000;color:#fff;border-color:rgba(255,255,255,.26);}
@@ -1719,15 +1729,23 @@
     padding:0 14px;background:linear-gradient(180deg,rgba(3,5,8,0) 26%,rgba(3,5,8,.86));
     animation:kfConsIn .26s ease both;}
   .kfCons.gone{opacity:0;transition:opacity .24s ease;}
-  .kfConsCard{width:min(92vw,420px);margin-bottom:calc(18px + var(--safe-b));padding:20px 18px 16px;
+  /* COLOUR IS DECLARED HERE OR iOS PICKS IT. .ssVis sets no colour of its own — on the share
+     sheet it inherits white from .ssCard — so dropped into a card that declares none, every
+     word inside the <button> fell back to system link blue. It read as a web form, not as
+     KAMO. */
+  .kfConsCard{color:#fff;width:min(92vw,420px);margin-bottom:calc(18px + var(--safe-b));padding:20px 18px 16px;
     border-radius:24px;border:1px solid rgba(255,255,255,.16);
     background:linear-gradient(180deg,rgba(15,42,34,.96),rgba(7,13,11,.98));
     box-shadow:0 18px 50px rgba(0,0,0,.5);
     animation:kfConsUp .3s cubic-bezier(.2,.9,.3,1) both;}
   @keyframes kfConsIn{from{opacity:0}to{opacity:1}}
   @keyframes kfConsUp{from{transform:translateY(18px)}to{transform:none}}
+  /* The kicker/headline pair every other KAMO sheet wears, so this one is recognisably the
+     same object as the share sheet it precedes rather than a dialog from somewhere else. */
+  .kfConsK{font-family:var(--display);font-size:11px;font-weight:800;letter-spacing:1.6px;
+    text-transform:uppercase;color:var(--mint);text-align:center;margin:0 0 6px;opacity:.9;}
   .kfConsT{font-family:var(--display);font-size:19px;font-weight:800;letter-spacing:-.3px;
-    text-align:center;margin:0 0 14px;}
+    text-align:center;margin:0 0 14px;color:#fff;}
   .kfConsGo{display:flex;align-items:center;justify-content:center;width:100%;height:52px;
     margin-top:12px;border:none;border-radius:16px;background:#fff;color:#04120c;
     font-family:var(--display);font-size:16.5px;font-weight:800;cursor:pointer;
@@ -2211,6 +2229,12 @@
          destination, and it must not out-rank the send or Instagram above it. -->
     <div class="ssRow2" id="ssRow2">
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
+    <!-- WHAT COMES AFTER THE SEND. Every ending in this product closes on itself: you share a
+         challenge and the sheet just sits there, at the moment of highest intent in the whole
+         session. This is the one action that reloads the loop, and it only appears once
+         something has actually been sent — an unearned button on a sheet nobody has used yet
+         is noise. -->
+    <button class="ssBtn ssAgain" id="ssAgain" style="display:none">Hide another</button>
       <button class="ssBtn ssPlus" id="ssPlus" style="display:none"><span class="ic">✦</span>Remove mark</button>
     </div>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
@@ -5518,6 +5542,20 @@ function applyPlanAvailability(p){
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
 window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
+/* WHERE A TAPPED NOTIFICATION LANDS. "Someone found your hide / see how" opened the camera,
+   which is the screen with the least to do with what just happened — the notification
+   promised a result and delivered a viewfinder.
+   The wrapper calls this with the hide id from the push payload. It opens the player card,
+   which is where the results rows live and where Watch and Heat sit: the actual answer to
+   "see how". Defensive by construction — an id that means nothing here still lands the user
+   on their own card rather than nowhere, which is strictly better than the camera. */
+window.KAMO.openFound=(id)=>{
+  try{
+    if(id) chRemember(String(id).replace(/[^a-f0-9]/gi,"").slice(0,16));
+    track("notif_opened_found",{});
+    if(typeof openKamoHome==="function") openKamoHome();
+  }catch(e){}
+};
 window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn();
   /* The boot camera decision is waiting on exactly this. Resolving it here rather than on
      the 700ms timer means a returning user reaches compose as fast as they always did. */
@@ -6592,7 +6630,12 @@ shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdro
    side in the same pass, so it starts flowing with the next release.
    `mode` rides along because a TikTok tap on the reveal MP4 and on the static image are
    different products, and the native side reports them as different `kind`s. */
+/* Shown by the two things that count as "sent": a share target (Instagram and the rest) and
+   the invite. Not by opening the sheet — the offer has to be earned by an action, or it is
+   just another button. */
+function ssShowAgain(){ try{ const a=$("#ssAgain"); if(a) a.style.display="flex"; }catch(e){} }
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
+  if(typeof ssShowAgain==="function") ssShowAgain();
   track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
   nativeShare(b.dataset.target); });
 /* Pure recruitment path: text + link, no image. The image shares carry the link in
@@ -6843,9 +6886,14 @@ function confettiBurst(originEl){
    sender practised their aim at one offset on the share sheet and then played at another,
    14px higher, on every hide they opened; reported as taps landing above the finger in the
    feed, which is simply where most rounds are played now.
-   56, because that is the one somebody rehearses with, and because the complaint is that
-   the ring rides too high. One constant, so the two cannot drift apart again. */
-const CH_RET_OFF=56;
+   Was 56 — the rehearsal's own value, chosen because that is what a thumb practises with.
+   Reported still too high twice after that, on the rehearsal AND in the feed, so the number
+   itself was wrong in both places rather than merely inconsistent.
+   38, and the arithmetic is why: the ring is 58px across, so at 56 its BOTTOM EDGE floats 27
+   pixels clear of the fingertip — a gap you have to aim across. At 38 the ring sits just on
+   top of the finger, still clear of the thing being aimed at, which is the only job the
+   offset ever had. One constant, so the two cannot drift apart again. */
+const CH_RET_OFF=38;
 function chPrevPlay(){
   try{
     const g=chGeom(); if(!g) return;
@@ -6900,7 +6948,7 @@ function chPrevPlay(){
       +'</div></div>';
     document.body.appendChild(w);
     const who=getHandle();
-    document.getElementById("chPPh").textContent = who ? "@"+who+" hid a body in here" : "Someone hid a body in here";
+    document.getElementById("chPPh").textContent = who ? "@"+who+" hid a kamo here" : "Someone hid a kamo here";
 
     const frame=document.getElementById("chPPframe");
     /* The frame takes the BOARD's shape, so the hide fills it edge to edge instead of sitting
@@ -7167,7 +7215,7 @@ $("#ssInvite").onclick=async()=>{
      line that has always shipped. */
   const who=getHandle();
   const text = link
-    ? (who ? "🫥 @"+who+" hid a body in this photo." : "🫥 There's a body hidden in this photo.")
+    ? (who ? "@"+who+" hid a kamo in this pic." : "Someone hid a kamo in this pic.")
       +"\nOne tap to find it."
       +"\n\n"+link
     : "🫥 KAMO — paint yourself into the background until nobody can find you."
@@ -7204,6 +7252,10 @@ $("#ssInvite").onclick=async()=>{
        ratio built across the two is the mixed funnel this file warns about elsewhere.
        invite_native is WEB_ONLY, so bare-vs-challenge is answerable from one id, on 1.0.2. */
     track("invite_native",{score:sc,link:!!link,bare});
+    /* Guarded: scripts/test-share.mjs evals this handler in isolation, and a helper defined
+       elsewhere in the module is not in that scope — the same reason every other cross-scope
+       call in this file is written defensively. */
+    if(typeof ssShowAgain==="function") ssShowAgain();
     return;
   }
   /* THE ANSWER LANDS ON THE BUTTON, not in a toast 700ms after the sheet closed. The thumb
@@ -7224,6 +7276,7 @@ $("#ssInvite").onclick=async()=>{
   }catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
   if(shared||cancelled){
     track("invite_shared",{ok:shared,cancelled:cancelled,link:!!link});
+    if(shared&&typeof ssShowAgain==="function") ssShowAgain();
     if(b){
       b.innerHTML = shared ? '<span class="ic">✅</span>Sent' : original;
       if(shared){ invitePreview(); setTimeout(()=>{ if(b) b.innerHTML=original; },1500); }
@@ -8264,6 +8317,18 @@ $("#cfYes").onclick=()=>{ const wasFinished=finished, sc=Math.round(currentScore
   if(wasFinished){ postNative({type:"review-moment",reason:"retake",score:sc}); maybeOfferPlus(sc); } };
 confirmSheet.onclick=e=>{ if(e.target===confirmSheet) closeConfirm(); };
 
+/* HIDE ANOTHER — the exit that reloads the loop instead of ending it.
+   Same steps the Retake confirmation takes (exitFinished, backToCompose), minus the
+   confirmation: there is nothing to confirm. The hide has already been sent, so leaving this
+   screen costs the user nothing — which is exactly why the offer belongs here.
+   No review prompt and no paywall on this path: those hang off Retake because abandoning a
+   finished hide is a different moment from having just shared one, and asking somebody to
+   rate the app one tap after they sent a challenge is how a good moment gets spent. */
+{ const a=$("#ssAgain");
+  if(a) a.onclick=()=>{ haptic(10); track("hide_another_tapped",{});
+    closeShareSheet(); if(finished) exitFinished(); backToCompose(); a.style.display="none"; };
+}
+
 window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1)); if(renderer) resize3(); });
 
 initThree();
@@ -8692,6 +8757,7 @@ function kfAskConsent(){
          reads, and the row underneath already says the sentence that matters. */
       wrap.innerHTML=
         '<div class="kfConsCard">'
+        +'<div class="kfConsK">Before you send</div>'
         +'<div class="kfConsT">Your hides are public</div>'
         +'<button class="ssVis" id="kfConsVis" aria-pressed="true">'
         +'<span class="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/>'
@@ -8795,9 +8861,11 @@ async function chUpload(){
     const mine=chId;
     bytes.then((up)=>{
       if(!up) return;                 // upload failed — stays private, stays out of the feed
-      /* ASKED BEFORE THE FIRST ONE TRAVELS, and only ever once — see kfAskConsent(). On every
-         later hide this resolves synchronously off the stored answer and nothing is shown. */
-      kfAskConsent().then((pub)=>kfApplyVisibility(mine,pub));
+      /* NO SHEET IN FRONT OF THE SEND. The row on the share sheet is now visible in the peek
+         state — the state it presents itself in on every reveal — so the disclosure is made
+         where the eyes already are, before the send, without a modal interrupting the one
+         action this product exists to produce. */
+      kfApplyVisibility(mine,kfWantPublic());
       /* HELD BACK A BEAT, and now behind the main upload rather than racing it: these are
          two more encodes and two more uploads, and starting them while the photo itself is
          still climbing the radio is exactly the contention this delay exists to avoid. The
@@ -9171,11 +9239,19 @@ function khHeat(h,btn){
     const pts=list.map(r=>r&&r.trace&&r.trace.end)
                   .filter(e=>e&&typeof e.x==="number"&&typeof e.y==="number")
                   .map((e,i)=>({x:e.x,y:e.y,hit:(list[i]&&list[i].why==="hit")||e.hit===true}));
+    /* Only hunts recorded SINCE the trace carried its source can be attributed; the rest are
+       counted and not claimed, which is the same honesty rule the results card already
+       follows about outcomes it does not know. */
+    const fromFeed=list.filter(r=>r&&r.trace&&r.trace.src==="feed").length;
+    const fromLink=list.filter(r=>r&&r.trace&&r.trace.src==="link").length;
+    const finders=list.filter(r=>r&&r.why==="hit"&&r.trace&&r.trace.who)
+                      .map(r=>String(r.trace.who).replace(/[^A-Za-z0-9_.]/g,"").slice(0,16))
+                      .filter(Boolean);
     if(!pts.length){ showHint("No hunts recorded on this one yet"); track("heat_empty",{}); return; }
-    khShowHeat(h,pts);
+    khShowHeat(h,pts,{feed:fromFeed,link:fromLink,finders:finders});
   }).catch(()=>{ if(btn){ btn.textContent=label; btn.disabled=false; } showHint("Couldn't load it"); });
 }
-function khShowHeat(h,pts){
+function khShowHeat(h,pts,src){
   try{
     document.getElementById("khHeat")?.remove();
     const w=document.createElement("div"); w.id="khHeat"; w.className="chPP";
@@ -9183,7 +9259,26 @@ function khShowHeat(h,pts){
     /* SAID FROM THE CREATOR'S SIDE, like every other line on this card. "16 tried" is a
        statistic; "16 people searched your photo" is what happened to them. */
     const head=n+(n===1?" person searched":" people searched")+" your photo";
-    const sub=found?(found+" found you"):"Nobody found you";
+    /* THE SPLIT IS THE POINT OF THIS LINE NOW. "7 from the feed" is the sentence that tells a
+       creator their photo is working on strangers, which is the only reason to publish. Said
+       only when it is known: hunts recorded before the trace carried a source stay silent
+       rather than being guessed into one bucket. */
+    /* NAMED WHEN THERE IS A NAME. One finder is the sentence; two or more become a name and
+       a number, because a list of five handles is a list, not news. Unsigned finders fall
+       back to the count, which is what most of them will be. */
+    const fnd=(src&&src.finders)||[];
+    let sub;
+    if(!found) sub="Nobody found you";
+    else if(fnd.length===1&&found===1) sub="@"+fnd[0]+" found you";
+    else if(fnd.length>=1) sub="@"+fnd[0]+" and "+(found-1)+" other"+(found-1===1?"":"s")+" found you";
+    else sub=found+" found you";
+    const known=(src&&(src.feed+src.link))||0;
+    if(known>0){
+      const bits=[];
+      if(src.feed) bits.push(src.feed+" from the feed");
+      if(src.link) bits.push(src.link+" from your link");
+      sub+=" · "+bits.join(", ");
+    }
     const pro=isPro;
     w.innerHTML='<div class="chPPin">'
       +'<div class="pwKick">WHERE THEY LOOKED</div>'
@@ -9743,7 +9838,21 @@ function chSeek(hideId,opts){
        abandoned — abandoned aims ARE the hesitations), and the buzz instant. Recorded
        here, read later; sent once, fire-and-forget, at the end of the round. */
     let t0=0, done=false, clock=null, flipN=0, revealedSrc="", flipped=false, traceSent=false;
-    const trace={v:1,vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
+    /* WHERE THIS HUNT CAME FROM. n_attempts counts every play into one number, so a creator
+       reading "12 tried" cannot tell whether their feed is working or their friends are —
+       the two things they would act on differently. Carried on the TRACE rather than added to
+       submit_attempt: that function is the hottest path in the product and this is a
+       reporting nicety, not a reason to touch it. The trace is already written on every hunt
+       and already read back by the heat map, so the split costs one key. */
+    /* WHO WAS HUNTING. "1 found you" is a count; "@marie found you" is the thing that
+       actually happened, and it is the only line on that card somebody would screenshot.
+       Same ride as `src` — on the trace, not on submit_attempt.
+       EMPTY WHEN UNSIGNED, which is most people: 117 of 3191 hides carry a name, so the
+       count stays the fallback rather than the exception. Narrowed by cleanHandle() when it
+       was typed and rendered with textContent on the other side, the same two-sided rule the
+       seeker headline already follows for the author's name. */
+    const trace={v:1,src:(FEED?"feed":"link"),who:(getHandle()||"").slice(0,16),
+                 vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
     const clockEl=$$("chClock");
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
       clock=setInterval(()=>{ clockEl.textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100);
@@ -9768,7 +9877,13 @@ function chSeek(hideId,opts){
     /* THE NAME IS THE HEADLINE. "Someone hid a body in here" spent the widest line on the
        screen saying nothing about who — and in a feed of strangers, who is the only thing
        that makes the next photo different from the last. The sentence moves to the sub. */
-    $$("chHead").textContent = h.name ? "@"+h.name : "Someone hid a body in here";
+    /* FIRST SLIDE SAYS THE SENTENCE, THE REST SAY THE NAME. Somebody meeting the feed needs
+       to be told what they are looking at once; by the second photo the only thing that
+       differs between slides is who made it, and repeating the sentence spends the widest
+       line on the screen saying what they already know. */
+    $$("chHead").textContent = (OPT.firstInFeed||!FEED)
+      ? (h.name ? "@"+h.name+" hid a kamo here" : "Someone hid a kamo here")
+      : (h.name ? "@"+h.name : "Someone hid a kamo here");
 /* WHICH ROUND THIS IS, and it is not decoration. "Send one back" hands the answered hide's
        own camouflaged photo to the next round, so a chain accumulates figures: by round six the
        picture holds six hidden people. Saying so is what makes that legible instead of eerie —
@@ -10324,7 +10439,8 @@ function chFeed(){
        (n_reported = 0 in the filter), so this is the fastest lever in the product and it
        was behind the slowest gesture. Right-hand side, away from the ✕. */
     +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button>'
-    +'<span style="flex:1"></span>'
+    /* NEXT TO THE ✕, NOT OPPOSITE IT. On the right it landed on top of the round's own clock
+       chip, which sits in that corner on every slide — the count showed through the flag. */
     +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
@@ -10365,7 +10481,7 @@ function chFeed(){
     S.played++;
     track("feed_slide",{n:S.played,replay:!!s.replay});
     S.round=chSeek(s.row.id,{
-      host:s.host, feed:true, replay:!!s.replay,
+      host:s.host, feed:true, replay:!!s.replay, firstInFeed:(S.played===1),
       onNext:()=>goNext(),
       onEnded:()=>{ if(S.killHint) S.killHint(); },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely

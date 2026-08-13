@@ -166,6 +166,30 @@ console.log('\nTHE FEED CAN SAY SOMETHING BACK');
   await page.close();
 }
 
+/* WHERE THE HUNT CAME FROM. n_attempts counts every play into one number, so a creator
+   could not tell whether their feed was working or their friends were. The source rides the
+   trace; what matters is that a feed round says so on the wire. */
+console.log('\nA HUNT SAYS WHERE IT CAME FROM');
+{
+  const page = await open(ROWS(3), {
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const t = await page.evaluate(() => {
+    const c = (window.__rpc || []).filter(x => x[0] === 'save_seek_trace').pop();
+    return c && c[1] && c[1].p_trace ? c[1].p_trace.src : null;
+  });
+  t === 'feed' ? ok('a round played in the feed files its trace as src:"feed"')
+               : bad('trace src on a feed round: ' + JSON.stringify(t));
+  await page.close();
+}
+
 /* THE BLOCK, WHICH IS THE ONLY CONTROL HERE THAT MAKES A PROMISE ABOUT THE FUTURE.
    "Don't show me this person" is not a statement about one photo, so the three things worth
    asserting are all about what happens AFTER: the tag is kept, the next request carries it,

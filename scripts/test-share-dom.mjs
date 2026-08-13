@@ -104,7 +104,7 @@ async function round(label,dwell){
   return {msg,waited};
 }
 const r1=await round('ROUND 1 — tapped early (dwell 1.2s < 3s upload)',1200);
-/@tony hid a body/.test(r1.msg) ? ok('message is personalised') : bad('generic message: '+JSON.stringify(r1.msg.slice(0,60)));
+/@tony hid a kamo/.test(r1.msg) ? ok('message is personalised') : bad('generic message: '+JSON.stringify(r1.msg.slice(0,60)));
 /\?h=|\/h\//.test(r1.msg) && /hide1/.test(await page.evaluate(()=>window.__msgs[0])) ? ok('and carries the round-1 link') : ok('link present: '+/hide1/.test(r1.msg));
 /* The dwell must be DEDUCTED from the wait: whatever of the upload happened while the
    sender looked at the reveal is time they never spend staring at a disabled button. */
@@ -133,7 +133,7 @@ const r4=await round('ROUND 4 — tapped with the whole upload still ahead (dwel
 r4.waited < 900
   ? ok(`the link is ready with ${UPLOAD_MS-50}ms of upload still to run (waited ${r4.waited}ms)`)
   : bad(`the send waited ${r4.waited}ms for bytes it does not need — the id is behind the file again`);
-/@tony hid a body/.test(r4.msg)
+/@tony hid a kamo/.test(r4.msg)
   ? ok('so the message is the challenge, not the generic invite')
   : bad('fell back to the generic invite: '+JSON.stringify(r4.msg.slice(0,70)));
 /hide4/.test(r4.msg) && !/\?i=1/.test(r4.msg)
