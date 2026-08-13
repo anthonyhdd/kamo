@@ -2823,9 +2823,20 @@ function gumSafe(c, ms=GUM_MS_DECIDED){
 const LENS_KEY="kamo_lens";
 function lensCached(){ try{ return localStorage.getItem(LENS_KEY)||""; }catch(_){ return ""; } }
 function lensRemember(id){ try{ id?localStorage.setItem(LENS_KEY,id):localStorage.removeItem(LENS_KEY); }catch(_){} }
-/* Ultra-wide first. "wide" alone also matches "Back Dual Wide Camera", which IS the 1x, so
-   the ultra test has to run on its own and win. */
-const isUltra=l=>/ultra/i.test(l||"");
+/* WHICH LABEL IS THE WIDE ONE, and the near-misses are the whole difficulty.
+   "wide" on its own matches "Back Dual Wide Camera" and "Back Triple Camera" — those ARE the
+   1x, or a virtual device that STARTS at 1x, so matching them changes nothing while looking
+   like it worked. The telephoto must never match either: picking it would make the framing
+   worse than doing nothing, which is the one outcome worse than failing.
+   So: an explicit ultra/0.5 test, and an explicit reject list ahead of it. `grand-angle` is
+   there because iOS labels follow the system language and the founder's phone is French; it
+   only counts alongside `ultra`, since "grand-angle" alone is the 1x in French exactly as
+   "wide" is in English. */
+const isUltra=l=>{ const t=(l||"").toLowerCase();
+  if(/tele|télé|dual|triple/.test(t)) return false;
+  /* No trailing \b on the 0.5 test: iOS writes it "0.5x", and a word boundary between the 5
+     and the x never matches, so the whole clause was dead. */
+  return /ultra/.test(t)||/0[.,]5/.test(t); };
 async function widenLens(){
   if(facing!=="environment") return;          // the front camera has no second lens to reach for
   if(widenLens._done) return; widenLens._done=1;
