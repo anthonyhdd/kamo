@@ -120,9 +120,18 @@ console.log('\nTHE CARD OPENS FOR EVERYONE, AND CLAIMS ONLY WHAT IS TRUE');
   free.plus === 'none'
     ? ok('no + on a free user\'s badge')
     : bad(`the badge wears "KAMO+" for a non-member (display:${free.plus}) — it is telling them they own something they do not`);
-  free.upsell !== 'none' && free.upsell !== 'absent'
-    ? ok('the upsell row is offered')
-    : bad(`the upsell is ${free.upsell} for a free user — the wordmark's paywall path is gone with nothing replacing it`);
+  /* THE UPSELL BANNER IS GONE ON PURPOSE — it was a full-width CTA sitting on top of the
+     results list, which is the reason the card is opened at all. What must NOT be gone is a
+     route to the paywall, so the assertion moved rather than being deleted: the locked
+     controls on this card still carry ✦ and still lead there, which is a better ask because
+     it arrives attached to the thing being sold. */
+  free.upsell === 'absent'
+    ? ok('no upsell banner eating the results list')
+    : bad(`the upsell banner is back (${free.upsell}) — it pushes the hides into a ~150px window`);
+  const locks = await page.evaluate(() => document.querySelectorAll('#kamoHome .khCharOpt.lock, #kamoHome .khFinOpt.lock').length);
+  locks > 0
+    ? ok(`and KAMO+ is still reachable from the card — ${locks} locked control(s) marked ✦`)
+    : bad('nothing on the card leads to the paywall any more: the banner went and took the only route with it');
   free.chips === 0
     ? ok('no perk list — the card is about who you are, not what the subscription contains')
     : bad(`${free.chips} perk chips are back on the player card`);
@@ -133,9 +142,11 @@ console.log('\nTHE CARD OPENS FOR EVERYONE, AND CLAIMS ONLY WHAT IS TRUE');
 
   const pro = await page.evaluate(() => window.__h.open(true));
   pro.plus !== 'none' ? ok('a member gets the +') : bad('the + is hidden from someone who paid for it');
-  pro.upsell === 'none'
+  /* 'absent' now, not 'none': the banner is out of the markup entirely rather than hidden per
+     user, so nobody is sold what they already own because there is nothing to sell here. */
+  pro.upsell === 'absent'
     ? ok('and is not sold what they already own')
-    : bad('the upsell row shows to a member');
+    : bad(`the upsell row is ${pro.upsell} for a member`);
 }
 
 console.log('\nTHE HANDLE IS KEPT, AND KEPT CLEAN');
