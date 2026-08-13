@@ -1,0 +1,29 @@
+-- APPLIED 2026-08-13 to Supabase project qpztlobbnjyjbxqyuzgg.
+--
+-- THE FEED ORDERS BY WHAT NOBODY HAS PLAYED, NOT BY WHAT IS NEW.
+--
+-- created_at DESC sounds right and is not. It puts a hide twenty people have already tried
+-- ahead of one nobody has ever opened, purely for being an hour younger — and the number
+-- that built this feed was 271 of 2980 hides ever opened by anybody. The supply was never
+-- the problem, the distribution was, and newest-first does nothing about it.
+--
+--   order by least(n_attempts, 3) asc, created_at desc
+--
+-- Untouched hides first, then once-played, then twice, and everything from three upward
+-- tied. CAPPED AT THREE on purpose: past that, "how played" stops being a useful distinction
+-- and the order should go back to being about freshness — uncapped, a popular hide sinks
+-- forever. Inside each band the newest wins, so the feed still feels live.
+--
+-- NO SEED, no shuffle. With ~37 public hides a day a random order mostly reshuffles the same
+-- small room, and a stable one is what lets kfSeen() skip cleanly and the second lap come
+-- back in a sequence that makes sense. The 5-argument shuffle experiment already ordered
+-- this way and is left alone; no build has ever called it.
+--
+-- NOTHING DIES. Hides keep their 30-day expires_at and are not retired after N finds
+-- (founder, 2026-08-13: "on a peu d'images donc laisse les toutes").
+--
+-- Applied to both overloads the page can reach, edited into the bodies rather than added
+-- beside them: an ordering is not a signature, and a page mid-deploy should get the good
+-- order immediately rather than after the fleet turns over.
+-- Bodies are reproduced in full in the dashboard migration `feed_order_least_played_first`;
+-- the ORDER BY above is the whole of the change against 2026-08-13-shadowban.sql.
