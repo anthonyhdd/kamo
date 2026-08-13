@@ -66,7 +66,12 @@ async function head(name){
 console.log('\nTHE SEEKER IS TOLD WHO THEY ARE PLAYING');
 {
   const t=await head('tony');
-  t==='@tony hid a body in here' ? ok(`a signed hide names its sender as the AUTHOR ("${t}")`) : bad(`signed hide shows ${JSON.stringify(t)}`);
+  /* THE HEADLINE IS THE NAME NOW. It spent the widest line on the screen restating the
+     game ("hid a body in here") when the only thing that differs between two feed slides is
+     WHO made them; the sentence moved to the sub. What must not change is that the sender is
+     named as the AUTHOR — the bug this assertion was written for was a headline that read as
+     if @tony were the one hidden. */
+  t==='@tony' ? ok(`a signed hide names its sender as the AUTHOR ("${t}")`) : bad(`signed hide shows ${JSON.stringify(t)}`);
 }
 {
   const t=await head(null);
