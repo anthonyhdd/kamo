@@ -1,0 +1,20 @@
+-- APPLIED 2026-08-13 to Supabase project qpztlobbnjyjbxqyuzgg.
+--
+-- THE FEED'S PAINT FLOOR: 30% -> 70%.
+--
+-- 30 was the PUBLISH floor — below it a figure stands in plain sight and there is no game —
+-- and the feed simply borrowed it. Publishing and being served to STRANGERS are not the same
+-- bar: a hide at 40% is a fine thing to send a friend as a joke and a bad advertisement to
+-- somebody meeting the game for the first time (founder, 2026-08-13: "cacher ceux pas peint
+-- parce que ça nuit au jeu").
+--
+-- Measured before changing it. Of 67 playable public hides: 59 at 100% coverage, 5 near 90,
+-- and only 2 below 70. So this costs the feed two photos out of sixty-seven. A floor at 90
+-- would have cost eight, which is too much at this supply.
+--
+-- The 1:1 link path is untouched — what somebody chose to send one person is their business,
+-- and CH_MIN_COVERAGE still governs there.
+--
+-- Both bodies the page can reach; the ORDER BY is unchanged from 2026-08-13-feed-order.sql.
+-- Full text lives in the dashboard migration `feed_coverage_floor_70`; the only difference
+-- against the previous file is `coalesce(h.coverage, 100) >= 70`.

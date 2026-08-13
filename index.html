@@ -9171,11 +9171,16 @@ function khHeat(h,btn){
     const pts=list.map(r=>r&&r.trace&&r.trace.end)
                   .filter(e=>e&&typeof e.x==="number"&&typeof e.y==="number")
                   .map((e,i)=>({x:e.x,y:e.y,hit:(list[i]&&list[i].why==="hit")||e.hit===true}));
+    /* Only hunts recorded SINCE the trace carried its source can be attributed; the rest are
+       counted and not claimed, which is the same honesty rule the results card already
+       follows about outcomes it does not know. */
+    const fromFeed=list.filter(r=>r&&r.trace&&r.trace.src==="feed").length;
+    const fromLink=list.filter(r=>r&&r.trace&&r.trace.src==="link").length;
     if(!pts.length){ showHint("No hunts recorded on this one yet"); track("heat_empty",{}); return; }
-    khShowHeat(h,pts);
+    khShowHeat(h,pts,{feed:fromFeed,link:fromLink});
   }).catch(()=>{ if(btn){ btn.textContent=label; btn.disabled=false; } showHint("Couldn't load it"); });
 }
-function khShowHeat(h,pts){
+function khShowHeat(h,pts,src){
   try{
     document.getElementById("khHeat")?.remove();
     const w=document.createElement("div"); w.id="khHeat"; w.className="chPP";
@@ -9183,7 +9188,18 @@ function khShowHeat(h,pts){
     /* SAID FROM THE CREATOR'S SIDE, like every other line on this card. "16 tried" is a
        statistic; "16 people searched your photo" is what happened to them. */
     const head=n+(n===1?" person searched":" people searched")+" your photo";
-    const sub=found?(found+" found you"):"Nobody found you";
+    /* THE SPLIT IS THE POINT OF THIS LINE NOW. "7 from the feed" is the sentence that tells a
+       creator their photo is working on strangers, which is the only reason to publish. Said
+       only when it is known: hunts recorded before the trace carried a source stay silent
+       rather than being guessed into one bucket. */
+    let sub=found?(found+" found you"):"Nobody found you";
+    const known=(src&&(src.feed+src.link))||0;
+    if(known>0){
+      const bits=[];
+      if(src.feed) bits.push(src.feed+" from the feed");
+      if(src.link) bits.push(src.link+" from your link");
+      sub+=" · "+bits.join(", ");
+    }
     const pro=isPro;
     w.innerHTML='<div class="chPPin">'
       +'<div class="pwKick">WHERE THEY LOOKED</div>'
@@ -9743,7 +9759,13 @@ function chSeek(hideId,opts){
        abandoned — abandoned aims ARE the hesitations), and the buzz instant. Recorded
        here, read later; sent once, fire-and-forget, at the end of the round. */
     let t0=0, done=false, clock=null, flipN=0, revealedSrc="", flipped=false, traceSent=false;
-    const trace={v:1,vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
+    /* WHERE THIS HUNT CAME FROM. n_attempts counts every play into one number, so a creator
+       reading "12 tried" cannot tell whether their feed is working or their friends are —
+       the two things they would act on differently. Carried on the TRACE rather than added to
+       submit_attempt: that function is the hottest path in the product and this is a
+       reporting nicety, not a reason to touch it. The trace is already written on every hunt
+       and already read back by the heat map, so the split costs one key. */
+    const trace={v:1,src:(FEED?"feed":"link"),vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
     const clockEl=$$("chClock");
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
       clock=setInterval(()=>{ clockEl.textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100);
