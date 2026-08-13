@@ -2041,6 +2041,27 @@ const startEl=$("#start"), hintEl=$("#hint"), shutterWrap=$("#shutterWrap"), fli
 const wheelEl=$("#wheel"), wheelCenter=$("#wheelCenter"), flashEl=$("#flash"), scoreChip=$("#scoreChip"), busyEl=$("#busy");
 const ctx=board.getContext("2d",{willReadFrequently:true});
 let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+/* WHO THIS ROUND IS ANSWERING, when it is an answer.
+ *
+ * Set by chRehide() — the "Send one back" path off the seeker's ending card — and read by
+ * chUpload(), which stamps it on the published hide. That stamp is the whole feature: iOS
+ * never tells us who a share went to, and gives no way to message a contact the user has not
+ * picked. But the recipient of a REPLY is not an unknown contact. It is the person whose hide
+ * was just played, and we hold their handle and sometimes their push address — so the reply is
+ * delivered by us instead of by the share sheet: no contact picker, no taps.
+ *
+ * Cleared on every capture, and that is not housekeeping. A photo taken off the camera is a
+ * new hide addressed to nobody, and carrying the previous answer's target into it would put a
+ * notification on a stranger's lock screen about a hide that has nothing to do with them. */
+let chReplyTo="", chReplyName="";
+function chClearReply(){ chReplyTo=""; chReplyName=""; }
+/* DECLARED UP HERE, AND THAT IS THE WHOLE POINT. `let` in a module is in its temporal dead
+   zone until execution reaches it, and both readers of these two — updateInviteBtn() and
+   chClearReply() via startCamera()/usePhotoSrc() — run during module evaluation, thousands of
+   lines ABOVE where this naturally belonged. Declaring it next to chUpload() threw
+   "Cannot access 'chReplyTo' before initialization" on first render, which takes the entire
+   app down for everyone: same failure the pwArm comment describes, same fix. */
+
 /* The board's effective pixel ratio once PAINT_MAX_W has been applied — see capture().
    Everything that sizes brush geometry uses THIS, not dpr, so strokes keep their
    on-screen thickness whatever the backing store ends up being. */
@@ -2812,7 +2833,7 @@ async function startCamera(auto){
   const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
+    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; chClearReply(); startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
     catch(e){ lastErr=e;
       // Permission-level refusals (and the iOS hang) won't be fixed by loosening
       // constraints — retrying just costs another timeout before we can say anything.
@@ -2858,6 +2879,11 @@ function pickPhoto(){
    two doors — this is the one usePhoto() reaches through after createObjectURL. */
 function usePhotoSrc(src){
   if(!src) return;
+  /* A DIFFERENT PHOTO IS A DIFFERENT CONVERSATION. chRehide() hands the answered hide's own
+     image straight to `photo` and never comes through here, so this only ever fires when the
+     user has gone and picked something else — at which point the round has stopped being a
+     reply to anybody. Same reasoning as the camera branch in startCamera(). */
+  chClearReply();
   photo.onload=()=>syncPreviewFit();
   photo.src=src; photo.style.display="block";
   stopCamView(); cam.style.display="none";
@@ -5069,7 +5095,15 @@ window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="f
    the clipboard is the floor, so the button works with or without native. Nothing is left
    to gate on. */
 function updateInviteBtn(){ const b=document.getElementById("ssInvite"); if(!b) return;
-  b.style.display=""; }
+  b.style.display="";
+  /* THE BUTTON NAMES THE PERSON WHEN IT KNOWS THEM. "Challenge a friend" is a decision — the
+     user has to think of somebody — while "Send it back to @tony" is not, because the round
+     they just played already decided it. Only when the answered hide was signed: 117 of 3191
+     hides carry a name, so the generic label stays the common case and must not regress for
+     it. textContent, never innerHTML — the handle comes off another user's device, the same
+     boundary the seeker headline crosses. */
+  b.textContent = chReplyTo ? (chReplyName ? "Send it back to @"+chReplyName : "Send it back")
+                            : "Challenge a friend"; }
 // native torch refused/failed → don't leave the button lit claiming it's on
 window.KAMO.torchFailed=()=>{ torchOn=false; if(typeof updateLightBtn==="function") updateLightBtn(); showHint("Couldn't turn the light on"); };
 window.KAMO.revealDone=()=>{ clearTimeout(showBusy._t); try{ busyEl.style.display="none"; }catch(e){} };
@@ -5357,8 +5391,11 @@ const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide
    included, without waiting for an App Store review. The carrier goes in the same commit:
    with one name always arriving, a second one is not redundancy, it is the ambiguity. */
 "share_target_tapped",
-/* New name, so no shipped binary's allow-list knows it and the bridge would drop it. */
-"prev_blocked_tapped"]);
+/* THE REPLY LOOP, AND THE BLOCKED-CARD TAP. All three names are new, so no shipped binary's
+   allow-list knows any of them and the bridge would drop all three in silence — while the
+   features looked like they were producing no behaviour at all. Direct, for the same reason
+   the share tap above is: this page deploys on its own and the binary does not. */
+"reply_started","reply_pending","prev_blocked_tapped"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -7593,6 +7630,17 @@ const CH_MAKE=true;
 const CH_SEEK=(()=>{ try{ return (new URLSearchParams(location.search).get("h")||"").replace(/[^a-f0-9]/gi,"").slice(0,16); }catch(e){ return ""; } })();
 let chId="";   // the hide this round produced; "" until the upload lands
 
+/* SET-RETURNING RPCs NEED THEIR OWN DOOR. chRpc below unwraps an array to its first element
+   — right for every single-row function this file had until now, and silently wrong for one
+   that returns a list: my_replies would have reported exactly one reply forever, which reads
+   as "the feature works" rather than as a bug. Same headers, different unwrap. */
+async function chRpcRows(fn,body){
+  const r=await fetch(CH_URL+"/rest/v1/rpc/"+fn,{method:"POST",
+    headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(fn+" "+r.status);
+  const j=await r.json(); return Array.isArray(j)?j:(j?[j]:[]);
+}
 async function chRpc(fn,body){
   const r=await fetch(CH_URL+"/rest/v1/rpc/"+fn,{method:"POST",
     headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"application/json"},
@@ -7633,7 +7681,16 @@ function chBlob(src){
     const c=document.createElement("canvas");
     c.width=Math.round(src.width*S); c.height=Math.round(src.height*S);
     c.getContext("2d").drawImage(src,0,0,c.width,c.height);
-    c.toBlob(b=>res(b),"image/jpeg",0.72);
+/* QUALITY RISES ON A REPLY, because a reply is a re-encode of a re-encode. The seeker
+       downloads this JPEG, paints on it and publishes it again, so a six-round chain is six
+       generations of lossy compression stacked on one photo — and the camouflage depends on
+       painted colours matching the background EXACTLY, which is precisely what compression
+       artefacts destroy. Every earlier figure gets easier to spot as the chain runs, which is
+       backwards.
+       0.82, not higher: the note above is measured — 1080px at 0.72 lands 150-250 KB against
+       the bucket's 400 KB ceiling, and this has to stay under it. This slows the decay, it
+       does not stop it; nothing short of carrying the original around would. */
+    c.toBlob(b=>res(b),"image/jpeg",chReplyTo?0.82:0.72);
   });
 }
 
@@ -7745,7 +7802,34 @@ function chPrepare(){
    id landed 900ms after the reset. So every round carries a number, and a publish that
    comes back to a round that no longer exists drops its answer instead of installing it. */
 let chRound=0;
+/* chReplyTo / chReplyName / chClearReply() live near the TOP of this module, not here where
+   they are used — see the note beside their declaration. TDZ. */
+/* TEST HOOK, same posture as everything else in this file that has one: NOT on window.KAMO.
+   That object is the wrapper's bridge contract and a test affordance has no business in it.
+   scripts/test-reply-dom.mjs drives the real flow — open a link, give up, tap "Send one back"
+   — and then needs to read two things the DOM does not expose until the share sheet opens:
+   who the round is answering, and what the send button would say about it. */
+window.KAMOREPLY={
+  state:()=>({to:chReplyTo,name:chReplyName}),
+  label:()=>{ updateInviteBtn(); const b=document.getElementById("ssInvite"); return b?b.textContent:null; },
+  /* What chUpload() would send, without needing a painted board and a storage round trip to
+     find out. Same function the publish path calls — not a copy of it. */
+  forms:()=>chCreateForms({p_img_path:"x.jpg",p_cx:0.5,p_cy:0.5,p_r:0.1,p_secs:9,p_coverage:80},getHandle()),
+};
 function chResetRound(){ chId=""; chPrep=null; chPrepare._retried=false; chRound++; }
+/* THE FALLBACK LADDER, PULLED OUT SO IT CAN BE READ AND TESTED.
+   Inline, this was four lines nobody could exercise without a painted board, a mask canvas
+   and a storage round trip — which is precisely why the thing it decides (does the reply
+   carry its address?) would have failed silently. As a function it is one assertion in
+   scripts/test-reply-dom.mjs. */
+function chCreateForms(base,who){
+  const signed={...base,p_limit_s:null,p_max_taps:null,p_name:who||null};
+  const forms=[];
+  if(chReplyTo) forms.push({...signed,p_reply_to:chReplyTo});
+  if(who) forms.push(signed);
+  forms.push(base);
+  return forms;
+}
 async function chUpload(){
   if(!CH_MAKE||chId) return;
   /* Concurrent calls raced past the chId guard — the peek's pointerdown and the sheet
@@ -7773,21 +7857,22 @@ async function chUpload(){
     const who=getHandle();
     const base={p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,p_secs:roundSeconds(),
                 p_coverage:Math.round(currentScore||0)};
-    if(who){
-      try{
-        chId=await chRpc("create_hide",{...base,p_limit_s:null,p_max_taps:null,p_name:who});
-      }catch(_){
-        /* A hide that goes out unsigned is a smaller loss than a hide that never goes out. */
-        chId=await chRpc("create_hide",base);
-      }
-    } else {
-      chId=await chRpc("create_hide",base);
+    /* FOUR OVERLOADS NOW: a 10-argument form carries `reply_to`, so a hide made off "Send one
+       back" says who it answers. Same rule as ever — the overload was ADDED, never edited.
+       TRIED WIDEST FIRST, EACH FALLING BACK TO THE NEXT, and the order is by what is lost if
+       a form turns out to be unavailable: a reply that publishes without its address is still
+       a playable hide, and an unsigned hide is still a hide. Nothing here may end with no row
+       at all — that is the only outcome the sender would actually notice. */
+    const forms=chCreateForms(base,who);
+    for(let i=0;i<forms.length;i++){
+      try{ chId=await chRpc("create_hide",forms[i]); break; }
+      catch(e){ if(i===forms.length-1) throw e; }
     }
     /* The row exists on the server either way — abandoning it here costs one hide nobody
        will ever open, which is strictly cheaper than sending a friend the wrong picture. */
     if(myRound!==chRound){ chId=""; track("hide_published_stale",{}); return; }
     chRemember(chId);
-    track("hide_published",{});
+    track("hide_published",{reply:!!chReplyTo});
     chAttachPush();
     /* WHICH POPULATION MADE THIS, so the loop can still be read once a second country is
        running. Fire-and-forget and after the id exists, exactly like the push token: no
@@ -8287,7 +8372,9 @@ async function khResults(){
         + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>')
         + (waiting ? ' · <b>'+waiting+"</b> waiting" : "");
     /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
-    markSeen(tried<1?0:tried); brandDot(false);
+    /* Both reasons the dot can be lit are cleared here, or it relights on the next check and
+       the card the user just read starts crying wolf. */
+    markSeen(tried<1?0:tried); markRepliesSeen(chReplyNewest); brandDot(false);
     /* THE SUMMARY IS THE CLOSED STATE, ALWAYS — including for a single hide. Sending straight
        from the tap was the first design and it is wrong for the same reason the gear is not on
        the reveal: a share sheet that opens without being asked for is indistinguishable from a
@@ -8333,8 +8420,33 @@ function brandDot(on){
   const b=document.querySelector(".brand"); if(!b) return;
   b.classList.toggle("hasNews",!!on);
 }
+/* SOMEBODY ANSWERED YOU — the half of the reply loop that does not need a push token.
+   24 of 3191 hides carry one (it only exists on builds after 1.1.0, and only once the
+   notification opt-in has been spent), so a reply delivered ONLY as a notification would
+   reach about 3% of creators. This reaches all of them, on their next launch, using the dot
+   the app already lights for "your hide got played". The push is the accelerant; this is the
+   mechanism. Compared by timestamp rather than by count so a reply that expires cannot
+   un-ring the bell. */
+const REPLY_SEEN_KEY="kamo_replies_seen";
+function replySeenAt(){ try{ return localStorage.getItem(REPLY_SEEN_KEY)||""; }catch(e){ return ""; } }
+function markRepliesSeen(iso){ try{ if(iso) localStorage.setItem(REPLY_SEEN_KEY,String(iso)); }catch(e){} }
+let chReplyNewest="";
+async function chReplyCheck(){
+  const ids=chMine(); if(!ids.length) return;
+  let rows=[];
+  try{ rows=await chRpcRows("my_replies",{p_ids:ids}); }catch(e){ return; }
+  if(!rows.length) return;
+  chReplyNewest=String(rows[0].created_at||"");
+  if(chReplyNewest && chReplyNewest>replySeenAt()){
+    brandDot(true);
+    track("reply_pending",{n:rows.length,signed:!!rows[0].name});
+  }
+}
 async function chNewsCheck(){
   try{
+    /* Not awaited together with the tally: a reply is worth the dot on its own, and one of
+       the two failing must not take the other with it. */
+    chReplyCheck().catch(()=>{});
     const t=await chTally(); if(!t) return;
     if(t.tried>seenTries()){ brandDot(true); track("results_pending",{tried:t.tried,found:t.found}); }
   }catch(e){}
@@ -8542,7 +8654,13 @@ function chSeek(){
        the picture. The headline states the dare and names its author; the sub carries the
        rule. */
     $$("chHead").textContent = h.name ? "@"+h.name+" hid a body in here" : "Someone hid a body in here";
-    $$("chSub").textContent="One tap to find it.";
+/* WHICH ROUND THIS IS, and it is not decoration. "Send one back" hands the answered hide's
+       own camouflaged photo to the next round, so a chain accumulates figures: by round six the
+       picture holds six hidden people. Saying so is what makes that legible instead of eerie —
+       and it is the honest thing to print above a photo the player is about to be told they
+       searched wrong. Silent at round 1, which is every hide that is not an answer. */
+    const rnd=(h.round|0)>1?(h.round|0):0;
+    $$("chSub").textContent=(rnd?"Round "+rnd+" · ":"")+"One tap to find it.";
 
     const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit"; quit.textContent="I give up";
     w.appendChild(quit);
@@ -8681,10 +8799,23 @@ function chSeek(){
         if(frames) armFlipUI();
       } else {
         img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
-        track("seek_failed",{reason:"miss",ms:ms});
+        track("seek_failed",{reason:"miss",ms:ms,old_round:(res&&res.old_round)|0});
         sendTrace("miss");
         const frames=await snapReveal(true);
-        ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
+        /* WRONG, OR WRONG ONE? On a chain the photo carries every earlier round's figure, and
+           the answer key is only the latest — so a player who genuinely spots a camouflaged
+           person gets told they failed. The server checks a miss against the ancestors and
+           names the one they hit. Nothing about the current answer is revealed: this can only
+           confirm a figure they already found with their own eyes, which is the whole
+           difference between "you are wrong" and "you found the wrong one". */
+        if(res&&res.old_round){
+          const who=res.old_name?"@"+res.old_name+"'s":"the one";
+          ending("That one's already been found.",
+                 "You found "+who+" from round "+res.old_round+". Mine is still in there.",
+                 {rehide:true,camoSrc:camoSrc});
+        } else {
+          ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
+        }
         if(frames) armFlipUI();
       }
     }
@@ -8759,6 +8890,13 @@ function chSeek(){
        publish dies at toBlob — storage answers ACAO:* (verified). */
     function chRehide(src){
       track("seek_rehide_tapped",{});
+      /* THE ANSWER'S ADDRESS, captured at the only moment it is knowable. From here on the
+         user is making a hide, and the app has no other way to learn who it is for — the
+         share sheet will never say. `h.name` is what the button and the notification print;
+         CH_SEEK is what the row is stamped with, and the server only accepts it if it names
+         a hide that really exists. */
+      chReplyTo=CH_SEEK; chReplyName=(h&&h.name)?String(h.name):"";
+      track("reply_started",{signed:!!chReplyName});
       try{ w.remove(); st.remove(); }catch(_){}
       photo.crossOrigin="anonymous";
       photo.onload=()=>syncPreviewFit();
