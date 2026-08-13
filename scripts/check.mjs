@@ -764,6 +764,21 @@ try {
   bad('THE FEED IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12b-quater. The reply knows who it answers -------------------------------------------
+   iOS never says who a share went to, so the only address KAMO can ever have for a reply is
+   the hide it answers — captured on "Send one back" and stamped on the published row. Both
+   ways it can break are silent: the address never captured (the reply publishes as an
+   ordinary hide and nobody is notified), or the address outliving its round (a stranger gets
+   a notification about a hide they were never part of). */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-reply-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? console.log('  · REPLY TEST SKIPPED — ' + out.trim().split('\n').pop())
+    : ok('a reply knows who it answers (node scripts/test-reply-dom.mjs)');
+} catch (e) {
+  bad('THE REPLY LOOP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 12b-bis. The share sends THIS round's hide, and sends it now -------------------------
    Two field-reported bugs that hid each other: the upload starting on the same gesture as
    the tap (an 8s wait, then the generic invite), and chId surviving capture() so the second
