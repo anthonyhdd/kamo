@@ -120,6 +120,26 @@ paths.length===2 && paths[0]!==paths[1] ? ok(`two rounds → two distinct images
 const r3=await round('ROUND 3 — tapped after the upload could finish',3400);
 r3.waited<600 ? ok(`instant when the reveal outlasts the upload (${r3.waited}ms)`) : bad(`still waiting ${r3.waited}ms`);
 /hide3/.test(r3.msg) ? ok('and it is round 3\'s own hide') : bad('round 3 link: '+JSON.stringify(r3.msg.slice(-30)));
+
+/* THE ID DOES NOT WAIT ON THE BYTES — the assertion the three above could not make.
+   All of them pass on code where create_hide runs after the upload; they only measure that
+   the reveal absorbs some of it. This one taps with the ENTIRE 3s upload still to run,
+   which is the founder's screenshot: reveal, share immediately, and the message goes out as
+   the generic invite with a ?i=1 link because chId does not exist yet.
+   create_hide needs the storage PATH, which this device invents locally, so the only
+   correct wait here is one round trip to the database. Anything near UPLOAD_MS means the
+   row is behind the file again. */
+const r4=await round('ROUND 4 — tapped with the whole upload still ahead (dwell 50ms)',50);
+r4.waited < 900
+  ? ok(`the link is ready with ${UPLOAD_MS-50}ms of upload still to run (waited ${r4.waited}ms)`)
+  : bad(`the send waited ${r4.waited}ms for bytes it does not need — the id is behind the file again`);
+/@tony hid a body/.test(r4.msg)
+  ? ok('so the message is the challenge, not the generic invite')
+  : bad('fell back to the generic invite: '+JSON.stringify(r4.msg.slice(0,70)));
+/hide4/.test(r4.msg) && !/\?i=1/.test(r4.msg)
+  ? ok("carrying round 4's own hide, and no ?i=1 anywhere in it")
+  : bad('round 4 link: '+JSON.stringify(r4.msg.slice(-40)));
+
 await browser.close(); server.close();
 console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant and always its own hide');
 process.exit(failed?1:0);
