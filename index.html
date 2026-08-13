@@ -10142,7 +10142,11 @@ function chSeek(hideId,opts){
         confettiBurst($$("chFrame"));
         track("seek_found",TP({ms:ms,pct:(res.pct==null?-1:res.pct),others:res.others|0}));
         sendTrace("hit");
-        const frames=await snapReveal(false);
+        /* NOT AWAITED — see the note on snapReveal(). The card is built from `res`, which is
+           already here; making it wait for two image loads is what made the ending feel slow.
+           ending() is synchronous, so it always finishes before the .then() below can run,
+           and the flip button can never be wiped by the innerHTML that builds the card. */
+        const frames=snapReveal(false);
         /* ④ — the chrono noted, now it speaks: rank among everyone who buzzed this hide
            before (misses count as slower — they never found it at all). Silent when there
            is nobody to compare against yet. */
@@ -10156,12 +10160,12 @@ function chSeek(hideId,opts){
                             : "Faster than "+res.pct+"% of players.")
                         : (res.others===0 ? "First one in." : ""),
           {rehide:true,camoSrc:camoSrc});
-        if(frames) armFlipUI();
+        frames.then(f=>{ if(f) armFlipUI(); });
       } else {
         img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
         track("seek_failed",TP({reason:"miss",ms:ms,old_round:(res&&res.old_round)|0}));
         sendTrace("miss");
-        const frames=await snapReveal(true);
+        const frames=snapReveal(true);
         /* WRONG, OR WRONG ONE? On a chain the photo carries every earlier round's figure, and
            the answer key is only the latest — so a player who genuinely spots a camouflaged
            person gets told they failed. The server checks a miss against the ancestors and
@@ -10189,7 +10193,7 @@ function chSeek(hideId,opts){
         } else {
           ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
         }
-        if(frames) armFlipUI();
+        frames.then(f=>{ if(f) armFlipUI(); });
       }
     }
 
@@ -10201,22 +10205,41 @@ function chSeek(hideId,opts){
       trace.end={ms:ms,x:-1,y:-1};
       track("seek_failed",TP({reason:"giveup",ms:ms}));
       sendTrace("giveup");
-      const frames=await snapReveal(true);
+      const frames=snapReveal(true);
       ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
-      if(frames) armFlipUI();
+      frames.then(f=>{ if(f) armFlipUI(); });
     };
 
     /* THE SNAP — one frame, never a fade. A fade never produces a double-take, and a
        reveal that arrives gradually erases the creator's work on the way in. */
+    /* WHAT THIS FUNCTION COSTS, AND WHO SHOULD BE PAYING IT.
+       Every caller used to `await` this before calling ending(), so the headline and the card
+       — both of which are built entirely from the submit_attempt response, already in hand —
+       sat behind up to two image loads over the radio. That is the reported "lenteur du titre
+       et de la modal": not a slow render, a card queued behind a download it does not read.
+       The three call sites now start this and paint the ending immediately, arming the flip
+       button when the frames actually arrive. Nothing here needs to be awaited by anything
+       except armFlipUI().
+       AND THE TWO FRAMES GO OUT TOGETHER. `_w` was requested only after `_b` had resolved, so
+       the reveal itself cost two sequential round trips where one would do — and the wave is
+       not even needed for the first paint, only for the loop 360ms later. Both are started
+       at once; `_b` flips the photo the moment it lands and `_w` joins whenever it does.
+       The cost is one wasted 404 on a LEGACY hide (published before these frames existed,
+       where neither file is there). That is a shrinking population — hides expire at 30 days
+       — and the request is concurrent, so it costs latency to nobody. */
     async function snapReveal(lost){
       const base=camoSrc.replace(/\.jpg$/,"");
       const load=(u)=>new Promise(res0=>{ const m=new Image(); m.onload=()=>res0(u); m.onerror=()=>res0(null); m.src=u; });
       let bSrc=null, wSrc=null;
-      try{ bSrc=await load(base+"_b.jpg"); }catch(_){}
+      const bP=load(base+"_b.jpg"), wP=load(base+"_w.jpg");
+      try{ bSrc=await bP; }catch(_){}
       if(bSrc){
-        try{ wSrc=await load(base+"_w.jpg"); }catch(_){}
+        /* THE FLIP FIRST, THE WAVE WHEN IT GETS HERE. Swapping the photo is the payoff and it
+           only needs `_b`; holding it back for a frame that is not drawn for another 360ms
+           was spending the whole wave round trip on the moment that matters most. */
         img.src=bSrc; revealedSrc=bSrc; flipped=true;
         buzzHaptic([28,50,28]);
+        try{ wSrc=await wP; }catch(_){}
         track("seek_reveal_shown",{assets:wSrc?"wave":"still"});
         /* IL BOUGE: two frames alternating — up, wave, up — then it settles standing.
            A two-frame coucou reads as movement; a video would read as a fade. */

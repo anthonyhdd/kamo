@@ -213,6 +213,52 @@ console.log('\nA REACTION FROM THE OLD BUILD DOES NOT LOCK THE NEW CHIPS');
   await page.close();
 }
 
+/* THE ENDING IS BUILT FROM THE ANSWER, NOT FROM THE PICTURE OF IT.
+   Every caller of snapReveal() used to await it before calling ending(), so the headline and
+   the card — both built entirely from the submit_attempt response, already in hand — queued
+   behind up to two image loads over the radio. That is the reported lag on the title and the
+   modal after a tap in the feed: not a slow render, a card waiting on a download it never
+   reads.
+   The regression this guards is subtle and silent: re-introducing a single `await` in front
+   of ending() costs nothing on a fast connection and makes the ending feel broken on a slow
+   one, which is exactly the population that cannot report it. So the reveal frames are
+   STALLED OUTRIGHT here — the request is accepted and never answered — and the card is
+   required to arrive anyway. A test that merely measured milliseconds would pass on a fast
+   machine with the await back in place; one that hangs the network cannot. */
+console.log('\nTHE ENDING DOES NOT WAIT FOR THE REVEAL FRAMES');
+{
+  const page = await open(ROWS(1), {
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 }, hide_reactions_of: [] });
+  /* Never fulfilled, never aborted: an abort would resolve the Image() as an error and let
+     the old code through. A dead request is what a bad radio actually looks like. */
+  let stalled = 0;
+  await page.route('**/*_b.jpg', () => { stalled++; });
+  await page.route('**/*_w.jpg', () => { stalled++; });
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  /* waitForFunction, never a sleep: the card is mounted off the submit_attempt round trip,
+     whose duration is the harness's, not a constant. */
+  const landed = await page.waitForFunction(() => {
+    const h = document.querySelector('#chHead');
+    return !!(h && h.textContent.trim()) && !!document.querySelector('#chFoot .chCard');
+  }, { timeout: 8000 }).then(() => true).catch(() => false);
+  landed
+    ? ok('the headline and the card arrive while the frames are still in flight')
+    : bad('the ending never mounted with the reveal frames stalled — it is awaiting them again');
+  const head = await page.evaluate(() => (document.querySelector('#chHead') || {}).textContent || '');
+  head.trim() === 'They were right there.'
+    ? ok('and it is the real ending, not a placeholder')
+    : bad('headline was ' + JSON.stringify(head));
+  /* The frames were genuinely requested — otherwise the assertion above proves nothing, it
+     just means this hide never had reveal assets to wait for in the first place. */
+  stalled > 0 ? ok(`and the frames really were in flight (${stalled} held)`) : bad('no reveal frame was ever requested');
+  await page.close();
+}
+
 /* THE ONE CONTROL ON THIS CARD THAT LEAVES THE APP.
    Everything else the ending card offers spends the round inside KAMO, which is why the feed
    retains and does not recruit. This button is the exception, so the two things that would

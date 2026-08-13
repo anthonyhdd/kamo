@@ -194,5 +194,106 @@ if (CHALLENGE) {
   }
 }
 
+/* ---- THE UNIVERSAL LINK ASSOCIATION FILE --------------------------------------------------
+   playkamo.com/h/<id> is every challenge ever sent. Without this file iOS opens those links
+   in Safari — including on the phones that ALREADY HAVE KAMO, who are the single most likely
+   people alive to play another round. apple-app-site-association is what sends them into the
+   app instead, and it is a static file on the Pages site behind the apex (anthonyhdd/playkamo).
+
+   WHY THIS LIVES IN THE WATCHDOG AND NOT IN check.mjs. The file being correct in the repo
+   proves nothing: everything that can go wrong with it goes wrong in the SERVING, and the dev
+   container has no egress to look. Three failures, none visible from the repo:
+
+     1. Jekyll. GitHub Pages runs it by default and it drops every path starting with a dot,
+        so `.well-known/` is not published at all unless `/.nojekyll` exists. The file is
+        perfect, committed, and 404s.
+     2. Content-Type. Apple requires application/json. The filename cannot have an extension,
+        and Pages types responses BY extension, so this is liable to be served as
+        application/octet-stream. Apple's fetcher rejects it.
+     3. A redirect. Apple does not follow them for this file.
+
+   AND THE FAILURE IS STICKY, WHICH IS WHY IT IS CHECKED EVERY TEN MINUTES RATHER THAN ONCE AT
+   DEPLOY. iOS caches a failed association. A phone that fetched a 404 or an octet-stream does
+   not re-ask when the file is fixed, and shipping a corrected build does not reach it. So the
+   window between "this broke" and "we know" has to be minutes, and it has to be watched
+   forever rather than confirmed once.
+
+   NOT AN OUTAGE, DELIBERATELY REPORTED LIKE ONE. Every other check above names something that
+   is dead for users right now; this names a link that opens in the wrong place. It still
+   fails the run, because a silent Universal Links failure is the kind that survives weeks. */
+const AASA = process.env.KAMO_WATCH_AASA
+  ? JSON.parse(process.env.KAMO_WATCH_AASA)
+  /* Same rule as the challenge check: skipped when the origins are overridden, which only
+     ever happens inside scripts/test-watchdog.mjs driving a local server. */
+  : (process.env.KAMO_WATCH_ORIGINS ? null
+    : { name: 'universal links', url: 'https://playkamo.com/.well-known/apple-app-site-association' });
+
+if (AASA) {
+  let res, body;
+  try {
+    /* No cache-buster here, unlike every other check. A query string makes this a different
+       URL from the one Apple actually fetches, and what THAT url returns is the whole
+       question. */
+    res = await fetch(AASA.url, { redirect: 'manual' });
+    body = await res.text();
+  } catch (e) {
+    bad(`${AASA.name} (${AASA.url}) — request failed: ${e.message}`);
+    res = null;
+  }
+  if (res) {
+    if (res.status >= 300 && res.status < 400) {
+      bad(`${AASA.name} REDIRECTS (${res.status}) to ${res.headers.get('location') || '(none)'}\n`
+        + '    Apple does not follow redirects for this file. The association will never form.');
+    } else if (res.status === 404) {
+      bad(`${AASA.name} returns 404 — THIS IS THE JEKYLL TRAP.\n`
+        + '    GitHub Pages runs Jekyll by default and Jekyll drops every path beginning with a\n'
+        + '    dot, so .well-known/ is never published. Confirm /.nojekyll exists at the root of\n'
+        + '    anthonyhdd/playkamo. The file being committed is not enough.');
+    } else if (!res.ok) {
+      bad(`${AASA.name} returned HTTP ${res.status}`);
+    } else {
+      ok(`${AASA.name} answers HTTP 200, no redirect`);
+
+      /* THE TRAP THAT LOOKS LIKE SUCCESS. 200 with the right bytes and the wrong header is
+         indistinguishable from working in a browser, in curl, and in the repo — and Apple
+         rejects it. This is the assertion the whole check exists for. */
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      /^application\/json\b/.test(ct)
+        ? ok(`  ${AASA.name}: served as ${ct}`)
+        : bad(`${AASA.name} is served as ${JSON.stringify(ct || '(none)')}, not application/json.\n`
+          + '    Apple rejects it and iOS CACHES the rejection, so every phone that already\n'
+          + '    fetched it stays broken through the next build. GitHub Pages types responses by\n'
+          + '    file extension and this file must not have one, so Pages alone cannot fix it.\n'
+          + '    FIX: a Cloudflare Transform Rule (Modify Response Header) on\n'
+          + '      http.request.uri.path eq "/.well-known/apple-app-site-association"\n'
+          + '    setting content-type: application/json. playkamo.com is already proxied, so this\n'
+          + '    needs no new infrastructure. Do NOT rename the file, and do NOT touch the Worker\n'
+          + '    on /h/* — it carries every share link in existence.');
+
+      /* The content, not only the delivery: a file that parses but names the wrong app, or
+         stopped claiming /h/*, forms an association that silently does nothing. */
+      let doc = null;
+      try { doc = JSON.parse(body); } catch (e) {
+        bad(`${AASA.name} is not valid JSON (${e.message}) — Apple discards it silently.`);
+      }
+      if (doc) {
+        const details = (doc.applinks && doc.applinks.details) || [];
+        const ids = details.flatMap((d) => d.appIDs || (d.appID ? [d.appID] : []));
+        ids.includes('J55T97M8XV.com.blisscoach.kamo')
+          ? ok('  universal links: claimed by J55T97M8XV.com.blisscoach.kamo')
+          : bad(`${AASA.name} does not name the app — appIDs are ${JSON.stringify(ids)}.\n`
+            + '    Expected J55T97M8XV.com.blisscoach.kamo (team from CLAUDE.md, bundle from\n'
+            + "    kamo-app app.json). A wrong id associates nothing, and iOS caches that too.");
+        const claimsH = details.some((d) => (d.paths || []).includes('/h/*')
+          || (d.components || []).some((c) => c['/'] === '/h/*'));
+        claimsH
+          ? ok('  universal links: /h/* is claimed — challenge links open the app')
+          : bad(`${AASA.name} does not claim /h/*, which is the only path that matters.\n`
+            + '    Every challenge link lives under it; without the claim they all open Safari.');
+      }
+    }
+  }
+}
+
 console.log(failed ? `\n✗ ${failed} problem(s) — KAMO IS BROKEN IN PRODUCTION` : '\n✓ production is healthy');
 process.exit(failed ? 1 : 0);
