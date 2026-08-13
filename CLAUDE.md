@@ -120,6 +120,12 @@ Schema changes are applied through the dashboard and mirrored into `infra/*.sql`
 file. The database has no migration history of its own, so that directory is the only record
 of what changed and why.
 
+`hides.is_public` drives the feed and **defaults to FALSE**. That default is a safety property,
+not a preference: a `set_hide_public` call that never lands leaves the hide private, so the
+failure mode is "this did not reach the feed", never "this reached strangers without being
+asked". Everything published before 2026-08-13 is private permanently — it was made when a
+hide went to one person and nothing on screen said otherwise. Do not backfill it.
+
 `hides.reply_to` is how "send one back" reaches a person iOS never named. The share sheet never
 says who a challenge went to, but the recipient of a *reply* is knowable — it is the creator of
 the hide just played — so `chRehide()` captures that id and `chUpload()` stamps it. Two
