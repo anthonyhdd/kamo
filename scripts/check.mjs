@@ -593,6 +593,42 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     : ok(`tlFrames and tlTimes are mutated together (${sites.length} sites)`);
 }
 
+/* ---- 5d-quinquies. THE TWO ANALYTICS ROADS STAY JOINABLE ---------------------------------
+ * track() sends an event one of two ways: through the bridge to the native SDK, or — for
+ * every name in WEB_ONLY — straight to Amplitude's HTTP API from the page. Those land under
+ * two different Amplitude users unless the web payload carries the same user_id native sets.
+ *
+ * WHAT BREAKING THIS LOOKS LIKE: nothing. No error, no warning, no drop in any count. Only
+ * cross-road funnels change, and they change to ZERO — which reads as a wall in the product
+ * rather than a hole in the instrumentation. On 2026-08-13 `essay_finished` -> `sheet_presented`
+ * reported 324 people painting a hide and not one of them reaching the share sheet, and it
+ * took reading track() to disbelieve the number.
+ *
+ * So the payload keeps user_id, and it keeps device_id beside it — the device_id is the only
+ * identity a browser seeker will ever have, and replacing it would break the seeker funnel to
+ * fix the app one.
+ */
+{
+  const at = html.indexOf('function chWebTrack(');
+  if (at < 0) bad('could not locate chWebTrack() — this check needs updating');
+  else {
+    const head = html.slice(at, at + 2600);
+    const hasUser = /user_id\s*:/.test(head);
+    const hasDevice = /device_id\s*:\s*chDeviceId\(\)/.test(head);
+    if (!hasUser) {
+      bad('chWebTrack() no longer sends user_id — every WEB_ONLY event goes back to a separate\n'
+        + '    Amplitude user from the app\'s own events, and every funnel crossing the two silently\n'
+        + '    returns zero instead of failing');
+    } else if (!hasDevice) {
+      bad('chWebTrack() no longer sends device_id — a browser seeker has no user_id at all, so\n'
+        + '    the whole seeker funnel loses its only identity');
+    } else if (!/window\.KAMO\.setAnalyticsUserId\s*=/.test(html)) {
+      bad('window.KAMO.setAnalyticsUserId is gone — the wrapper has no way to hand the id over,\n'
+        + '    so user_id above is always empty and the join never happens');
+    } else ok('web-direct events carry both ids, so they join the app\'s events');
+  }
+}
+
 /* ---- 5d-quater. THERE IS NO MANDATORY PAINT PERCENTAGE TO SHARE --------------------------
  * A standing rule from the founder, stated twice. The send is never gated on coverage.
  *
