@@ -1116,7 +1116,12 @@
   .khMore{display:block;margin-top:7px;color:var(--mint);font-size:12.5px;font-weight:700;}
   /* The summary, kept above the list it opened. Separated by the same hairline the rows use so
      it reads as the head of a table rather than as a first row with no picture. */
-  .khHead{padding-bottom:9px;}
+  /* THE SUMMARY IS THREE SEGMENTS AND IT HAS TO HOLD ONE LINE. It was inheriting the card's
+     body size, which fits two segments and overflows on the third — see the note in the head
+     builder. A step down plus tighter tracking buys the width; .khSeg keeps any break that
+     does happen on a separator instead of inside a number. */
+  .khHead{padding-bottom:9px;font-size:13px;line-height:1.35;letter-spacing:-.1px;}
+  .khSeg{white-space:nowrap;}
   /* One line per hide, the state on the left and the one action on the right. Bordered rows
      rather than a list with bullets: each row is its own object because each row sends its
      own challenge. */
@@ -9806,9 +9811,19 @@ async function khResults(){
       ? (waiting && !sentN ? "<b>"+waiting+"</b> still on your phone"
         : waiting ? "<b>"+sentN+"</b> sent · <b>"+waiting+"</b> waiting"
         : "<b>"+t.hides+"</b> challenge"+(t.hides===1?"":"s")+' sent · <span class="khNone">nobody has played yet</span>')
-      : "<b>"+tried+"</b> played your hide"+(rows.length===1?"":"s")+" · "
-        + (found ? "<b>"+found+"</b> found you" : '<span class="khNone">nobody found you</span>')
-        + (waiting ? ' · <b>'+waiting+"</b> waiting" : "");
+      /* SEGMENTS, AND EACH ONE IS INDIVISIBLE. The note above promises one line and this
+         branch quietly broke it the moment a third segment appeared: at 390px
+         "20 played your hides · 13 found you · 6 waiting" wraps, and it wrapped INSIDE the
+         last segment — leaving "· 6" hanging at the end of line one and the bare word
+         "waiting" alone on line two, which reads as a rendering bug rather than as a number.
+         Wrapping each segment in a nowrap span does not stop the line breaking; it decides
+         WHERE. A break now lands on a separator, so the worst case is two clean halves
+         ("… found you" / "6 waiting") instead of an orphaned word. Combined with the smaller
+         type on .khHead, three segments fit one line on every phone this ships to. */
+      : '<span class="khSeg"><b>'+tried+"</b> played your hide"+(rows.length===1?"":"s")+'</span> · '
+        + (found ? '<span class="khSeg"><b>'+found+"</b> found you</span>"
+                 : '<span class="khSeg khNone">nobody found you</span>')
+        + (waiting ? ' · <span class="khSeg"><b>'+waiting+"</b> waiting</span>" : "");
     /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
     /* Both reasons the dot can be lit are cleared here, or it relights on the next check and
        the card the user just read starts crying wolf. */
