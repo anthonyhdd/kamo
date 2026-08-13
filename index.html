@@ -1040,9 +1040,14 @@
     animation:pwShimmer 3.4s linear infinite;}
   /* WHITE, NOT GREY — founder's call, 2026-08-13. This line carries the offer's one sentence
      and it was being read at .72 against a photo, which is where grey text goes to die. */
-  .kpSub{font-size:14.5px;color:#fff;line-height:1.45;margin:0 auto 20px;max-width:320px;}
+  /* White, and LIGHTER: the weight was doing the shouting that the title is already doing.
+     Full white keeps it readable; 400 lets the headline above it lead. */
+  .kpSub{font-size:14.5px;color:#fff;font-weight:400;line-height:1.45;margin:0 auto 20px;max-width:320px;}
   .kpChips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:28px;}
-  .kpChip{font-size:12.5px;color:rgba(255,255,255,.82);padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
+  /* FULL WHITE — founder's call. These three name what KAMO+ actually is, and they were
+     set at .82 over a photo, which is where grey text goes to die (the same call already
+     made for .kpSub above). */
+  .kpChip{font-size:12.5px;color:#fff;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
   .kpGo{width:100%;padding:16px;border:none;border-radius:16px;background:var(--mint);color:#06231a;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(95,230,164,.32);}
   #kpBurst{position:absolute;left:50%;top:-8px;width:0;height:0;pointer-events:none;}
   /* The numbers are the point of the home sheet, so they get the display face and the size.
@@ -1119,8 +1124,16 @@
      the list alone wanted 720px on an 844px screen — which is how it came to fill the card and
      push the badge off the top. Two thirds of that height was the thumbnail, and the thumbnail
      only has to be recognisable to the person who took it. */
-  .khRow{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--stroke);}
+  /* flex-start, not center: the row is two stacked lines now, so centring would float the
+     thumbnail against the middle of the block instead of aligning it with the sentence it
+     belongs to. */
+  .khRow{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid var(--stroke);}
   .khRow:first-child{border-top:none;padding-top:2px;}
+  /* THE CONTROLS, ON THEIR OWN LINE AND IN THE ORDER THEY MATTER. Watch and Heat report what
+     happened; Send is the thing to DO, so it is pushed to the right edge where the thumb
+     already expects the primary action — the position it held when this was one line. */
+  .khRowActs{display:flex;align-items:center;gap:6px;}
+  .khRowActs .khSend{margin-left:auto;}
   /* THE WHOLE ROW IS LIVE (see khRenderRows), so it has to say so and it has to answer a
      press. Cursor and the tap-highlight suppression are the same treatment every other
      control on this card wears; the active state is deliberately a background rather than a
@@ -1128,12 +1141,13 @@
   .khRowTap{cursor:pointer;-webkit-tap-highlight-color:transparent;border-radius:10px;
     transition:background .12s ease;}
   .khRowTap:active{background:rgba(255,255,255,.05);}
-  /* TWO LINES, NEVER THREE. The state line is the widest thing on the row and it was wrapping
-     to three in the middle column — the row then grew past the thumbnail and the list read as
-     ragged. Dropping the duplicate chips gave the sentence its width back; this stops it
-     running away again if a longer state line is ever added. */
-  .khRowTxt{flex:1;min-width:0;font-size:12.5px;line-height:1.3;display:-webkit-box;
-    -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  /* THE SENTENCE GETS THE WHOLE WIDTH; THE CONTROLS GET THEIR OWN LINE. See khRowHtml — a
+     single line could not hold a sentence and three buttons, and no amount of clamping fixes
+     a column that is 90px wide. No clamp here on purpose: with the full width the state line
+     is one line in every case the app can produce, and truncating a sentence that fits would
+     be solving a problem that no longer exists. */
+  .khRowBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;}
+  .khRowTxt{min-width:0;font-size:12.5px;line-height:1.35;display:block;}
   .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:12.5px;color:inherit;}
   /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
      .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
@@ -1142,17 +1156,22 @@
   .khShot{flex:0 0 auto;width:31px;height:40px;border-radius:7px;overflow:hidden;
     border:1px solid rgba(255,255,255,.18);background:#0a0f0d;display:block;}
   .khShot img{width:100%;height:100%;object-fit:cover;display:block;}
-  .khRowChips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
-  /* Reuses .chChip so the terms are typeset identically to the card that sent them. */
-  .khRowChips .chChip{font-size:10.5px;padding:2px 7px;}
+  /* .khRowChips is GONE with the chips it styled — they repeated the state line word for word
+     ("2 tried" under "2 tried · nobody found you") and held width the sentence needed. Left
+     behind, the rules would be the dead CSS this file already pays for elsewhere (#ssMode). */
   /* Mint on the outcome that flatters the hider, white on the one that does not — the two
      read at a glance without either of them needing the word "you" underlined. */
   .khScore .khWin{color:var(--mint);font-weight:700;}
   .khScore .khHit{color:rgba(255,255,255,.9);font-weight:700;}
   /* Quieter than Send: watching is the reward, sending is the job. */
   .khWatch{flex:none;background:rgba(255,255,255,.06);border:1px solid var(--stroke);color:rgba(255,255,255,.72);
-    font-family:var(--display);font-size:12px;font-weight:700;border-radius:999px;padding:6px 11px;margin-right:6px;}
+    font-family:var(--display);font-size:12px;font-weight:700;border-radius:999px;padding:6px 11px;}
   .khWatch:active{transform:scale(.94);}
+  /* The same ✦ the locked bodies and finishes wear, so one mark means "KAMO+" everywhere on
+     this card. Inline rather than absolutely positioned: these buttons sit in a flex row that
+     can wrap, and a corner badge on a pill that moves is a badge that lands on its neighbour. */
+  .khWatch.lock{color:rgba(255,255,255,.55);}
+  .khWatch.lock::after{content:" ✦";font-size:10px;opacity:.9;}
   /* REACTIONS. The feed gave a player exactly two things to do with somebody else's photo —
      find it, or leave — and nothing to say back. Four emoji, no keyboard, no thread: the
      cheapest possible signal, on the one screen where the round is already over. */
@@ -1273,7 +1292,15 @@
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
   .pwBuy.pwBuyOff{background:rgba(255,255,255,.28);color:rgba(10,11,14,.55);box-shadow:none;animation:none;cursor:default;}
-  .pwBuy{position:relative;overflow:hidden;width:100%;height:56px;border:none;border-radius:16px;color:#0a0b0e;font-size:16px;font-weight:900;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;animation:pwBuyGlow 3s ease-in-out infinite;}
+  /* MINT, AND A PILL — founder's call. White made the one button that takes money look like
+     every other white surface in the sheet; --mint is the brand green already carried by the
+     price on the watermark, so the CTA now matches the thing it is selling instead of the
+     paper it is printed on. The dark ink stays: mint is bright enough that #0a0b0e is the
+     only readable foreground on it, and it is the same pairing .kpGo already uses.
+     Fully rounded rather than 16px, and the label sits tighter (gap 9 -> 6) so the price and
+     the words read as one phrase rather than two columns. The glow and the sheen are
+     untouched — pwBuyGlow still breathes underneath, which is the effect worth keeping. */
+  .pwBuy{position:relative;overflow:hidden;width:100%;height:56px;border:none;border-radius:999px;color:#0a0b0e;font-size:16px;font-weight:900;background:var(--mint);box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;animation:pwBuyGlow 3s ease-in-out infinite;}
   /* soft mint halo breathing + a slow glossy sweep — subtle, on-brand */
   @keyframes pwBuyGlow{0%,100%{box-shadow:0 10px 28px rgba(0,0,0,.4);}50%{box-shadow:0 10px 28px rgba(0,0,0,.4),0 0 24px rgba(95,230,164,.5);}}
   /* THE RULE THE SPAN WAS ALWAYS MISSING. setBuyLabel() wraps every buy label in .pwBuyTxt
@@ -1554,7 +1581,12 @@
      edge to exist at all. */
   .ssBtn.tiktok{background:#000;color:#fff;border-color:rgba(255,255,255,.26);}
   .ssRow2{display:flex;gap:9px;}
-  .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;}
+  /* EQUAL HEIGHT, ONE LINE EACH. These are siblings in a flex row, so a label that wraps
+     makes its button taller than the others and the whole row loses its baseline — which
+     is exactly what "Remove mark" did at three-across. Two buttons have the width to stay
+     on one line; the fixed height and nowrap keep it true if a label ever grows. */
+  .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;height:48px;font-size:15px;
+    white-space:nowrap;line-height:1;}
   /* NO SHEEN ON INSTAGRAM. It carried the paywall CTA's pwBuySheen — added when it was "the one
      destination we most want tapped", which is no longer true: the sheet leads with the send,
      and Instagram is second on purpose. Two moving highlights side by side made the sheet
@@ -2203,7 +2235,16 @@
          card still exists for the other two rows. -->
     <!-- Free users only — see khSetPlus(). Tagged `home`, not `brand`, so the ~9 paywall views
          a day the wordmark used to send can be told apart from the ones this row sends. -->
-    <button class="kpPrimary" id="khUpsell" style="display:none">Unlock everything</button>
+    <!-- THE UPSELL BUTTON IS GONE — founder's call. It was a full-width primary sitting under
+         a list that is the actual reason to open this card, and on a phone it pushed the
+         results into a ~150px window: the summary line, one row, and the next row clipped
+         mid-sentence. The card's job is to show a creator what happened to their hides; a
+         56px CTA for something they did not come here to buy was taking that space from the
+         thing they did.
+         KAMO+ is not unreachable — every locked control on this card still says ✦ and still
+         leads to the paywall (the bodies, the finishes, and now Heat), which is a better ask
+         anyway: it arrives attached to the thing being sold instead of as a banner. -->
+    <!-- (no #khUpsell) -->
     <!-- NO RESTORE HERE. It was added on the argument that this is an account screen and that
          five people had tapped Restore in a week looking for it — but those five taps happened
          on the PAYWALL, which is the only place it existed. They prove people find it there.
@@ -2302,7 +2343,11 @@
          session. This is the one action that reloads the loop, and it only appears once
          something has actually been sent — an unearned button on a sheet nobody has used yet
          is noise. -->
-    <button class="ssBtn ssAgain" id="ssAgain" style="display:none">Hide another</button>
+    <!-- "Hide another" is GONE — founder's call. It was the third pill in a row built for
+         two: at flex:1 in a 350px sheet, "Remove mark" wrapped to two lines while its
+         neighbours stayed on one, so the row read as three buttons of different heights
+         with their labels on different baselines. It was also redundant — "Not now" below
+         already leaves the sheet, and going again has always been one tap from there. -->
       <button class="ssBtn ssPlus" id="ssPlus" style="display:none"><span class="ic">✦</span>Remove mark</button>
     </div>
     <!-- hidden until updateInviteBtn() confirms the wrapper can handle it (or we're on the web) -->
@@ -7272,8 +7317,23 @@ $("#ssInvite").onclick=async()=>{
     if(!chSlotLink() && !chInviteNudged && b0){
       chInviteNudged=true;
       const back=b0.innerHTML;
-      b0.textContent="One moment — preparing your challenge";
-      setTimeout(()=>{ if(b0.textContent==="One moment — preparing your challenge") b0.innerHTML=back; },2200);
+      /* IT SPEAKS WHILE IT WAITS instead of printing one flat sentence and freezing.
+         "One moment — preparing your challenge" told the truth and told it badly: it is the
+         longest label on the sheet, it wraps on a narrow phone, and a line that does not move
+         for two seconds reads as a button that has hung. These are shorter, they are about
+         the ROUND rather than about the software, and they advance — a label that changes is
+         the cheapest proof that something is still happening.
+         Sequential, not shuffled: they narrate a progression, so a random order would have
+         the photo being sent before it was hidden. The last one holds, because that is where
+         the wait actually ends. Every restore is guarded on the label still being one of
+         ours, so a tap that changed it in the meantime is never overwritten. */
+      const NUDGE=["Hiding you in the photo…","Almost invisible…","Nearly there…"];
+      let ni=0; b0.textContent=NUDGE[0];
+      const spin=setInterval(()=>{
+        if(ni>=NUDGE.length-1||b0.textContent!==NUDGE[ni]){ clearInterval(spin); return; }
+        ni++; b0.textContent=NUDGE[ni]; },700);
+      setTimeout(()=>{ clearInterval(spin);
+        if(NUDGE.indexOf(b0.textContent)>=0) b0.innerHTML=back; },2200);
       track("share_deferred",{reason:"no_link",score:sc});
       return;
     }
@@ -8983,6 +9043,14 @@ function kfAskConsent(){
     }catch(e){ done(false); }   // could not be shown → nothing goes public
   });
 }
+/* THE ICON HAS TO CHANGE WITH THE ANSWER, not just its tint. A globe means "the world sees
+   this"; leaving a globe on the row while it says Private and only greying it out asks the
+   eye to read a colour rather than a symbol — and the one glance this row gets is the glance
+   before the send. The crossed-out eye is the opposite statement rather than a dimmer version
+   of the same one: nobody is looking. Same 24px grid and same stroke weight, so it drops into
+   the plate the globe already sits in. */
+const VIS_ICO_PUBLIC='<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>';
+const VIS_ICO_PRIVATE='<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/>';
 function kfRenderVis(){
   const b=$("#ssVis"); if(!b) return;
   const pub=kfWantPublic();
@@ -8990,6 +9058,8 @@ function kfRenderVis(){
   const t=$("#ssVisT"), s=$("#ssVisS");
   if(t) t.textContent=pub?"Public":"Private";
   if(s) s.textContent=pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to";
+  const ico=$("#ssVisIco"); const svg=ico&&ico.querySelector("svg");
+  if(svg) svg.innerHTML = pub ? VIS_ICO_PUBLIC : VIS_ICO_PRIVATE;
 }
 try{
   const vb=$("#ssVis");
@@ -9346,35 +9416,55 @@ function khRowHtml(h,i){
      did, which is the only news this surface exists to deliver. The share message still quotes
      the terms when the hide stores them (inventing them would promise a deal the round does
      not honour — that rule is unchanged). */
-  /* AND NOW THE COUNTS ARE GONE TOO, because they were the SAME FACTS TWICE. chStateLine()
-     already opens with "1 tried · nobody found you"; a "1 tried" chip underneath it restates
-     the first half word for word and a "3 found" chip restates the second. Two lines saying
-     one thing, on the narrowest column on the card — which is also why the state line was
-     wrapping to three lines: the chips were holding width the sentence needed.
-     The row now carries one sentence and its controls. Nothing is lost: every number the
-     chips showed is in the line above them, in a form that reads as news rather than as a
-     dashboard. */
-  const chips=[];
+  /* THE COUNTS ARE GONE — they were the SAME FACTS TWICE. chStateLine() already opens with
+     "2 tried · nobody found you"; a "2 tried" chip underneath restated the first half word
+     for word. Every number the chips showed is in the sentence above them, as news rather
+     than as a dashboard. */
   /* WATCH comes before SEND on a hide somebody has already played. The row's job is to
      report what other people did; until now it could only say it in numbers. */
   const watch = (h&&h.n_attempts>0) ? '<button class="khWatch" data-w="'+i+'">Watch</button>' : '';
   /* ONLY FROM TWO. One hunt is a replay and Watch already tells that story better; a heat map
      of a single dot is a dot. From two upward the picture starts saying something no counter
      can — that they all looked in the same wrong place, or that nobody came near. */
-  const heat = (h&&h.n_attempts>1) ? '<button class="khWatch khHeatBtn" data-h="'+i+'">Heat</button>' : '';
+  /* AND IT SAYS SO WHEN IT IS LOCKED. Heat is KAMO+, but the button did not admit it: a free
+     creator tapped a plain control on their OWN results, waited out a network round trip,
+     got a modal with the heat map blurred behind it, and only then met a paywall. Reported as
+     "le bouton heat mène à rien... et après ça mène au paywall qui a rien à voir" — and that
+     reading is correct, because nothing in the flow said the button was an upsell until after
+     it had spent the user's time.
+     The ✦ is the same mark the locked bodies and finishes already wear on this card, so the
+     lock is legible before the tap rather than after it. The tap itself goes straight to the
+     paywall with no request at all — see khRenderRows. Selling it is fine; selling it after a
+     wait, from a control that looked like a feature, is not. */
+  const heat = (h&&h.n_attempts>1)
+    ? '<button class="khWatch khHeatBtn'+(isPro?'':' lock')+'" data-h="'+i+'">Heat</button>' : '';
   /* THE ONE ROW WHERE THE BUTTON IS THE POINT. On a hide that was played, Send is a re-send
      and sits quietly next to Watch. On a hide that never left the phone it is the only thing
      the creator can usefully do, so it gets the filled treatment and says so — the row above
      it now reads "still on your phone", and an unstyled "Send" beside that sentence is a
      footnote to a problem instead of the answer to it. */
   const unsent = !!(h && h.sent===false);
+  /* TWO ROWS INSIDE THE ROW, because one was never going to fit and the third button proved
+     it. The old shape was thumbnail | sentence | Watch | Heat | Send on a single line, in a
+     column about 350px wide. With two controls the sentence was already wrapping to three
+     lines; the moment a hide crosses its second play Heat appears, the sentence gets ~90px,
+     and "2 tried · nobody found you" stacks FIVE lines tall beside a 46px photo. Clamping it
+     only turned an ugly wrap into a truncation — the text was never the problem, the layout
+     was asking one line to hold a sentence and three buttons.
+     So the sentence gets the full width beside the photo, and the controls get their own line
+     under it. Nothing is truncated, nothing is squeezed, and the row reads in the order it
+     happens: what other people did, then what you can do about it.
+     WATCH FIRST is unchanged and not only for looks — it is the established control and the
+     replay suite reaches for the first .khWatch on the row. Send is pushed to the right edge
+     by the actions row, so the primary action lands under the thumb where it always was. */
   return '<div class="khRow'+(unsent?' khRowUnsent':'')+'">'+shot
-    + '<span class="khRowTxt"><b>'+chStateLine(h)+'</b>'
-    + (chips.length?'<span class="khRowChips">'+chips.join("")+'</span>':'')
-    /* WATCH FIRST, and not only for looks: it is the established control, and the replay
-       suite reaches for the first .khWatch on the row. Heat is the newcomer and sits after. */
-    + '</span>'+watch+heat+'<button class="khSend'+(unsent?' khSendNow':'')+'" data-i="'+i+'">'
-    + (unsent?'Send it':'Send')+'</button></div>';
+    + '<span class="khRowBody">'
+    +   '<span class="khRowTxt"><b>'+chStateLine(h)+'</b></span>'
+    +   '<span class="khRowActs">'+watch+heat
+    +     '<button class="khSend'+(unsent?' khSendNow':'')+'" data-i="'+i+'">'
+    +     (unsent?'Send it':'Send')+'</button>'
+    +   '</span>'
+    + '</span></div>';
 }
 function khRenderRows(el,rows,head){
   el.innerHTML = (head?'<div class="khHead">'+head+'<span class="khMore">Hide these</span></div>':'')
@@ -9407,7 +9497,17 @@ function khRenderRows(el,rows,head){
     b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); khReplay(rows[+b.dataset.w],b); };
   });
   el.querySelectorAll(".khHeatBtn").forEach((b)=>{
-    b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); khHeat(rows[+b.dataset.h],b); };
+    b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
+      /* STRAIGHT THERE, AND NOTHING FETCHED. The old path ran get_seek_traces first, built
+         the whole modal, blurred the map and put the paywall behind one more tap — so a free
+         creator paid a round trip to be told they could not see their own results. Whether
+         this is locked is known on this device, synchronously, before anything is asked of
+         the network. One tap, one destination, no wait.
+         `src` separates this from the same event fired inside the modal, which is the pro
+         path's own upsell and a different question. */
+      if(!isPro){ track("heat_paywall_tapped",{n:(rows[+b.dataset.h]||{}).n_attempts|0,src:"row"});
+                  closeKamoHome(); openPaywall("heatmap"); return; }
+      khHeat(rows[+b.dataset.h],b); };
   });
 }
 
@@ -10759,7 +10859,7 @@ const KF_CSS=
 
   /* The swipe affordance. Shown on the first slide only and killed by the first scroll — an
      instruction that stays on screen after it has been obeyed is a permanent obstruction. */
-  +".kfHint{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;bottom:calc(84px + var(--safe-b));z-index:25;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.82);background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:7px 14px;border-radius:999px;pointer-events:none;animation:kfBob 1.9s ease-in-out infinite;}"
+  +".kfHint{position:absolute;left:50%;transform:translateX(-50%);max-width:88vw;white-space:normal;text-align:center;bottom:calc(84px + var(--safe-b));z-index:25;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.82);background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:7px 14px;border-radius:999px;pointer-events:none;animation:kfBob 1.9s ease-in-out infinite;}"
   +"@keyframes kfBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-6px)}}"
   +".kfMid{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}"
   +".kfMid .kfCard{width:min(90vw,380px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:22px 20px 18px;display:flex;flex-direction:column;gap:12px;align-items:center;}"
