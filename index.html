@@ -5356,7 +5356,9 @@ const WEB_ONLY=new Set(["pose_changed","sheet_presented","sheet_minimized","hide
    WEB_ONLY bypasses the bridge entirely, so the real name now lands from EVERY build, 1.0.2
    included, without waiting for an App Store review. The carrier goes in the same commit:
    with one name always arriving, a second one is not redundancy, it is the ambiguity. */
-"share_target_tapped"]);
+"share_target_tapped",
+/* New name, so no shipped binary's allow-list knows it and the bridge would drop it. */
+"prev_blocked_tapped"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -6107,8 +6109,20 @@ function chPrevRender(){
     const blocked=Math.round(currentScore||0)<CH_MIN_COVERAGE;
     /* The two chips ARE the deal the friend gets, and the deal is fixed now: one tap,
        no clock. Constants, so the card can never disagree with the seeker screen. */
-    document.getElementById("chChipS").textContent=blocked?"not hidden yet":"1 tap";
-    document.getElementById("chChipT").textContent=blocked?"paint them first":"no clock";
+    /* WHEN IT IS BLOCKED, THE CARD HAS ONE JOB: say how far off you are, and in what unit.
+       "not hidden yet" / "paint them first" said neither. They named a state the user could
+       already see and gave an instruction with no target — no idea whether one more stroke
+       was needed or twenty — on the same card whose tap silently closes the sheet. Taken
+       together that reads as "the modal shut for no reason", which is exactly what it was
+       reported as.
+       Numbers instead: what you have, and what it takes. Both interpolated — CH_MIN_COVERAGE
+       is the same constant chUpload() actually refuses on, so this card can never promise a
+       floor the publish does not enforce. */
+    const pct=Math.round(currentScore||0);
+    const title=row.querySelector(".chPrevTxt b");
+    if(title) title.textContent=blocked?"Too easy to spot":"My challenge";
+    document.getElementById("chChipS").textContent=blocked?(pct+"% painted"):"1 tap";
+    document.getElementById("chChipT").textContent=blocked?("needs "+CH_MIN_COVERAGE+"%"):"no clock";
     /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
        an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
        because a third chip made the card read as clutter. What survives it: the share MESSAGE
@@ -6140,8 +6154,15 @@ function chPrevRender(){
        and to be about to be shown. onclick (not addEventListener) on purpose — chPrevRender
        runs again on every share sheet open, and a listener would stack a duplicate each
        time, so the preview would open twice, then three times. */
+    /* THE BLOCKED TAP CLOSES THE SHEET ON PURPOSE — it is taking you back to the brush, which
+       is the only thing that fixes the card. It was reported as "tapping the card closes the
+       modal instead of opening the share", and that report was right about the experience: the
+       card gave no reason, so the close read as a dismissal rather than as a destination.
+       The copy above is what makes it legible; the hint is what names it before the tap. */
     const go=blocked
-      ? ()=>{ haptic(10); closeShareSheet(); if($("#btnEdit").style.display!=="none") $("#btnEdit").click(); }
+      ? ()=>{ haptic(10); track("prev_blocked_tapped",{coverage:pct}); closeShareSheet();
+              if($("#btnEdit").style.display!=="none") $("#btnEdit").click();
+              showHint("Keep painting — "+CH_MIN_COVERAGE+"% covered before you can send it"); }
       : ()=>{ haptic(10); chPrevPlay(); };
     shot.onclick=(ev)=>{ ev.stopPropagation(); go(); };
     /* THE WHOLE ROW OPENS IT, not just the 46px thumbnail. The card is one object that says
