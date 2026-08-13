@@ -149,7 +149,12 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
   await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
   await page.waitForTimeout(900);
   await page.evaluate(() => document.getElementById('chQuit').click());
-  await page.waitForTimeout(900);
+  /* WAITED FOR, NEVER SLEPT ON — the rule this file's sibling already writes down: the ending
+     card mounts BEHIND the reveal frames, whose load time is not a constant. A 900ms sleep
+     here passed five runs out of six and took the whole gate red on the sixth, with a null
+     dereference rather than a failed assertion, so it read as "THE FEED IS BROKEN" with no
+     detail at all. */
+  await page.waitForSelector('#chBlk', { timeout: 10000 }).catch(() => {});
 
   const present = await page.evaluate(() => {
     const b = document.getElementById('chBlk');
@@ -162,7 +167,7 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
   /* The reload after a block must ask the server again rather than reuse the tail it already
      holds. Emptying the seed here is how the test can tell those two apart. */
   await page.evaluate(() => { window.__seed.feed_page = []; window.__rpc.length = 0; });
-  await page.evaluate(() => document.getElementById('chBlk').click());
+  await page.evaluate(() => { const b = document.getElementById('chBlk'); if (b) b.click(); });
   await page.waitForTimeout(900);
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('kamo_blocked') || '[]'));
@@ -214,6 +219,100 @@ console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
   pair.rep && !pair.blk
     ? ok('a sent hide still offers Report, and offers no block')
     : bad('outside the feed: ' + JSON.stringify(pair));
+  await page.close();
+}
+
+/* CONSENT, WHICH IS THE ONE SCREEN IN THIS APP WHERE BEING WRONG PUBLISHES SOMEBODY'S ROOM.
+   Public stays the default and the sheet says so with the switch already on — what is
+   asserted here is that the default is REACHED THROUGH A CHOICE, never behind one. */
+console.log('\nNOTHING GOES PUBLIC BEFORE ANYBODY HAS BEEN TOLD');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(() => { window.__seed = { set_hide_public: null }; });
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(600);
+
+  const asked = await page.evaluate(() => window.KAMOFEED.asked());
+  !asked ? ok('a fresh device has not been asked yet') : bad('a fresh device reads as already asked');
+
+  const p = page.evaluate(() => window.KAMOFEED.askConsent());
+  await page.waitForSelector('#kfCons', { timeout: 8000 }).catch(() => {});
+  const sheet = await page.evaluate(() => ({
+    title: (document.querySelector('.kfConsT') || {}).textContent,
+    pressed: document.getElementById('kfConsVis').getAttribute('aria-pressed'),
+    sub: (document.getElementById('kfConsVS') || {}).textContent,
+    cta: (document.getElementById('kfConsGo') || {}).textContent,
+  }));
+  sheet.pressed === 'true'
+    ? ok(`the switch is already on — public is still the default ("${sheet.title}")`)
+    : bad('the consent sheet does not default to public: ' + JSON.stringify(sheet));
+  /feed/i.test(sheet.sub || '')
+    ? ok(`and it names where the photo goes ("${sheet.sub}")`)
+    : bad('the sheet does not say where the photo goes: ' + JSON.stringify(sheet.sub));
+
+  /* THE ASSERTION THAT MATTERS. Before the tap there must be no set_hide_public on the wire:
+     29 hides went public in 24h whose author never saw anything, and that is the hole. */
+  const early = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'set_hide_public').length);
+  early === 0 ? ok('and nothing has been published while the question is still open')
+              : bad(`set_hide_public fired ${early}x before the user answered`);
+
+  await page.evaluate(() => document.getElementById('kfConsGo').click());
+  const answer = await p;
+  const after = await page.evaluate(() => ({ asked: window.KAMOFEED.asked(), want: window.KAMOFEED.wantPublic() }));
+  answer === true && after.asked && after.want
+    ? ok('tapping through consents to the default, and the answer sticks')
+    : bad('after Got it: ' + JSON.stringify({ answer, ...after }));
+  await page.close();
+}
+
+/* Turning it off on the sheet must be a real answer, not decoration. */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(() => { window.__seed = { set_hide_public: null }; });
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(600);
+  const p = page.evaluate(() => window.KAMOFEED.askConsent());
+  await page.waitForSelector('#kfCons', { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => document.getElementById('kfConsVis').click());
+  await page.evaluate(() => document.getElementById('kfConsGo').click());
+  const answer = await p;
+  const want = await page.evaluate(() => window.KAMOFEED.wantPublic());
+  answer === false && want === false
+    ? ok('switching it off keeps the hide private, and that choice sticks too')
+    : bad('after choosing private: ' + JSON.stringify({ answer, want }));
+  await page.close();
+}
+
+/* THE SECOND LAP. A player who has cleared the room was being told the room was empty. */
+console.log('\nA CLEARED FEED REOPENS INSTEAD OF SAYING IT IS EMPTY');
+{
+  const rows = ROWS(3);
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript((r) => {
+    /* Every hide already played on this device — the exact state 31 of 66 opens hit today. */
+    localStorage.setItem('kamo_feed_seen', JSON.stringify(r.map(x => x.id)));
+    window.__seed = { feed_page: r, set_hide_public: null,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' } };
+  }, rows);
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => document.getElementById('btnFeed').click());
+  /* WAITED FOR, NEVER SLEPT ON. The lap costs a SECOND feed_page round trip after the first
+     one comes back empty, so a fixed sleep here is a test that goes red on a slow morning —
+     which it did, once, in the gate. Wait for the thing being asserted, with a ceiling. */
+  await page.waitForFunction(() => document.querySelectorAll('.kfSlide').length > 0, null, { timeout: 8000 })
+    .catch(() => {});
+
+  const slides = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+  slides === 3 ? ok('the seen hides come back rather than a dead end (3 slides)')
+               : bad(`expected the feed to reopen with 3 slides, got ${slides}`);
+  const mid = await page.evaluate(() => {
+    const m = document.getElementById('kfMid');
+    return m && m.style.display !== 'none' ? (m.textContent || '').trim() : '';
+  });
+  !/Nothing here yet/.test(mid)
+    ? ok('and it does not tell a regular player the feed is empty')
+    : bad('still showing the cold start to somebody who has played: ' + JSON.stringify(mid.slice(0, 40)));
   await page.close();
 }
 
