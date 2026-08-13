@@ -8907,9 +8907,22 @@ function chSeek(){
            confirm a figure they already found with their own eyes, which is the whole
            difference between "you are wrong" and "you found the wrong one". */
         if(res&&res.old_round){
-          const who=res.old_name?"@"+res.old_name+"'s":"the one";
-          ending("That one's already been found.",
-                 "You found "+who+" from round "+res.old_round+". Mine is still in there.",
+          /* SAY THE TRUE THING, AND SAY IT TO THE RIGHT PERSON.
+             The first version of this line claimed the old figure had "already been found" —
+             which it may never have been, the seeker before them can have given up — and
+             credited it to "@tony" even when @tony was the person reading, because a chain
+             ping-pongs between two people and the ancestor's author is very often the seeker
+             themselves. Being told you found somebody else's figure when it is your own is
+             worse than no message.
+             The server cannot know whose it is; there are no accounts. chMine() can: it holds
+             the ids this device published, and the tap now comes back with the ancestor's id.
+             So the sentence stops guessing. */
+          const mine=res.old_id&&chMine().indexOf(res.old_id)>=0;
+          const whose=mine ? "the one you hid in round "+res.old_round
+                    : res.old_name ? "@"+res.old_name+"'s, from round "+res.old_round
+                    : "the one from round "+res.old_round;
+          ending("Wrong body.",
+                 "That's "+whose+". The new one is still in there.",
                  {rehide:true,camoSrc:camoSrc});
         } else {
           ending("They were right there.","",{rehide:true,camoSrc:camoSrc});

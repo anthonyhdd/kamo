@@ -88,6 +88,7 @@ async function openHide(name, extra) {
       reveal_hide: null,
       save_seek_trace: null,
     };
+    if (x && x.mine) { try { localStorage.setItem('kamo_hides', JSON.stringify(x.mine)); } catch (e) {} }
   }, [name, extra || {}]);
   await page.goto(base + '?h=abc123def4567890', { waitUntil: 'load' });
   await page.waitForSelector('#chQuit', { timeout: 10000 });
@@ -194,7 +195,7 @@ console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
      inside buzz() off the server's answer. */
   const page = await openHide('tony', {
     hide: { round: 4 },
-    attempt: { hit: false, tries: 2, missed: 2, secs: 9, pct: null, others: 0, scope: 'all', old_round: 2, old_name: 'tony' },
+    attempt: { hit: false, tries: 2, missed: 2, secs: 9, pct: null, others: 0, scope: 'all', old_round: 2, old_name: 'tony', old_id: 'someoneelse0000' },
   });
   await page.mouse.move(200, 500); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
   await page.waitForSelector('#chReh', { timeout: 10000 });
@@ -202,7 +203,7 @@ console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
     head: document.getElementById('chHead').textContent,
     sub: document.getElementById('chSub').textContent,
   }));
-  /^That one/.test(t.head) && /@tony's from round 2/.test(t.sub) && /still in there/.test(t.sub)
+  t.head === 'Wrong body.' && /@tony's, from round 2/.test(t.sub) && /still in there/.test(t.sub)
     ? ok(`a wrong-one tap is named, not failed ("${t.sub}")`)
     : bad('old-find ending reads ' + JSON.stringify(t));
   await page.close();
@@ -218,6 +219,21 @@ console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
   /the one from round 1/.test(sub) && !/@/.test(sub)
     ? ok(`and an unsigned one is named without inventing a handle ("${sub}")`)
     : bad('unsigned old-find reads ' + JSON.stringify(sub));
+
+  /* Seeded through the same door the app uses (kamo_hides is chMine()'s key), so the page
+     believes it published that hide — which is exactly the state a real ping-pong produces. */
+  const self = await openHide('tony', {
+    hide: { round: 3 },
+    attempt: { hit: false, tries: 2, missed: 2, secs: 9, pct: null, others: 0, scope: 'all', old_round: 1, old_name: 'tony', old_id: 'ownhide000000001' },
+    mine: ['ownhide000000001'],
+  });
+  await self.mouse.move(200, 500); await self.mouse.down(); await self.waitForTimeout(80); await self.mouse.up();
+  await self.waitForSelector('#chReh', { timeout: 10000 });
+  const selfSub = await self.evaluate(() => document.getElementById('chSub').textContent);
+  /you hid in round 1/.test(selfSub) && !/@/.test(selfSub)
+    ? ok(`finding your own figure says so ("${selfSub}")`)
+    : bad('self old-find reads ' + JSON.stringify(selfSub));
+  await self.close();
   await anon.close();
 
   /* A PLAIN MISS MUST STAY A PLAIN MISS. Without this, any regression that always reports an
