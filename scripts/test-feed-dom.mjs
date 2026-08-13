@@ -77,15 +77,15 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
   n_attempts: i, n_found: 0, created_at: '2026-08-1' + (2 - (i % 3)) + 'T10:0' + i + ':00Z',
 }));
 
-async function open(rows) {
+async function open(rows, extra) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-  await page.addInitScript((r) => {
-    window.__seed = {
-      feed_page: r,
+  await page.addInitScript((a) => {
+    window.__seed = Object.assign({
+      feed_page: a.r,
       get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
       set_hide_public: null,
-    };
-  }, rows);
+    }, a.extra || {});
+  }, { r: rows, extra: extra || null });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
   /* The real entry point: the button on the camera screen, clicked the way a thumb does. */
@@ -132,6 +132,88 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
     ? ok('feed_page is called with a cursor and nothing else')
     : bad('feed_page called with ' + JSON.stringify(args));
 
+  await page.close();
+}
+
+/* THE BLOCK, WHICH IS THE ONLY CONTROL HERE THAT MAKES A PROMISE ABOUT THE FUTURE.
+   "Don't show me this person" is not a statement about one photo, so the three things worth
+   asserting are all about what happens AFTER: the tag is kept, the next request carries it,
+   and the already-fetched tail — chosen by a request that predates the block — does not
+   survive. A block that only removed the slide under the thumb would look identical on this
+   screen and be broken two swipes later. */
+console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
+{
+  const page = await open(ROWS(4), { block_author: 'tag_abc123' });
+
+  /* Down one slide first, so there is something above the block as well as below it. */
+  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  await page.waitForTimeout(900);
+  await page.evaluate(() => document.getElementById('chQuit').click());
+  await page.waitForTimeout(900);
+
+  const present = await page.evaluate(() => {
+    const b = document.getElementById('chBlk');
+    return b ? b.textContent : null;
+  });
+  present === "Don't show me this person"
+    ? ok('the round ends with a block next to the report, in the feed')
+    : bad('block control reads ' + JSON.stringify(present));
+
+  /* The reload after a block must ask the server again rather than reuse the tail it already
+     holds. Emptying the seed here is how the test can tell those two apart. */
+  await page.evaluate(() => { window.__seed.feed_page = []; window.__rpc.length = 0; });
+  await page.evaluate(() => document.getElementById('chBlk').click());
+  await page.waitForTimeout(900);
+
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('kamo_blocked') || '[]'));
+  Array.isArray(stored) && stored.length === 1 && stored[0] === 'tag_abc123'
+    ? ok('what is kept is the tag block_author returned — not the hide id, not the author key')
+    : bad('kamo_blocked holds ' + JSON.stringify(stored));
+
+  const sent = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').map(c => c[1]));
+  sent.length && sent.every(b => Array.isArray(b.p_block_tags) && b.p_block_tags.includes('tag_abc123'))
+    ? ok('and every feed_page after it carries the block list')
+    : bad('feed_page after the block: ' + JSON.stringify(sent));
+
+  /* One slide above the block survives; the blocked slide and everything under it do not. */
+  const left = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+  left === 1
+    ? ok('the blocked hide and the unplayed tail below it are gone (1 slide kept above)')
+    : bad(`expected 1 slide left, got ${left}`);
+
+  const end = await page.evaluate(() => {
+    const m = document.getElementById('kfMid');
+    return m && m.style.display !== 'none' ? (m.textContent || '').trim() : '';
+  });
+  /^That's everything for now\./.test(end)
+    ? ok('and running out that way is an invitation, not a black screen')
+    : bad('after the block the feed shows ' + JSON.stringify(end.slice(0, 80)));
+
+  await page.close();
+}
+
+/* A hide somebody was personally SENT has no feed behind it, so there is nothing for a block
+   to act on — and a control that reads as if it did something and does not is worse than no
+   control. Same round, same ending, mounted outside the feed. */
+console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.addInitScript(() => {
+    window.__seed = {
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
+      save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 },
+    };
+  });
+  await page.goto(base + '?h=abc123def4567890', { waitUntil: 'load' });
+  await page.waitForTimeout(900);
+  await page.evaluate(() => { const q = document.getElementById('chQuit'); if (q) q.click(); });
+  await page.waitForTimeout(900);
+  const pair = await page.evaluate(() => ({
+    rep: !!document.getElementById('chRep'), blk: !!document.getElementById('chBlk'),
+  }));
+  pair.rep && !pair.blk
+    ? ok('a sent hide still offers Report, and offers no block')
+    : bad('outside the feed: ' + JSON.stringify(pair));
   await page.close();
 }
 
