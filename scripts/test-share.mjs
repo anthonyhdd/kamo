@@ -327,7 +327,7 @@ console.log('\nCHANGING TAPS OR THE CLOCK REPUBLISHES THE HIDE');
 console.log('\nTHE INVITE CARRIES THE HANDLE');
 {
   const { calls } = await run({ nativeInvite: true, share: null, handle: 'tony' });
-  /@tony hid a body in this photo/.test(calls.text || '')
+  /@tony hid a kamo in this pic/.test(calls.text || '')
     ? ok('a set handle signs the challenge')
     : bad(`the handle did not reach the message: ${JSON.stringify(calls.text)}`);
   !/@@|@undefined|@null/.test(calls.text || '')
@@ -336,7 +336,7 @@ console.log('\nTHE INVITE CARRIES THE HANDLE');
 }
 {
   const { calls } = await run({ nativeInvite: true, share: null, handle: '' });
-  /There's a body hidden in this photo/.test(calls.text || '') && !/@/.test((calls.text || '').split('\n')[0])
+  /Someone hid a kamo in this pic/.test(calls.text || '') && !/@/.test((calls.text || '').split('\n')[0])
     ? ok('no handle → the line that has always shipped, with no placeholder')
     : bad(`the unsigned invite changed: ${JSON.stringify(calls.text)}`);
 }
