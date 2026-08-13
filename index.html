@@ -1005,7 +1005,12 @@
      fill the card. shrink:1 + min-height:0 is the pair that actually lets it give way: a flex
      item's default min-height is auto, which refuses to go below its content and hands the
      overflow back to the card. Expanded, it takes what room is left and scrolls the rest. */
+  /* SNAP, so the list never rests showing half a row. An open accordion that starts on a
+     sentence sliced through the middle reads as broken layout rather than as scrollable
+     content — which is exactly how it looked. `proximity`, not `mandatory`: it tidies where
+     the finger already stopped instead of fighting the scroll. */
   #kamoHome .khScore{flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    scroll-snap-type:y proximity;
     -webkit-overflow-scrolling:touch;}
   @keyframes kpRise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
   /* THE KAMO FACE, like everything else that speaks for the brand. The badge and the
@@ -1102,7 +1107,13 @@
   /* The scoreboard of the hides you sent. Numbers in the brand face and in mint, the words
      around them quiet — the same treatment the preview card's chips get, for the same reason:
      the figures are the message and the sentence is only there to make them read. */
-  .khScore{width:100%;max-width:320px;margin:0 auto 20px;padding:13px 14px;border-radius:16px;
+  /* 320 -> the card's own width. This cap was set when the box held one summary sentence,
+     and it is why the list reads as cramped: every row carries a 34px thumbnail, a sentence
+     and up to three controls, and squeezing that into 320px is what forced the sentence and
+     the buttons onto separate lines in the first place. The card already has its own max
+     width and its own padding, so filling it is not "wider", it is "not narrower than its
+     container for no reason". */
+  .khScore{width:100%;max-width:100%;margin:0 auto 20px;padding:13px 14px;border-radius:16px;
     background:rgba(255,255,255,.05);border:1px solid var(--stroke);
     font-size:14px;color:rgba(255,255,255,.66);line-height:1.5;}
   .khScore b{font-family:var(--display);font-weight:900;color:var(--mint);font-size:16px;}
@@ -1132,12 +1143,15 @@
   /* flex-start, not center: the row is two stacked lines now, so centring would float the
      thumbnail against the middle of the block instead of aligning it with the sentence it
      belongs to. */
-  .khRow{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid var(--stroke);}
+  .khRow{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--stroke);
+    scroll-snap-align:start;}
   .khRow:first-child{border-top:none;padding-top:2px;}
   /* THE CONTROLS, ON THEIR OWN LINE AND IN THE ORDER THEY MATTER. Watch and Heat report what
      happened; Send is the thing to DO, so it is pushed to the right edge where the thumb
      already expects the primary action — the position it held when this was one line. */
-  .khRowActs{display:flex;align-items:center;gap:6px;}
+  /* Controls start at the same left edge as the sentence above them; Send is the only one
+     that leaves, pushed to the right rail so the primary action lines up down the list. */
+  .khRowActs{display:flex;align-items:center;justify-content:flex-start;gap:6px;}
   .khRowActs .khSend{margin-left:auto;}
   /* THE WHOLE ROW IS LIVE (see khRenderRows), so it has to say so and it has to answer a
      press. Cursor and the tap-highlight suppression are the same treatment every other
@@ -1151,14 +1165,22 @@
      a column that is 90px wide. No clamp here on purpose: with the full width the state line
      is one line in every case the app can produce, and truncating a sentence that fits would
      be solving a problem that no longer exists. */
-  .khRowBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;}
+  /* LEFT, AND THIS IS THE WHOLE BUG IN THE SCREENSHOT. .kpCard is text-align:center — right
+     for a headline and a subline, wrong for a list. Stacking the row into a column inherited
+     that centring, so the sentence floated in the middle of its own column, detached from
+     the photo on its left, and every row centred its buttons independently: three rows, three
+     different left edges, no vertical rhythm at all. A list is read down a common edge.
+     Explicit here rather than on .khRow, because the thumbnail is a flex item and does not
+     care — it is the text and the controls that were drifting. */
+  .khRowBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;text-align:left;
+    align-items:stretch;}
   .khRowTxt{min-width:0;font-size:12.5px;line-height:1.35;display:block;}
   .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:12.5px;color:inherit;}
   /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
      .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
      rather than a canvas, because these hides are on the server, not in this session's memory.
      No ::after play glyph: that one opens a preview, this one is a label. */
-  .khShot{flex:0 0 auto;width:31px;height:40px;border-radius:7px;overflow:hidden;
+  .khShot{flex:0 0 auto;width:34px;height:44px;border-radius:7px;overflow:hidden;
     border:1px solid rgba(255,255,255,.18);background:#0a0f0d;display:block;}
   .khShot img{width:100%;height:100%;object-fit:cover;display:block;}
   /* .khRowChips is GONE with the chips it styled — they repeated the state line word for word
