@@ -71,11 +71,11 @@ console.log('\nTHE SEEKER IS TOLD WHO THEY ARE PLAYING');
      WHO made them; the sentence moved to the sub. What must not change is that the sender is
      named as the AUTHOR — the bug this assertion was written for was a headline that read as
      if @tony were the one hidden. */
-  t==='@tony' ? ok(`a signed hide names its sender as the AUTHOR ("${t}")`) : bad(`signed hide shows ${JSON.stringify(t)}`);
+  t==='@tony hid a kamo here' ? ok(`a signed hide names its sender as the AUTHOR ("${t}")`) : bad(`signed hide shows ${JSON.stringify(t)}`);
 }
 {
   const t=await head(null);
-  t==='Someone hid a body in here' ? ok(`an unsigned hide still says what happened ("${t}")`) : bad(`unsigned hide shows ${JSON.stringify(t)}`);
+  t==='Someone hid a kamo here' ? ok(`an unsigned hide still says what happened ("${t}")`) : bad(`unsigned hide shows ${JSON.stringify(t)}`);
 }
 await browser.close(); server.close();
 console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the seeker screen names the sender');
