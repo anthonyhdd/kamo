@@ -328,7 +328,11 @@
      The torch shifts inboard rather than sharing the slot. It is display:none in the app by
      construction (TORCH_EXPOSED_TO_WEB is false — see kamo-app/App.js for the camera blackout
      that killed it), so this only ever separates two visible buttons in a plain browser. */
+  /* THE FIGURE IS DRAWN OFF-CENTRE IN ITS OWN VIEWBOX — it peeks from behind a wall on the
+     left, so its mass sits right of centre and the glyph reads as pushed left in a square
+     button. Nudged back optically rather than by redrawing the path, which is shared. */
   #btnFeed{right:24px;}
+  #btnFeed svg{transform:translateX(1.5px);}
   #btnFeed .kfDot{position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}
   /* THE TORCH MOVES OFF THE BOTTOM ROW. It sat at right:80px, so the bottom-right corner
      held two controls and the feed button — the one that opens everybody else's hides — had
@@ -9637,17 +9641,23 @@ function chSeek(hideId,opts){
        who reads "Find @tony" spends their one tap looking for a person who was never in
        the picture. The headline states the dare and names its author; the sub carries the
        rule. */
-    $$("chHead").textContent = h.name ? "@"+h.name+" hid a body in here" : "Someone hid a body in here";
+    /* THE NAME IS THE HEADLINE. "Someone hid a body in here" spent the widest line on the
+       screen saying nothing about who — and in a feed of strangers, who is the only thing
+       that makes the next photo different from the last. The sentence moves to the sub. */
+    $$("chHead").textContent = h.name ? "@"+h.name : "Someone hid a body in here";
 /* WHICH ROUND THIS IS, and it is not decoration. "Send one back" hands the answered hide's
        own camouflaged photo to the next round, so a chain accumulates figures: by round six the
        picture holds six hidden people. Saying so is what makes that legible instead of eerie —
        and it is the honest thing to print above a photo the player is about to be told they
        searched wrong. Silent at round 1, which is every hide that is not an answer. */
     const rnd=(h.round|0)>1?(h.round|0):0;
-    $$("chSub").textContent=(rnd?"Round "+rnd+" · ":"")+"One tap to find it.";
+    $$("chSub").textContent=(rnd?"Round "+rnd+" · ":"")+"One tap to find";
 
+    /* NO GIVE-UP IN THE FEED. On a link there is nowhere else to go, so quitting has to be a
+       button. In a feed the exit already exists and is the gesture the whole surface is built
+       on — swipe to the next hide — and a second way outes with it for the same thumb. */
     const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit"; quit.textContent="I give up";
-    w.appendChild(quit);
+    if(!FEED) w.appendChild(quit);
 
     /* ===== zoom + pan (free, unpenalised, scoped to this stage) ======================== */
     const stage=$$("chStage"), zoomEl=$$("chZoom");
@@ -10154,7 +10164,14 @@ function chFeed(){
        round's own headline is centred at the top of the same screen — the two printed
        through each other. The label was orientation for a screen that does not need any:
        the player is looking at somebody's photo with "@tony hid a body in here" over it. */
-    +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button></div>'
+    /* REPORT WITHOUT FINISHING. It only ever existed at the END of a round, so getting a
+       photo out of the feed meant playing it first — which is exactly backwards for the
+       photo you most want gone. One report already pulls a hide for everybody
+       (n_reported = 0 in the filter), so this is the fastest lever in the product and it
+       was behind the slowest gesture. Right-hand side, away from the ✕. */
+    +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button>'
+    +'<span style="flex:1"></span>'
+    +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
@@ -10346,6 +10363,16 @@ function chFeed(){
   },{passive:true});
 
   root.querySelector("#kfClose").onclick=()=>close();
+  /* Acts on whatever slide is live. Reports and drops in one move — the reporter should not
+     have to look at it again while the page they are holding catches up. */
+  root.querySelector("#kfFlag").onclick=()=>{
+    const s0=S.slides[S.active]; if(!s0) return;
+    haptic(10);
+    try{ chRpc("report_hide",{p_id:s0.row.id}).catch(()=>{}); }catch(e){}
+    track("seek_reported",{src:"feed_bar"});
+    drop(s0.row.id);
+    showHint("Reported. Thank you.");
+  };
 
   function paint(){
     if(kfState!==S) return;

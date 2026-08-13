@@ -192,14 +192,14 @@ console.log('\nA CHAIN SAYS HOW DEEP IT IS');
 {
   const page = await openHide('tony', { hide: { round: 6 } });
   const sub = await page.evaluate(() => document.getElementById('chSub').textContent);
-  sub === 'Round 6 · One tap to find it.'
+  sub === 'Round 6 · One tap to find'
     ? ok(`the seeker is told which round it is ("${sub}")`)
     : bad('round 6 subtitle reads ' + JSON.stringify(sub));
   await page.close();
 
   const first = await openHide('tony', { hide: { round: 1 } });
   const sub1 = await first.evaluate(() => document.getElementById('chSub').textContent);
-  sub1 === 'One tap to find it.'
+  sub1 === 'One tap to find'
     ? ok('and a hide that is not an answer says nothing about rounds')
     : bad('round 1 subtitle reads ' + JSON.stringify(sub1));
   await first.close();
