@@ -199,24 +199,48 @@ console.log('\nTHE THREE FREE SIZES READ AS THREE');
    thumb was hidden, and the bar never opened the paywall at all. Trials per new customer
    went 3.19% → 0.77% across that change. These are the assertions that would have caught it.
 */
-console.log('\nNOTHING IS DRAWN THAT A FREE USER CANNOT HAVE');
+/* THE RULE, NOT THE ARRANGEMENT. This block used to assert "no stops are drawn" AND "the
+   thumb is visible" — two descriptions of one particular layout, not of the thing 6 August
+   broke. That day one dot was drawn, the thumb was hidden and the bar never opened the
+   paywall: a free user was shown NOTHING. The rule is that the control must never be empty,
+   not that the thumb in particular is what fills it.
+   Asserting the layout instead of the rule is also what let a SECOND failure through
+   underneath it. With the thumb as the only object, 10/20/36 render at 19/23/27px — a 3.6x
+   range of brush drawn as 1.4x — and players report that the three sizes look the same.
+   That is now its own assertion, because it is the failure that was actually reported. */
+console.log('\nA FREE USER CAN SEE THE WHOLE FREE SET');
 {
   await page.evaluate(() => { window.__b.reset(); window.__b.setPro(false); });
-  const dots = (await page.evaluate(() => window.__b.dots())).filter((d) => d.shown);
-  dots.length === 0
-    ? ok('no stops are rendered — four designs died drawing sizes the control would refuse')
-    : bad(`${dots.length} stops are drawn (${dots.map((d) => d.size).join(', ')}) — a size picker `
-        + 'that shows what it refuses is a frustration machine, whatever it is styled like');
+  const dots = await page.evaluate(() => window.__b.dots());
+  const shown = dots.filter((d) => d.shown);
+  const t = await page.evaluate(() => window.__b.thumb());
+
+  (shown.length > 0 || t.shown)
+    ? ok(shown.length ? `${shown.length} stops are drawn (${shown.map((d) => d.size).join(', ')})`
+                      : `the thumb stands in for them (${t.dia}px)`)
+    : bad('a free user faces an EMPTY control — no stops and no thumb. That is the 6 August '
+        + 'bug, the one that took trials per new customer from 3.19% to 0.77%.');
+
+  const refused = shown.filter((d) => !FREE.includes(d.size));
+  refused.length === 0
+    ? ok('and nothing is drawn that a tap would be refused')
+    : bad(`${refused.length} unavailable sizes are drawn (${refused.map((d) => d.size).join(', ')}) — `
+        + 'a size picker that shows what it refuses is a frustration machine, whatever it is styled like');
+
+  if (shown.length > 1) {
+    const dias = shown.map((d) => d.dia);
+    const spread = Math.max(...dias) / Math.max(0.01, Math.min(...dias));
+    const brushSpread = Math.max(...FREE) / Math.min(...FREE);
+    new Set(dias).size === dias.length && spread >= 2
+      ? ok(`and they look like different sizes (${dias.join(' / ')}px — ${spread.toFixed(1)}x across a ${brushSpread.toFixed(1)}x range)`)
+      : bad(`the free sizes are drawn at ${dias.join(' / ')}px — ${spread.toFixed(1)}x, for a brush range of `
+          + `${brushSpread.toFixed(1)}x. Players cannot see three levels because three levels are not being drawn.`);
+  }
 
   const st = await page.evaluate(() => window.__b.starShown());
   st ? bad('the ✦ is still on the paint screen — the fading rail already says "there is more", '
         + 'and a second signal is the last piece of furniture left on the photo')
      : ok('and the ✦ is gone with them');
-
-  const t = await page.evaluate(() => window.__b.thumb());
-  t.shown ? ok(`the thumb is the only object, and it is visible to free users (${t.dia}px)`)
-          : bad('the thumb is hidden from free users — that was the 6 August bug, where the '
-              + 'control showed a free user nothing at all');
 }
 
 console.log('\nTHE THUMB IS THE PREVIEW');

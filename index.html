@@ -692,6 +692,25 @@
   #sizeStar{position:absolute;right:16px;top:calc(32% + 222px);font-size:17px;line-height:1;
     width:34px;height:34px;align-items:center;justify-content:center;
     color:var(--mint);opacity:.95;cursor:pointer;display:none;text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 12px rgba(0,0,0,.5);}
+  /* THE BRUSH AT ITS TRUE SIZE, and this is the only element on the screen that tells the
+     truth about it. `brush` IS the on-screen diameter in CSS px at zoom 1 — pctx.lineWidth
+     is brush*paintDpr in image pixels and paintDpr is W/stage.clientWidth, so the two
+     cancel. The thumb has never shown that: its diameter is 10+t*22, which renders a
+     10px brush as 19px and a 36px brush as 27px. It does not merely compress a 3.6x range
+     into 1.4x, it is wrong in both directions at once, and "the three sizes look the same"
+     is what players report because it is what the control shows them.
+     A RING, OVER THE PHOTO, AND ONLY WHILE THE BAR IS HELD. The size that matters is the
+     one the stroke will be, so it is drawn where the stroke will land rather than on the
+     rail. Transient by construction: this file has stripped permanent furniture off the
+     photo three times over and it was right to — the photo is the product. It fades on
+     release and leaves nothing behind. */
+  #brushPrev{position:absolute;left:50%;top:50%;z-index:15;border-radius:50%;
+    border:2px solid rgba(255,255,255,.92);background:rgba(255,255,255,.10);
+    box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 12px rgba(0,0,0,.45);
+    pointer-events:none;opacity:0;transform:translate(-50%,-50%);
+    transition:opacity .18s ease-out,width .12s ease-out,height .12s ease-out;}
+  #brushPrev.on{opacity:1;}
+  @media (prefers-reduced-motion:reduce){#brushPrev{transition:opacity .18s ease-out;}}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
   #revealHandle{position:absolute;top:0;bottom:0;width:46px;z-index:15;transform:translateX(-50%);display:none;touch-action:none;align-items:center;justify-content:center;}
@@ -1659,6 +1678,8 @@
 
     <!-- vertical brush-size slider (free) -->
     <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div></div><div id="sizeStar">✦</div>
+    <!-- the brush at its TRUE size, over the photo, only while the bar is being touched -->
+    <div id="brushPrev"></div>
     <!-- before/after reveal (finished view) -->
     <canvas id="revealC"></canvas>
     <div id="revealHandle"><div class="rhKnob">‹ ›</div></div>
@@ -5566,7 +5587,15 @@ function trackCarried(kind,props){
    home_results_shown is already routed direct, so routing the other four anywhere else would
    put the numerator and the denominator on different Amplitude users and make the division
    meaningless. Same device id, same path, all five. */
-const WEB_ONLY=new Set(["camera_lenses","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+/* THE SIZE BAR HAS NEVER BEEN MEASURED. It has been redesigned at least six times — every
+   direction of the pendulum is argued in the notes around sizeBar.addEventListener below,
+   with the paywall consequences of each — and not one of those turns had a number for the
+   only question that decides them: how many rounds ever touch it, and which size they end
+   on. There is no event on the control at all, so "the players do not understand the three
+   levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
+   them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
+   fleet — an allow-list entry would only measure builds that ship after the next review. */
+const WEB_ONLY=new Set(["brush_changed","camera_lenses","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -7415,7 +7444,14 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      the dot is those three sizes, so the choice is visible in the only place it matters.
      Nothing is drawn that the user cannot have, which is what all three rejections were
      actually about. */
-  sizeThumb.style.display="block";
+  /* THE THUMB IS THE MEMBER'S CONTROL, AND ONLY THEIRS. For a member the bar really is
+     continuous and a sliding dot is the honest picture of that. A free user is choosing from
+     three fixed values, and for them the thumb was doing two wrong things at once: standing
+     in for a scale it renders as 19/23/27px (see #brushPrev for why that is not a
+     compression but an error), and being a fourth circle beside the stops. It hides with the
+     continuous control it belongs to, and the lit stop is the indicator — which is what the
+     note four designs ago already said, before the stops themselves were removed. */
+  sizeThumb.style.display=free?"none":"block";
   /* The dots are positioned from the SAME tFromBrush()/SB_PAD geometry the thumb uses, so a
      dot always sits exactly where tapping it lands. Built once, then only repositioned —
      renderSizeBar runs on every capture and on every pro change. */
@@ -7436,7 +7472,50 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      differently from the others. The real defect was that the gesture did nothing, not that it
      was unlabelled — the thumb's diameter IS the size, and it moves. Fixing the drag fixed the
      report; drawing the dots would have re-created a problem four designs died on. */
-  dots.forEach((d)=>{ d.style.display="none"; }); }
+  /* DRAWN AGAIN, AND THE OBJECTION ABOVE DOES NOT APPLY TO WHAT IS DRAWN HERE.
+     The note that killed these says "the thumb is a circle too, so three dots beside it make
+     four circles". That was written about CIRCLES. What .sizeDot has been since — and what
+     survived in the stylesheet after the JS stopped using it — is a BAR: constant width,
+     thickness carrying the size, which is the design the note two above it argues for in its
+     own words ("a bar spends the horizontal axis on a constant length and the vertical on
+     thickness alone, so the scale is legible at 2px"). And the fourth circle is gone anyway:
+     the thumb now hides for the people who see these.
+     What it buys is the thing players are reporting. stopTh() draws 10/20/36 at 4 / 7.5 /
+     13px — 3.25x, linear in the brush — against the 19/23/27px the thumb was showing for the
+     same three sizes. The scale was not hard to see; it was not being drawn.
+     Only the three that can be picked, per the note above: a picker that renders sizes it
+     will refuse is a frustration machine. The rail stays, unlike the five-stop version that
+     hid it — with two locked sizes no longer drawn, its faded lower half is the only thing
+     left saying a paid range exists at all, and that gradient is load-bearing for the ✦
+     gesture underneath it. */
+  if(free){
+    dots.forEach((d,i)=>{
+      const size=SIZE_STOPS[i], th=stopTh(size);
+      d.style.display="block";
+      d.style.top=stopY(i,h)+"px";
+      d.style.height=th+"px";
+      d.style.marginTop=(-th/2)+"px";
+      d.classList.toggle("on",brush===size);
+    });
+  } else {
+    dots.forEach((d)=>{ d.style.display="none"; d.classList.remove("on"); });
+  }
+  syncBrushPrev(); }
+/* THE RING IS THE BRUSH, 1:1. `brush` is the on-screen diameter in CSS px at zoom 1 —
+   pctx.lineWidth is brush*paintDpr in image pixels and paintDpr is W/stage.clientWidth, so
+   the two cancel exactly. Multiplied by zoomK because a zoomed stroke covers the same amount
+   of PHOTO but does look bigger on glass, and this is about what the eye is told. */
+const brushPrev=$("#brushPrev");
+function syncBrushPrev(){ if(!brushPrev) return;
+  const d=Math.max(4,Math.round(brush*(zoomK||1)));
+  brushPrev.style.width=d+"px"; brushPrev.style.height=d+"px"; }
+/* Held while the bar is, then given a moment to be read before it goes. It never survives
+   the gesture: the photo is the product and this file has stripped standing furniture off it
+   three times already. */
+function showBrushPrev(on){ if(!brushPrev) return;
+  syncBrushPrev(); clearTimeout(brushPrev._t);
+  if(on){ brushPrev.classList.add("on"); return; }
+  brushPrev._t=setTimeout(()=>brushPrev.classList.remove("on"),420); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
   /* No free-user branch here any more: the bar's pointerdown handler turns free users away
@@ -7481,6 +7560,9 @@ let sizing=false, freeSizing=false;
    tap can only reach the one it is nearest — so "adjusting" and "asking" are different
    gestures at different pixels instead of the same gesture read two ways. */
 sizeBar.addEventListener("pointerdown",e=>{
+  /* The value this gesture started on, so the event at the end can report a real change and
+     stay silent when a press picks the size that was already selected. */
+  sizeBar._g0=brush;
   /* Free users never enter `sizing`, which is what keeps pointermove from doing anything:
      no setPointerCapture, no sizeFromEvent, so `brush` cannot leave the five stops. Not
      forced: `size` keeps its PW_CAP of one sheet per launch, and force would throw that
@@ -7534,10 +7616,14 @@ sizeBar.addEventListener("pointerdown",e=>{
        is a question, and it is still answered once per launch. */
     freeSizing=true;
     try{ sizeBar.setPointerCapture(e.pointerId); }catch(_){}
+    /* After the ✦ zone check, deliberately: reaching under the floor is a question about
+       sizes you do not have, and answering it with a ring showing one you do would be the
+       app talking past the person. */
+    showBrushPrev(true);
     freeSnap(t,h);
     return;
   }
-  e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; sizeFromEvent(e); paintHaptic(); });
+  e.preventDefault(); sizeBar.setPointerCapture(e.pointerId); sizing=true; showBrushPrev(true); sizeFromEvent(e); paintHaptic(); });
 /* Snap to the nearest of the three free stops, by POSITION — the same arithmetic the tap used,
    factored out so the press and the drag cannot drift apart. Silent when nothing changes: a
    slow drag across one stop should tick once, not sixty times. */
@@ -7568,7 +7654,23 @@ sizeBar.addEventListener("pointermove",e=>{
     let t=1-((e.clientY-r.top-SB_PAD)/h);
     freeSnap(Math.max(0,Math.min(1,t)),h);
   } });
-const endSizing=()=>{ sizing=false; freeSizing=false; };
+/* ONE EVENT PER GESTURE, AT THE END OF IT. Not on pointermove: a member's drag calls
+   sizeFromEvent sixty times a second and would file sixty rows describing one decision.
+   `from`/`to` are the sizes, `stop` is which of the three a free user landed on (-1 for a
+   member, who is not picking from a set), and `free` splits the two populations that use
+   this control in completely different ways.
+   Silent when nothing changed, so a press that re-picks the current size does not read as a
+   size change — otherwise "how many rounds adjust the brush" counts taps that adjusted
+   nothing, which is the number the redesigns keep being argued without. */
+const endSizing=()=>{
+  if(sizing||freeSizing){
+    const from=sizeBar._g0;
+    if(typeof from==="number"&&from!==brush){
+      track("brush_changed",{from:from,to:brush,stop:SIZE_STOPS.indexOf(brush),free:!canPro()});
+    }
+    showBrushPrev(false);
+  }
+  sizing=false; freeSizing=false; };
 sizeBar.addEventListener("pointerup",endSizing); sizeBar.addEventListener("pointercancel",endSizing);
 /* THE ✦ IS A BUTTON, NOT A DECAL. It marks the bar as the premium tool and now sits at the
    locked end of it, so a tap on it is an explicit "show me what this costs" — the clearest
