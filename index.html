@@ -330,7 +330,13 @@
      that killed it), so this only ever separates two visible buttons in a plain browser. */
   #btnFeed{right:24px;}
   #btnFeed .kfDot{position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}
-  #btnLight{right:80px;}
+  /* THE TORCH MOVES OFF THE BOTTOM ROW. It sat at right:80px, so the bottom-right corner
+     held two controls and the feed button — the one that opens everybody else's hides — had
+     to share the only corner a thumb reaches without moving. The torch is a setting, not a
+     destination: it goes above the shutter, where it is still one thumb away and no longer
+     competes. Centred on the shutter's own axis so the column reads as one control stack. */
+  #btnLight{left:50%;transform:translateX(-50%);bottom:calc(150px + var(--safe-b));right:auto;}
+  #btnLight:active{transform:translateX(-50%) scale(.94);}
   /* torch on = the button itself lights up */
   #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
   #btnLight.on svg{stroke:#04120b;fill:#04120b;}
@@ -1011,7 +1017,9 @@
     background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;
     animation:pwShimmer 3.4s linear infinite;}
-  .kpSub{font-size:14.5px;color:rgba(255,255,255,.72);line-height:1.45;margin:0 auto 20px;max-width:320px;}
+  /* WHITE, NOT GREY — founder's call, 2026-08-13. This line carries the offer's one sentence
+     and it was being read at .72 against a photo, which is where grey text goes to die. */
+  .kpSub{font-size:14.5px;color:#fff;line-height:1.45;margin:0 auto 20px;max-width:320px;}
   .kpChips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:28px;}
   .kpChip{font-size:12.5px;color:rgba(255,255,255,.82);padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);}
   .kpGo{width:100%;padding:16px;border:none;border-radius:16px;background:var(--mint);color:#06231a;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(95,230,164,.32);}
@@ -1161,7 +1169,7 @@
     background-size:260% 100%;-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;
     animation:pwShimmer 3.4s linear infinite;}
-  .pwSub{font-size:14px;opacity:.8;margin-top:6px;line-height:1.4;}
+  .pwSub{font-size:14px;color:#fff;opacity:1;margin-top:6px;line-height:1.4;}
   .pwList{list-style:none;margin:16px 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;}
   .pwList li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:600;}
   .pwList li b{color:var(--accent);font-size:16px;width:20px;text-align:center;}
@@ -1656,16 +1664,22 @@
      switch in the same state on the sheet a second later, which is the difference between a
      disclosure and a formality. Three parts and no paragraph: what it is, the control, the
      way out. Above the share sheet's own layer so it cannot open behind it. */
+  /* VISIBLE THE MOMENT IT IS IN THE DOM. This opened at opacity:0 and was lit by a class
+     added in requestAnimationFrame — which does not fire in a backgrounded page. The sheet
+     would then sit invisible over the reveal while the promise behind it never resolved, so
+     the hide never published at all. A CSS animation needs no JS tick and cannot be skipped:
+     worst case somebody sees the final frame immediately, which is a sheet. */
   .kfCons{position:fixed;inset:0;z-index:9600;display:flex;align-items:flex-end;justify-content:center;
     padding:0 14px;background:linear-gradient(180deg,rgba(3,5,8,0) 26%,rgba(3,5,8,.86));
-    opacity:0;transition:opacity .26s ease;}
-  .kfCons.show{opacity:1;}
+    animation:kfConsIn .26s ease both;}
+  .kfCons.gone{opacity:0;transition:opacity .24s ease;}
   .kfConsCard{width:min(92vw,420px);margin-bottom:calc(18px + var(--safe-b));padding:20px 18px 16px;
     border-radius:24px;border:1px solid rgba(255,255,255,.16);
     background:linear-gradient(180deg,rgba(15,42,34,.96),rgba(7,13,11,.98));
     box-shadow:0 18px 50px rgba(0,0,0,.5);
-    transform:translateY(18px);transition:transform .3s cubic-bezier(.2,.9,.3,1);}
-  .kfCons.show .kfConsCard{transform:none;}
+    animation:kfConsUp .3s cubic-bezier(.2,.9,.3,1) both;}
+  @keyframes kfConsIn{from{opacity:0}to{opacity:1}}
+  @keyframes kfConsUp{from{transform:translateY(18px)}to{transform:none}}
   .kfConsT{font-family:var(--display);font-size:19px;font-weight:800;letter-spacing:-.3px;
     text-align:center;margin:0 0 14px;}
   .kfConsGo{display:flex;align-items:center;justify-content:center;width:100%;height:52px;
@@ -1734,7 +1748,7 @@
            than as peeking.
            The mint drop-shadow is the glow, kept low (.5 alpha, 4px) — "subtile" was the word. -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/>
+        <path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.4l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.94z"/>
       </svg>
     </button>
     <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
@@ -1767,8 +1781,13 @@
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.4"/><circle cx="8.6" cy="10.2" r="1.7"/><path d="M21 16.5l-5-4.6L7 19"/></svg>
     </button>
     <!-- the feed: everybody else's hides, playable without making one first -->
+    <!-- THE FIGURE, NOT A MAGNIFIER. The loupe said "search", which is not what this button
+         does — it opens a room full of other people's hides. The peeking mark is the one
+         glyph in this app that already means "somebody is hidden in here", and it is the
+         same path the New chip wears in the character picker, verbatim. Painted in stroke
+         like every other .camBtn, which is how it rendered in the top bar it came from. -->
     <button id="btnFeed" class="camBtn" aria-label="Play other hides" title="Play other hides">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>
     </button>
     <!-- torch: only shown where it actually works (see setupTorch) -->
     <button id="btnLight" class="camBtn" aria-label="Light" title="Light">
@@ -8615,7 +8634,7 @@ function kfAskConsent(){
     let settled=false;
     const finish=(v)=>{ if(settled) return; settled=true;
       kfMarkAsked(); kfSetWantPublic(v); kfRenderVis();
-      try{ wrap.classList.remove("show"); setTimeout(()=>wrap.remove(),260); }catch(e){}
+      try{ wrap.classList.add("gone"); setTimeout(()=>wrap.remove(),260); }catch(e){}
       track("visibility_consent",{public:v});
       done(v); };
     let wrap;
@@ -8636,7 +8655,6 @@ function kfAskConsent(){
         +'<button class="kfConsGo" id="kfConsGo">Got it</button>'
         +'</div>';
       document.body.appendChild(wrap);
-      requestAnimationFrame(()=>wrap.classList.add("show"));
       let on=true;
       const vis=wrap.querySelector("#kfConsVis");
       vis.onclick=()=>{ on=!on; haptic(10);

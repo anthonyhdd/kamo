@@ -149,7 +149,12 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
   await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
   await page.waitForTimeout(900);
   await page.evaluate(() => document.getElementById('chQuit').click());
-  await page.waitForTimeout(900);
+  /* WAITED FOR, NEVER SLEPT ON — the rule this file's sibling already writes down: the ending
+     card mounts BEHIND the reveal frames, whose load time is not a constant. A 900ms sleep
+     here passed five runs out of six and took the whole gate red on the sixth, with a null
+     dereference rather than a failed assertion, so it read as "THE FEED IS BROKEN" with no
+     detail at all. */
+  await page.waitForSelector('#chBlk', { timeout: 10000 }).catch(() => {});
 
   const present = await page.evaluate(() => {
     const b = document.getElementById('chBlk');
@@ -162,7 +167,7 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
   /* The reload after a block must ask the server again rather than reuse the tail it already
      holds. Emptying the seed here is how the test can tell those two apart. */
   await page.evaluate(() => { window.__seed.feed_page = []; window.__rpc.length = 0; });
-  await page.evaluate(() => document.getElementById('chBlk').click());
+  await page.evaluate(() => { const b = document.getElementById('chBlk'); if (b) b.click(); });
   await page.waitForTimeout(900);
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('kamo_blocked') || '[]'));
@@ -231,7 +236,7 @@ console.log('\nNOTHING GOES PUBLIC BEFORE ANYBODY HAS BEEN TOLD');
   !asked ? ok('a fresh device has not been asked yet') : bad('a fresh device reads as already asked');
 
   const p = page.evaluate(() => window.KAMOFEED.askConsent());
-  await page.waitForSelector('#kfCons.show', { timeout: 5000 });
+  await page.waitForSelector('#kfCons', { timeout: 8000 }).catch(() => {});
   const sheet = await page.evaluate(() => ({
     title: (document.querySelector('.kfConsT') || {}).textContent,
     pressed: document.getElementById('kfConsVis').getAttribute('aria-pressed'),
@@ -267,7 +272,7 @@ console.log('\nNOTHING GOES PUBLIC BEFORE ANYBODY HAS BEEN TOLD');
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   const p = page.evaluate(() => window.KAMOFEED.askConsent());
-  await page.waitForSelector('#kfCons.show', { timeout: 5000 });
+  await page.waitForSelector('#kfCons', { timeout: 8000 }).catch(() => {});
   await page.evaluate(() => document.getElementById('kfConsVis').click());
   await page.evaluate(() => document.getElementById('kfConsGo').click());
   const answer = await p;
@@ -292,7 +297,11 @@ console.log('\nA CLEARED FEED REOPENS INSTEAD OF SAYING IT IS EMPTY');
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
   await page.evaluate(() => document.getElementById('btnFeed').click());
-  await page.waitForTimeout(1400);
+  /* WAITED FOR, NEVER SLEPT ON. The lap costs a SECOND feed_page round trip after the first
+     one comes back empty, so a fixed sleep here is a test that goes red on a slow morning —
+     which it did, once, in the gate. Wait for the thing being asserted, with a ceiling. */
+  await page.waitForFunction(() => document.querySelectorAll('.kfSlide').length > 0, null, { timeout: 8000 })
+    .catch(() => {});
 
   const slides = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
   slides === 3 ? ok('the seen hides come back rather than a dead end (3 slides)')
