@@ -9566,7 +9566,13 @@ function chSeek(hideId,opts){
         +(FEED
             ? '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chNext">Next hide ↑</button>'
             : '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+'</button>')
-        +'<button class="chR" id="chRep">Report this photo</button></div>';
+        +'<button class="chR" id="chRep">Report this photo</button>'
+        /* ONLY IN THE FEED. "Don't show me this person" is an instruction about what the
+           feed serves, and there is no feed behind a hide somebody was personally sent — a
+           block there would be a button that reads as if it did something and does not.
+           Reporting stays on both, because that one is about the photo. */
+        +(FEED?'<button class="chR" id="chBlk">Don\'t show me this person</button>':'')
+        +'</div>';
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
          failure this change exists to end. Split seek_cta_tapped by tier and a template that
@@ -9582,6 +9588,34 @@ function chSeek(hideId,opts){
            page the reporter is holding was fetched before they tapped. */
         if(OPT.onReported) OPT.onReported(HID);
         $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
+      /* THE BLOCK IS THE SERVER'S ANSWER, NOT THIS SCREEN'S GUESS. block_author() turns the
+         one thing this device legitimately holds — the id of a hide it was served — into a
+         tag for whoever made it. The tag is what gets stored and what every later feed_page
+         is filtered by, so the block outlives this photo, this session and this hide's
+         30-day expiry.
+         NULL comes back for a hide with no author on record: everything published before
+         author keys existed. That is not an error and must not be dressed as a success —
+         the photo still leaves this feed, and the copy says only what actually happened. */
+      if($$("chBlk")) $$("chBlk").onclick=()=>{
+        const b=$$("chBlk"); if(b.disabled) return;
+        b.disabled=true; b.textContent="Blocking…";
+        const done=(msg)=>{ const f=$$("chFoot"); if(f) f.innerHTML=
+          '<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px"></div></div>';
+          const d=f&&f.querySelector("div>div"); if(d) d.textContent=msg; };
+        chRpc("block_author",{p_id:HID}).then(tag=>{
+          const kept=kfAddBlock(tag);
+          track("seek_blocked",TP({tagged:!!tag,stored:kept,n:kfBlocked().length}));
+          if(OPT.onBlocked) OPT.onBlocked(HID,kept);
+          done(kept?"Blocked. You won't see their hides again."
+                   :"Hidden. This one won't come back.");
+        }).catch(()=>{
+          /* The photo goes away regardless — the viewer asked for that much and it costs
+             nothing to honour locally. What is NOT claimed is the durable half. */
+          track("seek_blocked",TP({tagged:false,stored:false,failed:true}));
+          if(OPT.onBlocked) OPT.onBlocked(HID,false);
+          done("Hidden. This one won't come back.");
+        });
+      };
     }
   })();
   /* The handle, returned SYNCHRONOUSLY while the round above is still fetching its hide.
@@ -9638,6 +9672,34 @@ function kfMarkSeen(id){
   if(!id) return;
   try{ const a=kfSeen().filter(x=>x!==id); a.unshift(id);
        localStorage.setItem(KF_SEEN_KEY,JSON.stringify(a.slice(0,400))); }catch(e){}
+}
+/* BLOCKED AUTHORS, AS TAGS RATHER THAN AS PEOPLE.
+ *
+ * What is stored is sha256(author_key || pepper), handed over by block_author() — never the
+ * author key itself, which is the string create_hide accepts and would let a client publish
+ * as somebody else. feed_page has never returned either one: a stable author id readable off
+ * the feed lets anyone cluster an author's whole output by scrolling, and that is a heavier
+ * thing than the block it would buy.
+ *
+ * TAGS AND NOT HIDE IDS, because a hide is deleted at 30 days and a block resolved through it
+ * would lapse in silence exactly when it starts to matter — the blocked author's old photos
+ * are gone by then anyway, so what the block is really for is their NEXT one. A tag is a
+ * value this device keeps.
+ *
+ * Capped like the seen list, and for the same reason, but far smaller: this is a list of
+ * people somebody has actively turned away, not a history. Anyone reaching 200 has a problem
+ * no cap fixes. */
+const KF_BLOCK_KEY="kamo_blocked";
+function kfBlocked(){
+  try{ const a=JSON.parse(localStorage.getItem(KF_BLOCK_KEY)||"[]");
+       return Array.isArray(a)?a.filter(x=>typeof x==="string"&&x):[]; }catch(e){ return []; }
+}
+function kfAddBlock(tag){
+  if(!tag||typeof tag!=="string") return false;
+  try{ const a=kfBlocked().filter(x=>x!==tag); a.unshift(tag);
+       localStorage.setItem(KF_BLOCK_KEY,JSON.stringify(a.slice(0,200))); return true;
+  }catch(e){ return false; }   /* private mode: the drop below still happens, it just does
+                                  not outlive the session */
 }
 /* THE BUTTON DOES NOT EXIST UNTIL THE FEED DOES.
  *
@@ -9760,6 +9822,7 @@ function chFeed(){
       onNext:()=>goNext(),
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       onReported:(id)=>drop(id),
+      onBlocked:(id,stored)=>blockDrop(id,stored),
     });
     if(i>=S.slides.length-3) load();
   }
@@ -9784,6 +9847,43 @@ function chFeed(){
     else if(i<S.active) S.active--;
   }
 
+  /* A BLOCK TAKES THE TAIL WITH IT, NOT JUST THE SLIDE UNDER THE THUMB.
+     Every slide below this one was chosen by a feed_page call made before the block existed,
+     so any of them may be by the same author — and "don't show me this person" is broken most
+     visibly by their next photo appearing two swipes later. The page cannot tell which ones
+     are theirs: it holds tags for blocked authors and nothing at all for the rest, which is
+     the property worth keeping. So it throws the unplayed tail away and asks the server
+     again, from the same point in the timeline, with the new list.
+     Slides ABOVE stay. They have been played, they are in kfSeen(), and rewinding the scroll
+     position of somebody who just asked for one small thing is its own rudeness. */
+  function blockDrop(id,stored){
+    const i=S.slides.findIndex(s=>s.row.id===id);
+    if(i<0) return;
+    if(!stored){ drop(id); return; }   // nothing durable to re-filter on — just this photo
+    if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
+    S.slides.slice(i).forEach(s=>{ try{ s.el.remove(); }catch(_){} });
+    S.slides=S.slides.slice(0,i);
+    S.active=-1;
+    S.cursor=S.slides.length?S.slides[S.slides.length-1].row.created_at:null;
+    S.done=false;
+    load().then(()=>{
+      if(kfState!==S) return;
+      /* NOTHING CAME BACK BELOW THE BLOCK — which is the normal outcome when the feed is
+         small and the blocked author was most of it. Measured against `i`, not against zero:
+         the slides above survived the purge, so a length test would read "there is still a
+         feed here" and drop the viewer back onto a round they have already played, with no
+         way of knowing it was the last one. */
+      if(S.slides.length<=i){
+        midCard("That's everything for now.",
+          "You've played what the feed has. Make one of your own and it goes to the top.",
+          "Make a hide",()=>{ track("feed_blocked_empty",{}); close(); });
+        return;
+      }
+      try{ S.slides[i].el.scrollIntoView({block:"start"}); }catch(_){}
+      activate(i);
+    });
+  }
+
   function addSlide(row){
     const el=document.createElement("section"); el.className="kfSlide";
     const img=document.createElement("img");
@@ -9801,7 +9901,17 @@ function chFeed(){
     if(S.loading||S.done) return;
     S.loading=true;
     try{
-      const rows=await kfRpc("feed_page",{p_before:S.cursor,p_limit:KF_PAGE});
+      /* TWO CALLS, AND WHICH ONE IS SENT IS THE SAFETY PROPERTY.
+         A device with no blocks sends the 2-argument form this feed has always sent — the
+         proven call, unchanged, which is what nearly every launch is. Only a device that has
+         actually blocked somebody reaches for the 3-argument overload, and if that one fails
+         the load FAILS: it falls through to the Retry card below rather than quietly retrying
+         without the filter. Falling back would mean answering "don't show me this person"
+         with their photograph. */
+      const tags=kfBlocked();
+      const rows=await kfRpc("feed_page", tags.length
+        ? {p_before:S.cursor,p_limit:KF_PAGE,p_block_tags:tags}
+        : {p_before:S.cursor,p_limit:KF_PAGE});
       if(kfState!==S) return;                        // closed while the request was in flight
       if(!rows.length){ S.done=true; }
       else{
@@ -9867,7 +9977,11 @@ function chFeed(){
    business in a contract. scripts/test-feed-dom.mjs opens the feed the way a phone does, by
    clicking #btnFeed; what it cannot reach from the DOM is kfApplyVisibility, because the id
    it acts on lives in a module-scoped `chId` that only exists after a real publish. */
-window.KAMOFEED={ open:chFeed, setVisibility:kfApplyVisibility, wantPublic:kfWantPublic };
+window.KAMOFEED={ open:chFeed, setVisibility:kfApplyVisibility, wantPublic:kfWantPublic,
+  /* The block list is the one piece of feed state with no DOM at all — a tag is deliberately
+     never rendered — so a test that could not read it could only assert that a button was
+     clicked, which is the half that was never in doubt. */
+  blocked:kfBlocked };
 
 /* THE SEEKER NEVER MEETS THE CAMERA. Arriving on ?h= means someone sent you a hide to
    find: no permission sheet, no hero, no three.js scene — just the photo and a tap. The
