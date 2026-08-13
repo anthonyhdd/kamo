@@ -6907,8 +6907,21 @@ function invitePreview(){ chPrevRender(); }
    absorbed a timing bug in silence.
    Resolves the moment chId lands, gives up after `ms` and lets the caller send the honest
    invite rather than hanging on the share. */
+/* One "give it a second" per hide, on the web path only — see the nudge in the invite
+   handler. Declared here rather than beside chId because chResetRound() clears it and the
+   handler reads it, and both live further down. */
+let chInviteNudged=false;
 function chAwaitId(ms){
   if(chId||!CH_MAKE) return Promise.resolve(chId);
+  /* KICK, DO NOT ONLY WAIT. This polled a variable and hoped. That was survivable while the
+     only reason for a missing id was an upload still in flight — something already on its
+     way, which waiting genuinely resolves. Since chSlot() the id is one database round trip
+     from the reveal, so an id that is STILL missing here does not mean "not yet", it means
+     the publish failed or never ran; and polling a publish that is not happening burns the
+     whole ceiling and then sends the generic invite anyway.
+     chUpload() is idempotent — it guards on chId and its own in-flight flag — so calling it
+     here either starts the publish that never happened or does nothing at all. */
+  try{ chUpload(); }catch(e){}
   return new Promise((done)=>{
     const t0=Date.now();
     const tick=()=>{ if(chId||Date.now()-t0>=ms) return done(chId);
@@ -6930,6 +6943,30 @@ $("#ssInvite").onclick=async()=>{
     closeShareSheet();
     const be=$("#btnEdit"); if(be&&be.style.display!=="none") be.click();
     return;
+  }
+  /* THE WEB PATH CANNOT WAIT, SO IT ASKS FOR ONE MORE TAP RATHER THAN SENDING A DUD.
+     navigator.share needs the user activation this tap granted and the first await spends
+     it — that rule is why the 8s ceiling below is native-only, and why a browser has been
+     sending the generic invite whenever the id was not ready. With chSlot() that window is
+     one round trip instead of a whole upload, so reaching here without a link now means the
+     publish genuinely has not happened. Kick it, say so, and let the NEXT tap carry the
+     challenge — a tap is cheaper than a friend opening a link and finding no game.
+     ONE nudge only. If the second tap still has no link the database is unreachable, and
+     trapping somebody behind a button that never arms is worse than the honest invite: it
+     falls through and sends that instead. Reset per round, so the offer is per hide.
+     BEFORE chMarkSent() and the tap event, deliberately: nothing was sent, so nothing may
+     be stamped as sent. */
+  if(!(nativeCaps&&nativeCaps.invite) && !chLink()){
+    try{ chUpload(); }catch(e){}
+    const b0=$("#ssInvite");
+    if(!chInviteNudged && b0){
+      chInviteNudged=true;
+      const back=b0.innerHTML;
+      b0.textContent="One moment — preparing your challenge";
+      setTimeout(()=>{ if(b0.textContent==="One moment — preparing your challenge") b0.innerHTML=back; },2200);
+      track("share_deferred",{reason:"no_link",score:sc});
+      return;
+    }
   }
   /* STAMPED HERE, at the tap, not after the share reports back. iOS never tells the web
      whether the sheet was sent or cancelled — invite_native is the last thing we see — so
@@ -8268,19 +8305,51 @@ const CH_MIN_COVERAGE=30;
  * in the bucket — bytes, referenced by nothing, discoverable by nobody.
  * One PROMISE, not a flag: chUpload() awaits this, so a tap that lands mid-upload joins
  * the flight already in progress instead of starting a second one. */
-let chPrep=null;
+let chPrep=null, chSlotV=null;
+/* THE ID MUST NOT WAIT ON THE BYTES. This is the split that fixes the share going out with
+ * no game in it.
+ *
+ * create_hide needs the storage PATH, not the file — and that path is a string this device
+ * makes up locally. It was nevertheless being generated inside the upload, so the row (and
+ * therefore chId, and therefore the link) could not exist until a ~200KB JPEG had finished
+ * crossing an LTE connection: 3-6 seconds in which "Challenge a friend" has nothing to point
+ * at and falls through to the generic invite and a ?i=1 link with no hide behind it.
+ *
+ * Measured over 11-13 Aug, by the `link` property on the send itself: on the native path,
+ * which can afford to wait and does, 3.7% of sends carried no hide. On the web path, which
+ * CANNOT wait — navigator.share needs the user activation from the tap and the first await
+ * spends it — 7 of 11 sends on 13 Aug and 13 of 22 on 12 Aug. Roughly six in ten shares from
+ * a browser reached a friend with no game in them.
+ *
+ * So the name and the geometry are taken FIRST, synchronously, off state that already
+ * exists; the row is created from them; and the bytes travel on their own. What genuinely
+ * needs the picture — the feed, and the reveal frames — waits for it, and nothing else does.
+ *
+ * Cost, stated plainly: an upload that never lands now leaves a row pointing at a missing
+ * object, where before it left no row at all. That trade is only defensible because this
+ * upload does not fail — it finishes late (hide_publish_failed has sat at 0-2 a day against
+ * ~400 hides, and the recorded failures are dropped radios, which the retry below covers).
+ * A dead image on a handful of links is a smaller wound than six in ten shares carrying
+ * nothing. */
+function chSlot(){
+  if(chSlotV) return chSlotV;
+  if(!CH_MAKE) return null;
+  if(Math.round(currentScore||0)<CH_MIN_COVERAGE) return null;
+  const g=chGeom(); if(!g) return null;
+  const name=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).replace(/[^a-z0-9]/g,"")+".jpg";
+  chSlotV={name,g};
+  return chSlotV;
+}
 function chPrepare(){
   if(chPrep) return chPrep;
-  if(!CH_MAKE||chId) return Promise.resolve(null);
-  if(Math.round(currentScore||0)<CH_MIN_COVERAGE) return Promise.resolve(null);
+  if(!CH_MAKE) return Promise.resolve(null);
+  const slot=chSlot(); if(!slot) return Promise.resolve(null);
   chPrep=(async()=>{
-    const g=chGeom(); if(!g) return null;
     const blob=await chBlob(); if(!blob) return null;
-    const name=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).replace(/[^a-z0-9]/g,"")+".jpg";
-    const up=await fetch(CH_URL+"/storage/v1/object/hides/"+name,{method:"POST",
+    const up=await fetch(CH_URL+"/storage/v1/object/hides/"+slot.name,{method:"POST",
       headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
     if(!up.ok) throw new Error("upload "+up.status);
-    return {name,g};
+    return slot;
   })().catch((e)=>{
     /* Cleared, so the tap can try again rather than inheriting a dead promise for the
        rest of the round. */
@@ -8294,9 +8363,15 @@ function chPrepare(){
        is looking at their reveal for a median 154 seconds; spending 2.5 of them on a second
        attempt is free. Once only, and reset per round — a phone with no signal must not
        spend the round retrying. */
+    /* NO LONGER GUARDED ON chId. It used to read `if(!chId && ...)`, which was the same
+       question as "have the bytes landed" only while the row waited on them. The row is now
+       created first, so chId is set within a round trip and that guard would refuse every
+       retry there is — the one case this exists for. What it must not do is retry into a
+       round that has moved on, which is what `finished` and the slot identity say. */
     if(!chPrepare._retried){
       chPrepare._retried=true;
-      setTimeout(()=>{ if(!chId&&!chPrep&&finished) chPrepare(); },2500);
+      const mySlot=chSlotV;
+      setTimeout(()=>{ if(!chPrep&&finished&&chSlotV===mySlot) chPrepare(); },2500);
     }
     return null;
   });
@@ -8330,7 +8405,7 @@ window.KAMOREPLY={
      find out. Same function the publish path calls — not a copy of it. */
   forms:()=>chCreateForms({p_img_path:"x.jpg",p_cx:0.5,p_cy:0.5,p_r:0.1,p_secs:9,p_coverage:80},getHandle()),
 };
-function chResetRound(){ chId=""; chPrep=null; chPrepare._retried=false; chRound++; }
+function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chRound++; }
 /* THE FALLBACK LADDER, PULLED OUT SO IT CAN BE READ AND TESTED.
    Inline, this was four lines nobody could exercise without a painted board, a mask canvas
    and a storage round trip — which is precisely why the thing it decides (does the reply
@@ -8405,11 +8480,14 @@ async function chUpload(){
   chUpload._busy=true;
   const myRound=chRound;
   try{
-    /* Started at the reveal (see enterFinished) and almost always finished by now; a tap
-       that beats it simply joins the same flight. */
-    const prep=await chPrepare(); if(!prep) return;
-    if(myRound!==chRound) return;   // a new hide was captured while this waited
-    const name=prep.name, g=prep.g;
+    /* THE NAME, NOT THE FILE — see the note on chSlot(). Synchronous, off the mask canvas
+       and a random string, so it costs nothing and cannot be late. */
+    const slot=chSlot(); if(!slot) return;
+    /* The bytes are STARTED here and awaited further down by the two things that actually
+       need a picture. Started at the reveal (see enterFinished) in the normal case, so this
+       usually just joins a flight already in progress. */
+    const bytes=chPrepare();
+    const name=slot.name, g=slot.g;
     /* WHICH OVERLOAD, AND WHY THERE ARE TWO LEFT. create_hide exists at 6, 8 and 9
        arguments and PostgREST resolves by the exact set of keys sent. The 8-arg
        (settings) form is retired product: the seeker plays one buzz on no clock, so
@@ -8436,10 +8514,27 @@ async function chUpload(){
        will ever open, which is strictly cheaper than sending a friend the wrong picture. */
     if(myRound!==chRound){ chId=""; track("hide_published_stale",{}); return; }
     chRemember(chId);
-    /* Straight after the row exists, so the window in which a hide is published but has no
-       visibility set is a single round trip wide — and on the private side of the default
-       for every millisecond of it. */
-    kfApplyVisibility(chId,kfWantPublic());
+    /* THE FEED WAITS FOR THE PICTURE; THE LINK DOES NOT.
+       This is the one place the split above has to be paid for. A row now exists before its
+       image does, and the feed is the surface where that would be seen by strangers — a card
+       with a hole in it, on somebody else's phone. So the hide is offered to the feed only
+       once the bytes are in the bucket, which also means an upload that never lands can
+       never reach it: the hide stays private, which is the direction this file already fails
+       in everywhere else.
+       The 1:1 link is the opposite case and needs no wait — it goes to one person who opens
+       it minutes later, and holding it back is the entire bug being fixed here.
+       `mine` rather than chId: by the time this resolves the round may have moved on, and
+       the visibility of THIS hide must not be decided by whatever is current then. */
+    const mine=chId;
+    bytes.then((up)=>{
+      if(!up) return;                 // upload failed — stays private, stays out of the feed
+      kfApplyVisibility(mine,kfWantPublic());
+      /* HELD BACK A BEAT, and now behind the main upload rather than racing it: these are
+         two more encodes and two more uploads, and starting them while the photo itself is
+         still climbing the radio is exactly the contention this delay exists to avoid. The
+         snap is needed by the time a friend OPENS the link, minutes away at best. */
+      setTimeout(()=>chUploadReveal(name),1500);
+    }).catch(()=>{});
     track("hide_published",{public:kfWantPublic(),reply:!!chReplyTo});
     chAttachPush();
     /* WHICH POPULATION MADE THIS, so the loop can still be read once a second country is
@@ -8449,11 +8544,7 @@ async function chUpload(){
        that very number. */
     try{ chRpc("set_hide_lang",{p_id:chId,p_lang:(navigator.language||"")}).catch(()=>{}); }catch(e){}
     armResultsPing(false);   // published, not sent — see the note on armResultsPing
-    /* HELD BACK A BEAT. These are two more uploads and two more canvas encodes, and they
-       used to start in the same breath as the share — competing for the radio and the main
-       thread with the one action the user is waiting on. The snap needs them by the time a
-       friend OPENS the link, which is minutes away at best. */
-    setTimeout(()=>chUploadReveal(name),1500);
+    /* chUploadReveal now hangs off the upload above rather than off this line. */
   }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
   finally{ chUpload._busy=false; }
 }
