@@ -1,0 +1,88 @@
+# CI — the pre-push gate, armed.
+#
+# WHY THIS EXISTS. `scripts/check.mjs` is the gate, and CLAUDE.md says it must be green before
+# every push. It was — and it meant nothing. Thirteen of its checks open a browser, and every
+# one of them SKIPS when `playwright-core` is absent, printing a `·` line and leaving the exit
+# code at 0. So on a machine without that package — which is every machine, since it is
+# deliberately not a dependency of this repo — the run ended on "✓ all checks passed" while
+# thirteen suites had executed nothing.
+#
+# On 2026-08-12 thirty pull requests merged into a main on which FOUR of those suites were
+# already red (the share sheet, the results chip, the player card and the full-bleed paywall),
+# and no run anywhere said so. The gate never failed. It was never armed.
+#
+# This job is the place where the browser is present ON PURPOSE, so here a skip cannot mean
+# "no browser handy" — it can only mean the setup below broke. `KAMO_CI=1` turns every skip
+# into a failure for exactly that reason.
+#
+# WHAT THIS DOES NOT REPLACE. Pages deploys on push and CI runs after it, so this is a net
+# under the gate, never the gate itself. Keep running check.mjs before you push.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A superseded run tells you about a commit nobody is looking at any more.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # NODE 22, AND THE VERSION IS LOAD-BEARING. Every DOM test locates Chrome through
+      # `fs.globSync`, which does not exist before Node 22 — on Node 20 the helper returns []
+      # and all thirteen report "no chromium found" while the binary sits exactly where they
+      # looked. Some of them do not even get that far and just exit non-zero with no output.
+      # Both failure modes were produced by pinning '20' here, on a runner where the browser
+      # was correctly installed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # playwright-core lives OUTSIDE the repo, exactly as a laptop would have it: the tests
+      # look in $PW_CORE first, and keeping it out of the tree means this job cannot quietly
+      # add a dependency the repo does not declare.
+      - name: Install playwright-core
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw"
+          cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright-core
+
+      # /opt/pw-browsers is not a preference — it is the path every test globs for
+      # ('/opt/pw-browsers/chromium-*/chrome-linux/chrome'). Installing anywhere else makes
+      # all thirteen print "no chromium found" and skip, which KAMO_CI=1 would then report as
+      # thirteen failures. Match the glob.
+      #
+      # AND THE GLOB IS OLDER THAN THE LAYOUT. Playwright used to unpack Chromium into
+      # `chrome-linux/`; current versions ship Chrome for Testing into `chrome-linux64/`, so a
+      # fresh install lands one directory name away from where all thirteen tests look and
+      # every one of them skips. Rather than pin a playwright version — which only moves the
+      # day this breaks — resolve the binary that was actually installed and give it the name
+      # the tests expect. Works on both layouts, and on the next one.
+      - name: Install Chromium where the tests look for it
+        run: |
+          sudo mkdir -p /opt/pw-browsers
+          sudo chown "$USER" /opt/pw-browsers
+          PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx --yes playwright@latest install --with-deps chromium
+          bin=$(find /opt/pw-browsers/chromium-* -type f -name chrome | head -1)
+          [ -n "$bin" ] || { echo "no chrome binary under /opt/pw-browsers/chromium-*"; ls -R /opt/pw-browsers | head -40; exit 1; }
+          want="$(dirname "$(dirname "$bin")")/chrome-linux"
+          [ -e "$want" ] || ln -s "$(dirname "$bin")" "$want"
+          ls -l /opt/pw-browsers/chromium-*/chrome-linux/chrome
+
+      # KAMO_CI=1: a skip is a failure. The one exception is test-pass-dom, which needs the
+      # live creator-pass phrase and is gated on a secret rather than on a browser — check.mjs
+      # holds that exemption in SECRET_GATED, not here, so it stays next to the reason.
+      - name: check.mjs
+        env:
+          KAMO_CI: '1'
+          PW_CORE: ${{ runner.temp }}/pw
+        run: node scripts/check.mjs
