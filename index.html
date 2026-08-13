@@ -2791,6 +2791,94 @@ function gumSafe(c, ms=GUM_MS_DECIDED){
    quarter.
    `ideal`, never `exact`: a device that cannot do 1920x1440 must still get a camera. The
    fallback chain below drops the hint entirely on its last two rungs for the same reason. */
+/* ---- THE OTHER LENS, WHICH IS THE ONE THAT WAS ACTUALLY MISSING -------------------------
+   The note above hdHint() ends "It cannot go further than that — a 19.5:9 screen showing a
+   4:3 sensor full-bleed must lose about half the width, which is why every camera app crops."
+   That is true and it is not the whole answer, because it only ever considers how much of ONE
+   sensor is kept. A side-by-side against GONE, same spot, same framing, same minute, shows a
+   visibly wider frame than KAMO gets. That difference is not a crop: it is the ULTRA-WIDE
+   lens — roughly 120 degrees against the wide's 73 — and no amount of aspect-ratio work on
+   the wide camera can reach it.
+
+   facingMode:"environment" hands back the default back camera, which is always the 1x wide.
+   The ultra-wide is a separate device, and iOS Safari does enumerate it (labelled along the
+   lines of "Back Ultra Wide Camera") — but ONLY after camera permission has been granted:
+   before that, enumerateDevices() returns entries with empty labels and blank deviceIds, so
+   it cannot be picked on the first acquisition. Hence the shape here: take whatever the
+   normal chain gives, then upgrade.
+
+   TWO WAYS UP, CHEAPEST FIRST.
+     1. zoom. On a virtual multi-camera device the track can expose a zoom capability whose
+        min is below 1, and applyConstraints() then widens the SAME track — no second
+        getUserMedia, which matters because re-acquiring on iOS is the flaky path gumSafe()
+        exists to survive.
+     2. deviceId. Otherwise re-acquire on the ultra-wide explicitly, and only swap once the
+        new stream is live — the old one is kept running until then, so a failure costs
+        nothing and the camera never goes black.
+   Any error at any point leaves the working stream exactly as it was.
+
+   AND IT REPORTS WHAT IT FOUND, because this has been argued from theory twice. camera_lenses
+   carries the labels the device actually offers and what was picked, so "the ultra-wide is not
+   reachable from a WebView" stops being a belief and becomes a number. */
+const LENS_KEY="kamo_lens";
+function lensCached(){ try{ return localStorage.getItem(LENS_KEY)||""; }catch(_){ return ""; } }
+function lensRemember(id){ try{ id?localStorage.setItem(LENS_KEY,id):localStorage.removeItem(LENS_KEY); }catch(_){} }
+/* WHICH LABEL IS THE WIDE ONE, and the near-misses are the whole difficulty.
+   "wide" on its own matches "Back Dual Wide Camera" and "Back Triple Camera" — those ARE the
+   1x, or a virtual device that STARTS at 1x, so matching them changes nothing while looking
+   like it worked. The telephoto must never match either: picking it would make the framing
+   worse than doing nothing, which is the one outcome worse than failing.
+   So: an explicit ultra/0.5 test, and an explicit reject list ahead of it. `grand-angle` is
+   there because iOS labels follow the system language and the founder's phone is French; it
+   only counts alongside `ultra`, since "grand-angle" alone is the 1x in French exactly as
+   "wide" is in English. */
+const isUltra=l=>{ const t=(l||"").toLowerCase();
+  if(/tele|télé|dual|triple/.test(t)) return false;
+  /* No trailing \b on the 0.5 test: iOS writes it "0.5x", and a word boundary between the 5
+     and the x never matches, so the whole clause was dead. */
+  return /ultra/.test(t)||/0[.,]5/.test(t); };
+async function widenLens(){
+  if(facing!=="environment") return;          // the front camera has no second lens to reach for
+  if(widenLens._done) return; widenLens._done=1;
+  const rep={picked:"none"};
+  try{
+    const track=stream&&stream.getVideoTracks()[0];
+    if(!track) return;
+    /* 1 — the same track, widened. */
+    try{
+      const caps=track.getCapabilities?track.getCapabilities():null;
+      if(caps&&caps.zoom&&typeof caps.zoom.min==="number"){
+        rep.zoom_min=caps.zoom.min; rep.zoom_max=caps.zoom.max;
+        if(caps.zoom.min<1){
+          await track.applyConstraints({advanced:[{zoom:caps.zoom.min}]});
+          rep.picked="zoom"; return;
+        }
+      }
+    }catch(_){}
+    /* 2 — a different camera. */
+    if(!navigator.mediaDevices.enumerateDevices) return;
+    const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput");
+    rep.n=devs.length;
+    rep.labels=devs.map(d=>d.label||"?").join("|").slice(0,180);
+    const cur=(track.getSettings&&track.getSettings().deviceId)||"";
+    const ultra=devs.find(d=>isUltra(d.label)&&d.deviceId&&d.deviceId!==cur);
+    if(!ultra) return;
+    rep.picked="ultra";
+    /* The old stream stays up until the new one is proven — a failed swap must not leave a
+       black frame on the screen the whole product exists to produce. */
+    const next=await gumSafe({video:{deviceId:{exact:ultra.deviceId},...hdHint()},audio:false},GUM_MS_DECIDED);
+    const old=stream;
+    stream=next; cam.srcObject=next;
+    try{ await cam.play(); }catch(_){}
+    try{ old&&old.getTracks().forEach(t=>t.stop()); }catch(_){}
+    lensRemember(ultra.deviceId);
+    startCamView();
+  }catch(e){ rep.err=(e&&e.name)||"err"; rep.picked="none"; lensRemember(""); }
+  /* Reported on every path, including the ones that changed nothing — "the device offers one
+     back camera and no zoom range" is the answer that settles this, and it only exists if the
+     no-op case reports too. */
+  finally{ try{ track("camera_lenses",Object.assign(rep,camSize())); }catch(_){} }
+}
 function hdHint(){
   const portrait=(window.innerHeight||0)>=(window.innerWidth||0);
   return portrait ? {width:{ideal:1440},height:{ideal:1920},aspectRatio:{ideal:3/4}}
@@ -2830,10 +2918,20 @@ async function startCamera(auto){
      navigator.permissions.query({name:'camera'}), so there is nothing better to ask. */
   const gumMs = camEverAsked() ? GUM_MS_DECIDED : GUM_MS_PROMPT;
   try{ localStorage.setItem(CAM_ASKED_KEY,"1"); }catch(_){}
-  const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
+  /* A remembered ultra-wide goes first, so a returning user gets the wide frame on the very
+     first acquisition instead of a visible swap one beat later. Only for the back camera, and
+     never as the only rung: a deviceId can go stale across relaunches and the chain below is
+     what makes that harmless. */
+  const lens=facing==="environment"?lensCached():"";
+  const tries=[...(lens?[{video:{deviceId:{exact:lens},...hdHint()},audio:false}]:[]),{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; chClearReply(); startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
+    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; chClearReply(); startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose();
+      /* AFTER the app is already working, and deliberately not awaited. Everything above has
+         produced a live camera and a usable screen; widening is an upgrade on top of that, so
+         it must never delay the first frame or be able to fail the acquisition. */
+      widenLens();
+      return; }
     catch(e){ lastErr=e;
       // Permission-level refusals (and the iOS hang) won't be fixed by loosening
       // constraints — retrying just costs another timeout before we can say anything.
