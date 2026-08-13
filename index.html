@@ -6865,9 +6865,14 @@ function confettiBurst(originEl){
    sender practised their aim at one offset on the share sheet and then played at another,
    14px higher, on every hide they opened; reported as taps landing above the finger in the
    feed, which is simply where most rounds are played now.
-   56, because that is the one somebody rehearses with, and because the complaint is that
-   the ring rides too high. One constant, so the two cannot drift apart again. */
-const CH_RET_OFF=56;
+   Was 56 — the rehearsal's own value, chosen because that is what a thumb practises with.
+   Reported still too high twice after that, on the rehearsal AND in the feed, so the number
+   itself was wrong in both places rather than merely inconsistent.
+   38, and the arithmetic is why: the ring is 58px across, so at 56 its BOTTOM EDGE floats 27
+   pixels clear of the fingertip — a gap you have to aim across. At 38 the ring sits just on
+   top of the finger, still clear of the thing being aimed at, which is the only job the
+   offset ever had. One constant, so the two cannot drift apart again. */
+const CH_RET_OFF=38;
 function chPrevPlay(){
   try{
     const g=chGeom(); if(!g) return;
