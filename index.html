@@ -7500,7 +7500,14 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      compression but an error), and being a fourth circle beside the stops. It hides with the
      continuous control it belongs to, and the lit stop is the indicator — which is what the
      note four designs ago already said, before the stops themselves were removed. */
-  sizeThumb.style.display=free?"none":"block";
+  /* BACK TO ALWAYS. The thumb was hidden for free users so the three drawn stops could be
+     the indicator without a fourth circle beside them. The founder preferred the moving dot
+     and asked for it back (2026-08-13), so the stops go and the thumb returns to being the
+     whole control for everyone. What the stops were solving — that 10/20/36 render as
+     19/23/27px and read as one size — is now answered by #brushPrev instead, which shows the
+     brush at its TRUE diameter on the photo while the bar is held. That is the honest signal;
+     the stops were the redundant half. */
+  sizeThumb.style.display="block";
   /* The dots are positioned from the SAME tFromBrush()/SB_PAD geometry the thumb uses, so a
      dot always sits exactly where tapping it lands. Built once, then only repositioned —
      renderSizeBar runs on every capture and on every pro change. */
@@ -7537,20 +7544,10 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      hid it — with two locked sizes no longer drawn, its faded lower half is the only thing
      left saying a paid range exists at all, and that gradient is load-bearing for the ✦
      gesture underneath it. */
-  if(free){
-    dots.forEach((d,i)=>{
-      const size=SIZE_STOPS[i], th=stopTh(size);
-      d.style.display="block";
-      d.style.top=stopY(i,h)+"px";
-      d.style.height=th+"px";
-      d.style.marginTop=(-th/2)+"px";
-      d.classList.toggle("on",brush===size);
-      /* The stop standing ON the boundary. It is what dips when someone reaches past it. */
-      d.classList.toggle("floorEdge",i===SIZE_STOPS.length-1);
-    });
-  } else {
-    dots.forEach((d)=>{ d.style.display="none"; d.classList.remove("on"); });
-  }
+  /* NOT DRAWN. Kept built and positioned by nothing, exactly as before: the elements and
+     their stylesheet stay so this is one flag to flip if the question reopens, and the
+     geometry that placed them (stopY, stopTh) is still what --floorPct and #sizeLock read. */
+  dots.forEach((d)=>{ d.style.display="none"; d.classList.remove("on"); d.classList.remove("floorEdge"); });
   syncBrushPrev(); }
 /* THE RING IS THE BRUSH, 1:1. `brush` is the on-screen diameter in CSS px at zoom 1 —
    pctx.lineWidth is brush*paintDpr in image pixels and paintDpr is W/stage.clientWidth, so
