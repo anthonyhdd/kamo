@@ -166,6 +166,25 @@ console.log('\nAND THE ADDRESS REACHES THE SERVER');
   forms.length > 1 && last && !('p_reply_to' in last)
     ? ok(`it falls back to a plain hide rather than to nothing (${forms.length} forms)`)
     : bad('fallback ladder: ' + JSON.stringify(forms));
+
+  /* AND WHO MADE IT. Without a key on the row there is no blocking at all — feed_page's
+     block clause passes author_key IS NULL straight through, so an unkeyed hide is one no
+     viewer can ever get rid of. It rides the widest rung only: the narrower overloads have
+     no argument for it. */
+  const key = forms[0] && forms[0].p_author_key;
+  typeof key === 'string' && /^[a-z0-9]{16,40}$/.test(key)
+    ? ok(`the widest form carries an author key, so the hide can be blocked (${key.length} chars)`)
+    : bad('author key on the widest form: ' + JSON.stringify(key));
+  forms.slice(1).every(f => !('p_author_key' in f))
+    ? ok('and no narrower rung claims to carry one')
+    : bad('a fallback form carries p_author_key: ' + JSON.stringify(forms.slice(1)));
+
+  /* STABLE, OR EVERY BLOCK EVER PLACED AGAINST THIS DEVICE LAPSES IN SILENCE. A key that
+     regenerates per call would pass every assertion above and still be useless. */
+  const again = await page.evaluate(() => window.KAMOREPLY.forms()[0].p_author_key);
+  again === key
+    ? ok('and it is the same key on the next publish, so a block outlives one hide')
+    : bad(`author key changed between calls: ${key} then ${again}`);
   await page.close();
 }
 

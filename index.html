@@ -8226,6 +8226,58 @@ window.KAMOREPLY={
   forms:()=>chCreateForms({p_img_path:"x.jpg",p_cx:0.5,p_cy:0.5,p_r:0.1,p_secs:9,p_coverage:80},getHandle()),
 };
 function chResetRound(){ chId=""; chPrep=null; chPrepare._retried=false; chRound++; }
+
+/* WHO MADE IT — a random per-device string, so a viewer can say "not this person again".
+ *
+ * Reporting is the blunt instrument and it already exists: one report pulls a photo out of
+ * the feed for everybody. Blocking is the quiet one — it removes an author from ONE viewer's
+ * feed and touches nothing anybody else sees. Without a key on the row there is no such
+ * thing: every hide made before today carries author_key NULL, and feed_page's block clause
+ * passes NULL through, so the filter matched nothing and failed by doing nothing.
+ *
+ * NOT chDeviceId(), which is the tempting reuse and wrong twice over. It only runs on the web
+ * path — "this path only ever runs where there is no wrapper" — so inside the app, where
+ * nearly every hide is made, it does not exist. And it is the Amplitude device id: the one
+ * thing a block key must never do is join a row in this database to a funnel.
+ *
+ * WRITTEN ONCE AND NEVER REFRESHED. Every block anyone has placed against this device is a
+ * string equality against this value, so regenerating it silently lapses all of them — the
+ * blocked author reappears and nothing anywhere reports it. Hence: validate on read, replace
+ * only what is missing or corrupt.
+ *
+ * IT TRAVELS ONE WAY. create_hide takes it; nothing hands it back. feed_page returns id,
+ * img_path, name and two counters and deliberately not this, because a stable author id
+ * readable off the feed would let anyone cluster every photo one person has ever published —
+ * a heavier thing than the block it would buy. Which is why the block UI, when it lands,
+ * wants to name a HIDE and let the server resolve its author.
+ *
+ * Declared HERE rather than beside the other kf* helpers 1300 lines down, next to its one
+ * caller: the const is a TDZ hazard exactly like chReplyTo, and this file has been bitten by
+ * that once already. */
+const KF_AUTHOR_KEY="kamo_author_key";
+function kfAuthorKey(){
+  try{
+    const k=localStorage.getItem(KF_AUTHOR_KEY);
+    /* The alphabet create_hide narrows to. A key that fails this is one the server would
+       rewrite on arrival, so it is not this device's key — take a fresh one rather than send
+       a string that comes back different from how it went out. */
+    if(k&&/^[a-z0-9]{16,40}$/.test(k)) return k;
+    let n="";
+    try{
+      const b=new Uint8Array(12); crypto.getRandomValues(b);
+      n=Array.from(b,x=>x.toString(16).padStart(2,"0")).join("");
+    }catch(e){
+      /* Not security, just "a key at all" — every browser this ships to has crypto on https,
+         and a collision here costs two devices one shared block. */
+      n=(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2))
+          .replace(/[^a-z0-9]/g,"").slice(0,24);
+    }
+    if(n.length<16) return "";
+    localStorage.setItem(KF_AUTHOR_KEY,n);
+    return n;
+  }catch(e){ return ""; }   /* private mode: no key, no block, still a hide */
+}
+
 /* THE FALLBACK LADDER, PULLED OUT SO IT CAN BE READ AND TESTED.
    Inline, this was four lines nobody could exercise without a painted board, a mask canvas
    and a storage round trip — which is precisely why the thing it decides (does the reply
@@ -8234,6 +8286,16 @@ function chResetRound(){ chId=""; chPrep=null; chPrepare._retried=false; chRound
 function chCreateForms(base,who){
   const signed={...base,p_limit_s:null,p_max_taps:null,p_name:who||null};
   const forms=[];
+  /* WIDEST FIRST, and this rung is wider than "signed + reply": it carries the author key, so
+     it is the only form that produces a blockable hide. Both nullable fields ride along
+     because Postgres resolves overloads by argument TYPE while PostgREST resolves by NAME —
+     a tidier (…, p_name, p_author_key) would be (text, text) at the end, the exact signature
+     the reply form already holds, and the catalogue would refuse the second one. So there is
+     one 11-argument overload and it takes both, with nulls for whichever does not apply.
+     The rungs below are untouched: a page loaded before this deploy still climbs them, and a
+     hide with no author is a hide that publishes and simply cannot be blocked. */
+  const key=kfAuthorKey();
+  if(key) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key});
   if(chReplyTo) forms.push({...signed,p_reply_to:chReplyTo});
   if(who) forms.push(signed);
   forms.push(base);
