@@ -151,20 +151,46 @@ console.log('\nEXACTLY ONE share mechanism per tap');
     : bad(`no-share environment misbehaved — ${label(calls)}`);
 }
 
-/* UNDER THE PUBLISH FLOOR, NOTHING WAITS AND NOTHING SENDS. chUpload() refuses an
-   unpainted hide, so the 8s "Preparing your challenge…" wait would burn in full and end
-   on the generic invite — the founder hit exactly that. The handler must bail instantly:
-   no share mechanism, no sent stamp, no upload wait; the sheet closes and the hint says
-   why. */
-console.log('\nBELOW THE PUBLISH FLOOR, THE BUTTON SAYS WHY INSTEAD OF WAITING');
+/* UNDER THE PUBLISH FLOOR THE SEND STILL GOES OUT — IT JUST DOES NOT WAIT.
+ *
+ * THIS BLOCK ASSERTED THE OPPOSITE UNTIL 2026-08-13, and it was wrong about the rule rather
+ * than about the code. The floor refused the send outright: no share, no stamp, sheet closed,
+ * back to the brush. It fired on over a third of everyone who finished a round, and the
+ * founder's standing rule is that there is never a mandatory paint percentage to share.
+ *
+ * What was RIGHT in the old block is kept: nothing may wait. chUpload() still refuses to
+ * publish an unpainted hide — the challenge link's og:image would spoil the answer in the
+ * thread — so no id is ever coming, and an 8s "Preparing your challenge…" would burn in full
+ * before sending the invite anyway. That wait is the real defect the refusal was papering
+ * over, and removing the door without removing the wait would ship the worse of both.
+ *
+ * So the shape under the floor is: send immediately, as the invite, waiting for nothing. */
+console.log('\nBELOW THE PUBLISH FLOOR, THE SEND GOES OUT — IMMEDIATELY, AS THE INVITE');
 {
   const { calls } = await run({ nativeInvite: true, share: 'ok', score: 0 });
-  calls.native === 0 && calls.webShare === 0 && calls.clipboard === 0 && calls.markedSent === 0 && calls.waited === 0
-    ? ok(`unpainted hide → no wait, no share, no sent stamp (${label(calls)} waited:${calls.waited})`)
-    : bad(`the blocked path still fired something — ${label(calls)} sent:${calls.markedSent} waited:${calls.waited}`);
-  calls.sheetClosed === 1 && calls.hints.some((h) => /[Pp]aint/.test(h || ''))
-    ? ok('the sheet closes and the hint names the fix')
-    : bad(`blocked without explanation — closed:${calls.sheetClosed} hints:${JSON.stringify(calls.hints)}`);
+  calls.native === 1 && calls.markedSent === 1
+    ? ok(`unpainted hide still sends (${label(calls)} sent:${calls.markedSent})`)
+    : bad(`an unpainted hide did not send — ${label(calls)} sent:${calls.markedSent}.\n`
+      + '    That is a mandatory paint percentage to share, which is ruled out.');
+  calls.waited === 0
+    ? ok('...and waits for nothing — no challenge id is coming')
+    : bad(`the send waited ${calls.waited} time(s) for an id chUpload() will never create — the\n`
+      + '    button holds at "Preparing your challenge…" for 8s and then sends the invite anyway');
+  /* THE MESSAGE IS WHERE HONESTY LIVES NOW. Under the floor there is no puzzle, so the text
+     must not announce one — otherwise the friend taps a link and finds nothing hidden, which
+     is the failure the floor was really guarding against. */
+  !/hid a body|body hidden|One tap to find/.test(calls.text || '')
+    ? ok('...and the text promises no puzzle, because there is not one')
+    : bad(`an unpainted hide announced a body in the photo: ${JSON.stringify(calls.text)}`);
+}
+{
+  /* The web path has its own way of failing this: a nudge that spends the tap asking for a
+     second one once the link lands. Under the floor no link ever lands, so that nudge is the
+     old dead end wearing a politer sentence. */
+  const { calls } = await run({ nativeInvite: false, share: 'ok', score: 0 });
+  calls.webShare === 1 || calls.clipboard === 1
+    ? ok('the web path sends on the first tap too, rather than nudging for a link that is not coming')
+    : bad(`the web path sent nothing on an unpainted hide — ${label(calls)}`);
 }
 {
   /* And the floor is a FLOOR, not a switch that broke sending: at 30 everything works. */

@@ -593,6 +593,53 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     : ok(`tlFrames and tlTimes are mutated together (${sites.length} sites)`);
 }
 
+/* ---- 5d-quater. THERE IS NO MANDATORY PAINT PERCENTAGE TO SHARE --------------------------
+ * A standing rule from the founder, stated twice. The send is never gated on coverage.
+ *
+ * It has been broken once already: PR #147 added a floor that refused "Challenge a friend"
+ * outright, closed the sheet and pushed the user back to the brush. It fired on over a third
+ * of everyone who finished a round, for days, and the only thing it ever produced was a share
+ * that did not happen.
+ *
+ * It is an easy rule to break by accident, because the REASON for the floor is good: a hide
+ * with no paint publishes a challenge whose og:image shows the figure in plain sight and
+ * spoils the answer in the thread before anyone taps it. The correct expression of that is
+ * chUpload() refusing to PUBLISH — which stays, and is not what this checks. What must never
+ * come back is a coverage test that ends the send.
+ *
+ * So: inside the invite handler, no `if (… CH_MIN_COVERAGE …) { … return … }`. Computing
+ * `bare` from the same constant is fine and required — the handler has to know no challenge
+ * is coming so that it does not WAIT for one.
+ */
+{
+  const at = html.indexOf('$("#ssInvite").onclick');
+  if (at < 0) bad('could not locate the #ssInvite handler — this check needs updating');
+  else {
+    const open = html.indexOf('{', at);
+    let d = 0, end = -1;
+    for (let i = open; i < html.length; i++) {
+      if (html[i] === '{') d++;
+      else if (html[i] === '}') { d--; if (!d) { end = i; break; } }
+    }
+    const body = html.slice(open + 1, end < 0 ? html.length : end)
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    /* [^{}]* so the match cannot run past the end of the if-block and find an unrelated
+       `return` further down the handler — the same lazy-span mistake 5d documents. */
+    if (/if\s*\([^)]*CH_MIN_COVERAGE[^)]*\)\s*\{[^{}]*\breturn\b/.test(body)) {
+      bad('THE SHARE IS GATED ON COVERAGE AGAIN. The invite handler returns early on\n'
+        + '    CH_MIN_COVERAGE, which is a mandatory paint percentage to share — ruled out\n'
+        + '    twice, and the last time it shipped it silently refused a third of all finished\n'
+        + '    rounds.\n'
+        + '    Keep the PUBLISH floor (chUpload) — that one stops a link preview spoiling the\n'
+        + '    answer. The SEND has to go out regardless, as the invite.');
+    } else if (!/const\s+bare\s*=/.test(body)) {
+      bad('the invite handler no longer computes `bare` — without it the native path holds the\n'
+        + '    button at "Preparing your challenge…" for 8s waiting on an id that is never\n'
+        + '    coming, then sends the invite anyway');
+    } else ok('the send is never gated on coverage (the publish floor still is)');
+  }
+}
+
 /* ---- 5d-ter. The pre-roll sampler stays behind its capability -----------------------------
  * sessPre() encodes a 720x1280 JPEG off the camera preview and is called from camTick — i.e.
  * from inside a requestAnimationFrame loop, on the aim screen, which is the one screen where a
