@@ -143,12 +143,23 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
    screen and be broken two swipes later. */
 console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
 {
-  const page = await open(ROWS(4), { block_author: 'tag_abc123' });
+  const page = await open(ROWS(4), { block_author: 'tag_abc123',
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
 
   /* Down one slide first, so there is something above the block as well as below it. */
   await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
   await page.waitForTimeout(900);
-  await page.evaluate(() => document.getElementById('chQuit').click());
+  /* THE ONLY WAY OUT OF A FEED ROUND IS NOW THE TAP. "I give up" was removed from the feed
+     — the swipe is the exit there — so this ends the round the way a player does: press and
+     release on the stage, which commits the aim. */
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    if (!st) return;
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o));
+    st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
   /* WAITED FOR, NEVER SLEPT ON — the rule this file's sibling already writes down: the ending
      card mounts BEHIND the reveal frames, whose load time is not a constant. A 900ms sleep
      here passed five runs out of six and took the whole gate red on the sixth, with a null
