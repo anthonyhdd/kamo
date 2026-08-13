@@ -9835,7 +9835,15 @@ function chSeek(hideId,opts){
        rides above the card in the same column. */
     +"#chFoot{position:absolute;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 12px calc(10px + var(--safe-b));pointer-events:none;}"
     +"#chFoot>*{pointer-events:auto;}"
-    +".chFlipB{width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(4,6,10,.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-size:21px;line-height:1;display:flex;align-items:center;justify-content:center;}"
+    /* QUIETER THAN THE CARD IT SITS ON, because it is the second way to do the same thing.
+       The whole photo is already the flip target — flip() is wired to a tap anywhere on the
+       stage — so this button is a redundant affordance whose only job is to SAY that the
+       double-take exists. At 52px in near-solid black with a full-white glyph it was reading
+       as a primary control parked between the reveal and the card, competing with the two
+       real CTAs directly underneath it and covering more of the photo than it needs to.
+       Smaller, thinner, and the glyph carried at partial opacity: still obviously tappable,
+       no longer the loudest thing above the card. */
+    +".chFlipB{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(4,6,10,.4);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:rgba(255,255,255,.62);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;}"
     +".chFlipB:active{transform:scale(.92);}"
     +".chCard{width:min(92vw,420px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(10,21,18,.96) 60%,rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.22);"
       +"border-radius:26px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:16px 18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;animation:chUp .45s cubic-bezier(.2,.9,.3,1);}"
