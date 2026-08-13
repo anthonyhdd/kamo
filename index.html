@@ -643,6 +643,31 @@
      whose children draw the visible track — so a box-shadow spread on it painted a
      hard-edged green RECTANGLE around nothing. The ✦ is already the premium marker and it
      is a glyph, so it can be pulsed without inventing a shape. */
+  /* THE LOCKED RANGE, AS A REGION — WHICH IS THE ONE THING THE PENDULUM NEVER TRIED.
+     Every past attempt at "there is more down here" put SIZES on the rail: two locked stops,
+     rejected twice because a picker that renders what it refuses is a frustration machine and
+     because it says "the finer you want to be, the more you pay". Then nothing at all, and a
+     --floorPct gradient going .42 → .15 over 9% of the rail, which reads as "it is a bit dark
+     down there" rather than as an edge. Players report the predictable result: they do not
+     know the rest is locked.
+     A REGION IS NOT A SIZE. It cannot be aimed at and it offers nothing, so it escapes the
+     objection that killed the stops — it labels a zone instead of dangling a brush. The hard
+     mint top edge is the boundary the gradient never drew; the fill just says which side of
+     it is which. Mint because mint is KAMO+ everywhere in this app (the ✦, the all-colours
+     swatch), so the region needs no word to be read.
+     Members never see it: nothing below is locked for them and a marked-off region would be
+     a lie. */
+  #sizeLock{position:absolute;left:50%;transform:translateX(-50%);width:8px;border-radius:0 0 4px 4px;
+    background:linear-gradient(to bottom,rgba(95,230,164,.24),rgba(95,230,164,.08));
+    border-top:1.5px solid var(--mint);pointer-events:none;display:none;}
+  /* AND IT IS WHAT ANSWERS. flashSizeLock() has been pulsing #sizeStar, which renderSizeBar
+     sets to display:none on every call, and #sizeBar, which its own comment calls "an
+     invisible 34x212 box". So "the bar answers on itself, without words" — the stated reason
+     the `size` line was removed from PW_LOCK_HINT — has been answering with nothing at all.
+     Now it lights the region the user is reaching into. */
+  @keyframes lockGlow{0%{filter:brightness(1)}28%{filter:brightness(2.2)}100%{filter:brightness(1)}}
+  #sizeBar.lockPulse #sizeLock,#sizeBar.floorBounce #sizeLock{animation:lockGlow .6s ease-out;}
+  @media (prefers-reduced-motion:reduce){#sizeBar.lockPulse #sizeLock,#sizeBar.floorBounce #sizeLock{animation:none}}
   #sizeBar.lockPulse ~ #sizeStar{animation:tickPop .55s ease-out;color:var(--mint);}
   /* The thumb dips toward the floor and springs back — "there is more, and it is not yours"
      said with motion instead of an object. The ✦ pulses with it so the two read as one event. */
@@ -650,6 +675,14 @@
   #sizeBar.floorBounce #sizeThumb{animation:floorDip .40s cubic-bezier(.34,1.56,.64,1);}
   #sizeBar.floorBounce ~ #sizeStar{animation:tickPop .55s ease-out;}
   @media (prefers-reduced-motion:reduce){#sizeBar.floorBounce #sizeThumb{animation:none}}
+  /* THE DIP NEEDS SOMETHING THAT IS ON SCREEN. It rode #sizeThumb, which is now hidden for
+     free users — and free users are the only ones who can reach a floor. The object actually
+     standing at the boundary is the finest free stop, so that is what springs off it. Its own
+     keyframe because .sizeDot centres with margins, not with a translate: reusing floorDip
+     would yank it to the left edge on the first frame. */
+  @keyframes floorDipDot{0%{transform:translateY(0)}38%{transform:translateY(7px)}100%{transform:translateY(0)}}
+  #sizeBar.floorBounce .sizeDot.floorEdge{animation:floorDipDot .40s cubic-bezier(.34,1.56,.64,1);}
+  @media (prefers-reduced-motion:reduce){#sizeBar.floorBounce .sizeDot.floorEdge{animation:none}}
   /* EVERY STOP, MARKED — INCLUDING THE ONES YOU CANNOT HAVE. A tap-to-pick control nobody
      can see is a control nobody uses, and that went double for the locked half: only the dot
      under your thumb was drawn, so the paid range was invisible and the bar read as a
@@ -710,6 +743,13 @@
     pointer-events:none;opacity:0;transform:translate(-50%,-50%);
     transition:opacity .18s ease-out,width .12s ease-out,height .12s ease-out;}
   #brushPrev.on{opacity:1;}
+  /* THE SAME RING, SHOWING WHAT IS DOWN THERE. Reaching under the floor asks a question, and
+     "you cannot" is a worse answer than the honest one: this is how fine it gets. The pitch
+     already promises it in words nobody reads on this screen ("down to fine detail"); at 4px
+     beside the 10px they own, it is the same sentence drawn. Mint, so it reads as the locked
+     range rather than as their brush suddenly changing. */
+  #brushPrev.locked{border-color:var(--mint);background:rgba(95,230,164,.14);
+    box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 14px rgba(95,230,164,.5);}
   @media (prefers-reduced-motion:reduce){#brushPrev{transition:opacity .18s ease-out;}}
   /* before/after reveal (finished view) */
   #revealC{position:absolute;inset:0;z-index:14;display:none;}
@@ -1677,7 +1717,7 @@
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
 
     <!-- vertical brush-size slider (free) -->
-    <div id="sizeBar"><div id="sizeFill"></div><div id="sizeThumb"></div></div><div id="sizeStar">✦</div>
+    <div id="sizeBar"><div id="sizeLock"></div><div id="sizeFill"></div><div id="sizeThumb"></div></div><div id="sizeStar">✦</div>
     <!-- the brush at its TRUE size, over the photo, only while the bar is being touched -->
     <div id="brushPrev"></div>
     <!-- before/after reveal (finished view) -->
@@ -5595,7 +5635,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["brush_changed","camera_lenses","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -7393,7 +7433,7 @@ $("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoS
 $("#btnSave").onclick=saveStatic;
 
 /* ===== brush-size slider (free) + 3 quick-size presets ===== */
-const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill"), sizeStar=$("#sizeStar");
+const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill"), sizeStar=$("#sizeStar"), sizeLock=$("#sizeLock");
 const SB_PAD=24;
 function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
@@ -7416,6 +7456,15 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      for the ✦ that marks the junction. Members get 100%: nothing below is locked. */
   const floorY=free?stopY(SIZE_STOPS.length-1,h):sizeBar.clientHeight;
   sizeBar.style.setProperty("--floorPct",(100*floorY/sizeBar.clientHeight).toFixed(1)+"%");
+  /* THE REGION ITSELF, from the floor to the foot of the rail. The rail is inset 16px top and
+     bottom, so the bottom edge is clientHeight-16 — matching it exactly is what makes this
+     read as part of the control rather than as a sticker on top of it. */
+  if(sizeLock){
+    if(free){ const bot=sizeBar.clientHeight-16;
+      sizeLock.style.display="block"; sizeLock.style.top=floorY+"px";
+      sizeLock.style.height=Math.max(0,bot-floorY)+"px"; }
+    else sizeLock.style.display="none";
+  }
   sizeBar.classList.remove("stops");
   /* ALWAYS SHOWN, including for members. Hiding it once you own KAMO+ was my call and it
      was wrong: the ✦ is what identifies the bar as the premium tool, and a member who has
@@ -7496,6 +7545,8 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
       d.style.height=th+"px";
       d.style.marginTop=(-th/2)+"px";
       d.classList.toggle("on",brush===size);
+      /* The stop standing ON the boundary. It is what dips when someone reaches past it. */
+      d.classList.toggle("floorEdge",i===SIZE_STOPS.length-1);
     });
   } else {
     dots.forEach((d)=>{ d.style.display="none"; d.classList.remove("on"); });
@@ -7516,6 +7567,19 @@ function showBrushPrev(on){ if(!brushPrev) return;
   syncBrushPrev(); clearTimeout(brushPrev._t);
   if(on){ brushPrev.classList.add("on"); return; }
   brushPrev._t=setTimeout(()=>brushPrev.classList.remove("on"),420); }
+/* WHAT IS UNDER THE FLOOR, DRAWN ONCE. The finest thing KAMO+ opens, at its true size, in the
+   same ring and the same place their own brush was a moment ago — so the comparison is made
+   for them instead of described. Deliberately NOT selectable and gone in 600ms: this shows a
+   size, it does not offer one, which is the whole distinction the two rejected stop designs
+   collapsed. */
+function flashLockedBrush(){ if(!brushPrev) return;
+  const d=Math.max(3,Math.round(Math.min(...PRO_SIZES)*(zoomK||1)));
+  brushPrev.style.width=d+"px"; brushPrev.style.height=d+"px";
+  brushPrev.classList.add("locked"); brushPrev.classList.add("on");
+  clearTimeout(brushPrev._t);
+  brushPrev._t=setTimeout(()=>{ brushPrev.classList.remove("on");
+    /* after the fade, or the mint snaps back to white in front of them */
+    setTimeout(()=>brushPrev.classList.remove("locked"),240); },620); }
 function sizeFromEvent(e){ const r=sizeBar.getBoundingClientRect(), h=r.height-SB_PAD*2; let t=1-((e.clientY-r.top-SB_PAD)/h); t=Math.max(0,Math.min(1,t));
   let b=brushFromT(t);
   /* No free-user branch here any more: the bar's pointerdown handler turns free users away
@@ -7598,7 +7662,17 @@ sizeBar.addEventListener("pointerdown",e=>{
          full. Asking again is not a new question, so it gets the thumb springing back off the
          floor and the ✦ pulsing — the tactile version of the same sentence, with nothing to
          dismiss mid-round. */
-      if(!sizeBar._askedFloor){ sizeBar._askedFloor=1; openPaywall("size_star",true); return; }
+      /* THE GESTURE ITSELF, COUNTED. Six redesigns of this control have been argued from what
+         the paywall did afterwards, and not one of them knew how many people reach under the
+         floor at all — so "nobody understands the rest is locked" and "nobody tries" have
+         never been separable. `first` splits the reach that gets a full sheet from every later
+         one, which is the pair whose ratio says whether the capped answer works. */
+      const first=!sizeBar._askedFloor;
+      track("size_floor_reached",{first:first,brush:brush});
+      if(first){ sizeBar._askedFloor=1; openPaywall("size_star",true); return; }
+      /* Only past the sheet: on the first reach a full screen is already answering, and a ring
+         behind it would be talking over it. */
+      flashLockedBrush();
       sizeBar.classList.remove("floorBounce"); void sizeBar.offsetWidth;
       sizeBar.classList.add("floorBounce");
       clearTimeout(sizeBar._bt);
