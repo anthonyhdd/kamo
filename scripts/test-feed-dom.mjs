@@ -81,8 +81,13 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
   n_attempts: i, n_found: 0, created_at: '2026-08-1' + (2 - (i % 3)) + 'T10:0' + i + ':00Z',
 }));
 
-async function open(rows, extra) {
+/* `before` runs against the fresh page BEFORE it navigates — the only window in which a test
+   can plant localStorage the app will read on boot (a legacy reaction key, say). It takes the
+   page rather than a value so it can use addInitScript, which is the one hook that survives
+   the navigation. */
+async function open(rows, extra, before) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  if (before) await before(page);
   await page.addInitScript((a) => {
     window.__seed = Object.assign({
       feed_page: a.r,
@@ -159,10 +164,153 @@ console.log('\nTHE FEED CAN SAY SOMETHING BACK');
   await page.waitForTimeout(400);
   const sent = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide').length);
   sent === 1 ? ok('a tap reaches the wire') : bad(`react_to_hide called ${sent}x`);
+  /* A DIFFERENT EMOJI IS A DIFFERENT THING TO SAY. The cap used to be one reaction per hide,
+     which killed the other three chips silently the moment any one was used. */
   await page.evaluate(() => document.querySelectorAll('.chRxB')[1].click());
   await page.waitForTimeout(400);
-  const after = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide').length);
-  after === 1 ? ok('and the second one does not — one per hide') : bad(`a second tap sent ${after} calls`);
+  const two = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide').length);
+  two === 2 ? ok('and a second emoji is allowed — the cap is per emoji, not per hide') : bad(`two emoji sent ${two} calls`);
+  /* THE COURTESY THE CAP EXISTS FOR, unchanged: nobody runs a number up on their own. */
+  await page.evaluate(() => document.querySelectorAll('.chRxB')[1].click());
+  await page.waitForTimeout(400);
+  const again = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide').length);
+  again === 2 ? ok('but the same one twice is not — still one tap per emoji') : bad(`a repeat sent ${again} calls`);
+  /* THE ANSWER SURVIVES THE ROUND. The used chips are stored as a list under kamo_rx_<id>;
+     a device that reacted under the previous build wrote "1", which must not be read back as
+     a used emoji and must not lock the chips. */
+  const stored = await page.evaluate(() => localStorage.getItem('kamo_rx_hide0'));
+  (stored || '').split(',').filter(Boolean).length === 2
+    ? ok('and both are remembered on the device')
+    : bad('stored reactions: ' + JSON.stringify(stored));
+  const lit = await page.evaluate(() => document.querySelectorAll('.chRxB.on').length);
+  lit === 2 ? ok('a used chip stays lit rather than going quiet') : bad(`${lit} chips lit`);
+  await page.close();
+}
+
+/* THE OLD SINGLE-VALUE KEY, READ BY THE NEW CODE. Every device that reacted before this
+   change wrote the literal "1" under kamo_rx_<id>. Split on commas that is one entry, "1",
+   which matches no emoji — so those people get all four chips back. The failure to avoid is
+   the opposite one: a parser that treats a non-empty key as "already reacted" would leave
+   them permanently unable to react to that hide, silently, forever. */
+console.log('\nA REACTION FROM THE OLD BUILD DOES NOT LOCK THE NEW CHIPS');
+{
+  const page = await open(ROWS(1), { react_to_hide: null, hide_reactions_of: [],
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } }, (p) =>
+    p.addInitScript(() => { try { localStorage.setItem('kamo_rx_hide0', '1'); } catch (e) {} }));
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
+  const lit = await page.evaluate(() => document.querySelectorAll('.chRxB.on').length);
+  lit === 0 ? ok('none of the four is pre-locked by the legacy value') : bad(`${lit} chips came back lit`);
+  await page.evaluate(() => document.querySelector('.chRxB').click());
+  await page.waitForTimeout(400);
+  const sent = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide').length);
+  sent === 1 ? ok('and they can still react') : bad(`react_to_hide called ${sent}x`);
+  await page.close();
+}
+
+/* THE ENDING IS BUILT FROM THE ANSWER, NOT FROM THE PICTURE OF IT.
+   Every caller of snapReveal() used to await it before calling ending(), so the headline and
+   the card — both built entirely from the submit_attempt response, already in hand — queued
+   behind up to two image loads over the radio. That is the reported lag on the title and the
+   modal after a tap in the feed: not a slow render, a card waiting on a download it never
+   reads.
+   The regression this guards is subtle and silent: re-introducing a single `await` in front
+   of ending() costs nothing on a fast connection and makes the ending feel broken on a slow
+   one, which is exactly the population that cannot report it. So the reveal frames are
+   STALLED OUTRIGHT here — the request is accepted and never answered — and the card is
+   required to arrive anyway. A test that merely measured milliseconds would pass on a fast
+   machine with the await back in place; one that hangs the network cannot. */
+console.log('\nTHE ENDING DOES NOT WAIT FOR THE REVEAL FRAMES');
+{
+  const page = await open(ROWS(1), {
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 }, hide_reactions_of: [] });
+  /* Never fulfilled, never aborted: an abort would resolve the Image() as an error and let
+     the old code through. A dead request is what a bad radio actually looks like. */
+  let stalled = 0;
+  await page.route('**/*_b.jpg', () => { stalled++; });
+  await page.route('**/*_w.jpg', () => { stalled++; });
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  /* waitForFunction, never a sleep: the card is mounted off the submit_attempt round trip,
+     whose duration is the harness's, not a constant. */
+  const landed = await page.waitForFunction(() => {
+    const h = document.querySelector('#chHead');
+    return !!(h && h.textContent.trim()) && !!document.querySelector('#chFoot .chCard');
+  }, { timeout: 8000 }).then(() => true).catch(() => false);
+  landed
+    ? ok('the headline and the card arrive while the frames are still in flight')
+    : bad('the ending never mounted with the reveal frames stalled — it is awaiting them again');
+  const head = await page.evaluate(() => (document.querySelector('#chHead') || {}).textContent || '');
+  head.trim() === 'They were right there.'
+    ? ok('and it is the real ending, not a placeholder')
+    : bad('headline was ' + JSON.stringify(head));
+  /* The frames were genuinely requested — otherwise the assertion above proves nothing, it
+     just means this hide never had reveal assets to wait for in the first place. */
+  stalled > 0 ? ok(`and the frames really were in flight (${stalled} held)`) : bad('no reveal frame was ever requested');
+  await page.close();
+}
+
+/* THE ONE CONTROL ON THIS CARD THAT LEAVES THE APP.
+   Everything else the ending card offers spends the round inside KAMO, which is why the feed
+   retains and does not recruit. This button is the exception, so the two things that would
+   make it worthless are asserted rather than read:
+     1. IT SENDS THIS HIDE. The composer's #ssInvite sends chLink() — the round THIS phone
+        made last — and on a feed slide that is somebody else's photo, a stale id, or empty.
+        Sending the wrong link here is invisible to the sender and lands a stranger's caption
+        on their own share, so the id in the message is compared against the slide's.
+     2. IT SENDS SYNCHRONOUSLY. navigator.share must be reached on the tap's own activation;
+        the composer cannot manage that because it waits for an upload, and this path exists
+        precisely because HID is already known. A share that arrives after an await is a
+        share WebKit refuses, so the test asserts the call landed with no timer in between. */
+console.log('\nTHE FEED CAN SEND SOMEBODY ELSE\'S HIDE');
+{
+  const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [],
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
+  /* Recorded, not stubbed away: navigator.share is replaced before the tap so the message is
+     readable, and the replacement resolves so the button takes the `shared` branch. */
+  await page.evaluate(() => {
+    window.__share = [];
+    navigator.share = (d) => { window.__share.push(d); return Promise.resolve(); };
+  });
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  await page.waitForSelector('#chSend', { timeout: 10000 }).catch(() => {});
+  const there = await page.evaluate(() => !!document.querySelector('#chSend'));
+  there ? ok('the ending card offers a way out of the app') : bad('#chSend is not on the card');
+  /* ABOVE THE EXIT. A share offered after "Next hide ↑" has already named the way out is a
+     share the thumb has passed by, so the ORDER is the feature and not a detail of markup. */
+  const order = await page.evaluate(() => {
+    const f = document.querySelector('#chFoot'); if (!f) return 'no card';
+    const ids = [...f.querySelectorAll('button')].map(b => b.id).filter(Boolean);
+    return ids.indexOf('chSend') < ids.indexOf('chNext') ? 'above' : ids.join(',');
+  });
+  order === 'above' ? ok('and it sits above "Next hide ↑", not under it') : bad('button order: ' + order);
+  await page.evaluate(() => document.querySelector('#chSend').click());
+  await page.waitForFunction(() => (window.__share || []).length > 0, { timeout: 5000 }).catch(() => {});
+  const msg = await page.evaluate(() => (window.__share[0] || {}).text || '');
+  /* Against the SLIDE's id, not a literal: the first row of ROWS() is the hide on screen, and
+     a hardcoded id here would pass the day the fixture is renamed and the button regressed. */
+  msg.includes('/h/' + ROWS(1)[0].id)
+    ? ok('and the link it sends is the hide being played, not the sender\'s own')
+    : bad('the message carried: ' + JSON.stringify(msg));
+  /* The seeded get_hide names the author `tony`; the sender is passing this on, not claiming
+     it, so the signature has to be the author's. */
+  msg.includes('@tony')
+    ? ok('signed with the author, so the sender is passing it on rather than claiming it')
+    : bad('the message is not signed by the author: ' + JSON.stringify(msg));
   await page.close();
 }
 

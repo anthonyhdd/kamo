@@ -331,8 +331,20 @@
   /* THE FIGURE IS DRAWN OFF-CENTRE IN ITS OWN VIEWBOX — it peeks from behind a wall on the
      left, so its mass sits right of centre and the glyph reads as pushed left in a square
      button. Nudged back optically rather than by redrawing the path, which is shared. */
-  #btnFeed{right:24px;}
-  #btnFeed svg{transform:translateX(1.5px);}
+  /* AND IT GLOWS, because it is the only button on this screen that leads somewhere with
+     other people in it. The camera screen is a wall of neutral glass chips — shutter, roll,
+     torch, flip — and the feed reads as one more of them, so the thing that answers "there is
+     something to do here besides make one" is the least visible control on the screen.
+     A RESTING GLOW, NOT A PULSE. An animated button on a camera viewfinder competes with the
+     shot; this is a static mint bloom, brightened on press. The dot that marks new content
+     still owns the "something changed" signal — it is on the same button and a pulsing frame
+     underneath it would drown it. */
+  #btnFeed{right:24px;border-color:rgba(95,230,164,.42);
+    box-shadow:0 0 0 1px rgba(95,230,164,.12),0 0 16px rgba(95,230,164,.28),
+      inset 0 0 12px rgba(95,230,164,.10);}
+  #btnFeed:active{box-shadow:0 0 0 1px rgba(95,230,164,.2),0 0 22px rgba(95,230,164,.42),
+      inset 0 0 12px rgba(95,230,164,.14);}
+  #btnFeed svg{transform:translateX(1.5px);stroke:var(--mint);}
   #btnFeed .kfDot{position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}
   /* THE TORCH MOVES OFF THE BOTTOM ROW. It sat at right:80px, so the bottom-right corner
      held two controls and the feed button — the one that opens everybody else's hides — had
@@ -1128,13 +1140,37 @@
      find it, or leave — and nothing to say back. Four emoji, no keyboard, no thread: the
      cheapest possible signal, on the one screen where the round is already over. */
   .chRx{display:flex;gap:8px;justify-content:center;margin:2px 0 4px;}
-  .chRxB{display:flex;align-items:center;gap:5px;min-width:52px;justify-content:center;
+  .chRxB{position:relative;display:flex;align-items:center;gap:5px;min-width:52px;justify-content:center;
     background:rgba(255,255,255,.07);border:1px solid var(--stroke);border-radius:999px;
     padding:7px 11px;font-size:16px;line-height:1;cursor:pointer;color:#fff;
-    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1),
+      background .18s ease,border-color .18s ease;}
   .chRxB:active{transform:scale(.9);}
   .chRxB.on{background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.45);}
   .chRxN{font-family:var(--font);font-size:12.5px;font-weight:700;opacity:.75;}
+  /* THE TAP HAS TO LAND, and until now the only thing that moved was a background colour
+     swapping in under the thumb — which is the one pixel a thumb is covering. Three things
+     fire together instead, all of them CSS so none of them can be skipped by a backgrounded
+     page the way a requestAnimationFrame tick can:
+       1. the chip springs — overshoot and settle, on the same curve the buttons already use
+       2. a ring pushes out from the edge and dissolves, so the feedback is visible AROUND
+          the thumb rather than under it
+       3. the emoji itself lifts off the chip and fades upward
+     Subtle on purpose: this is an acknowledgement, not a celebration. The confetti moment in
+     this app belongs to the reveal, and a reaction that competes with it cheapens both.
+     .chRxN gets its own tick so the number reads as having CHANGED rather than as having
+     always been that — the count is the only part of this the next person also sees. */
+  @keyframes chRxPop{0%{transform:scale(1)}38%{transform:scale(1.18)}100%{transform:scale(1)}}
+  .chRxB.pop{animation:chRxPop .34s cubic-bezier(.3,1.5,.5,1);}
+  @keyframes chRxRing{from{opacity:.5;transform:scale(1)}to{opacity:0;transform:scale(1.45)}}
+  .chRxB.pop::before{content:"";position:absolute;inset:-1px;border-radius:999px;
+    border:1px solid rgba(95,230,164,.8);animation:chRxRing .5s ease-out forwards;pointer-events:none;}
+  @keyframes chRxFly{from{opacity:.85;transform:translate(-50%,0) scale(1)}
+    to{opacity:0;transform:translate(-50%,-26px) scale(1.5)}}
+  .chRxFly{position:absolute;left:50%;top:2px;font-size:16px;line-height:1;pointer-events:none;
+    animation:chRxFly .62s cubic-bezier(.25,.8,.4,1) forwards;}
+  @keyframes chRxTick{0%{transform:translateY(0)}45%{transform:translateY(-3px)}100%{transform:translateY(0)}}
+  .chRxN.tick{animation:chRxTick .3s ease;display:inline-block;}
   /* WHERE THEY LOOKED — the aggregate of every hunt on one hide, which is the only view in
      this app that gets better while its owner does nothing. One dot per seeker's final tap,
      laid on the photo they were looking at; the answer key itself is never drawn, because a
@@ -1699,17 +1735,32 @@
      defensible if the sentence saying so is on the screen they are already looking at, at
      the size of everything else on it. It sits directly above the send buttons for the same
      reason — it has to be read before the tap, not found after it. */
+  /* COLOUR, DECLARED — and this is the same bug .kfConsCard already fixed one sheet over.
+     A <button> does NOT inherit `color` in WebKit the way the divs around it do: it falls
+     back to system link blue unless something says otherwise. .ssVis carried no colour of
+     its own and the note under .kfCons says so in as many words, but the fix was applied
+     only to the consent card — so on the SHARE sheet, the one surface this row actually
+     ships on, "Public" and its subtitle rendered blue. Blue is not in this app's palette
+     anywhere; it read as an unstyled web form dropped into the sheet.
+     AND IT IS DELIBERATELY QUIET NOW. This row is a disclosure, not an alert: it must be
+     readable before the send without competing with the button underneath it that the whole
+     sheet exists to produce. So it weighs no more than the rows around it — no accent on the
+     label, no tinted icon plate, type a step down from the card's own headline.
+     THE SENTENCE STAYS. Everything above is about WEIGHT, not about saying less: "Anyone can
+     play it in the KAMO feed" is the one line that makes public-by-default defensible, and
+     the whole argument in the .ssVis note above is that it has to be legible before the tap.
+     Quieter, never absent. */
   .ssVis{display:flex;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:10px 11px;border-radius:15px;
     border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.045);cursor:pointer;text-align:left;
-    -webkit-tap-highlight-color:transparent;}
+    color:rgba(255,255,255,.92);-webkit-tap-highlight-color:transparent;}
   .ssVis:active{transform:scale(.98);}
-  .ssVisIco{flex:0 0 auto;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(95,230,164,.14);}
-  .ssVisIco svg{width:19px;height:19px;fill:none;stroke:var(--mint);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
-  .ssVis[aria-pressed="false"] .ssVisIco{background:rgba(255,255,255,.08);}
-  .ssVis[aria-pressed="false"] .ssVisIco svg{stroke:rgba(255,255,255,.7);}
+  .ssVisIco{flex:0 0 auto;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);}
+  .ssVisIco svg{width:19px;height:19px;fill:none;stroke:rgba(255,255,255,.62);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .ssVis[aria-pressed="false"] .ssVisIco{background:rgba(255,255,255,.07);}
+  .ssVis[aria-pressed="false"] .ssVisIco svg{stroke:rgba(255,255,255,.62);}
   .ssVisTxt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
-  .ssVisTxt b{font-family:var(--display);font-size:14.5px;font-weight:700;letter-spacing:-.2px;}
-  .ssVisTxt i{font-style:normal;font-size:11.5px;line-height:1.3;opacity:.62;}
+  .ssVisTxt b{font-family:var(--display);font-size:13.5px;font-weight:600;letter-spacing:-.1px;color:rgba(255,255,255,.9);}
+  .ssVisTxt i{font-style:normal;font-size:11px;line-height:1.3;opacity:.45;}
   .ssVisSw{flex:0 0 auto;width:42px;height:25px;border-radius:999px;background:var(--mint);position:relative;transition:background .15s;}
   .ssVisSw i{position:absolute;top:3px;left:20px;width:19px;height:19px;border-radius:50%;background:#04120b;transition:left .15s;}
   .ssVis[aria-pressed="false"] .ssVisSw{background:rgba(255,255,255,.22);}
@@ -4996,6 +5047,44 @@ function setHandle(v){
   if(nativeCaps && nativeCaps.handleStore) postNative({type:"handle",value:h});
   return h;
 }
+/* THE NAME NOBODY TYPED, because almost nobody types one: 126 hides of 3346 are signed, and
+   the feed serves 109 anonymous photos out of 115. A feed where every row says "Someone" is
+   a feed with no people in it, and that reads as abandoned rather than as private.
+   NOT A MODAL AT FIRST LAUNCH. The obvious fix — ask for a name on the way in — puts a form
+   in front of a stranger at the single highest-abandon moment the app has. So the name is
+   ASSIGNED, silently, at the first hide, and personalising it is offered where the name is
+   already on screen (the home card headline, which is the edit control) rather than before
+   anyone knows what it is for.
+   THE WORD LISTS ARE MIRRORED IN SQL — infra/2026-08-13-handle-backfill.sql fills the same
+   two arrays for the rows that already exist. They have to stay the same two lists or the
+   feed reads as two products: keep them in step or let them both go, but do not edit one.
+   Camouflage is the theme because it is the game: things that are hard to see. 24 × 24 = 576
+   combinations, and the longest pair is 14 characters, inside cleanHandle's 16. */
+const HANDLE_ADJ=["Mossy","Dusty","Amber","Slate","Umber","Olive","Ashen","Hazel","Ochre","Sable",
+  "Ivory","Rusty","Teal","Pewter","Cobalt","Velvet","Silent","Hidden","Drifting","Still",
+  "Faint","Shy","Quiet","Dim"];
+const HANDLE_NOUN=["Fox","Moth","Gecko","Heron","Lynx","Squid","Owl","Crab","Toad","Viper",
+  "Mantis","Skink","Ermine","Otter","Wren","Adder","Newt","Hare","Stoat","Pika",
+  "Quail","Snipe","Raven","Vole"];
+function mintHandle(){
+  const a=HANDLE_ADJ[Math.floor(Math.random()*HANDLE_ADJ.length)];
+  const n=HANDLE_NOUN[Math.floor(Math.random()*HANDLE_NOUN.length)];
+  return cleanHandle(a+n);
+}
+/* THE ONLY FUNCTION THAT MAY INVENT ONE, and getHandle() deliberately still cannot.
+   getHandle() is read on render paths — the home headline, the preview card, the share text —
+   and a read that quietly writes would stamp a name onto a device that has never published
+   anything, at whatever moment a screen happened to paint. That is the first-launch modal
+   again, minus the dialog. So minting lives here, and here is called from the publish path
+   and nowhere else: the name comes into existence with the first hide that carries it. */
+function ensureHandle(){
+  const h=getHandle(); if(h) return h;
+  const m=setHandle(mintHandle());
+  /* Empty only if localStorage refused the write; the caller then publishes unsigned exactly
+     as it does today rather than shipping a name the device cannot remember it chose. */
+  if(m) track("handle_assigned",{});
+  return m;
+}
 /* THE NAME COMING BACK FROM NATIVE, and it only ever fills a hole.
    Called on every syncWeb, which also runs on a plain reload, so it must never overwrite a
    name the user just typed with the one that happened to be on disk. Empty page + non-empty
@@ -5877,6 +5966,23 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    feed_opened → feed_slide → hide_published joins at user level without a build. */
 "feed_opened","feed_closed","feed_slide","feed_empty","feed_empty_cta","feed_next_tapped",
 "feed_load_failed","hide_visibility_set",
+/* THE FEED'S ONLY WAY OUT OF THE APP, and the pair has to travel together for the same
+   reason the save pair does: the number worth knowing is a RATIO — sends over taps — and
+   routing one of them through the wrapper would put numerator and denominator on different
+   Amplitude users. Both names are new, so no shipped binary's allow-list contains either;
+   through the bridge they would be dropped in silence and the feed's K-factor would read as
+   a flat zero whether the button worked or nobody touched it.
+   NOTE FOR THE NEXT EDITOR: backticks, never double quotes — check.mjs reads these names by
+   regex over the whole literal and a name quoted in prose is parsed as an ENTRY.
+   `feed_send_tapped` is the intent, `feed_sent` the outcome, and the outcome carries `how`
+   so the native sheet, the web sheet and the clipboard stay separable. */
+"feed_send_tapped","feed_sent",
+/* THE NAME THIS DEVICE WAS GIVEN RATHER THAN CHOSE. Fires once per device, from the first
+   publish, and it is the denominator for the question the assignment exists to answer: of the
+   people handed a pseudonym, how many go and change it — `hide_signed` already reports the
+   edit and is routed direct, so the pair has to land on the same Amplitude user to divide.
+   Backticks, not double quotes — check.mjs parses names out of this literal by regex. */
+"handle_assigned",
 /* AND THE SEEKER'S OWN EVENTS, which have never needed routing before and now do. Every
    seek_* event in this file's history fired in a plain browser — a ?h= link opens in Safari,
    never inside the wrapper — so postNative() returned false and they went direct by accident
@@ -7127,7 +7233,16 @@ $("#ssInvite").onclick=async()=>{
   if(!bare && !(nativeCaps&&nativeCaps.invite) && !chLink()){
     try{ chUpload(); }catch(e){}
     const b0=$("#ssInvite");
-    if(!chInviteNudged && b0){
+    /* THE NUDGE IS THE FALLBACK NOW, NOT THE PATH — and this is the other half of the cost
+       those 7 sends a day were paying. This branch does not merely send a worse message: it
+       RETURNS, spending the user's first tap on "One moment" and sending nothing at all. That
+       was the right trade when there was no link to be had. chSlotLink() is one, known with
+       no round trip, so asking somebody to wait for something they already have is now pure
+       loss — the second tap is where the link-less invite actually went out.
+       It still fires when no id could be minted (crypto unavailable), which is the only case
+       left where the honest invite really is all there is. chUpload() above is unconditional
+       either way: whatever the button does next, the upload has to be moving. */
+    if(!chSlotLink() && !chInviteNudged && b0){
       chInviteNudged=true;
       const back=b0.innerHTML;
       b0.textContent="One moment — preparing your challenge";
@@ -7205,7 +7320,14 @@ $("#ssInvite").onclick=async()=>{
      leaves that id in place. Branching the message on `link` alone then announces a body in a
      photo where the figure is standing in plain sight — and the link preview shows exactly
      that, in the thread, before anyone taps. The send stays; only the promise is withdrawn. */
-  const link=bare?"":chLink();
+  /* THE WEB BRANCH GETS THE OPTIMISTIC LINK; THE NATIVE ONE NEVER DOES.
+     Above, `useNative` has already waited up to 8s for the real id, so chLink() is populated
+     in all but the failing cases — and where a real link is coming, a guessed one is strictly
+     worse (see chSlotLink: create_hide fails ~2.7% of the time and those 404).
+     The web branch cannot wait at all, so its choice is not "guess or wait", it is "guess or
+     send the generic invite this instant". A link that is right ~97% of the time beats one
+     that is absent 100% of the time, which is what 7 sends a day were getting. */
+  const link=bare?"":(chLink()||(useNative?"":chSlotLink()));
   /* SIGNED, WHEN THERE IS A NAME TO SIGN IT WITH. An anonymous dare is a weaker ask than one
      with a person behind it, and this is the loop that is flat — 71 shares a day, roughly one
      in eight ever played. It is also what stops the handle from being decoration: without
@@ -7275,7 +7397,12 @@ $("#ssInvite").onclick=async()=>{
     if(navigator.share){ await navigator.share({text:text}); shared=true; }
   }catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
   if(shared||cancelled){
-    track("invite_shared",{ok:shared,cancelled:cancelled,link:!!link});
+    /* `optimistic` SEPARATES THE FIX FROM THE THING IT FIXED. link=false was the symptom and
+       it should now be ~0 on this path; what replaces it is a link that was guessed before
+       create_hide answered, and those are not the same claim. Without this property a guessed
+       link that 404s is indistinguishable from a real one, and the 2.7% this trade accepts
+       could not be measured against the 7 sends a day it buys. */
+    track("invite_shared",{ok:shared,cancelled:cancelled,link:!!link,optimistic:!!link&&!chLink()});
     if(shared&&typeof ssShowAgain==="function") ssShowAgain();
     if(b){
       b.innerHTML = shared ? '<span class="ic">✅</span>Sent' : original;
@@ -8542,9 +8669,36 @@ function chSlot(){
   if(Math.round(currentScore||0)<CH_MIN_COVERAGE) return null;
   const g=chGeom(); if(!g) return null;
   const name=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).replace(/[^a-z0-9]/g,"")+".jpg";
-  chSlotV={name,g};
+  /* THE ID, MINTED HERE FOR THE SAME REASON THE NAME IS. create_hide used to be the only
+     thing that could say what this hide is called, so the link did not exist until a round
+     trip came back — and the web share path cannot wait for a round trip (navigator.share
+     needs the activation the first await spends). That race is what sends a friend an invite
+     with no game in it; see infra/2026-08-13-client-hide-id.sql.
+     16 lowercase hex, because that is exactly what the Worker parses out of /h/<id> and what
+     the server now validates. crypto.getRandomValues where it exists — 64 bits of collision
+     space, and the server rejects a duplicate anyway rather than letting one row shadow
+     another. */
+  let id="";
+  try{
+    const a=new Uint8Array(8);
+    if(self.crypto&&self.crypto.getRandomValues) self.crypto.getRandomValues(a);
+    else for(let i=0;i<8;i++) a[i]=Math.floor(Math.random()*256);
+    id=Array.from(a).map(b=>b.toString(16).padStart(2,"0")).join("");
+  }catch(e){ id=""; }
+  chSlotV={name,g,id};
   return chSlotV;
 }
+/* THE LINK BEFORE THE ROW EXISTS, AND THE ONE CALLER ALLOWED TO USE IT.
+   chLink() answers "this hide is published"; this answers "this hide is going to be called
+   that". The two are the same string once create_hide lands, and only this one is available
+   during the 3-6s the upload takes.
+   IT IS NOT A DROP-IN FOR chLink(), and must not become one. create_hide fails on roughly
+   2.7% of publishes (82 against 3009 over 2026-08-06..13), and on those this link 404s. That
+   is a bad trade wherever a real link would otherwise arrive a moment later — the native
+   share path waits 8s precisely because it can — and a good one only where the alternative
+   is the generic invite going out RIGHT NOW with no game in it, which is the web branch and
+   nothing else. Roughly 16 web sends a day, of which 7 currently carry no link at all. */
+function chSlotLink(){ const s=chSlot(); return (s&&s.id)?(SHARE_HOST+"/"+s.id):""; }
 function chPrepare(){
   if(chPrep) return chPrep;
   if(!CH_MAKE) return Promise.resolve(null);
@@ -8679,7 +8833,15 @@ function chCreateForms(base,who){
      one 11-argument overload and it takes both, with nulls for whichever does not apply.
      The rungs below are untouched: a page loaded before this deploy still climbs them, and a
      hide with no author is a hide that publishes and simply cannot be blocked. */
+  /* THE NEW WIDEST RUNG — 12 arguments, adding the client-chosen id. Same discipline as the
+     11-argument rung below it: ADDED, never edited, so a page loaded before the migration
+     still climbs the shorter forms and publishes exactly as it does today.
+     The id rides on top of the author key rather than replacing a rung, because losing the
+     author key to gain a fast link would trade a blockable hide for a share — and a hide
+     nobody can block is a worse thing to publish than a link that arrives a second late. */
   const key=kfAuthorKey();
+  const slot=chSlot();
+  if(key&&slot&&slot.id) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id});
   if(key) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key});
   if(chReplyTo) forms.push({...signed,p_reply_to:chReplyTo});
   if(who) forms.push(signed);
@@ -8737,7 +8899,22 @@ function kfApplyVisibility(id,pub){
 const KF_ASKED_KEY="kamo_vis_asked";
 function kfAsked(){ try{ return localStorage.getItem(KF_ASKED_KEY)==="1"; }catch(e){ return false; } }
 function kfMarkAsked(){ try{ localStorage.setItem(KF_ASKED_KEY,"1"); }catch(e){} }
-/* Resolves to the answer. Resolves FALSE if it cannot be shown at all rather than assuming
+/* NOT WIRED, AND NOT DEAD EITHER — read this before deleting it.
+   Nothing in the app calls this. The sheet was removed from the flow on purpose (founder's
+   call): the disclosure now lives on the share sheet's own .ssVis row, which is visible in
+   the peek state, and a modal in front of the reveal was costing the send. That decision
+   stands, and this is deliberately NOT being re-wired.
+   It is kept, and kept TESTED (scripts/test-feed-dom.mjs drives it through
+   window.KAMOFEED.askConsent), because of what it is: the one-time, explicit, in-words opt-in
+   for a product whose default publishes a stranger's photo to a public feed. That default is
+   defensible today because the row states it before the send. If that ever stops being
+   enough — a store review, a regulator, a jurisdiction with a different answer, or simply a
+   change of mind — the fix must be one line re-enabling a path that already works, not a
+   rebuild under time pressure. Dead code that cannot run is drift; this is a switch with the
+   wiring already run to it, and the wiring is what takes the time.
+   If it is ever deleted, delete its tests in the same commit, and say in the message that the
+   opt-in path is gone rather than letting it disappear as a cleanup.
+   Resolves to the answer. Resolves FALSE if it cannot be shown at all rather than assuming
    consent nobody gave. */
 function kfAskConsent(){
   if(kfAsked()) return Promise.resolve(kfWantPublic());
@@ -8829,7 +9006,10 @@ async function chUpload(){
        The 9-argument form is also the only one that can be MISSING: the database migration
        and this file do not deploy together, so if the page ships first every signed upload
        would 404 and publish nothing. Hence the fallback below rather than a bare await. */
-    const who=getHandle();
+    /* ensureHandle(), NOT getHandle() — this is the publish path, and the one moment a name
+       is worth having is the moment a photo goes out carrying it. Every other reader stays a
+       pure read (see ensureHandle). */
+    const who=ensureHandle();
     const base={p_img_path:name,p_cx:g.cx,p_cy:g.cy,p_r:g.r,p_secs:roundSeconds(),
                 p_coverage:Math.round(currentScore||0)};
     /* FOUR OVERLOADS NOW: a 10-argument form carries `reply_to`, so a hide made off "Send one
@@ -9726,7 +9906,15 @@ function chSeek(hideId,opts){
        rides above the card in the same column. */
     +"#chFoot{position:absolute;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 12px calc(10px + var(--safe-b));pointer-events:none;}"
     +"#chFoot>*{pointer-events:auto;}"
-    +".chFlipB{width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(4,6,10,.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-size:21px;line-height:1;display:flex;align-items:center;justify-content:center;}"
+    /* QUIETER THAN THE CARD IT SITS ON, because it is the second way to do the same thing.
+       The whole photo is already the flip target — flip() is wired to a tap anywhere on the
+       stage — so this button is a redundant affordance whose only job is to SAY that the
+       double-take exists. At 52px in near-solid black with a full-white glyph it was reading
+       as a primary control parked between the reveal and the card, competing with the two
+       real CTAs directly underneath it and covering more of the photo than it needs to.
+       Smaller, thinner, and the glyph carried at partial opacity: still obviously tappable,
+       no longer the loudest thing above the card. */
+    +".chFlipB{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(4,6,10,.4);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:rgba(255,255,255,.62);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;}"
     +".chFlipB:active{transform:scale(.92);}"
     +".chCard{width:min(92vw,420px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(10,21,18,.96) 60%,rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.22);"
       +"border-radius:26px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:16px 18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;animation:chUp .45s cubic-bezier(.2,.9,.3,1);}"
@@ -10025,7 +10213,11 @@ function chSeek(hideId,opts){
         confettiBurst($$("chFrame"));
         track("seek_found",TP({ms:ms,pct:(res.pct==null?-1:res.pct),others:res.others|0}));
         sendTrace("hit");
-        const frames=await snapReveal(false);
+        /* NOT AWAITED — see the note on snapReveal(). The card is built from `res`, which is
+           already here; making it wait for two image loads is what made the ending feel slow.
+           ending() is synchronous, so it always finishes before the .then() below can run,
+           and the flip button can never be wiped by the innerHTML that builds the card. */
+        const frames=snapReveal(false);
         /* ④ — the chrono noted, now it speaks: rank among everyone who buzzed this hide
            before (misses count as slower — they never found it at all). Silent when there
            is nobody to compare against yet. */
@@ -10039,12 +10231,12 @@ function chSeek(hideId,opts){
                             : "Faster than "+res.pct+"% of players.")
                         : (res.others===0 ? "First one in." : ""),
           {rehide:true,camoSrc:camoSrc});
-        if(frames) armFlipUI();
+        frames.then(f=>{ if(f) armFlipUI(); });
       } else {
         img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
         track("seek_failed",TP({reason:"miss",ms:ms,old_round:(res&&res.old_round)|0}));
         sendTrace("miss");
-        const frames=await snapReveal(true);
+        const frames=snapReveal(true);
         /* WRONG, OR WRONG ONE? On a chain the photo carries every earlier round's figure, and
            the answer key is only the latest — so a player who genuinely spots a camouflaged
            person gets told they failed. The server checks a miss against the ancestors and
@@ -10072,7 +10264,7 @@ function chSeek(hideId,opts){
         } else {
           ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
         }
-        if(frames) armFlipUI();
+        frames.then(f=>{ if(f) armFlipUI(); });
       }
     }
 
@@ -10084,22 +10276,41 @@ function chSeek(hideId,opts){
       trace.end={ms:ms,x:-1,y:-1};
       track("seek_failed",TP({reason:"giveup",ms:ms}));
       sendTrace("giveup");
-      const frames=await snapReveal(true);
+      const frames=snapReveal(true);
       ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
-      if(frames) armFlipUI();
+      frames.then(f=>{ if(f) armFlipUI(); });
     };
 
     /* THE SNAP — one frame, never a fade. A fade never produces a double-take, and a
        reveal that arrives gradually erases the creator's work on the way in. */
+    /* WHAT THIS FUNCTION COSTS, AND WHO SHOULD BE PAYING IT.
+       Every caller used to `await` this before calling ending(), so the headline and the card
+       — both of which are built entirely from the submit_attempt response, already in hand —
+       sat behind up to two image loads over the radio. That is the reported "lenteur du titre
+       et de la modal": not a slow render, a card queued behind a download it does not read.
+       The three call sites now start this and paint the ending immediately, arming the flip
+       button when the frames actually arrive. Nothing here needs to be awaited by anything
+       except armFlipUI().
+       AND THE TWO FRAMES GO OUT TOGETHER. `_w` was requested only after `_b` had resolved, so
+       the reveal itself cost two sequential round trips where one would do — and the wave is
+       not even needed for the first paint, only for the loop 360ms later. Both are started
+       at once; `_b` flips the photo the moment it lands and `_w` joins whenever it does.
+       The cost is one wasted 404 on a LEGACY hide (published before these frames existed,
+       where neither file is there). That is a shrinking population — hides expire at 30 days
+       — and the request is concurrent, so it costs latency to nobody. */
     async function snapReveal(lost){
       const base=camoSrc.replace(/\.jpg$/,"");
       const load=(u)=>new Promise(res0=>{ const m=new Image(); m.onload=()=>res0(u); m.onerror=()=>res0(null); m.src=u; });
       let bSrc=null, wSrc=null;
-      try{ bSrc=await load(base+"_b.jpg"); }catch(_){}
+      const bP=load(base+"_b.jpg"), wP=load(base+"_w.jpg");
+      try{ bSrc=await bP; }catch(_){}
       if(bSrc){
-        try{ wSrc=await load(base+"_w.jpg"); }catch(_){}
+        /* THE FLIP FIRST, THE WAVE WHEN IT GETS HERE. Swapping the photo is the payoff and it
+           only needs `_b`; holding it back for a frame that is not drawn for another 360ms
+           was spending the whole wave round trip on the moment that matters most. */
         img.src=bSrc; revealedSrc=bSrc; flipped=true;
         buzzHaptic([28,50,28]);
+        try{ wSrc=await wP; }catch(_){}
         track("seek_reveal_shown",{assets:wSrc?"wave":"still"});
         /* IL BOUGE: two frames alternating — up, wave, up — then it settles standing.
            A two-frame coucou reads as movement; a video would read as a fade. */
@@ -10183,8 +10394,22 @@ function chSeek(hideId,opts){
       /* THE CARD SAYS SOMETHING DIFFERENT INSIDE THE APP, because "Get KAMO" is being said
          to somebody who already has it. In the feed the round ends on the two moves that
          are actually available: make one out of this photo, or go to the next hide. */
+      /* AND ONE THAT LEAVES THE APP — the only one on this card that does.
+         Every other control here spends the round inside KAMO: rehide, next, react, report,
+         block. That makes the feed pure retention, which is what it was built for, but it
+         also means the feed cannot bring a single new person in: it recirculates the people
+         already here. The one gesture that would is the one nobody is offered — sending the
+         photo you just got beaten by, at the moment you got beaten by it.
+         SECOND, not third, and deliberately above "Next hide ↑": the tap competes with the
+         next slide, and a share offered after the exit has already been named is a share
+         nobody sees. The primary stays "Hide one in this photo" — this borrows the position
+         under it, not the one above.
+         The link is THIS hide, not the player's own. chLink() is the round the player made
+         last, which on a feed slide is either stale or empty, and sending it here would ship
+         a stranger's caption over the sender's own photo. */
       $$("chFoot").innerHTML='<div class="chCard">'
         +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">'+(FEED?'Hide one in this photo':'Send one back')+'</button>':'')
+        +(FEED?'<button class="chCta2" id="chSend">Send to a friend</button>':'')
         +(FEED
             ? '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chNext">Next hide ↑</button>'
             /* THE SECOND ROUND SELLS THE APP — the half of #175 whose measurement shipped
@@ -10214,27 +10439,97 @@ function chSeek(hideId,opts){
          accounts here, so a cap is a courtesy and not a guarantee — and the honest place for
          a courtesy is the device that owes it. The counts come back from the server so the
          number is everybody's, not this phone's. */
+      /* ONE TAP PER EMOJI, NOT ONE TAP PER HIDE.
+         The cap used to be a single reaction for the whole photo: react once and the other
+         three chips went dead, silently — nothing said so, they simply stopped answering.
+         That is the wrong shape for what this control is. A reaction here is not a vote to
+         be rationed, it is the only thing a seeker can say back, and "🔥 and 😂" is a
+         perfectly ordinary thing to mean. The courtesy the cap exists to provide — one
+         person cannot run a number up on their own — is preserved exactly, because it was
+         never about the total: each emoji still accepts one tap from this device, so the
+         most anybody can add is one of each, and a chip that has been used says so by
+         staying lit instead of by going quiet.
+         STORED AS A LIST, and the old single-value key is read as one: a device that reacted
+         under the previous build wrote "1", which is not an emoji and so matches nothing —
+         those people get their remaining three chips back rather than a corrupted set. */
       if($$("chRx")){
         const EM=["🔥","😂","😱","👏"], KEY="kamo_rx_"+HID;
-        let spent=false; try{ spent=localStorage.getItem(KEY)==="1"; }catch(e){}
+        let spent=[]; try{ spent=String(localStorage.getItem(KEY)||"").split(",").filter(Boolean); }catch(e){}
         const box=$$("chRx");
-        box.innerHTML=EM.map(e=>'<button class="chRxB" data-e="'+e+'">'+e
+        box.innerHTML=EM.map(e=>'<button class="chRxB'+(spent.indexOf(e)<0?'':' on')+'" data-e="'+e+'">'+e
           +'<span class="chRxN" data-n="'+e+'"></span></button>').join("");
         const paint=(rows)=>{ (rows||[]).forEach(r=>{ const el=box.querySelector('[data-n="'+r.emoji+'"]');
           if(el) el.textContent=r.n>0?String(r.n):""; }); };
         try{ chRpcRows("hide_reactions_of",{p_id:HID}).then(paint).catch(()=>{}); }catch(e){}
         box.querySelectorAll(".chRxB").forEach(b=>{
           b.onclick=()=>{
-            if(spent) return; spent=true;
-            try{ localStorage.setItem(KEY,"1"); }catch(e){}
+            const em=b.dataset.e;
+            if(spent.indexOf(em)>=0) return;
+            spent.push(em);
+            try{ localStorage.setItem(KEY,spent.join(",")); }catch(e){}
             b.classList.add("on"); haptic(10);
+            /* Restarted rather than merely added: a second tap on a chip that still carries
+               the class would not replay the animation, and these chips sit next to each
+               other — the pop has to be honest about WHICH one was hit. */
+            b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+            const fly=document.createElement("span");
+            fly.className="chRxFly"; fly.textContent=em;
+            b.appendChild(fly); setTimeout(()=>{ try{ fly.remove(); }catch(_){} },700);
             const n=b.querySelector(".chRxN");
-            if(n) n.textContent=String((parseInt(n.textContent||"0",10)||0)+1);
-            track("hide_reacted",TP({emoji:b.dataset.e}));
-            try{ chRpc("react_to_hide",{p_id:HID,p_emoji:b.dataset.e}).catch(()=>{}); }catch(e){}
+            if(n){ n.textContent=String((parseInt(n.textContent||"0",10)||0)+1);
+              n.classList.remove("tick"); void n.offsetWidth; n.classList.add("tick"); }
+            track("hide_reacted",TP({emoji:em,nth:spent.length}));
+            try{ chRpc("react_to_hide",{p_id:HID,p_emoji:em}).catch(()=>{}); }catch(e){}
           };
         });
       }
+      /* THE SEND, AND WHY IT NEEDS NONE OF THE COMPOSER'S MACHINERY.
+         #ssInvite has to reserve a slot, start an upload, decide whether the round cleared
+         the coverage floor and then wait up to eight seconds for create_hide to answer,
+         because the thing it is sending does not exist yet when the thumb lands. Here it
+         already does: HID names a row the server just served this device. So the link is
+         known synchronously, there is nothing to await before navigator.share, and the
+         `bare` branch — a send with no puzzle behind it — cannot arise at all.
+         SIGNED WITH THE AUTHOR, NOT THE SENDER. `h.name` is whoever made this hide; the
+         person tapping is passing it on, not claiming it. Unsigned falls back to the same
+         line the composer uses, so the two shares read identically in a thread. */
+      if($$("chSend")) $$("chSend").onclick=async()=>{
+        const b=$$("chSend"); if(!b||b.disabled) return;
+        const original=b.innerHTML;
+        const url=SHARE_HOST+"/"+HID;
+        const who=(h&&h.name)?String(h.name):"";
+        const text=(who?"@"+who+" hid a kamo in this pic.":"Someone hid a kamo in this pic.")
+          +"\nOne tap to find it."
+          +"\n\n"+url;
+        /* ONE PATH, CHOSEN UP FRONT — the rule the composer learned the hard way. A wrapper
+           from 1.0.4 answers `invite` with a real iOS sheet, and running navigator.share
+           underneath it raced two sheets against each other. */
+        const useNative=!!(nativeCaps&&nativeCaps.invite);
+        track("feed_send_tapped",TP({native:useNative,signed:!!who}));
+        if(useNative){
+          /* The wrapper owns the outcome and reports invite_sent / invite_cancelled itself;
+             the web gets no callback, so there is no optimistic "Sent" to print here. */
+          postNative({type:"invite",message:text,score:0});
+          track("feed_sent",TP({how:"native"}));
+          return;
+        }
+        /* BEFORE ANY AWAIT. navigator.share needs the user activation this tap granted and
+           the first await spends it — the rule stated at #ssInvite, and the reason that path
+           cannot wait for its upload. AbortError is a decision, not a failure: it must not
+           fall through to the clipboard and claim something was copied. */
+        let shared=false, cancelled=false;
+        try{ if(navigator.share){ await navigator.share({text:text}); shared=true; } }
+        catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
+        if(shared||cancelled){
+          track("feed_sent",TP({how:"share",ok:shared,cancelled:cancelled}));
+          if(shared){ b.innerHTML="Sent"; setTimeout(()=>{ if(b) b.innerHTML=original; },1500); }
+          return;
+        }
+        const ok=await chCopy(text);
+        track("feed_sent",TP({how:"copy",ok:ok}));
+        b.innerHTML=ok?"Copied — send it to a friend":"Couldn't copy";
+        setTimeout(()=>{ if(b) b.innerHTML=original; },1800);
+      };
       if($$("chNext")) $$("chNext").onclick=()=>{ track("feed_next_tapped",{}); if(OPT.onNext) OPT.onNext(); };
       if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
       $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
