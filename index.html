@@ -5526,6 +5526,20 @@ function applyPlanAvailability(p){
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
 window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
+/* WHERE A TAPPED NOTIFICATION LANDS. "Someone found your hide / see how" opened the camera,
+   which is the screen with the least to do with what just happened — the notification
+   promised a result and delivered a viewfinder.
+   The wrapper calls this with the hide id from the push payload. It opens the player card,
+   which is where the results rows live and where Watch and Heat sit: the actual answer to
+   "see how". Defensive by construction — an id that means nothing here still lands the user
+   on their own card rather than nowhere, which is strictly better than the camera. */
+window.KAMO.openFound=(id)=>{
+  try{
+    if(id) chRemember(String(id).replace(/[^a-f0-9]/gi,"").slice(0,16));
+    track("notif_opened_found",{});
+    if(typeof openKamoHome==="function") openKamoHome();
+  }catch(e){}
+};
 window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn();
   /* The boot camera decision is waiting on exactly this. Resolving it here rather than on
      the 700ms timer means a returning user reaches compose as fast as they always did. */
