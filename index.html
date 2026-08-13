@@ -1650,6 +1650,29 @@
   .ssVisSw i{position:absolute;top:3px;left:20px;width:19px;height:19px;border-radius:50%;background:#04120b;transition:left .15s;}
   .ssVis[aria-pressed="false"] .ssVisSw{background:rgba(255,255,255,.22);}
   .ssVis[aria-pressed="false"] .ssVisSw i{left:3px;background:rgba(255,255,255,.9);}
+  /* THE ONE-TIME CONSENT SHEET. Deliberately the same object as the share sheet it precedes —
+     bottom-anchored, same card treatment, and the row inside it IS .ssVis, the identical
+     control with the identical words. Somebody meets the switch here and then finds the same
+     switch in the same state on the sheet a second later, which is the difference between a
+     disclosure and a formality. Three parts and no paragraph: what it is, the control, the
+     way out. Above the share sheet's own layer so it cannot open behind it. */
+  .kfCons{position:fixed;inset:0;z-index:9600;display:flex;align-items:flex-end;justify-content:center;
+    padding:0 14px;background:linear-gradient(180deg,rgba(3,5,8,0) 26%,rgba(3,5,8,.86));
+    opacity:0;transition:opacity .26s ease;}
+  .kfCons.show{opacity:1;}
+  .kfConsCard{width:min(92vw,420px);margin-bottom:calc(18px + var(--safe-b));padding:20px 18px 16px;
+    border-radius:24px;border:1px solid rgba(255,255,255,.16);
+    background:linear-gradient(180deg,rgba(15,42,34,.96),rgba(7,13,11,.98));
+    box-shadow:0 18px 50px rgba(0,0,0,.5);
+    transform:translateY(18px);transition:transform .3s cubic-bezier(.2,.9,.3,1);}
+  .kfCons.show .kfConsCard{transform:none;}
+  .kfConsT{font-family:var(--display);font-size:19px;font-weight:800;letter-spacing:-.3px;
+    text-align:center;margin:0 0 14px;}
+  .kfConsGo{display:flex;align-items:center;justify-content:center;width:100%;height:52px;
+    margin-top:12px;border:none;border-radius:16px;background:#fff;color:#04120c;
+    font-family:var(--display);font-size:16.5px;font-weight:800;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+  .kfConsGo:active{transform:scale(.98);}
   /* Same quiet dismiss as the paywall's "Maybe later". */
   .ssClose{display:block;width:100%;margin-top:2px;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;font-weight:700;cursor:pointer;padding:8px;}
   /* QUIET WAS TOO QUIET. This was mint text on nothing — no slab, no border — sitting last
@@ -8560,6 +8583,72 @@ function kfApplyVisibility(id,pub){
   if(!id) return;
   try{ chRpc("set_hide_public",{p_id:id,p_public:!!pub}).catch(()=>{}); }catch(e){}
 }
+
+/* SAID ONCE, BEFORE THE FIRST PHOTO GOES ANYWHERE.
+ *
+ * The switch has always existed and has always said the right words — it lives on the share
+ * sheet and reads "Anyone can play it in the KAMO feed". The problem is WHEN it is legible.
+ * The sheet presents itself on the reveal in the `peek` state, and that state hides every
+ * child except the grabber, the title, the send button and the preview; the visibility row
+ * is not on that list. So the row is behind a drag most people never perform, while the hide
+ * goes public on its own a second after the reveal.
+ * Measured over 24h: 29 hides were public whose author never even tapped share. Those people
+ * were never shown anything.
+ *
+ * PUBLIC STAYS THE DEFAULT — founder's call, 2026-08-13, and the existing public hides stay
+ * public. What changes is that nobody reaches it without having been told, in words, once.
+ * The row on this sheet IS the row from the share sheet: same control, same copy, already
+ * switched on. Somebody who taps straight through has consented to the default; somebody who
+ * flips it has set a preference that sticks forever.
+ *
+ * UNANSWERED IS PRIVATE. Not as a policy about defaults, but because an unanswered question
+ * is not an answer — if the app is killed on this sheet the hide simply stays out of the
+ * feed, which is the direction everything else in this file fails in. */
+const KF_ASKED_KEY="kamo_vis_asked";
+function kfAsked(){ try{ return localStorage.getItem(KF_ASKED_KEY)==="1"; }catch(e){ return false; } }
+function kfMarkAsked(){ try{ localStorage.setItem(KF_ASKED_KEY,"1"); }catch(e){} }
+/* Resolves to the answer. Resolves FALSE if it cannot be shown at all rather than assuming
+   consent nobody gave. */
+function kfAskConsent(){
+  if(kfAsked()) return Promise.resolve(kfWantPublic());
+  return new Promise((done)=>{
+    let settled=false;
+    const finish=(v)=>{ if(settled) return; settled=true;
+      kfMarkAsked(); kfSetWantPublic(v); kfRenderVis();
+      try{ wrap.classList.remove("show"); setTimeout(()=>wrap.remove(),260); }catch(e){}
+      track("visibility_consent",{public:v});
+      done(v); };
+    let wrap;
+    try{
+      wrap=document.createElement("div");
+      wrap.id="kfCons"; wrap.className="kfCons";
+      /* The same three parts as every sheet in this app, and nothing else: what it is, the
+         control, the way out. No paragraph — a wall of text on a reveal is a wall nobody
+         reads, and the row underneath already says the sentence that matters. */
+      wrap.innerHTML=
+        '<div class="kfConsCard">'
+        +'<div class="kfConsT">Your hides are public</div>'
+        +'<button class="ssVis" id="kfConsVis" aria-pressed="true">'
+        +'<span class="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/>'
+        +'<path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>'
+        +'<span class="ssVisTxt"><b id="kfConsVT">Public</b><i id="kfConsVS">Anyone can play it in the KAMO feed</i></span>'
+        +'<span class="ssVisSw"><i></i></span></button>'
+        +'<button class="kfConsGo" id="kfConsGo">Got it</button>'
+        +'</div>';
+      document.body.appendChild(wrap);
+      requestAnimationFrame(()=>wrap.classList.add("show"));
+      let on=true;
+      const vis=wrap.querySelector("#kfConsVis");
+      vis.onclick=()=>{ on=!on; haptic(10);
+        vis.setAttribute("aria-pressed",on?"true":"false");
+        wrap.querySelector("#kfConsVT").textContent=on?"Public":"Private";
+        wrap.querySelector("#kfConsVS").textContent=on?"Anyone can play it in the KAMO feed"
+                                                     :"Only whoever you send the link to"; };
+      wrap.querySelector("#kfConsGo").onclick=()=>{ haptic(10); finish(on); };
+      track("visibility_consent_shown",{});
+    }catch(e){ done(false); }   // could not be shown → nothing goes public
+  });
+}
 function kfRenderVis(){
   const b=$("#ssVis"); if(!b) return;
   const pub=kfWantPublic();
@@ -8642,7 +8731,9 @@ async function chUpload(){
     const mine=chId;
     bytes.then((up)=>{
       if(!up) return;                 // upload failed — stays private, stays out of the feed
-      kfApplyVisibility(mine,kfWantPublic());
+      /* ASKED BEFORE THE FIRST ONE TRAVELS, and only ever once — see kfAskConsent(). On every
+         later hide this resolves synchronously off the stored answer and nothing is shown. */
+      kfAskConsent().then((pub)=>kfApplyVisibility(mine,pub));
       /* HELD BACK A BEAT, and now behind the main upload rather than racing it: these are
          two more encodes and two more uploads, and starting them while the photo itself is
          still climbing the radio is exactly the contention this delay exists to avoid. The
@@ -9309,6 +9400,12 @@ function chSeek(hideId,opts){
   const HID=String(hideId||CH_SEEK);
   const HOST=opts.host||document.body;
   const FEED=!!opts.feed;
+  /* A SECOND LAP OF A HIDE THIS DEVICE HAS ALREADY SPENT — see the note on S.lap in the feed.
+     The round plays in full; what it must not do is FILE anything. Its answer is already
+     known to this player, so an attempt from here would inflate somebody's "12 people tried"
+     with a tap from a person who was not guessing. Judged locally against reveal_hide, which
+     the round already fetches a second later to draw the reveal, so nothing new is exposed. */
+  const REPLAY=!!opts.replay;
   /* ALIASED, because ending() takes a parameter called `opts` too and shadows this one.
      Reaching for the caller's callbacks in there under the name `opts` would silently read
      the ending's own {rehide, camoSrc} bag and do nothing. */
@@ -9642,8 +9739,18 @@ function chSeek(hideId,opts){
       $$("chFrame").appendChild(mk);
       buzzHaptic(20);
       let res=null;
-      try{ res=await chRpc("submit_attempt",{p_id:HID,p_x:x,p_y:y,p_ms:ms,p_v:2}); }
-      catch(e){ try{ res=await chRpc("submit_attempt",{p_id:HID,p_x:x,p_y:y,p_ms:ms}); }catch(_){}}
+      if(REPLAY){
+        /* NOTHING IS FILED ON A SECOND LAP. Judged here against the same answer key the
+           reveal is about to draw from, with the same circle the server tests: inside r of
+           (cx,cy) is a find. The counters, the percentile and the creator's notification all
+           belong to people who did not already know where to tap. */
+        try{ const g=await chRpc("reveal_hide",{p_id:HID});
+             if(g) res={hit:Math.hypot(x-g.cx,y-g.cy)<=g.r,tries:0,missed:0,secs:0,pct:null,others:0};
+        }catch(_){}
+      } else {
+        try{ res=await chRpc("submit_attempt",{p_id:HID,p_x:x,p_y:y,p_ms:ms,p_v:2}); }
+        catch(e){ try{ res=await chRpc("submit_attempt",{p_id:HID,p_x:x,p_y:y,p_ms:ms}); }catch(_){}}
+      }
       if(res&&res.hit){
         mk.className="chMark hit stay";
         chCelebrate($$("chFrame"),fx,fy);
@@ -10030,7 +10137,7 @@ function chFeed(){
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
-  const S={cursor:null,loading:false,done:false,slides:[],active:-1,round:null,played:0,hinted:false};
+  const S={cursor:null,loading:false,done:false,slides:[],active:-1,round:null,played:0,hinted:false,lap:0};
   kfState=S;
   track("feed_opened",{});
 
@@ -10064,9 +10171,9 @@ function chFeed(){
     const s=S.slides[i];
     kfMarkSeen(s.row.id);
     S.played++;
-    track("feed_slide",{n:S.played});
+    track("feed_slide",{n:S.played,replay:!!s.replay});
     S.round=chSeek(s.row.id,{
-      host:s.host, feed:true,
+      host:s.host, feed:true, replay:!!s.replay,
       onNext:()=>goNext(),
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       onReported:(id)=>drop(id),
@@ -10132,7 +10239,7 @@ function chFeed(){
     });
   }
 
-  function addSlide(row){
+  function addSlide(row,replay){
     const el=document.createElement("section"); el.className="kfSlide";
     const img=document.createElement("img");
     img.className="kfPrev"; img.alt=""; img.decoding="async"; img.draggable=false;
@@ -10140,7 +10247,7 @@ function chFeed(){
     const host=document.createElement("div"); host.className="kfHost";
     el.appendChild(img); el.appendChild(host);
     scroll.appendChild(el);
-    const s={el,host,row}; S.slides.push(s);
+    const s={el,host,row,replay:!!replay}; S.slides.push(s);
     io.observe(el);
     return s;
   }
@@ -10168,8 +10275,21 @@ function chFeed(){
            filtered out — which is the normal case for anyone who has played a while. */
         S.cursor=rows[rows.length-1].created_at;
         if(rows.length<KF_PAGE) S.done=true;
-        const skip=new Set(kfSeen().concat(chMine()));
-        rows.filter(r=>r&&r.id&&r.img_path&&!skip.has(r.id)).forEach(addSlide);
+        /* SECOND LAP: THE SKIP LIST IS DROPPED, NOT THE FEED.
+           A hide has one buzz in it, so a played hide is a spoiled hide and skipping it is
+           right — until the skip list is everything there is. With ~37 public hides a day a
+           regular player clears the room in minutes and then meets "Nothing here yet.",
+           which is the COLD-START copy and simply untrue: the feed is full, they have seen
+           it. 31 of 66 opens landed there today, and every one of them reads as "this is
+           dead" rather than "you're ahead of it".
+           So the room reopens. `S.lap` is set by paint() when a first pass came back empty;
+           from then on only this device's OWN hides are skipped, because playing your own is
+           the one thing that is never a round. Their answers are known — see the `replay`
+           flag on the slide, which stops the buzz reaching submit_attempt and inflating
+           somebody's attempt count with a tap from a player who already knew. */
+        const skip=new Set(S.lap?chMine():kfSeen().concat(chMine()));
+        rows.filter(r=>r&&r.id&&r.img_path&&!skip.has(r.id))
+            .forEach(r=>addSlide(r,S.lap));
       }
     }catch(e){
       track("feed_load_failed",{reason:String((e&&e.message)||e).slice(0,120)});
@@ -10201,6 +10321,17 @@ function chFeed(){
   function paint(){
     if(kfState!==S) return;
     if(!S.slides.length){
+      /* EMPTY MEANS TWO DIFFERENT THINGS AND ONLY ONE OF THEM IS A COLD START.
+         If this device has played hides before, the room is not empty — it has been cleared,
+         and the honest move is to reopen it rather than to tell a regular player that the
+         thing they have been playing all day contains nothing. One lap only: S.lap latches,
+         so a genuinely empty feed still lands on the cold start below instead of looping. */
+      if(!S.lap&&kfSeen().length){
+        S.lap=1; S.done=false; S.cursor=null;
+        track("feed_second_lap",{seen:kfSeen().length});
+        load().then(paint);
+        return;
+      }
       /* THE COLD START, SAID HONESTLY. On day one this is what everybody sees, and it is not
          an error: the feed is empty because nothing has been published to it yet, and the
          only thing that fills it is the next hide somebody makes. So the empty state is the
@@ -10229,7 +10360,10 @@ window.KAMOFEED={ open:chFeed, setVisibility:kfApplyVisibility, wantPublic:kfWan
   /* The block list is the one piece of feed state with no DOM at all — a tag is deliberately
      never rendered — so a test that could not read it could only assert that a button was
      clicked, which is the half that was never in doubt. */
-  blocked:kfBlocked };
+  blocked:kfBlocked,
+  /* The consent sheet has no other door: it is built and torn down inside one promise, at a
+     moment that needs a painted board and an upload to reach for real. */
+  askConsent:kfAskConsent, asked:kfAsked };
 
 /* THE SEEKER NEVER MEETS THE CAMERA. Arriving on ?h= means someone sent you a hide to
    find: no permission sheet, no hero, no three.js scene — just the photo and a tap. The
