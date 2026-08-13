@@ -967,6 +967,13 @@
      header and the buttons have taken theirs, which is about three rows and a hint of a
      fourth — enough to make it obvious the list scrolls. */
   #kamoHome .kpCard{max-height:70%;display:flex;flex-direction:column;align-items:center;}
+  /* AND NOTHING ELSE MAY GIVE WAY. Making the card a bounded flex column handed every child
+     the default flex-shrink:1, so once the expanded list pushed past max-height the browser
+     took the difference out of ALL of them — and the one that shows it is the upsell, whose
+     54px became ~40 and read as a squashed button. A declared height on a flex child is a
+     suggestion, not a floor. This pins every child at its natural size; .khScore below opts
+     back in to shrinking, which is the whole point of that rule and now its only job. */
+  #kamoHome .kpCard>*{flex:0 0 auto;}
   /* grow:0 — collapsed, this box is one line and must stay one line rather than inflate to
      fill the card. shrink:1 + min-height:0 is the pair that actually lets it give way: a flex
      item's default min-height is auto, which refuses to go below its content and hands the
@@ -6733,6 +6740,18 @@ function confettiBurst(originEl){
    marks, sparks, shake — but with infinite tries, and the headline (never a sub) narrates
    each result. The CTA and Back never move: the send stays one tap away from the first
    frame to the last. */
+/* HOW FAR THE RING SITS ABOVE THE FINGER, IN ONE PLACE.
+   The ring is held above the thumb so the thumb does not cover the thing being aimed at,
+   and the point committed is the RING, not the fingertip. That makes this number part of
+   the game's feel: get it wrong and every tap lands high.
+   It was declared twice — 56 in the rehearsal, 70 in the real round — by a commit whose own
+   message says the rehearsal plays "the same reticle as the seeker". It did not. So the
+   sender practised their aim at one offset on the share sheet and then played at another,
+   14px higher, on every hide they opened; reported as taps landing above the finger in the
+   feed, which is simply where most rounds are played now.
+   56, because that is the one somebody rehearses with, and because the complaint is that
+   the ring rides too high. One constant, so the two cannot drift apart again. */
+const CH_RET_OFF=56;
 function chPrevPlay(){
   try{
     const g=chGeom(); if(!g) return;
@@ -6830,7 +6849,7 @@ function chPrevPlay(){
        drag adjusts, release buzzes. Rehearsing the real move is the whole preview — a plain
        tap taught the sender a game that does not exist on the other side. */
     let ret=null, aimId=-1, found=false;
-    const RET_OFF=56;
+    const RET_OFF=CH_RET_OFF;
     const retMove=(x,y)=>{
       if(!ret) return;
       const r=img.getBoundingClientRect();
@@ -9498,7 +9517,7 @@ function chSeek(hideId,opts){
 
     /* ===== the buzz: aim with a reticle, release commits ================================ */
     const pts=new Map();
-    const RET_OFF=70;
+    const RET_OFF=CH_RET_OFF;
     let ret=null, aimRec=null, aimId=-1, pinch=null, postDown=null;
     const closeAim=(committed)=>{
       if(aimRec){ aimRec.c=committed?1:0; aimRec.u=t0?Date.now()-t0:0;
