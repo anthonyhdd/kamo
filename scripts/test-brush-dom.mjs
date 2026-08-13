@@ -98,6 +98,16 @@ const html = real.slice(0, at)
   + 'const o={clientY:y,clientX:r.left+5,bubbles:true,pointerId:1};'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));return brush;},'
+  + 'lock(){const l=document.getElementById("sizeLock");if(!l)return{shown:false,top:0,h:0};'
+  + 'return{shown:getComputedStyle(l).display!=="none",top:parseFloat(l.style.top)||0,'
+  + 'h:parseFloat(l.style.height)||0};},'
+  /* What the floor answer is actually painted on. flashSizeLock() spent weeks pulsing
+     #sizeStar and #sizeBar — one display:none, the other an invisible box — so the
+     control answered with nothing and no test noticed. This reads back visibility. */
+  + 'answerVisible(){const l=document.getElementById("sizeLock");'
+  + 'const e=sizeBar.querySelector(".sizeDot.floorEdge");'
+  + 'const vis=n=>!!n&&getComputedStyle(n).display!=="none";'
+  + 'return{region:vis(l),edge:vis(e),thumb:vis(sizeThumb),star:vis(sizeStar)};},'
   + 'starShown(){return getComputedStyle(sizeStar).display!=="none";},'
   + 'thumb(){return{shown:getComputedStyle(sizeThumb).display!=="none",dia:parseFloat(sizeThumb.style.width)||0};},'
   + 'setBrush(b){brush=b;renderSizeBar();return{dia:parseFloat(sizeThumb.style.width)||0};},'
@@ -282,9 +292,51 @@ console.log('\nREACHING UNDER THE FLOOR STILL ASKS TO BUY');
   await page.evaluate(() => window.__b.closePw());
   const second = await page.evaluate(() => { window.__b.tapFoot(); return window.__b.pw(); });
   !second.open && second.bouncing
-    ? ok('and asking again bounces the thumb instead of a second full screen mid-round')
+    ? ok('and asking again bounces instead of a second full screen mid-round')
     : bad(`the second reach left open=${second.open} bouncing=${second.bouncing} — it either floods `
         + '(824 views, one tap) or refuses in silence, and both have shipped before');
+
+  /* AND THE BOUNCE HAS TO LAND ON SOMETHING THAT IS ON SCREEN. This is the assertion that was
+     missing for weeks. flashSizeLock() animates #sizeStar, which renderSizeBar sets to
+     display:none on every call, and #sizeBar, which its own stylesheet calls "an invisible
+     34x212 box" — so "the bar answers on itself, without words", the stated reason the `size`
+     line was deleted from PW_LOCK_HINT, answered with nothing at all. The floorBounce dip then
+     rode #sizeThumb, which is hidden for free users, who are the only ones with a floor.
+     Setting a class is not feedback. Something visible has to carry it. */
+  const paint = await page.evaluate(() => window.__b.answerVisible());
+  (paint.region || paint.edge || paint.thumb || paint.star)
+    ? ok(`and it is painted on something visible (${Object.keys(paint).filter((k) => paint[k]).join(', ')})`)
+    : bad('the floor answer animates nothing that is on screen — region, edge, thumb and ✦ are '
+        + 'all hidden. That is exactly how flashSizeLock() pulsed two display:none elements for '
+        + 'weeks while the control "answered on itself".');
+}
+
+console.log('\nTHE LOCKED RANGE IS A REGION, AND ONLY FREE USERS SEE ONE');
+{
+  await page.evaluate(() => { window.__b.reset(); window.__b.setPro(false); });
+  const l = await page.evaluate(() => window.__b.lock());
+  const dots = (await page.evaluate(() => window.__b.dots())).filter((d) => d.shown);
+  const finest = dots.length ? Math.min(...dots.map((d) => d.top)) : 0;
+  const lowest = dots.length ? Math.max(...dots.map((d) => d.top)) : 0;
+
+  l.shown && l.h > 0
+    ? ok(`a free user gets a marked-off region (${l.h.toFixed(0)}px from y=${l.top.toFixed(0)})`)
+    : bad('nothing marks the locked range — the --floorPct gradient alone reads as "a bit dark '
+        + 'down there", which is the report this change answers');
+  /* Below every stop it draws. A region overlapping a size you can pick would be claiming
+     something that is already yours. */
+  l.top >= lowest
+    ? ok(`and it starts at or below the finest free stop (y=${lowest.toFixed(0)})`)
+    : bad(`the region starts at y=${l.top.toFixed(0)}, above the finest free stop at ${lowest.toFixed(0)} — `
+        + 'it is marking sizes the user already owns as locked');
+
+  await page.evaluate(() => window.__b.setPro(true));
+  const m = await page.evaluate(() => window.__b.lock());
+  !m.shown
+    ? ok('and a member sees none of it — nothing below is locked for them')
+    : bad('a member is shown a locked region for a range they have bought');
+  await page.evaluate(() => window.__b.setPro(false));
+  void finest;
 }
 
 await browser.close();
