@@ -191,6 +191,60 @@ console.log('\nTHE FEED OPENS ON THE PAGE THE PROBE ALREADY FETCHED');
   await page.close();
 }
 
+/* A BUTTON THAT DOES EVERYTHING EXCEPT BE VISIBLE. The profile control in the feed bar
+ * called openKamoHome() correctly from the day it shipped: the handler ran, the event fired,
+ * the .show class landed. The card rendered at z-index 80 underneath a fullscreen #kfeed at
+ * 9400 and nobody ever saw it — which is indistinguishable, from the outside, from a dead
+ * button, and was reported as one.
+ * SO THE ASSERTION IS elementFromPoint, NOT A CLASS. Every class-based or display-based check
+ * passes against the broken code, because nothing about the class was ever wrong. The only
+ * question that separates the two is whether a finger landing on the card would reach it. */
+console.log('\nTHE PROFILE BUTTON OPENS THE CARD WHERE IT CAN BE TOUCHED');
+{
+  const page = await open(ROWS(3));
+
+  const closed = await page.evaluate(() => {
+    const el = document.getElementById('kamoHome');
+    return !!el && !el.classList.contains('show');
+  });
+  closed ? ok('the card starts closed while the feed plays') : bad('#kamoHome is open before anything was tapped');
+
+  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.waitForTimeout(600);
+
+  const st = await page.evaluate(() => {
+    const el = document.getElementById('kamoHome');
+    if (!el) return { missing: true };
+    const card = el.querySelector('.kpCard');
+    if (!card) return { noCard: true, shown: el.classList.contains('show') };
+    const r = card.getBoundingClientRect();
+    /* A point provably inside the card, taken from the card's own box rather than guessed
+       from the viewport — the card is bottom-anchored and its height changes with content. */
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(24, r.height / 2));
+    return {
+      shown: el.classList.contains('show'),
+      z: getComputedStyle(el).zIndex,
+      position: getComputedStyle(el).position,
+      onTop: !!(hit && el.contains(hit)),
+      blockedBy: hit && !el.contains(hit) ? ((hit.closest('[id]') || {}).id || hit.className || hit.tagName) : null,
+    };
+  });
+
+  st.shown ? ok('tapping it opens the card') : bad('#kamoHome never got .show — the handler did not run');
+  st.onTop
+    ? ok(`and the card is what a finger would actually hit (z-index ${st.z}, ${st.position})`)
+    : bad(`the card is open but BURIED — a tap on it lands on "${st.blockedBy}" instead (z-index ${st.z}, ${st.position})`);
+
+  /* The handler is a toggle, and the second tap is the half that only exists because the
+     feed bar stays on screen behind the card. */
+  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.waitForTimeout(400);
+  const reclosed = await page.evaluate(() => !document.getElementById('kamoHome').classList.contains('show'));
+  reclosed ? ok('and tapping it again closes it') : bad('the profile button does not toggle back');
+
+  await page.close();
+}
+
 console.log('\nTHE FEED CAN SAY SOMETHING BACK');
 {
   const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [{ emoji: '\u{1F525}', n: 4 }],

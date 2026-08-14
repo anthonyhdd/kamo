@@ -961,7 +961,26 @@
      tap — so #kamoHome's outside stays CLEAR (no blur, no heavy dim, founder's call
      2026-08-12): the body swaps in plain sight right behind the card. A light scrim only
      where the card sits, for its own legibility. #kamoPlus keeps the shared treatment. */
-  #kamoHome{backdrop-filter:none;-webkit-backdrop-filter:none;background:linear-gradient(180deg,rgba(3,5,8,0) 34%,rgba(3,5,8,.72));}
+  /* IT OPENED 9320 LAYERS UNDERNEATH THE FEED, and that is why the profile button in the
+     feed bar did nothing. The handler on #kfMe is correct and always has been — it fires
+     feed_profile_tapped, calls openKamoHome(), the class lands. The card then renders at
+     z-index 80, and #kfeed is 9400. Nothing was broken; the card was simply behind an opaque
+     fullscreen surface, which looks exactly like a dead button.
+     The comment on that handler says the card "opens ON TOP of it". The CSS never agreed.
+     THE FILE HAS TWO BANDS AND #kamoHome WAS IN THE WRONG ONE. Everything that layers over
+     the app sits at 0-95 (#shareSheet 58, #paywall 60, this at 80); everything that TAKES
+     THE SCREEN sits at 9000+ (.chS 9000, #kfeed 9400, secretAsk 9500, .kfCons 9600). This
+     card is reachable from inside the feed, so it belongs in the second band.
+     9450, precisely: above the feed, and below both secretAsk and the visibility consent —
+     a pass prompt or a question about publishing somebody's photo must never end up behind
+     a profile card. And `fixed` rather than `absolute`, because over a fixed fullscreen
+     surface an absolutely-positioned overlay is sized by the document rather than the
+     viewport, which is how a raised z-index alone would have produced a card in the wrong
+     place instead of no card at all.
+     Everything it already sat above, it still sits above: the order against the paywall and
+     the share sheet is unchanged, so the existing closeKamoHome()-before-openPaywall() dance
+     on the Heat button keeps working exactly as it did. */
+  #kamoHome{position:fixed;z-index:9450;backdrop-filter:none;-webkit-backdrop-filter:none;background:linear-gradient(180deg,rgba(3,5,8,0) 34%,rgba(3,5,8,.72));}
   /* Breathing room on both sides — the row sat cramped between the sub line and the score
      box (founder, 2026-08-12). The chips are taller and quieter at rest; the selected one
      carries the mint ring, and the New chip's figure inherits its text colour so the mark
