@@ -144,6 +144,53 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
   await page.close();
 }
 
+/* THE OPENING FRAME COSTS NOTHING, and that is a property of the wire, not of a stopwatch.
+ * The feed used to make two round trips for one open: kfProbe asked "is there anything" at
+ * launch and threw the answer away, then chFeed() asked again — from a standing start, with a
+ * thumb already on the screen and a spinner where the photo goes. The second call is the one
+ * the user waits for, and it is the one that did not need to exist.
+ * Asserted by COUNTING feed_page calls across the tap rather than by timing the paint: a
+ * timing test on a laptop passes on any machine fast enough to hide the regression, which is
+ * every machine except the phone that has the problem. If a slide exists and the wire was
+ * silent, the page came from memory. There is no other way for that to be true. */
+console.log('\nTHE FEED OPENS ON THE PAGE THE PROBE ALREADY FETCHED');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.addInitScript((r) => {
+    window.__seed = {
+      feed_page: r,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
+      set_hide_public: null,
+    };
+  }, ROWS(4));
+  await page.goto(base, { waitUntil: 'load' });
+  /* The launch probe, waited for rather than slept on: until it has answered there is no
+     cache to open from and the test would be asserting against a race. */
+  await page.waitForFunction(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length >= 1, null, { timeout: 6000 });
+  const before = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length);
+
+  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.waitForSelector('.kfSlide', { timeout: 6000 });
+  const after = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length);
+
+  after === before
+    ? ok(`the first slide is on screen with no feed_page call after the tap (${before} total)`)
+    : bad(`opening the feed cost ${after - before} extra feed_page call(s) — the probe's page was not reused`);
+
+  /* AND THE PHOTOS DO NOT ALL START AT ONCE. Eight full-resolution JPEGs queued in the same
+     tick means the only one being looked at waits behind seven that are not. The first two
+     are eager on purpose — slide 1 is one flick away — and everything past them defers. */
+  const load = await page.evaluate(() => [...document.querySelectorAll('.kfSlide .kfPrev')].map(i => i.getAttribute('loading') || ''));
+  load.length >= 3 && load[0] !== 'lazy' && load[1] !== 'lazy' && load.slice(2).every(v => v === 'lazy')
+    ? ok('slides past the second defer their photo (' + load.map(v => v || 'eager').join(', ') + ')')
+    : bad('photo loading is ' + JSON.stringify(load) + ' — expected eager, eager, then lazy');
+
+  const prio = await page.evaluate(() => (document.querySelector('.kfSlide .kfPrev') || {}).getAttribute && document.querySelector('.kfSlide .kfPrev').getAttribute('fetchpriority'));
+  prio === 'high' ? ok('the opening photo is fetched at high priority') : bad('the first slide has fetchpriority=' + prio);
+
+  await page.close();
+}
+
 console.log('\nTHE FEED CAN SAY SOMETHING BACK');
 {
   const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [{ emoji: '\u{1F525}', n: 4 }],
