@@ -3970,12 +3970,37 @@ const tFromBrush=b=>Math.pow(Math.max(0,Math.min(1,(b-BRUSH_MIN)/(BRUSH_MAX-BRUS
 /* The ✦ lives under the last stop and labels the locked pair, so the stops cannot use the
    whole rail — they stop short and leave it the foot. Without this the glyph's box overhangs
    the control and it is back to floating over the photo, which is the bug it was moved for. */
-/* The stops take the top half; the rest is the ✦'s, target included. */
+/* The stops take the top half; the rest is the ✦'s, target included.
+   NOTHING READS THESE THREE ANY MORE. They are kept with the .sizeDot elements they place —
+   one flag to flip if the drawn stops ever come back — but --floorPct, #sizeLock, the ✦ zone
+   and the ✦ zone moved onto tFromBrush() on 2026-08-15 (freeSnap still reads it — see its note), because the stops are not drawn and
+   the thumb is. Do not wire a fourth thing to this spacing: that is the bug. */
 const STAR_RESERVE=h=>h*0.46;
 const STOP_GAP=h=>(h-STAR_RESERVE(h))/(SIZE_STOPS.length-1);
 const stopY=(i,h)=>SB_PAD+i*STOP_GAP(h);
-/* Below this the touch belongs to the ✦, not to a stop. */
-const starZoneY=h=>stopY(SIZE_STOPS.length-1,h)+STOP_GAP(h)*0.55;
+/* THE FLOOR IS WHERE THE THUMB STOPS, NOT WHERE THE DOTS WOULD HAVE BEEN.
+   #sizeLock — the mint region that means BELOW HERE IS KAMO+ — was pinned to stopY(last),
+   the EVEN spacing the drawn stops used. The stops are not drawn any more (see the note in
+   renderSizeBar): the only thing on the rail is the thumb, and the thumb is placed by
+   tFromBrush(), which is CURVED. The two geometries do not agree, and at the finest free
+   size they disagree by more than a thumb: stopY(last) lands at 112.6px on a 212px bar while
+   the thumb for brush 10 sits at 123.3px with a 19px diameter — so a free user who picks the
+   smallest size he is entitled to sees his own thumb sitting whole inside the mint zone he
+   has not paid for. Reported 2026-08-15 with a screenshot; the control was contradicting
+   itself, not leaking anything (freeSnap has always clamped `brush` to SIZE_STOPS).
+   So the floor is derived from the thumb: the BOTTOM EDGE of the thumb at the finest free
+   size, plus 2px of air. Below that line nothing free can ever be drawn, which is exactly
+   what the mint region claims. */
+const thumbDia=t=>Math.round(10+t*22);
+const FREE_FLOOR_T=tFromBrush(Math.min(...FREE_SIZES));
+const freeFloorY=h=>SB_PAD+(1-FREE_FLOOR_T)*h+thumbDia(FREE_FLOOR_T)/2+2;
+/* Below this the touch belongs to the ✦, not to a stop.
+   ONE LINE, NOT TWO. This was stopY(last)+0.55 of a gap — an independent third number that
+   happened to land 24px under the painted boundary, so a press in the top of the mint region
+   did NOT sell: it snapped to the finest free size while the region under the finger glowed
+   KAMO+. "The mint region always sells" (founder, 2026-08-14) is only true if the region and
+   the selling zone are the same pixels, so now they are the same expression. */
+const starZoneY=h=>freeFloorY(h);
 /* 2px at the finest, 13px at the fattest, linear in the brush itself so the picture does not
    lie about the tool. 13px is the ceiling the 41px spacing allows without two bars touching. */
 const stopTh=size=>Math.round((4+((size-Math.min(...FREE_SIZES))/(Math.max(...FREE_SIZES)-Math.min(...FREE_SIZES)))*9)*2)/2;
@@ -8371,7 +8396,7 @@ $("#btnSave").onclick=saveStatic;
 const sizeBar=$("#sizeBar"), sizeThumb=$("#sizeThumb"), sizeFill=$("#sizeFill"), sizeStar=$("#sizeStar"), sizeLock=$("#sizeLock");
 const SB_PAD=24;
 function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
-  const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=Math.round(10+t*22);
+  const h=sizeBar.clientHeight-SB_PAD*2, y=SB_PAD+(1-t)*h, d=thumbDia(t);   // thumbDia is shared with freeFloorY, so the floor cannot drift off the thumb it is measured from
   const free=!canPro();
   sizeThumb.style.width=d+"px"; sizeThumb.style.height=d+"px"; sizeThumb.style.top=y+"px";
   /* THE FILL STOPS WHERE THE FREE RANGE STOPS. Running it to the foot of the bar drew a
@@ -8389,7 +8414,7 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
   sizeFill.style.display="none";
   /* Where the free travel ends, as a percentage of the control, for the rail gradient and
      for the ✦ that marks the junction. Members get 100%: nothing below is locked. */
-  const floorY=free?stopY(SIZE_STOPS.length-1,h):sizeBar.clientHeight;
+  const floorY=free?freeFloorY(h):sizeBar.clientHeight;
   sizeBar.style.setProperty("--floorPct",(100*floorY/sizeBar.clientHeight).toFixed(1)+"%");
   /* THE REGION ITSELF, from the floor to the foot of the rail. The rail is inset 16px top and
      bottom, so the bottom edge is clientHeight-16 — matching it exactly is what makes this
@@ -8480,8 +8505,11 @@ function renderSizeBar(){ if(!sizeBar) return; const t=tFromBrush(brush);
      left saying a paid range exists at all, and that gradient is load-bearing for the ✦
      gesture underneath it. */
   /* NOT DRAWN. Kept built and positioned by nothing, exactly as before: the elements and
-     their stylesheet stay so this is one flag to flip if the question reopens, and the
-     geometry that placed them (stopY, stopTh) is still what --floorPct and #sizeLock read. */
+     their stylesheet stay so this is one flag to flip if the question reopens.
+     WHAT CHANGED: --floorPct and #sizeLock no longer read that geometry. They followed the
+     even stop spacing while the only thing on the rail — the thumb — followed the curve, and
+     the mint region ended up ABOVE the thumb at the finest free size. Both now come from
+     freeFloorY(), which is measured off the thumb itself. */
   dots.forEach((d)=>{ d.style.display="none"; d.classList.remove("on"); d.classList.remove("floorEdge"); });
   syncBrushPrev(); }
 /* THE RING IS THE BRUSH, 1:1. `brush` is the on-screen diameter in CSS px at zoom 1 —
@@ -8645,6 +8673,14 @@ sizeBar.addEventListener("pointerdown",e=>{
 /* Snap to the nearest of the three free stops, by POSITION — the same arithmetic the tap used,
    factored out so the press and the drag cannot drift apart. Silent when nothing changes: a
    slow drag across one stop should tick once, not sixty times. */
+/* STILL ON THE EVEN SPACING, AND THAT IS A SECOND BUG LEFT DELIBERATELY UNFIXED.
+   The boundaries this draws are nowhere near where the thumb is drawn: 36 only wins above the
+   top 13.5% of the rail while its thumb sits at 23.9%, so pressing ON the fat thumb selects
+   the middle size. Same root cause as the floor above — even spacing versus tFromBrush's
+   curve — and the fix is one line (nearest |tFromBrush(s)-t|). It is NOT taken here because it
+   moves which size people land on, and every redesign of this control has been argued from
+   that number. Scope of 2026-08-15 was the thumb sitting in the mint region; this is a
+   separate call to make on purpose. */
 function freeSnap(t,h){
     const span=(h-STAR_RESERVE(h))/h;
     let best=Math.round(((1-t)/span)*(SIZE_STOPS.length-1));

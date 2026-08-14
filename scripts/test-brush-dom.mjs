@@ -109,7 +109,11 @@ const html = real.slice(0, at)
   + 'const vis=n=>!!n&&getComputedStyle(n).display!=="none";'
   + 'return{region:vis(l),edge:vis(e),thumb:vis(sizeThumb),star:vis(sizeStar)};},'
   + 'starShown(){return getComputedStyle(sizeStar).display!=="none";},'
-  + 'thumb(){return{shown:getComputedStyle(sizeThumb).display!=="none",dia:parseFloat(sizeThumb.style.width)||0};},'
+  /* TOP AND BOTTOM, NOT JUST THE DIAMETER. The thumb centres on style.top with a
+     translate(-50%,-50%), so its painted extent is top±dia/2 — which is the only thing that
+     can be compared against #sizeLock's edge, and the comparison nothing was making. */
+  + 'thumb(){const y=parseFloat(sizeThumb.style.top)||0,d=parseFloat(sizeThumb.style.width)||0;'
+  + 'return{shown:getComputedStyle(sizeThumb).display!=="none",dia:d,top:y-d/2,bottom:y+d/2};},'
   + 'setBrush(b){brush=b;renderSizeBar();return{dia:parseFloat(sizeThumb.style.width)||0};},'
   + 'floorPct(){return parseFloat(sizeBar.style.getPropertyValue("--floorPct"))||0;},'
   + 'star(){return sizeStar.getBoundingClientRect();},'
@@ -341,6 +345,23 @@ console.log('\nTHE LOCKED RANGE IS A REGION, AND ONLY FREE USERS SEE ONE');
     ? ok(`and it starts at or below the finest free stop (y=${lowest.toFixed(0)})`)
     : bad(`the region starts at y=${l.top.toFixed(0)}, above the finest free stop at ${lowest.toFixed(0)} — `
         + 'it is marking sizes the user already owns as locked');
+  /* AND THE SAME THING ABOUT THE ONLY OBJECT ACTUALLY ON THE RAIL.
+     The assertion above has been vacuous since the stops stopped being drawn: `dots` filters
+     on shown, nothing is shown, so `lowest` is 0 and `l.top >= 0` is true of every layout
+     including the broken one. It was broken. #sizeLock followed the even stop spacing while
+     the thumb follows tFromBrush's curve, and at the finest free size the thumb sat WHOLE
+     inside the mint region — a free user looking at his own brush parked in the zone marked
+     KAMO+ (reported with a screenshot, 2026-08-15).
+     The thumb is what is on screen, so the thumb is what this compares. */
+  const finestThumb = await page.evaluate(() => {
+    const s = window.__b.sizes(); window.__b.setBrush(Math.min(...s)); return window.__b.thumb();
+  });
+  const l2 = await page.evaluate(() => window.__b.lock());
+  finestThumb.bottom <= l2.top
+    ? ok(`and the thumb at the finest free size stays clear of it (${finestThumb.bottom.toFixed(0)}px vs region top ${l2.top.toFixed(0)}px)`)
+    : bad(`the thumb at the finest free size reaches y=${finestThumb.bottom.toFixed(0)}, inside a region that starts at `
+        + `${l2.top.toFixed(0)} — the control shows a free user his own brush in the zone marked KAMO+`);
+  await page.evaluate(() => { const s = window.__b.sizes(); window.__b.setBrush(s[1]); });
 
   await page.evaluate(() => window.__b.setPro(true));
   const m = await page.evaluate(() => window.__b.lock());
