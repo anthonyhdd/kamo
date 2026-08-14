@@ -281,7 +281,11 @@ console.log('\nREACHING UNDER THE FLOOR STILL ASKS TO BUY');
   await page.evaluate((b) => { window.__b.reset(); window.__b.setBrush(b); }, FREE[1]);
   const held = await page.evaluate(() => window.__b.tapFoot());
   const first = await page.evaluate(() => window.__b.pw());
-  first.open && first.src === 'size_star'
+  /* SOURCE IS `size`, NOT `size_star`. The glyph and the mint region are two different
+     gestures answering two different questions, and reporting both as size_star put them in
+     one bucket — which is why source:"size" read 0 on most days while size_star read 70-90.
+     Asserted here because the split is the only thing that will let either be judged. */
+  first.open && first.src === 'size'
     ? ok(`the first reach opens the sheet as "${first.src}", uncapped`)
     : bad(`the first reach left open=${first.open} src=${first.src} — the paint screen is out of `
         + 'the funnel again, which is the regression this whole thread started from');
@@ -289,12 +293,20 @@ console.log('\nREACHING UNDER THE FLOOR STILL ASKS TO BUY');
     ? ok(`and the brush does not move (still ${held})`)
     : bad(`the brush jumped to ${held} — the foot is not a stop`);
 
+  /* THE MINT REGION ALWAYS SELLS — founder's call, 2026-08-14, replacing the once-per-launch
+     rule this assertion used to guard. The old contract was "ask again and it bounces", and
+     the fear behind it was the 824-views-one-tap flood. That flood came from an INVISIBLE
+     trapdoor: 47% of the bar was unmarked and most opens were people adjusting a tool. This
+     region is painted, bordered and clear of its free neighbour, so a press on it is aimed,
+     and an aimed request should not be refused because it is the second one today.
+     Still bounded elsewhere: only a pointerdown in the region counts (a drag past it clamps),
+     so this cannot fire on the way through. */
   await page.evaluate(() => window.__b.closePw());
   const second = await page.evaluate(() => { window.__b.tapFoot(); return window.__b.pw(); });
-  !second.open && second.bouncing
-    ? ok('and asking again bounces instead of a second full screen mid-round')
-    : bad(`the second reach left open=${second.open} bouncing=${second.bouncing} — it either floods `
-        + '(824 views, one tap) or refuses in silence, and both have shipped before');
+  second.open && second.src === 'size'
+    ? ok('and asking again opens it again — the region sells every time, not once per launch')
+    : bad(`the second reach left open=${second.open} src=${second.src} — the mint region went `
+        + 'quiet after one ask, which is the silent refusal this change removed');
 
   /* AND THE BOUNCE HAS TO LAND ON SOMETHING THAT IS ON SCREEN. This is the assertion that was
      missing for weeks. flashSizeLock() animates #sizeStar, which renderSizeBar sets to
