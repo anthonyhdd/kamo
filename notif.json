@@ -38,7 +38,28 @@
     "1 keeps every part of the design that was actually load-bearing: the ask still only",
     "fires from onHideFinished, i.e. after a finished hide, never on a cold launch, still",
     "behind our own soft dialog, and a Not now is still re-askable. The only thing dropped",
-    "is the requirement to have already come back."
+    "is the requirement to have already come back.",
+    "",
+    "askBody IS THE ONE THING CHANGED ON 2026-08-14, AND IT IS CHANGED ALONE.",
+    "Week of 08-10, uniques: soft_declined 281, system_granted 83, system_denied 33. Our own",
+    "dialog converts at 29%; iOS, once reached, says yes 72% of the time. So the binding",
+    "constraint is not Apple and never was — it is this sentence.",
+    "",
+    "It used to read: the moment someone opens your challenge, AND a nudge once a day to hide",
+    "another. Two promises, and the second is a chore. A daily reminder is a thing you agree",
+    "to endure; someone hunting the kamo you hid is a thing you want to know. Leading with the",
+    "chore spends the appetite the first half just created.",
+    "",
+    "The daily nudge is still promised, because it still happens and a dialog that hides what",
+    "the permission is for earns a Settings-off a week later. It is reframed rather than",
+    "dropped: your turn to hide, not a reminder to do homework.",
+    "",
+    "NOTHING ELSE MOVED IN THIS FILE ON PURPOSE. sessionsBeforeAsk, maxSoftAsks and",
+    "minDaysBetweenAsks decide WHO gets asked; this decides how many of them say yes. Move",
+    "both at once and neither number can be read afterwards. Judge it on",
+    "daily_reminder_optin_outcome: (system_granted + system_denied) over soft_declined + both,",
+    "against the 29% above. Wait for a full week — this audience arrives on ads and the",
+    "weekday mix moves the denominator."
   ],
 
   "enabled": true,
@@ -65,7 +86,7 @@
   "settleMs": 2600,
 
   "askTitle": "Know when they try to find you",
-  "askBody": "We'll tell you the moment someone opens your challenge, and nudge you once a day to hide another.",
+  "askBody": "The moment someone opens your challenge — and whether they found you. Plus a nudge when it's your turn to hide.",
   "askYes": "Turn it on",
   "askNo": "Not now",
 
