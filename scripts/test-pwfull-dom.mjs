@@ -112,7 +112,18 @@ console.log('\nTHE HARNESS PIN HOLDS — WITHOUT A SEED, HEADLESS GETS THE SHEET
 
 console.log('\nTHE FULL ARM RENDERS, AND THE RIGHT LINE LIGHTS');
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-await page.addInitScript(() => { try { localStorage.setItem('kamo_pw_design', 'full'); } catch (e) {} });
+/* kamo_pw_seen ALONGSIDE THE ARM, and it is a fixture fix rather than a behaviour change.
+   Since 2026-08-14 the FIRST paywall an install ever sees has to come from the end of a round
+   — the nth split showed that impression converts at twice the rate of any other and was
+   being spent by whichever tool lock fired first. This suite is about what the full-bleed arm
+   RENDERS, not about when it is allowed to open, and its fixture is a fresh device opening
+   from a non-payoff source: exactly the case the new rule defers. Without this seed the
+   paywall never opens and five assertions fail on a screen that is fine.
+   The gate itself is asserted in scripts/test-pwgate-dom.mjs, which owns that question. */
+await page.addInitScript(() => { try {
+  localStorage.setItem('kamo_pw_design', 'full');
+  localStorage.setItem('kamo_pw_seen', '1');
+} catch (e) {} });
 await page.goto(url, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
 {
