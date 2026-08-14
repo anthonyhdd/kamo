@@ -11028,16 +11028,51 @@ function kfAddBlock(tag){
  * This is a gate, not a kill switch — the day somebody publishes publicly, the button appears
  * by itself, for everybody, with no deploy. */
 let kfHasContent=false;
+/* THE PAGE THE PROBE ALREADY PAID FOR, held for the tap that is going to want it.
+   Consumed once, and only for the very first load of a feed session — everything after it is
+   a normal paged fetch from the cursor these rows set. */
+let kfFirstPage=null;
+/* Old enough to be a different feed. Five minutes is not about correctness — kfSeen() still
+   filters, and a hide does not go stale — it is about the one case this must not produce: a
+   phone left open all afternoon, opening a feed whose newest hide is hours old while newer
+   ones exist. Past the window it simply falls back to fetching, i.e. to today's behaviour. */
+const KF_CACHE_MS=300000;
+/* Returns the probe's page ONCE, or null, and it is deliberately a taker rather than a
+   getter: a second feed session in the same launch must go to the network, because by then
+   these rows have all been seen and serving them again is serving a spinner's worth of
+   filtering for nothing.
+   ⚠️ NOT FOR A DEVICE THAT HAS BLOCKED SOMEBODY. The probe sends the 2-argument call, which
+   has no block filter in it, so its rows can contain the author this device asked never to
+   see again. load() reaches for the 3-argument overload in that case and must keep doing so:
+   answering "don't show me this person" with their photograph is not a performance
+   trade-off, it is the one outcome that is worse than a slow feed. Checked here rather than
+   at probe time because a block can be added after launch. */
+function kfTakeFirstPage(){
+  const c=kfFirstPage; kfFirstPage=null;
+  if(!c||!c.rows.length) return null;
+  if(kfBlocked().length) return null;
+  if(Date.now()-c.at>KF_CACHE_MS) return null;
+  return c.rows;
+}
 function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b.style.display=(on&&kfHasContent)?"flex":"none"; }catch(e){} }
-/* Asked once per launch, and only where a feed could be opened at all. `limit 1` because the
-   question is "is there anything", not "what is there" — the page itself is fetched when the
-   button is actually tapped. Silent on failure: an unreachable probe leaves the button hidden,
-   which is the same outcome as an empty feed and the safe direction to fail in. */
+/* Asked once per launch, and only where a feed could be opened at all. Silent on failure: an
+   unreachable probe leaves the button hidden, which is the same outcome as an empty feed and
+   the safe direction to fail in.
+   IT ASKED FOR ONE ROW AND THREW THE ANSWER AWAY. The question was "is there anything", so
+   `limit 1` was exactly right for the button — and then chFeed() opened on a spinner and made
+   the SAME call again, from a standing start, with a thumb already on the screen. Two round
+   trips to Supabase for one feed, the second one on the critical path, and the first one had
+   already proven the connection was warm.
+   Asking for a full page costs the same request. `limit 1` and `limit 8` differ by a few
+   kilobytes of JSON on a query that is indexed either way, and it happens at launch, minutes
+   before anybody taps anything. What it buys is the whole wait: the feed opens on rows it
+   already holds. */
 async function kfProbe(){
   if(kfHasContent) return;
   try{
-    const rows=await kfRpc("feed_page",{p_before:null,p_limit:1});
+    const rows=await kfRpc("feed_page",{p_before:null,p_limit:KF_PAGE});
     if(rows&&rows.length){
+      kfFirstPage={rows:rows,at:Date.now()};
       kfHasContent=true;
       track("feed_available",{});
       /* Only reveal it if the camera screen is the thing on screen — the same condition
@@ -11225,6 +11260,20 @@ function chFeed(){
     const el=document.createElement("section"); el.className="kfSlide";
     const img=document.createElement("img");
     img.className="kfPrev"; img.alt=""; img.decoding="async"; img.draggable=false;
+    /* EIGHT PHOTOS USED TO START AT ONCE, and only one of them was on screen.
+       A page is 8 rows and every one of them got its src here, in the same tick — so the
+       first slide's JPEG, the only picture anybody is looking at, queued behind seven others
+       for the phone's connection. That is not a small effect on a cellular network with
+       full-resolution photos, and it gets worse as the feed fills up, which is exactly when
+       somebody notices the feed got slow.
+       The first two stay eager: slide 0 is the opening frame and slide 1 is one flick away,
+       and lazy-loading the thing the user is about to swipe to would trade an opening wait
+       for a wait on every swipe. Everything below that waits until the browser sees it
+       coming — which it does with a generous margin, well before the slide is on screen.
+       ⚠️ `loading` MUST be set before `src`. Setting it after the assignment is a no-op: the
+       fetch has already been queued, which is the failure this is fixing. */
+    if(S.slides.length>=2) img.loading="lazy";
+    else if(!S.slides.length) img.setAttribute("fetchpriority","high");
     img.src=CH_URL+"/storage/v1/object/public/hides/"+row.img_path;
     const host=document.createElement("div"); host.className="kfHost";
     el.appendChild(img); el.appendChild(host);
@@ -11245,10 +11294,19 @@ function chFeed(){
          the load FAILS: it falls through to the Retry card below rather than quietly retrying
          without the filter. Falling back would mean answering "don't show me this person"
          with their photograph. */
-      const tags=kfBlocked();
-      const rows=await kfRpc("feed_page", tags.length
-        ? {p_before:S.cursor,p_limit:KF_PAGE,p_block_tags:tags}
-        : {p_before:S.cursor,p_limit:KF_PAGE});
+      /* THE FIRST PAGE IS USUALLY ALREADY HERE. kfProbe fetched one at launch to decide
+         whether the button exists at all; taking it means the feed's opening frame costs no
+         network at all, which is the difference between a spinner and a photo. Only the
+         opening load qualifies — S.cursor is null and no lap has been forced — and the taker
+         refuses on a blocked device or a stale cache, so every other path below is untouched
+         and still the call this feed has always made. */
+      let rows=(S.cursor===null&&!S.lap)?kfTakeFirstPage():null;
+      if(!rows){
+        const tags=kfBlocked();
+        rows=await kfRpc("feed_page", tags.length
+          ? {p_before:S.cursor,p_limit:KF_PAGE,p_block_tags:tags}
+          : {p_before:S.cursor,p_limit:KF_PAGE});
+      }
       if(kfState!==S) return;                        // closed while the request was in flight
       if(!rows.length){ S.done=true; }
       else{
