@@ -6139,7 +6139,7 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    regex over the whole literal and a name quoted in prose is parsed as an ENTRY.
    `feed_send_tapped` is the intent, `feed_sent` the outcome, and the outcome carries `how`
    so the native sheet, the web sheet and the clipboard stay separable. */
-"feed_send_tapped","feed_sent",
+"feed_send_tapped","feed_sent","feed_profile_tapped",
 /* THE NAME THIS DEVICE WAS GIVEN RATHER THAN CHOSE. Fires once per device, from the first
    publish, and it is the denominator for the question the assignment exists to answer: of the
    people handed a pseudonym, how many go and change it — `hide_signed` already reports the
@@ -10962,6 +10962,10 @@ const KF_CSS=
   +".kfBar>*{pointer-events:auto;}"
   +".kfClose{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;}"
   +".kfClose:active{transform:scale(.92);}"
+  /* Set apart from the two controls that act on the PHOTO — same shape so it reads as part of
+     the bar, its own gap so it does not read as a third thing to do to this hide. */
+  +".kfMe{margin-left:6px;}"
+  +".kfMe svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}"
 
   /* The swipe affordance. Shown on the first slide only and killed by the first scroll — an
      instruction that stays on screen after it has been obeyed is a permanent obstruction. */
@@ -10995,7 +10999,20 @@ function chFeed(){
     +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button>'
     /* NEXT TO THE ✕, NOT OPPOSITE IT. On the right it landed on top of the round's own clock
        chip, which sits in that corner on every slide — the count showed through the flag. */
-    +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button></div>'
+    +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button>'
+    /* THE PROFILE DOOR, AND IT IS ON THE LEFT FOR THE REASON WRITTEN DIRECTLY ABOVE.
+       The obvious home for it is the top-right corner — and that corner already belongs to
+       the round's clock chip, on every single slide. The flag was moved off it for exactly
+       that collision; putting a profile button there would re-create the bug the comment
+       above exists to prevent, and it would land under the thumb on the one control that
+       must stay readable while a round is running.
+       So it joins the left cluster, pushed to the far end of it by margin-left:auto on
+       nothing — the bar is a flex row and this is simply its third child. A gap separates it
+       from the two round controls, because closing and reporting are about THIS photo and
+       this one is about the person looking at it. */
+    +'<button class="kfClose kfMe" id="kfMe" aria-label="Your profile" title="Your profile">'
+    +'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/>'
+    +'<path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0"/></svg></button></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
@@ -11187,6 +11204,17 @@ function chFeed(){
   },{passive:true});
 
   root.querySelector("#kfClose").onclick=()=>close();
+  /* TOGGLE, not open. The feed is a fullscreen surface and the card opens ON TOP of it, so a
+     button that only ever opens would leave the user tapping the same spot twice with nothing
+     happening the second time — the card's own backdrop is behind the bar here. Reading the
+     class rather than tracking state: the card can also be closed from its own Back button,
+     and a private flag would drift out of step the first time that happened. */
+  { const me=root.querySelector("#kfMe");
+    if(me) me.onclick=()=>{ haptic(8);
+      const el=document.getElementById("kamoHome");
+      const open=!!(el&&el.classList.contains("show"));
+      track("feed_profile_tapped",{open:!open});
+      if(open) closeKamoHome(); else openKamoHome(); }; }
   /* Acts on whatever slide is live. Reports and drops in one move — the reporter should not
      have to look at it again while the page they are holding catches up. */
   root.querySelector("#kfFlag").onclick=()=>{
