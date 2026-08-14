@@ -143,7 +143,15 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
   /^Lost in \d+\.\d+s$/.test(await txt(page, 'chHead')) ? ok('one miss ends the round, on the clock') : bad('head after miss: ' + await txt(page, 'chHead'));
   (await txt(page, 'chSub')) === 'They were right there.' ? ok('and the reveal line carries under it') : bad('sub after miss: ' + await txt(page, 'chSub'));
   const reh = await page.evaluate(() => { const e = document.getElementById('chReh'); return e ? e.textContent : null; });
-  reh === 'Send one back' ? ok('primary CTA is the no-install send-back') : bad('chReh: ' + reh);
+  /* NAMES THE SENDER WHEN THE HIDE IS SIGNED, bare when it is not — and the assertion has to
+     allow both or it pins whichever fixture this file happens to load. The "to @x" half is the
+     2026-08-14 change: the feed said "Hide one in this photo" and converted at 7% against the
+     link path's 222% on the same button in the same position, so the sentence names a person
+     on both surfaces now. Still an EXACT match either way: a regression that empties the
+     handle must fail here rather than pass a substring check on "Send one back". */
+  /^Send one back( to @[^@\s]+)?$/.test(reh || '')
+    ? ok(`primary CTA is the no-install send-back${/ to @/.test(reh) ? ', naming the sender' : ''}`)
+    : bad('chReh: ' + reh);
   const go = await page.evaluate(() => { const e = document.getElementById('chGo'); return e ? e.textContent : null; });
   go === 'Get KAMO' ? ok('install CTA is secondary') : bad('chGo: ' + go);
   // flip
