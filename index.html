@@ -2659,11 +2659,26 @@ function trialAdvertised(){
    page in headless Chromium, and a coin flipped at load would make the paywall assertions
    flaky — the exact poison the gate exists to keep out. A harness that wants the full arm
    seeds localStorage kamo_pw_design="full" before load. */
-const PW_FULL_ROLLOUT=50;
+/* 100 — THE EXPERIMENT IS OVER, CALLED BY THE FOUNDER (2026-08-15). The full-bleed arm is the
+   paywall now: every entry point, including the size and scale locks, which is where this was
+   noticed. A tap on the size bar was opening the sheet for half the fleet, and that was never
+   about the entry point — pwArm is a per-DEVICE coin flip, so "the wrong paywall" was simply
+   the other side of a 50/50. */
+const PW_FULL_ROLLOUT=100;
 let pwArm="sheet";
 try{
   const s=localStorage.getItem("kamo_pw_design");
-  if(s==="sheet"||s==="full") pwArm=s;
+  /* ⚠️ THE STORED VALUE IS STICKY, AND THAT IS WHY A ROLLOUT ALONE WOULD HAVE CHANGED NOTHING.
+     Everybody who has opened this app already carries kamo_pw_design, so raising the number
+     only reaches devices that have never been assigned — which, on a live app, is almost
+     nobody. Half the fleet would have kept the sheet forever and the founder would have seen
+     exactly the same thing tomorrow.
+     So a stored "sheet" is PROMOTED at full rollout rather than honoured. Written back, so the
+     promotion happens once and the value on disk keeps describing what the device shows.
+     Deliberately one-way: at any rollout below 100 the stored value still wins, so this cannot
+     quietly un-assign anybody if the number is ever lowered to run another test. */
+  if(s==="sheet"&&PW_FULL_ROLLOUT>=100){ pwArm="full"; try{ localStorage.setItem("kamo_pw_design","full"); }catch(e){} }
+  else if(s==="sheet"||s==="full") pwArm=s;
   else if(!navigator.webdriver){
     pwArm=(Math.random()*100<PW_FULL_ROLLOUT)?"full":"sheet";
     localStorage.setItem("kamo_pw_design",pwArm);
@@ -5119,7 +5134,22 @@ function pwPurchase(planOverride){
      it points the feedback at the wrong control — the haptic already confirms the tap, and
      StoreKit is the next thing on screen either way. */
   haptic(16); pwBuyIntent=true;
-  if(window.ReactNativeWebView){ if(!planOverride) setPwBuyLoading(true); postNative({type:"purchase",product:prod}); }
+  if(window.ReactNativeWebView){ if(!planOverride) setPwBuyLoading(true);
+    /* DID THE TAP EVEN LEAVE THIS PAGE. Over 2026-08-10..14, 209 Buy taps produced 114 native
+       outcomes — cancelled, trial, completed, failed, restored — and 95 produced NOTHING. The
+       native handler is exhaustive (try/catch/finally, every branch tracks), so those 95
+       either never arrived or arrived at a binary that does not know the message.
+       `window.ReactNativeWebView` being truthy is NOT the same as the message landing: it says
+       a wrapper is wrapped around this page, and nothing about whether that build implements
+       {type:"purchase"}. ~89% of the fleet is 1.0.2. postNative() already returns a boolean
+       nobody was reading.
+       `sent` is that boolean and `build` is saveWrapperTag(), which separates 1.0.8+ from the
+       old fleet off a capability this page can actually see. Together they cut the 95 four
+       ways: the post threw, the post went out on an old build, the post went out on a new one,
+       or it landed and the native side is where the silence is. One of those is fixable from
+       this file tonight; the rest need a build, and guessing which costs a review cycle. */
+    const sent=postNative({type:"purchase",product:prod});
+    track("purchase_bridged",{...buyProps,sent:!!sent,build:saveWrapperTag()}); }
   else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } }
 /* Bound through a wrapper, not passed directly: onclick hands the handler a MouseEvent, and
    pwPurchase's first argument is now the plan — `pwPurchase` as a listener would read the
@@ -6325,6 +6355,14 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    shape in Amplitude — a name with no data behind it — so adding it to this set replaced one
    permanent zero with another. The handler is removed in this change; see there. */
 "share_deferred","notif_opened_found",
+/* THE ONE THAT REPORTS ON THE BRIDGE MUST NOT TRAVEL BY IT. `purchase_bridged` exists to say
+   whether postNative() accepted the Buy tap at all — so routing it through postNative would
+   mean the exact failure it was written to catch is the failure that swallows it. Direct is
+   not a preference here, it is the only placement that can ever be true.
+   It lands on the web Amplitude user while `purchase_initiated` lands on the native one, so
+   they do not divide — read it on its own terms: how many Buy taps report sent=false, and on
+   which build. The count that matters is a count, not a ratio. */
+"purchase_bridged",
 /* THE OFFER AFTER THE SEND, and it has to travel on this path rather than the wrapper's for
    a reason that is not about shipped binaries: it can only ever fire in a browser. The
    button that emits it is hidden inside the app by construction — offering the app to
