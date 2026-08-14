@@ -191,6 +191,82 @@ console.log('\nTHE FEED OPENS ON THE PAGE THE PROBE ALREADY FETCHED');
   await page.close();
 }
 
+/* HOW LONG IT TOOK, WHICH THIS SCREEN COULD NOT SAY. The feed was made to open on a page
+ * fetched at launch instead of at the tap — a whole round trip off the critical path — and
+ * afterwards there was no way to judge it: feed_opened and feed_slide carry no duration, and
+ * completion sat at 85-91% before and after, exactly as it should, because the change was
+ * about the length of the wait and not about whether people got through it.
+ * THE ASSERTIONS ARE ON THE WIRE, and on `cached` above all: that property is what turns the
+ * question "did the probe's page get reused" from an argument into a filter. A timing event
+ * that fires but carries no way to tell the two paths apart would measure nothing.
+ * ⚠️ The photo is routed to a real 1×1 PNG rather than left to 404, because decode() rejects
+ * on a broken image and the suite would then be asserting the failure path while looking
+ * like it asserted the happy one. */
+console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
+{
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const sent = [];
+  await page.route('**/api.eu.amplitude.com/**', async r => {
+    try { (JSON.parse(r.request().postData() || '{}').events || []).forEach(e => sent.push(e)); } catch {}
+    await r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":200}' });
+  });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await page.addInitScript((r) => {
+    window.__seed = {
+      feed_page: r,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
+      set_hide_public: null,
+    };
+  }, ROWS(4));
+  await page.goto(base, { waitUntil: 'load' });
+  /* ⚠️ WAIT FOR THE PROBE, DO NOT SLEEP PAST IT. kfProbe fires on a 1200ms timer after load,
+     and the first version of this block clicked at 700ms — before the cache existed — so it
+     measured the network path and reported cached=false. The assertion below caught it, which
+     is the only reason this comment exists rather than a wrong number in a report. */
+  await page.waitForFunction(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length >= 1, null, { timeout: 8000 });
+  await page.evaluate(() => document.getElementById('btnFeed').click());
+  /* decode() resolves on its own schedule, so the wait is on the event landing rather than on
+     a clock — a fixed sleep would either flake or hide a regression that made it slower. */
+  await page.waitForFunction(() => true);
+  await page.waitForTimeout(1200);
+  /* A real second slide, so "later slides carry no timing" is an assertion and not a vacuous
+     pass over an empty list. */
+  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  await page.waitForTimeout(900);
+
+  const paint = sent.find(e => e.event_type === 'feed_first_paint');
+  const slide = sent.filter(e => e.event_type === 'feed_slide').find(e => (e.event_properties || {}).n === 1);
+
+  paint ? ok('feed_first_paint reached Amplitude') : bad('feed_first_paint never fired — the first photo painted and nothing said so');
+  if (paint) {
+    const p = paint.event_properties || {};
+    typeof p.ms === 'number' && p.ms >= 0 && p.ms < 60000
+      ? ok(`it carries the milliseconds from the tap to the decoded photo (ms=${p.ms})`)
+      : bad('feed_first_paint.ms is ' + JSON.stringify(p.ms));
+    /* The one that would have caught calling decode() before src: that ordering resolves in
+       about zero milliseconds every time, and reads as a feed that opens instantly. */
+    p.ok === true ? ok('and it reports the photo actually decoded (ok=true)') : bad('feed_first_paint.ok=' + p.ok + ' — the timing is measuring a failed image');
+    p.cached === true ? ok('and cached=true, so the probe page path is separable in one filter') : bad('feed_first_paint.cached=' + p.cached);
+    typeof p.ms_page === 'number' ? ok(`and ms_page says how much of it was the rows (ms_page=${p.ms_page})`) : bad('ms_page=' + JSON.stringify(p.ms_page));
+    p.slides === 4 ? ok('and slides reports the page it actually built (4)') : bad('slides=' + JSON.stringify(p.slides));
+  }
+  /* Asserted on the TYPE, not on the event existing. feed_slide n=1 has been on the wire
+     since the feed shipped, so "is it there" passes against a build that carries no timing
+     at all — which is exactly what it did on the first run of this block. */
+  slide && typeof (slide.event_properties || {}).ms === 'number' && typeof (slide.event_properties || {}).cached === 'boolean'
+    ? ok('feed_slide n=1 carries the round-mounted milestone (ms=' + slide.event_properties.ms + ', cached=' + slide.event_properties.cached + ')')
+    : bad('feed_slide n=1 carries no timing: ' + JSON.stringify(slide ? slide.event_properties : null));
+  /* Later slides must stay clean: a duration on a swipe the user chose to make would bury
+     the one number that is about the app being slow. */
+  const later = sent.filter(e => e.event_type === 'feed_slide' && (e.event_properties || {}).n > 1);
+  later.every(e => (e.event_properties || {}).ms === undefined)
+    ? ok('and later slides carry no timing (' + later.length + ' checked)')
+    : bad('a swipe past the first slide is being timed as if it were the open');
+
+  await page.close();
+}
+
 /* A BUTTON THAT DOES EVERYTHING EXCEPT BE VISIBLE. The profile control in the feed bar
  * called openKamoHome() correctly from the day it shipped: the handler ran, the event fired,
  * the .show class landed. The card rendered at z-index 80 underneath a fullscreen #kfeed at
