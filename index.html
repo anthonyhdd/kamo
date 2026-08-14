@@ -6192,6 +6192,13 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    feed_opened → feed_slide → hide_published joins at user level without a build. */
 "feed_opened","feed_closed","feed_slide","feed_empty","feed_empty_cta","feed_next_tapped",
 "feed_load_failed","hide_visibility_set",
+/* THE ONE THAT SAYS HOW LONG IT TOOK, and it has to travel with the rest of the family.
+   `feed_first_paint` carries the milliseconds from the tap to the first photograph being
+   decoded, and it is only readable against `feed_opened` — same session, same device, same
+   Amplitude user. Routing it through the bridge would land it on the native user while every
+   other feed name lands on the web one, and a duration you cannot attach to the open it
+   belongs to is a number with no denominator. */
+"feed_first_paint",
 /* THE FEED'S ONLY WAY OUT OF THE APP, and the pair has to travel together for the same
    reason the save pair does: the number worth knowing is a RATIO — sends over taps — and
    routing one of them through the wrapper would put numerator and denominator on different
@@ -11146,6 +11153,9 @@ const KF_CACHE_MS=300000;
    answering "don't show me this person" with their photograph is not a performance
    trade-off, it is the one outcome that is worse than a slow feed. Checked here rather than
    at probe time because a block can be added after launch. */
+/* One monotonic clock for the whole feed, in one place so the three milestones below are
+   measured against each other rather than against three different notions of "now". */
+function kfNow(){ try{ return (window.performance&&performance.now)?performance.now():Date.now(); }catch(e){ return Date.now(); } }
 function kfTakeFirstPage(){
   const c=kfFirstPage; kfFirstPage=null;
   if(!c||!c.rows.length) return null;
@@ -11254,6 +11264,17 @@ function chFeed(){
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
   const S={cursor:null,loading:false,done:false,slides:[],active:-1,round:null,played:0,hinted:false,lap:0};
   kfState=S;
+  /* THE CLOCK STARTS HERE, and it exists because the last change to this screen could not be
+     judged. The feed was made to open on a page fetched at launch instead of one fetched at
+     the tap — a whole network round trip removed from the critical path — and the only
+     numbers available afterwards were feed_opened and feed_slide, neither of which carries a
+     duration. Completion was already 85-91% before and stayed there, which is what it should
+     do: the fix changed how LONG the wait was, not whether people got through it, and
+     nothing in the product measured that.
+     performance.now() rather than Date.now(): monotonic, unaffected by a clock that changes
+     under a phone crossing a timezone, and sub-millisecond. Guarded because it costs one
+     expression to never care whether a WebView has it. */
+  S.t0=kfNow();
   track("feed_opened",{});
 
   const midCard=(title,body,cta,onCta)=>{
@@ -11286,7 +11307,15 @@ function chFeed(){
     const s=S.slides[i];
     kfMarkSeen(s.row.id);
     S.played++;
-    track("feed_slide",{n:S.played,replay:!!s.replay});
+    /* THE FIRST SLIDE CARRIES THE WAIT, and only the first: every later one is a swipe the
+       user chose to make, and stamping those would bury the one number that is about the
+       app being slow under a pile of numbers that are about somebody scrolling.
+       This is the ROUND-MOUNTED milestone — the spinner is gone and the game is wired.
+       The picture may still be arriving; that is feed_first_paint below, and the gap between
+       the two is exactly how much of the wait is the photo rather than the code. */
+    track("feed_slide", S.played===1
+      ? {n:1,replay:!!s.replay,ms:Math.round(kfNow()-S.t0),ms_page:S.msPage|0,cached:!!S.cached}
+      : {n:S.played,replay:!!s.replay});
     S.round=chSeek(s.row.id,{
       host:s.host, feed:true, replay:!!s.replay, firstInFeed:(S.played===1),
       onNext:()=>goNext(),
@@ -11373,7 +11402,34 @@ function chFeed(){
        fetch has already been queued, which is the failure this is fixing. */
     if(S.slides.length>=2) img.loading="lazy";
     else if(!S.slides.length) img.setAttribute("fetchpriority","high");
+    /* THE NUMBER THE FOUNDER ACTUALLY FELT. "Le feed met beaucoup de temps à s'ouvrir" is
+       not about a spinner leaving, it is about a photograph appearing — so the milestone is
+       the first slide's image being DECODED and ready to paint, not merely fetched.
+       img.decode() is what answers that: it resolves when the bitmap is ready for the next
+       frame. `onload` fires when the bytes are in and can still be followed by a decode
+       stall on a large JPEG, which is precisely the part of the wait a phone feels and a
+       laptop does not. Fallback for anything without decode().
+       ONCE PER FEED SESSION, on slide 0 only, and S.painted latches so a re-entrant load or
+       a re-render cannot double-count. `ok` is there so a photo that never arrives is
+       visible as a failure instead of as silence — and silence is what a missing event looks
+       like, which is the whole reason this file needed a drift checker. */
+    const first=!S.slides.length&&!S.painted;
     img.src=CH_URL+"/storage/v1/object/public/hides/"+row.img_path;
+    /* ⚠️ AFTER src, AND THAT ORDERING IS THE WHOLE THING. decode() on an <img> with no source
+       rejects immediately — so calling it a line earlier would resolve this in about zero
+       milliseconds, every time, and report a feed that paints instantly while the user
+       watches a spinner. A timing bug that reads as a perfect score is worse than no timing
+       at all. (`loading` still has to be set BEFORE src; it is, above.) */
+    if(first){
+      const paint=(ok)=>{ if(S.painted) return; S.painted=1;
+        /* `slides` is read here rather than captured above on purpose: the whole page is
+           appended synchronously, long before any decode resolves, so this reports how many
+           slides the page actually produced instead of the zero it was at this line. */
+        try{ track("feed_first_paint",{ms:Math.round(kfNow()-S.t0),ms_page:S.msPage|0,
+                                       cached:!!S.cached,slides:S.slides.length,ok:!!ok}); }catch(e){} };
+      try{ if(img.decode) img.decode().then(()=>paint(true),()=>paint(false));
+           else { img.onload=()=>paint(true); img.onerror=()=>paint(false); } }catch(e){}
+    }
     const host=document.createElement("div"); host.className="kfHost";
     el.appendChild(img); el.appendChild(host);
     scroll.appendChild(el);
@@ -11399,13 +11455,22 @@ function chFeed(){
          opening load qualifies — S.cursor is null and no lap has been forced — and the taker
          refuses on a blocked device or a stale cache, so every other path below is untouched
          and still the call this feed has always made. */
+      const tPage=kfNow();
       let rows=(S.cursor===null&&!S.lap)?kfTakeFirstPage():null;
+      const fromCache=!!rows;
       if(!rows){
         const tags=kfBlocked();
         rows=await kfRpc("feed_page", tags.length
           ? {p_before:S.cursor,p_limit:KF_PAGE,p_block_tags:tags}
           : {p_before:S.cursor,p_limit:KF_PAGE});
       }
+      /* STAMPED ONCE, ON THE LOAD THAT THE USER IS WAITING FOR. load() runs again on every
+         third slide to extend the feed and those calls are not on anybody's critical path;
+         folding them into the same number would average the wait away.
+         `cached` is the entire point: it is the one property that says whether the launch
+         probe's page was reused, so the effect of that change is a filter rather than an
+         argument. Expect ms_page ~0 with it and a real round trip without. */
+      if(S.msPage===undefined){ S.msPage=Math.round(kfNow()-tPage); S.cached=fromCache; }
       if(kfState!==S) return;                        // closed while the request was in flight
       if(!rows.length){ S.done=true; }
       else{
