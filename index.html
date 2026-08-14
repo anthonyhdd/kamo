@@ -6133,7 +6133,50 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    allow-list knows any of them and the bridge would drop all three in silence — while the
    features looked like they were producing no behaviour at all. Direct, for the same reason
    the share tap above is: this page deploys on its own and the binary does not. */
-"reply_started","reply_pending","prev_blocked_tapped","feed_available"]);
+"reply_started","reply_pending","prev_blocked_tapped","feed_available",
+/* THE ELEVEN THAT WERE STILL FALLING ON THE FLOOR, found by running kamo-app's own
+   scripts/check-web-events.js against the LIVE page rather than against either repo's main.
+   It reads what users' devices are actually firing, and it answered: 91 names emitted, 25
+   allow-listed in the shipped binary, and these eleven in neither list — so track() handed
+   each of them to postNative(), postNative() succeeded, and the wrapper discarded them
+   without a line in any log. Zero events, in a project where zero reads as a feature nobody
+   uses. `hide_reacted` is the sharpest example: it is the one signal that carries somebody
+   ELSE reacting to your hide, the exact personal hook a push notification would need, and it
+   has never once reached Amplitude.
+   WHY DIRECT AND NOT AN ALLOW-LIST ENTRY. Adding a name to WEB_EVENTS in kamo-app only
+   teaches builds that ship AFTER the next App Review — every phone already carrying 1.0.2
+   keeps dropping it. This page deploys to GitHub Pages on its own, so the direct path fixes
+   the whole fleet within minutes of merge. That is the same trade the share tap above took,
+   and the cost is the same and is real: these land on the WEB Amplitude user, so a ratio
+   whose other half goes through the bridge is a ratio across two different users. The pairs
+   below are therefore kept whole on purpose.
+   `heat_paywall_tapped` is the one place that cost bites: its natural successor is
+   `paywall_viewed`, which is allow-listed and travels native. Read the heat sheet's own
+   funnel — opened over tapped — and do NOT divide by anything on the native user. Fixing
+   that properly means moving the paywall pair direct too, which is a bigger change than a
+   measurement gap deserves tonight. */
+/* The feed, completing a family that is already direct. `feed_second_lap` says the queue ran
+   dry and started over, which is the difference between a feed with nothing in it and a feed
+   somebody finished; `feed_blocked_empty` is the way out of the blocked state. Splitting them
+   from `feed_opened` would put a lap and its own denominator on two users. */
+"feed_blocked_empty","feed_second_lap",
+/* The consent sheet, and it only means anything as a pair: the sheet SHOWN is the
+   denominator, the answer is the numerator, and the whole reason the sheet exists is the
+   rate between them. `hide_reacted` travels with them because a reaction is a feed round's
+   payoff and every other feed name is already here. */
+"visibility_consent_shown","visibility_consent","hide_reacted",
+/* The heat sheet, all three together for the reason in the note above — within-set ratios
+   are the only ones that will be readable. `heat_empty` separates a creator who opened a map
+   with no hunts on it from one who saw the real thing, which is the difference between a
+   dead feature and a feature waiting on traffic. */
+"heat_opened","heat_empty","heat_paywall_tapped",
+/* And the three singles. `hide_another_tapped` is the exit that reloads the loop instead of
+   ending it, so it belongs on the same user as the `hide_sent` it follows. `share_deferred` is
+   a share that could not be offered because no link had minted yet — the failure whose
+   success twin is already direct, which is the shape the save pair note above warns about.
+   `notif_opened_found` fires only INSIDE the wrapper, from KAMO.openFound, so the bridge was
+   dropping 100% of it: the one event that says a push was worth opening. */
+"hide_another_tapped","share_deferred","notif_opened_found"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
