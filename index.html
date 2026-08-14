@@ -849,7 +849,18 @@
      translucent for exactly that reason — the context IS the pitch.
      The blur is dropped, not inherited: a 6px blur over a full screen is a GPU cost on every
      frame of the open animation, and the full arm dims instead. */
-  #paywall.pwFull{align-items:stretch;background:rgba(5,6,10,.44);backdrop-filter:none;-webkit-backdrop-filter:none;}
+  /* TRANSPARENT, founder's call 2026-08-14. The flat rgba(5,6,10,.44) wash was the last thing
+     standing between the reader and their own photo, and on the full-bleed arm the photo IS
+     the argument — a scene you painted yourself, dimmed by nearly half, sells worse than the
+     scene. The copy keeps its legibility from the text-shadows it already carries and from
+     the white CTA slab, both of which were built for exactly this.
+     THE ONE EXCEPTION IS A SHEET BEHIND IT. Opened over the share sheet there is no photo
+     back there — there is a green card, and white type on it is unreadable. So that case
+     keeps a gradient, bottom-weighted, which is where the type actually sits. Detected at
+     open time (see pwOverSheet) rather than assumed, because the same paywall is reached
+     from a dozen entry points and only some of them have a sheet underneath. */
+  #paywall.pwFull{align-items:stretch;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
+  #paywall.pwFull.pwOverSheet{background:linear-gradient(180deg,rgba(3,5,8,0) 6%,rgba(3,5,8,.5) 58%,rgba(3,5,8,.8));}
   /* No bottom scrim — founder's call, 2026-08-12. The card is fully transparent: the flat
      .44 dim on #paywall.pwFull is the only thing between the scene and the copy, so the
      photo reads all the way down. The CTA is a white slab and survives anything; the small
@@ -4712,6 +4723,18 @@ const PW_RESERVED_CAP=2;
 const PW_HARD_CAP=8;
 const PW_FIRST_PAYOFF=new Set(["round_end"]);
 const PW_FIRST_MAX_DEFER=4;
+/* WHAT A REFUSAL LOOKS LIKE, AND WHEN IT LOOKS LIKE NOTHING AT ALL.
+   The two gates above refuse opens the user never asked for — and the first thing they did in
+   production was put a green "KAMO+ — tap to unlock" pill on the camera screen of a brand new
+   install, unprompted, next to the FIND A SPOT countdown. Two pills, one of them selling.
+   A lock hint answers a QUESTION: you tapped something locked, here is why it did nothing.
+   With no tap there is no question, and the honest response to an interruption we decided not
+   to make is to make no interruption. Silence.
+   User-initiated opens keep their hint, because there the button really would read as dead. */
+function pwRefused(src,force){
+  if(!(force||PW_USER_INITIATED.has(src))) return;
+  if(src==="size") flashSizeLock(); else showLockHint(src);
+}
 const PW_SEEN_KEY="kamo_pw_seen", PW_DEFER_KEY="kamo_pw_defer";
 function pwEverShown(){ try{ return localStorage.getItem(PW_SEEN_KEY)==="1"; }catch(e){ return true; } }
 /* Fails OPEN on both sides: a device with no storage reads as "already shown", so a private
@@ -4850,7 +4873,7 @@ function openPaywall(source,force){
      budget below this line exempts user-initiated opens, which is precisely how a launch
      reaches eleven paywalls: the caps were never the thing letting the tail through. The
      hint still fires, so a locked tool still says it is locked — only the sheet stops. */
-  if(pwOpens>=PW_HARD_CAP){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
+  if(pwOpens>=PW_HARD_CAP){ pwRefused(src,force); return; }
   /* ① THE FIRST ONE HAS TO BE EARNED. Not capped, not delayed — MOVED: the first paywall an
      install ever sees must come from the end of a round rather than from a wall hit in the
      middle of painting. Deliberately ahead of `force`, because the loudest tool locks are the
@@ -4859,7 +4882,7 @@ function openPaywall(source,force){
   if(!pwEverShown() && !PW_FIRST_PAYOFF.has(src) && pwDeferrals()<PW_FIRST_MAX_DEFER){
     pwBumpDeferral();
     track("paywall_deferred",{source:src,n:pwDeferrals(),forced:!!force});
-    if(src==="size") flashSizeLock(); else showLockHint(src);
+    pwRefused(src,force);
     return;
   }
   if(!force && cap!==undefined && used>=cap){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
@@ -4921,6 +4944,13 @@ function openPaywall(source,force){
      the sheet arm (#pwHero is display:none there), and run unconditionally on purpose: a
      device that switches arm mid-session must never open a stale hero. */
   pwHeroApply(src);
+  /* IS THERE A SHEET BEHIND THIS, decided here rather than guessed from the source. The
+     full-bleed arm is transparent now, which is right over a photo and unreadable over the
+     share sheet's green card — and the same paywall is reached from a dozen entry points,
+     only some of which have a sheet under them. Read once, at open, because the sheet can
+     close underneath while the paywall is up and the backdrop must not change mid-read. */
+  try{ const sh=shareSheetEl&&(shareSheetEl.classList.contains("show")||shareSheetEl.classList.contains("peek")||shareSheetEl.classList.contains("ssMini"));
+       paywallEl.classList.toggle("pwOverSheet",!!sh); }catch(e){}
   if(pwArm==="full"){ stage.classList.add("pwCover"); document.body.classList.add("pwCover"); }
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
