@@ -5896,10 +5896,23 @@ window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
    which is where the results rows live and where Watch and Heat sit: the actual answer to
    "see how". Defensive by construction — an id that means nothing here still lands the user
    on their own card rather than nowhere, which is strictly better than the camera. */
+/* THE PUSH PROMISES AN ANSWER; THIS IS WHAT HAS TO DELIVER IT.
+   "Someone found your kamo" was landing the user on the home card in its CLOSED state — the
+   summary, "N played your hides · M found you" — with the thing they were actually told about
+   one more tap away. Reported from a real device, 2026-08-15: "ça a juste ouvert l'app".
+   A notification that names a specific event and then opens a screen where that event is a
+   number is the same broken promise as a paywall quoting a trial the store will not honour.
+   khOpenNext is the one-shot khResults() consumes, because khResults() resets khOpen on every
+   open — see the note there.
+   `home_results_expanded` DELIBERATELY NOT FIRED. That event counts a TAP: its whole value is
+   the ratio expanded/shown, i.e. how many people choose to look. Firing it for an expansion
+   the app performed on their behalf would inflate exactly the number it exists to measure.
+   The push path is readable instead from notif_opened_found -> home_results_shown. */
 window.KAMO.openFound=(id)=>{
   try{
     if(id) chRemember(String(id).replace(/[^a-f0-9]/gi,"").slice(0,16));
-    track("notif_opened_found",{});
+    track("notif_opened_found",{expanded:true,hide:!!id});
+    khOpenNext=true;
     if(typeof openKamoHome==="function") openKamoHome();
   }catch(e){}
 };
@@ -9704,6 +9717,11 @@ function markSeen(n){ try{ localStorage.setItem(SEEN_KEY,String(n|0)); }catch(e)
    whole feature, and a selector would turn a tap into a decision. chMine() caps at ten, so
    the worst case is bounded even if the distribution moves. */
 let khOpen=false;
+/* ONE-SHOT: THE NEXT RESULTS PAINT OPENS EXPANDED. Set by KAMO.openFound() and consumed by
+   khResults(), because khResults() resets khOpen on EVERY open — so a flag set before
+   openKamoHome() would be wiped before it was read. One-shot rather than sticky: arriving
+   from a push is a reason to open the list once, not a new preference. */
+let khOpenNext=false;
 /* THE SAME OBJECT THE SHARE SHEET SHOWS, because it IS the same object. A row that only said
    "found you on tap 2" made the author guess WHICH of their hides that was — and the one thing
    that identifies a hide to the person who made it is the picture. img_path already comes back
@@ -10070,7 +10088,7 @@ async function khResults(){
     el.onclick=null;
     el.style.display="block";
   }
-  khOpen=false;
+  khOpen=khOpenNext; khOpenNext=false;
   try{
     /* null means NO IDS — the one answer that is certain without a network, and the one that
        must still be able to take the box away: someone who has never sent a challenge, or who
