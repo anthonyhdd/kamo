@@ -111,6 +111,14 @@ const r1=await round('ROUND 1 — tapped early (dwell 1.2s < 3s upload)',1200);
 r1.waited < UPLOAD_MS-1200+700 ? ok(`the reveal paid for ${UPLOAD_MS-r1.waited}ms of the ${UPLOAD_MS}ms upload (waited ${r1.waited}ms, was ${UPLOAD_MS}ms+)`)
   : bad(`the dwell bought nothing: waited ${r1.waited}ms of a ${UPLOAD_MS}ms upload`);
 
+/* AND THE APP IS NEVER SOLD TO SOMEBODY HOLDING IT. #ssGet is the post-send install offer,
+   and this page is the wrapper: a real send has just gone through, which is exactly the
+   moment ssOfferApp() runs. If the guard inside it were ever loosened — nativeCaps instead of
+   window.ReactNativeWebView, say — this is where it shows up, on the most-seen surface in the
+   product, after every single send. The browser half is scripts/test-sentcta-dom.mjs. */
+const offered=await page.evaluate(()=>{ const g=document.getElementById('ssGet'); return !!(g&&getComputedStyle(g).display!=='none'); });
+offered===false ? ok('the Get-KAMO offer stays hidden inside the app') : bad('#ssGet is being shown to a user who already has the app');
+
 const r2=await round('ROUND 2 — same session, own hide',1200);
 /hide2/.test(r2.msg) ? ok('round 2 sends its OWN hide (hide2), not round 1\'s') : bad('STALE LINK: '+JSON.stringify(r2.msg.slice(-40)));
 const paths=await page.evaluate(()=>window.__created);

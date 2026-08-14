@@ -948,6 +948,21 @@ try {
   bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* THE POST-SEND INSTALL OFFER, and the two ways it goes wrong are opposites. Shown inside the
+   wrapper it sells the app to somebody holding it, on the most-seen surface in the product,
+   after every send. Shown before anything is sent it is an advert on a sheet nobody has used.
+   Both are one edited condition away, and neither is visible in a diff — so the suite asserts
+   the TRANSITION (hidden, send, visible) from a browser, and test-share-dom asserts the
+   silence from the wrapper. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-sentcta-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-sentcta-dom.mjs', 'SENT-CTA TEST', out)
+    : ok('the app is offered after the send, and only in a browser (node scripts/test-sentcta-dom.mjs)');
+} catch (e) {
+  bad('THE POST-SEND OFFER IS WRONG:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 12c. The spectator seat ------------------------------------------------------------
    The replay animates a recorded transform into a travelling viewport, and its ending has
    to differ by outcome. One assertion there is a security boundary rather than a polish

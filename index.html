@@ -1589,7 +1589,15 @@
      product exists to produce. Founder's call, 2026-08-13: seamless, and capture the maximum
      of photos. So the disclosure moves to where the eyes already are — the control itself,
      visible before the send, on the screen everybody sees. */
-  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssInvite):not(.chPrev):not(.ig):not(.ssVis){display:none!important;}
+  /* .ssGet IS ON THIS LIST BECAUSE PEEK IS WHERE THE SENDER ACTUALLY IS. The sheet arrives in
+     peek and #ssInvite is reachable from it, so the whole send can happen without the sheet
+     ever opening: tap Challenge, iOS takes over, they pick WhatsApp, they come back — to a
+     peek sheet. An offer excluded here would be revealed into a state nobody was looking at,
+     which the sent-CTA suite caught on the first run.
+     It costs the peek nothing until it is earned: #ssGet ships display:none and only
+     chMarkSent() reveals it, so the sheet still ARRIVES short — the card's height is
+     content-driven, so it simply grows by one row at the moment there is something to say. */
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssInvite):not(.chPrev):not(.ig):not(.ssVis):not(.ssGet){display:none!important;}
   /* RESIZING BETWEEN THE TWO STATES IS A TRANSITION, NOT A CUT. Short and long differ by a few
      hundred pixels and the card used to jump between them in one frame, which on a bottom sheet
      reads as a glitch rather than as a change of size.
@@ -1654,8 +1662,22 @@
   .ssRow3 .ssBtn{flex:1 1 0;min-width:0;height:48px;font-size:15px;gap:8px;}
   .ssRow3 .ssBtn svg{width:20px;height:20px;}
   .ssBtn.ig{height:48px;font-size:15px;}
-  .ssBtn.ssAgain{height:48px;font-size:15px;margin-top:8px;background:rgba(95,230,164,.13);
-    border:1px solid rgba(95,230,164,.34);color:#c9ffe4;}
+  /* The post-send slot. It held "Hide another" until that button was cut for being a third
+     pill in a row built for two — the styling stayed because the slot is right: mint-tinted
+     rather than white, so it reads as an offer and never out-ranks the send above it.
+     Two lines, because one line cannot both name the promise and say why the app is needed
+     for it, and a single-line version of this is either a claim or an advert. auto height
+     rather than the 48px the other buttons carry: a fixed height with two lines in it is how
+     descenders get clipped on a narrow phone. */
+  .ssBtn.ssGet{height:auto;min-height:48px;padding:10px 14px;font-size:15px;margin-top:8px;
+    background:rgba(95,230,164,.13);border:1px solid rgba(95,230,164,.34);color:#c9ffe4;
+    text-align:left;}
+  .ssGetTxt{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .ssGetTxt b{font-weight:700;font-size:15px;}
+  /* Not italic despite the tag — <i> is here for the same reason .ssVisTxt uses it, as the
+     secondary line of a two-line label, and an italic subtitle in this sheet would be the
+     only italic type in the product. */
+  .ssGetTxt i{font-style:normal;font-size:12.5px;opacity:.72;}
   /* TikTok is black on a dark card, so unlike IG's gradient and Snap's yellow it needs an
      edge to exist at all. */
   .ssBtn.tiktok{background:#000;color:#fff;border-color:rgba(255,255,255,.26);}
@@ -2404,6 +2426,23 @@
       <span class="ssVisSw"><i></i></span>
     </button>
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Challenge a friend</button>
+    <!-- WHAT THE SEND EARNS, AND THE ONLY THING THE APP HAS THAT A BROWSER DOES NOT.
+         1141 people a month reach the reveal of somebody's hide in a plain browser, and 353
+         of them send one back — three times the number who tap Get KAMO on the same card.
+         So the install pitch is losing to the thing it sits next to, and it deserves to: at
+         that moment nobody wants to install anything, they want to answer. This offers the
+         app one step LATER, as the consequence of the answer rather than its alternative.
+         Somebody who has just sent a hide has something out there with their name on it, and
+         exactly one open question — did they find it. That is the only question this app can
+         answer and a browser tab cannot, so it is the only honest reason to install.
+         HIDDEN UNTIL SOMETHING IS ACTUALLY SENT, and revealed from chMarkSent() so it cannot
+         appear on a sheet nobody has used — see there. Inside the wrapper it never appears at
+         all: it would be selling the app to somebody holding it.
+         A direct child of .ssCard on purpose: the peek rule below hides every direct child it
+         does not name, so this cannot leak into the folded sheet. -->
+    <button class="ssBtn ssGet" id="ssGet" style="display:none">
+      <span class="ssGetTxt"><b>Know when they find you</b><i>KAMO can notify you. A browser tab can't.</i></span>
+    </button>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
     <!-- SNAPCHAT AND TIKTOK ARE GONE AS BUTTONS, not as destinations. This sheet had nine
          tappable things in it; a share sheet that asks nine questions gets answered by the
@@ -6217,13 +6256,26 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    with no hunts on it from one who saw the real thing, which is the difference between a
    dead feature and a feature waiting on traffic. */
 "heat_opened","heat_empty","heat_paywall_tapped",
-/* And the three singles. `hide_another_tapped` is the exit that reloads the loop instead of
-   ending it, so it belongs on the same user as the `hide_sent` it follows. `share_deferred` is
-   a share that could not be offered because no link had minted yet — the failure whose
-   success twin is already direct, which is the shape the save pair note above warns about.
-   `notif_opened_found` fires only INSIDE the wrapper, from KAMO.openFound, so the bridge was
-   dropping 100% of it: the one event that says a push was worth opening. */
-"hide_another_tapped","share_deferred","notif_opened_found"]);
+/* And the singles. `share_deferred` is a share that could not be offered because no link had
+   minted yet — the failure whose success twin is already direct, which is the shape the save
+   pair note above warns about. `notif_opened_found` fires only INSIDE the wrapper, from
+   KAMO.openFound, so the bridge was dropping 100% of it: the one event that says a push was
+   worth opening.
+   `hide_another_tapped` WAS HERE AND IS GONE, one day later, because routing it fixed
+   nothing: the button it belongs to was deleted from the share sheet and its handler has
+   been binding to a null element ever since. A dead handler and a dropped event are the same
+   shape in Amplitude — a name with no data behind it — so adding it to this set replaced one
+   permanent zero with another. The handler is removed in this change; see there. */
+"share_deferred","notif_opened_found",
+/* THE OFFER AFTER THE SEND, and it has to travel on this path rather than the wrapper's for
+   a reason that is not about shipped binaries: it can only ever fire in a browser. The
+   button that emits it is hidden inside the app by construction — offering the app to
+   somebody holding it is the one thing it must not do — so postNative() is not merely
+   slower here, it is never reached. Naming it makes that explicit instead of accidental,
+   which is the same mistake the seek_* block above is fixing.
+   It lands on the same Amplitude user as `hide_sent`, which is the whole point: sent over
+   offered over tapped is a funnel only if all three are one person. */
+"sent_cta_tapped"]);
 /* WHICH BINARY SAVED (or failed to). A WEB_ONLY event carries no `version` — that is a user
    property the native SDK sets on ITS user, and these land on the web one. So the build has
    to be stamped by hand, off the only thing this page can see: `settings` is a capability
@@ -6951,6 +7003,18 @@ shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdro
    the invite. Not by opening the sheet — the offer has to be earned by an action, or it is
    just another button. */
 function ssShowAgain(){ try{ const a=$("#ssAgain"); if(a) a.style.display="flex"; }catch(e){} }
+/* THE OFFER THAT ONLY EXISTS AFTER A SEND. Revealed from chMarkSent(), which is the one
+   moment in this file where a hide has provably gone out — not from the share-target tap,
+   which also fires for a share that was then cancelled.
+   NEVER IN THE WRAPPER, and the test is window.ReactNativeWebView rather than nativeCaps:
+   the question here is "is there an app around this page at all", which is true in every
+   wrapper ever shipped including the ones that never announce themselves. nativeCaps answers
+   a different question — which build — and would show a Get-the-app button to somebody
+   already holding the app, on any binary that failed to call setNativeCaps. */
+function ssOfferApp(){
+  try{ if(window.ReactNativeWebView) return;
+       const g=$("#ssGet"); if(g) g.style.display="flex"; }catch(e){}
+}
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
   if(typeof ssShowAgain==="function") ssShowAgain();
   track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
@@ -8670,16 +8734,27 @@ $("#cfYes").onclick=()=>{ const wasFinished=finished, sc=Math.round(currentScore
   if(wasFinished){ postNative({type:"review-moment",reason:"retake",score:sc}); maybeOfferPlus(sc); } };
 confirmSheet.onclick=e=>{ if(e.target===confirmSheet) closeConfirm(); };
 
-/* HIDE ANOTHER — the exit that reloads the loop instead of ending it.
-   Same steps the Retake confirmation takes (exitFinished, backToCompose), minus the
-   confirmation: there is nothing to confirm. The hide has already been sent, so leaving this
-   screen costs the user nothing — which is exactly why the offer belongs here.
-   No review prompt and no paywall on this path: those hang off Retake because abandoning a
-   finished hide is a different moment from having just shared one, and asking somebody to
-   rate the app one tap after they sent a challenge is how a good moment gets spent. */
-{ const a=$("#ssAgain");
-  if(a) a.onclick=()=>{ haptic(10); track("hide_another_tapped",{});
-    closeShareSheet(); if(finished) exitFinished(); backToCompose(); a.style.display="none"; };
+/* THE HANDLER THAT HAD NOTHING TO HANDLE. This block wired #ssAgain — the "Hide another"
+   button — and that button was deleted from the sheet when it became a third pill in a row
+   built for two. The markup went; this stayed. `$("#ssAgain")` has returned null on every
+   launch since, so `hide_another_tapped` could never fire, and ssShowAgain() has been
+   revealing an element that does not exist from four different call sites.
+   Worth naming rather than quietly deleting: that event was in the eleven routed direct on
+   2026-08-14 as part of fixing a silent drop, which would have replaced one kind of
+   permanent zero with another. A dead handler and a dropped event look identical in
+   Amplitude — both are a name with no data behind it — and only one of them is findable by
+   reading the allow-list. Removed from WEB_ONLY in the same change.
+   The slot it occupied is the right slot, and #ssGet now uses it. */
+{ const g=$("#ssGet");
+  /* refLink degrades to the bare store listing when there is no OneLink template, silently,
+     and `tier` is what makes that visible — the same property seek_cta_tapped carries, so
+     the two install doors are comparable in one chart. `link` says whether the hide this
+     person just sent had a real id behind it: an install pitched on "know when they find
+     you" means something different when there was nothing for anyone to find. */
+  if(g) g.onclick=()=>{ haptic(10);
+    const u=refLink("sent_cta",chId);
+    track("sent_cta_tapped",{tier:u===appLink?"plain":"onelink",link:!!chId});
+    location.href=u; };
 }
 
 window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1)); if(renderer) resize3(); });
@@ -9427,6 +9502,11 @@ function chMarkSent(){
   try{ track("hide_sent",{}); }catch(e){}
   /* Same key, so this REPLACES the "you never sent that one" nudge armed at publish. */
   try{ armResultsPing(true); }catch(e){}
+  /* THE WEB'S HALF OF THE LINE ABOVE. Inside the wrapper, armResultsPing schedules the nudge
+     that brings this person back to see who tried. In a browser there is nothing to schedule
+     and no way to schedule it — so the browser is offered the thing that could, at the exact
+     moment it is worth having. Same promise, same moment, told honestly. */
+  try{ ssOfferApp(); }catch(e){}
 }
 
 /* WHAT HAPPENED WHILE THEY WERE AWAY.
