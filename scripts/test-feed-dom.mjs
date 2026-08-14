@@ -250,7 +250,8 @@ console.log('\nTHE ENDING DOES NOT WAIT FOR THE REVEAL FRAMES');
     ? ok('the headline and the card arrive while the frames are still in flight')
     : bad('the ending never mounted with the reveal frames stalled — it is awaiting them again');
   const head = await page.evaluate(() => (document.querySelector('#chHead') || {}).textContent || '');
-  head.trim() === 'They were right there.'
+  /* The loss states its clock; the reveal line is the subtitle now. */
+  /^Lost in \d+\.\d+s$/.test(head.trim())
     ? ok('and it is the real ending, not a placeholder')
     : bad('headline was ' + JSON.stringify(head));
   /* The frames were genuinely requested — otherwise the assertion above proves nothing, it
