@@ -10521,7 +10521,15 @@ function chSeek(hideId,opts){
                  "That's "+whose+". The new one is still in there.",
                  {rehide:true,camoSrc:camoSrc});
         } else {
-          ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
+          /* THE LOSS NAMES ITS CLOCK, because the win always did ("Found in 3.2s") and the
+             two endings were not speaking the same language: one reported a performance, the
+             other made an observation. The seeker spent those seconds either way and the
+             number is the only part of a loss that is theirs.
+             "Lost", not "Loose" — the founder's note said Loose, which is a different English
+             word (slack, untied). The reveal line moves down to the subtitle, where it still
+             does its job: saying how close they were. */
+          ending("Lost in "+(ms/1000).toFixed(1)+"s","They were right there.",
+                 {rehide:true,camoSrc:camoSrc});
         }
         frames.then(f=>{ if(f) armFlipUI(); });
       }
@@ -10536,7 +10544,9 @@ function chSeek(hideId,opts){
       track("seek_failed",TP({reason:"giveup",ms:ms}));
       sendTrace("giveup");
       const frames=snapReveal(true);
-      ending("They were right there.","",{rehide:true,camoSrc:camoSrc});
+      /* Giving up is still a loss with a clock on it — the seconds were spent looking. */
+      ending("Lost in "+(ms/1000).toFixed(1)+"s","They were right there.",
+             {rehide:true,camoSrc:camoSrc});
       frames.then(f=>{ if(f) armFlipUI(); });
     };
 
@@ -10677,7 +10687,13 @@ function chSeek(hideId,opts){
                the secondary action. Round 1 is unchanged and still sells the loop. */
             : '<button class="'+((eopts.rehide&&chRoundsPlayed()<1)?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+'</button>')
         +(FEED?'<div class="chRx" id="chRx"></div>':'')
-        +'<button class="chR" id="chRep">Report this photo</button>'
+        /* NOT IN THE FEED, where the bar's ⚑ is on screen at all times and does exactly this
+           — two report links on one photo is one too many, and the founder counted them.
+           IT STAYS EVERYWHERE ELSE, and that is not tidiness: a hide opened from a LINK has
+           no feed bar and therefore no flag, so removing this outright would leave those
+           rounds with no way to report anything at all. Apple requires a reporting path on
+           user content (guideline 1.2); the feed has two, a link round would have none. */
+        +(FEED?'':'<button class="chR" id="chRep">Report this photo</button>')
         /* ONLY IN THE FEED. "Don't show me this person" is an instruction about what the
            feed serves, and there is no feed behind a hide somebody was personally sent — a
            block there would be a button that reads as if it did something and does not.
@@ -10791,7 +10807,7 @@ function chSeek(hideId,opts){
       };
       if($$("chNext")) $$("chNext").onclick=()=>{ track("feed_next_tapped",{}); if(OPT.onNext) OPT.onNext(); };
       if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
-      $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
+      if($$("chRep")) $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
         /* Out of THIS device's feed straight away, not only out of everyone else's on the
            next page. n_reported=1 already excludes it server-side (see feed_page), but the
            page the reporter is holding was fetched before they tapped. */
