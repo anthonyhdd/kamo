@@ -187,7 +187,7 @@ console.log('\nBELOW THE PUBLISH FLOOR, THE SEND GOES OUT — IMMEDIATELY, AS TH
   /* THE MESSAGE IS WHERE HONESTY LIVES NOW. Under the floor there is no puzzle, so the text
      must not announce one — otherwise the friend taps a link and finds nothing hidden, which
      is the failure the floor was really guarding against. */
-  !/hid a body|body hidden|One tap to find/.test(calls.text || '')
+  !/hid a body|hid a kamo|body hidden|kamo hidden|One tap to find/.test(calls.text || '')
     ? ok('...and the text promises no puzzle, because there is not one')
     : bad(`an unpainted hide announced a body in the photo: ${JSON.stringify(calls.text)}`);
 }
