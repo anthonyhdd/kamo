@@ -4700,20 +4700,16 @@ const PW_RESERVED_CAP=2;
 
    Two facts, and each one gets a constant.
 
-   ① THE FIRST PAYWALL IS WORTH TWICE ANY OTHER. Everything after the first converts at about
-   1.5% and the first at 3.4%, so more than half the value of this whole surface is in one
-   impression per install — and today it is spent by whichever tool lock happens to fire
-   first. Over 7 days: color 1359, time 928, size 722. Those are all the same moment, a wall
-   hit in the middle of painting, which is the worst instant in the session to ask for money.
-   PW_FIRST_PAYOFF says the FIRST paywall an install ever sees has to come from the end of a
-   round — the one moment the player has just felt the limits and has something finished in
-   front of them. Every later paywall behaves exactly as it does today; this changes WHICH
-   impression is the valuable one, not how many there are.
-   ⚠️ WITH AN ESCAPE HATCH, because a rule that can strand somebody is not a rule. A device
-   that keeps hitting locks without ever finishing a round would otherwise never be offered
-   anything at all, so after PW_FIRST_MAX_DEFER refusals the next source through wins. Each
-   refusal reports as `paywall_deferred`, so if this ever strands people the count says so
-   instead of the silence saying nothing.
+   ① A RULE THAT MOVED THE FIRST PAYWALL LIVED HERE FOR ONE DAY, AND IS GONE.
+   It held the first paywall of an install until the end of a round, on the argument that
+   nth=1 converts at 3.4% against ~1.5% for every later one. The argument was about the rank
+   WITHIN a launch and was used to justify reducing exposure ACROSS the population — two
+   different questions. Trials ran at 8/day on 2026-08-04 and ~0 since 08-09, in the same
+   window PW_GLOBAL_CAP went 3 -> 1, so exposure was already the suspect and this added more
+   of the same. On an app whose D1 is 2-9%, "wait until they finish a round" is "never" for
+   most of a cohort. Reverted the day after, founder's call, before it could be measured
+   into a corner.
+   WHAT SURVIVES IS THE PART THAT COSTS NOTHING:
 
    ② THE TAIL IS WORTH NOTHING. 108 impressions past the 8th, zero taps. Not a weak rate — a
    zero. PW_HARD_CAP is the first ceiling in this file that `force` cannot cross: every
@@ -4721,28 +4717,10 @@ const PW_RESERVED_CAP=2;
    paywalls. Past the cap the lock hint still fires, so a locked tool still says it is locked;
    only the sheet stops. */
 const PW_HARD_CAP=8;
-const PW_FIRST_PAYOFF=new Set(["round_end"]);
-const PW_FIRST_MAX_DEFER=4;
-/* WHAT A REFUSAL LOOKS LIKE, AND WHEN IT LOOKS LIKE NOTHING AT ALL.
-   The two gates above refuse opens the user never asked for — and the first thing they did in
-   production was put a green "KAMO+ — tap to unlock" pill on the camera screen of a brand new
-   install, unprompted, next to the FIND A SPOT countdown. Two pills, one of them selling.
-   A lock hint answers a QUESTION: you tapped something locked, here is why it did nothing.
-   With no tap there is no question, and the honest response to an interruption we decided not
-   to make is to make no interruption. Silence.
-   User-initiated opens keep their hint, because there the button really would read as dead. */
 function pwRefused(src,force){
   if(!(force||PW_USER_INITIATED.has(src))) return;
   if(src==="size") flashSizeLock(); else showLockHint(src);
 }
-const PW_SEEN_KEY="kamo_pw_seen", PW_DEFER_KEY="kamo_pw_defer";
-function pwEverShown(){ try{ return localStorage.getItem(PW_SEEN_KEY)==="1"; }catch(e){ return true; } }
-/* Fails OPEN on both sides: a device with no storage reads as "already shown", so a private
-   window or a wiped container gets today's behaviour rather than a paywall it can never
-   reach. Never showing an offer is a worse failure than showing it at the wrong moment. */
-function pwMarkShown(){ try{ localStorage.setItem(PW_SEEN_KEY,"1"); }catch(e){} }
-function pwDeferrals(){ try{ return (parseInt(localStorage.getItem(PW_DEFER_KEY),10)||0); }catch(e){ return 99; } }
-function pwBumpDeferral(){ try{ localStorage.setItem(PW_DEFER_KEY,String(pwDeferrals()+1)); }catch(e){} }
 let pwReservedOpens=0;         // reserved-source opens this launch (subset of pwInterruptions)
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
@@ -4874,17 +4852,6 @@ function openPaywall(source,force){
      reaches eleven paywalls: the caps were never the thing letting the tail through. The
      hint still fires, so a locked tool still says it is locked — only the sheet stops. */
   if(pwOpens>=PW_HARD_CAP){ pwRefused(src,force); return; }
-  /* ① THE FIRST ONE HAS TO BE EARNED. Not capped, not delayed — MOVED: the first paywall an
-     install ever sees must come from the end of a round rather than from a wall hit in the
-     middle of painting. Deliberately ahead of `force`, because the loudest tool locks are the
-     forced ones and exempting them would leave the rule describing a case that never happens.
-     Refusals are counted and reported, so the escape hatch is auditable rather than a hope. */
-  if(!pwEverShown() && !PW_FIRST_PAYOFF.has(src) && pwDeferrals()<PW_FIRST_MAX_DEFER){
-    pwBumpDeferral();
-    track("paywall_deferred",{source:src,n:pwDeferrals(),forced:!!force});
-    pwRefused(src,force);
-    return;
-  }
   if(!force && cap!==undefined && used>=cap){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
   /* Global budget, checked AFTER the per-source cap so the lock hint still explains the
      specific feature rather than a generic refusal. Exempt sources bypass entirely. */
@@ -4903,10 +4870,6 @@ function openPaywall(source,force){
   if(interruption){ pwInterruptions++; if(reserved) pwReservedOpens++; }
   pwLastSource=src;
   pwSourceOpens[src]=used+1; pwOpens++;
-  /* Marked HERE, at the point of no return, and not one line earlier: everything above this
-     can still refuse, and a device that recorded "seen" on a refused open would spend its one
-     valuable first impression on a paywall nobody was ever shown. */
-  pwMarkShown();
   const pitch=PW_PITCH[source];
   const t=$("#pwTitle"), s=$("#pwSub");
   /* Restore the generic copy when there is no pitch — without this the sheet would keep
@@ -6476,12 +6439,6 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    kamo-app in the same change, because check.mjs asserts the two lists stay disjoint and a
    name on both is lost twice over. */
 "push_attached",
-/* THE REFUSALS THE FIRST-PAYWALL RULE PRODUCES. `paywall_deferred` is the audit trail for a
-   rule that can, by construction, decide somebody sees no offer at all — so it has to be
-   readable on the same Amplitude user as the `paywall_viewed` it replaced, and it has to
-   report from every build rather than from whichever ones ship after the next review. If the
-   escape hatch is ever wrong, this count is the only thing that will say so. */
-"paywall_deferred",
 /* THE ONE THAT REPORTS ON THE BRIDGE MUST NOT TRAVEL BY IT. `purchase_bridged` exists to say
    whether postNative() accepted the Buy tap at all — so routing it through postNative would
    mean the exact failure it was written to catch is the failure that swallows it. Direct is
