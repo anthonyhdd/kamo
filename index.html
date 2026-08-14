@@ -11193,7 +11193,17 @@ function chSeek(hideId,opts){
          last, which on a feed slide is either stale or empty, and sending it here would ship
          a stranger's caption over the sender's own photo. */
       $$("chFoot").innerHTML='<div class="chCard">'
-        +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">'+(FEED?'Hide one in this photo':'Send one back')+'</button>':'')
+        /* ONE SENTENCE FOR BOTH SURFACES, and the feed's old one is why this changed.
+           2026-08-14, split by `src`: the feed carried 890 of the day's 1126 won rounds and
+           produced 62 taps here (7%); the link path won 236 and produced 525 (222%). Thirty
+           times the yield, on a button whose position was already primary in both — so the
+           gap was never placement. It was the sentence. "Hide one in this photo" describes a
+           craft task with no counterparty; "Send one back" names a person to answer, and
+           chRehide() already sets chReplyTo/chReplyName identically on both paths. The feed
+           knew who it was answering the whole time and declined to say so.
+           The handle itself is attached below via textContent, never interpolated here — same
+           rule as the seeker headline, and check.mjs asserts it. */
+        +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">Send one back</button>':'')
         +(FEED?'<button class="chCta2" id="chSend">Send to a friend</button>':'')
         /* "NEXT HIDE ↑" IS GONE — founder's call, 2026-08-14. It was a button that named the
            gesture the screen is already built on: the feed is scroll-snap with
@@ -11331,7 +11341,18 @@ function chSeek(hideId,opts){
         b.innerHTML=ok?"Copied — send it to a friend":"Couldn't copy";
         setTimeout(()=>{ if(b) b.innerHTML=original; },1800);
       };
-      if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
+      if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc);
+        /* AND THE PERSON IT ANSWERS, when this hide is signed. textContent, not innerHTML:
+           the handle is typed by a stranger and this is the same rule the seeker headline
+           follows — check.mjs asserts that one, and a second place doing it by hand is how
+           the first one stops being true.
+           Unsigned hides keep the bare sentence rather than inventing a name for them: the
+           point is that somebody is on the other end, and "@undefined" is the opposite of
+           that. Both surfaces get it — the link path is where the 222% was measured, so
+           naming the sender there is not a change, it is the thing that was already working
+           said out loud. */
+        const who=(h&&h.name)?String(h.name):"";
+        if(who) $$("chReh").textContent="Send one back to @"+who; }
       if($$("chRep")) $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
         /* Out of THIS device's feed straight away, not only out of everyone else's on the
            next page. n_reported=1 already excludes it server-side (see feed_page), but the
