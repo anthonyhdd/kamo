@@ -260,6 +260,37 @@ console.log('\nTHE ENDING DOES NOT WAIT FOR THE REVEAL FRAMES');
   await page.close();
 }
 
+/* THE SEEKER'S OWN RECORD. It could not be derived from anything that already existed —
+   kamo_rounds counts only outside the wrapper (by design, it drives the Get KAMO / Play KAMO
+   split), and the hit/miss was answered by submit_attempt, drawn, and dropped. So it is a new
+   counter, and a counter nobody asserts is a counter that silently stops.
+   Counted from ending(), the single funnel for found / missed / gave up — asserting it here
+   is what stops somebody "tidying" it into the three branches, where a miss that also reveals
+   an ancestor would count the same round twice. */
+console.log('\nA ROUND IS FILED ON THIS DEVICE, WIN OR LOSE');
+{
+  const page = await open(ROWS(2), { react_to_hide: null, hide_reactions_of: [],
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
+  const before = await page.evaluate(() => window.KAMOSEEK.record());
+  before.n === 0 && before.hit === 0
+    ? ok('a fresh device has no record')
+    : bad('the record did not start empty: ' + JSON.stringify(before));
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  await page.waitForSelector('#chFoot .chCard', { timeout: 8000 }).catch(() => {});
+  const after = await page.evaluate(() => window.KAMOSEEK.record());
+  /* A MISS COUNTS. The rate needs its denominator or it is a win counter wearing a percent
+     sign — every round played has to land, not only the ones that went well. */
+  after.n === 1 && after.hit === 0
+    ? ok('a miss files the round and no hit — the denominator is real')
+    : bad('after a miss the record is ' + JSON.stringify(after));
+  await page.close();
+}
+
 /* THE ONE CONTROL ON THIS CARD THAT LEAVES THE APP.
    Everything else the ending card offers spends the round inside KAMO, which is why the feed
    retains and does not recruit. This button is the exception, so the two things that would
