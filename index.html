@@ -4638,6 +4638,31 @@ const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size","char"
    uninvited ask per launch. Every user-initiated door (✦, watermark row, wordmark) is still
    exempt and still opens on demand. */
 const PW_GLOBAL_CAP=1;
+/* ONE SHARED BUDGET IS FIRST-COME-FIRST-SERVED, AND THE WRONG TRIGGER KEPT WINNING.
+   Measured after PW_GLOBAL_CAP went 3 -> 1: `color` rose (98 -> 151 views/day) while
+   `round_end`, `time` and `chset` all went to EXACTLY ZERO on 08-13 and 08-14, having run
+   120 / 80 / 22 the day before. A cap does not do that — a cap of one still lets each
+   source through once per launch. What happened is that `color` fires early in a session,
+   spends the single budget, and every later interruption is refused for the rest of the
+   launch. The end of a round — the one moment the player has just felt the aim clock and
+   the paint limit — stopped being asked at all.
+   So `round_end` draws on its own budget instead of racing for the shared one, and that
+   budget is its ORIGINAL per-source allowance — PW_CAP.round_end is 2, and the reserve
+   matches it, so the end of a round asks exactly as often as it did before the global cap
+   existed. Founder's call, made with the number in front of him.
+   READ THE ARITHMETIC HONESTLY: 2 reserved + 1 shared puts the uninvited ceiling back at 3,
+   which is where PW_GLOBAL_CAP was before it went to 1. The 11000-views-for-4-subscriptions
+   note above is NOT refuted by this change — it is overridden by a deliberate bet that the
+   views it measured were the wrong ones, bought at `color` and `size` rather than at the end
+   of a round. What settles it is round_end's own conversion, not the total: if
+   `paywall_viewed source=round_end` -> trial does not beat the other sources, this reserve
+   is paying the same fatigue cost the note describes and should go back to 1.
+   pwInterruptions still counts EVERY uninvited open, reserved ones included, because it is
+   what `nth_interruption` reports — the shared budget subtracts the reserved spend instead,
+   so reserving cannot quietly widen the shared allowance. */
+const PW_RESERVED=new Set(["round_end"]);
+const PW_RESERVED_CAP=2;
+let pwReservedOpens=0;         // reserved-source opens this launch (subset of pwInterruptions)
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
 /* Which trigger opened the sheet the user is currently looking at. purchase_initiated needs
@@ -4767,11 +4792,18 @@ function openPaywall(source,force){
   /* Global budget, checked AFTER the per-source cap so the lock hint still explains the
      specific feature rather than a generic refusal. Exempt sources bypass entirely. */
   const interruption=!PW_USER_INITIATED.has(src);
-  if(!force && interruption && pwInterruptions>=PW_GLOBAL_CAP){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
+  /* Reserved sources (see PW_RESERVED) spend their own budget; everyone else shares
+     PW_GLOBAL_CAP. The shared spend is pwInterruptions MINUS the reserved ones, so a
+     reserved open never eats the shared allowance and never widens it either. */
+  const reserved=interruption && PW_RESERVED.has(src);
+  const overBudget=reserved
+    ? pwReservedOpens>=PW_RESERVED_CAP
+    : (pwInterruptions-pwReservedOpens)>=PW_GLOBAL_CAP;
+  if(!force && interruption && overBudget){ if(src==="size") flashSizeLock(); else showLockHint(src); return; }
   /* Counted even when exempt: pwInterruptions is what nth_interruption reports, and a
      paywall the user did not ask for is one whether or not the budget was allowed to stop
      it. Exempting it from the count would make the measurement flatter than reality. */
-  if(interruption) pwInterruptions++;
+  if(interruption){ pwInterruptions++; if(reserved) pwReservedOpens++; }
   pwLastSource=src;
   pwSourceOpens[src]=used+1; pwOpens++;
   const pitch=PW_PITCH[source];
