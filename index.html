@@ -234,6 +234,27 @@
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
     font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);}
   #scoreChip b{color:var(--accent);font-weight:850;}
+  /* THE COVERAGE FLOOR, SAID WHILE IT CAN STILL BE ACTED ON.
+     Same slot and shape as #scoreChip, its OWN id on purpose: scoreChip belongs to the
+     reveal and this belongs to paint mode, and the two must stay independently ownable —
+     see the note under scoreChip for why sharing that slot is a rule and not an accident.
+     On 2026-08-14 the browser reply path produced 423 hide_publish_blocked against 73
+     published hides: five out of six people who tapped "Send one back" painted something,
+     tapped Challenge, and were told only then that it was not enough. The floor is not the
+     problem — an unpainted hide spoils its own link preview, which is why CH_MIN_COVERAGE
+     exists. Not knowing about it until the last tap is. */
+  #covHud{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
+    background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
+    font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);
+    white-space:nowrap;transition:border-color .18s ease,box-shadow .18s ease;}
+  #covHud b{font-weight:850;}
+  /* Under the floor the number is the news, so it takes the accent and the rest stays quiet.
+     Over it, the whole chip turns mint — the same "something good happened" colour the
+     wordmark's news dot uses — because at that point the number stops mattering and the only
+     thing worth reading is that the button downstream will now work. */
+  #covHud.short b{color:var(--accent);}
+  #covHud.ready{border-color:rgba(95,230,164,.55);box-shadow:0 6px 20px rgba(0,0,0,.5),0 0 0 3px rgba(95,230,164,.22);}
+  #covHud.ready b{color:var(--mint);}
   /* THE ONE PIECE OF NEWS THIS APP CAN GIVE SOMEONE FOR COMING BACK.
      Same slot and same shape as #scoreChip — they can never be on screen together, because
      scoreChip belongs to the reveal and this belongs to the camera screen someone lands on
@@ -2062,6 +2083,7 @@
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
     <div id="scoreChip"></div>
+    <div id="covHud"></div>
     <button id="btnBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Retake</button>
     <button id="btnDone" class="navbtn">Done</button>
     <button id="btnEdit" class="navbtn" style="display:none">Edit</button>
@@ -3635,6 +3657,10 @@ function captureBurst(char){ if(!char) return; const p=charScreen(char), fx=$("#
 
 /* ===== CAPTURE ===== */
 let sceneCanvas=null, maskCanvas=null, blurCanvas=null, hiderPoints=[], currentScore=0, seenPaint=false;
+/* Whether THIS round has already announced that it cleared the coverage floor — see
+   updateCoverageHud(). Lives out here with currentScore because it is the same lifetime:
+   both are the round's, both are reset by the capture that starts one. */
+let covCrossed=false;
 let roundStartedAt=0, roundMs=0, captureWasAuto=false, aimStartedAt=0, aimGiven=0;   // capture -> Done. The number the user is actually playing against.
 /* FRAMING — fit the camera to the board's WIDTH, don't crop to its aspect.
    The board is the whole screen: 9:19.5 on a modern iPhone (dr ~0.46). The camera hands
@@ -3753,6 +3779,7 @@ function capture(){
   tlCaptureOpen();   // ...and it opens on the untouched shot, which is where the round starts — see tlCaptureOpen()
   chResetRound();   // ...and so does the published hide — see chResetRound()
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
+  covCrossed=false; updateCoverageHud();   // ...and the floor's chip opens the round at 0%, saying what it will take
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
   /* KAMO+ paints with no clock (was PRO_PAINT_SECONDS=75 until 2026-08-11). The round ends
@@ -3819,6 +3846,39 @@ function showScore(){
      speedrun number. How well it is hidden is the thing worth bragging about and the
      reason to go again, and it was computed (currentScore) and shown nowhere. */
   scoreChip.innerHTML=`🫥 <b>${Math.max(0,Math.min(100,Math.round(currentScore||0)))}%</b> hidden · ${roundSeconds()}s`;
+}
+
+/* THE FLOOR, SAID WHILE IT CAN STILL BE ACTED ON — see #covHud in the stylesheet for the
+   423-against-73 that this exists for.
+   Called from the three places currentScore can move (the end of a stroke, undo, clear) and
+   from the two that change whether paint mode is on screen at all. That is the complete set:
+   currentScore is a cached number, not a live one, so refreshing anywhere else would redraw
+   the same value. It READS currentScore rather than calling computeScore() again — every
+   caller has just assigned it, and computeScore is a real pixel scan; recomputing here would
+   double the cost of every single brush lift to print an identical number. */
+function updateCoverageHud(){
+  const el=$("#covHud"); if(!el) return;
+  /* Paint mode only. The reveal owns this slot's twin (#scoreChip) and the two may never be
+     on screen together — enterFinished() hides this one on its way past. */
+  if(mode!=="paint"||finished){ el.style.display="none"; return; }
+  const pct=Math.max(0,Math.min(100,Math.round(currentScore||0)));
+  const ready=pct>=CH_MIN_COVERAGE;
+  el.style.display="block";
+  el.classList.toggle("ready",ready);
+  el.classList.toggle("short",!ready);
+  /* Two sentences, not one with a number swapped in. Below the floor the target is the thing
+     the player cannot see and the only actionable fact; above it the target is spent, and
+     what they need to know is that they are allowed to stop. */
+  el.innerHTML=ready
+    ? `🫥 <b>${pct}% hidden</b> · ready to challenge`
+    : `🫥 <b>${pct}%</b> hidden · ${CH_MIN_COVERAGE}% to challenge`;
+  /* ONE PULSE, ON THE CROSSING, ONCE PER ROUND. Crossing the floor is the only event in
+     paint mode that changes what the app will let you do next, and it lands with the finger
+     already off the glass — a colour change at the top of the screen is easy to paint
+     straight past. Not re-armed on the way back down: coverage wobbles either side of 30 as
+     you work, and a buzz per wobble would train people to ignore the one that matters.
+     The capture that opens a round re-arms it, beside currentScore=0. */
+  if(ready&&!covCrossed){ covCrossed=true; haptic(14); track("coverage_reached",{coverage:pct,reply:!!chReplyTo}); }
 }
 
 /* ===== PAINT ===== */
@@ -4356,7 +4416,7 @@ function sessionPayload(){
   if(span>SESS_MAX_MS){ const k=SESS_MAX_MS/span; rel=rel.map(v=>Math.round(v*k)); }
   return {frames,times:rel,pre:preFrames.length,span};
 }
-function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } tlCapture(); } }
+function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } updateCoverageHud(); tlCapture(); } }
 /* Lifting a finger has to drop it from the pinch set FIRST, or a two-finger gesture leaves
    a stale pointer behind and the next single-finger touch is read as the second half of a
    pinch — i.e. painting silently stops working. Ending the pinch on the way down to one
@@ -6377,6 +6437,16 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    features looked like they were producing no behaviour at all. Direct, for the same reason
    the share tap above is: this page deploys on its own and the binary does not. */
 "reply_started","reply_pending","prev_blocked_tapped","feed_available",
+/* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
+   names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
+   so a coverage event travelling by the bridge would answer for a different user and no ratio
+   between the three would join. Direct also means it reports from 1.0.2, which is most of the
+   fleet and all of the browser traffic this was built for.
+   What it is for: on 2026-08-14 the reply path produced 423 blocked publishes against 73
+   published hides, and nothing said whether people were stopping short of 30% or never
+   understanding that 30% was the ask. This separates those — a round that fires this and
+   still never publishes is a different problem from one that never fires it at all. */
+"coverage_reached",
 /* THE ELEVEN THAT WERE STILL FALLING ON THE FLOOR, found by running kamo-app's own
    scripts/check-web-events.js against the LIVE page rather than against either repo's main.
    It reads what users' devices are actually firing, and it answered: 91 names emitted, 25
@@ -8363,8 +8433,8 @@ function captureShot(){
 }
 $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
-$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); } };
-$("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); } };
+$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
+$("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
 $("#btnSave").onclick=saveStatic;
 
 /* ===== brush-size slider (free) + 3 quick-size presets ===== */
@@ -8811,6 +8881,7 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
   ["swatchRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
+  updateCoverageHud();   // paint mode is over: the floor's chip vacates the slot showScore() is about to take
   showScore();   // "vanished in Xs" — the number the round was played for
   /* THE PICTURE STARTS ITS JOURNEY NOW, and this is the whole reason the share stopped
      taking eight seconds. It does NOT publish — see chPrepare(): no row is created, so
@@ -8849,7 +8920,8 @@ function exitFinished(){ finished=false; stage.classList.remove("done");
   ["swatchRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
-  scoreChip.style.display="none"; }   // the time belongs to the reveal, not the editor
+  scoreChip.style.display="none";   // the time belongs to the reveal, not the editor
+  updateCoverageHud(); }   // ...and back in the editor the floor is actionable again, so it says where the paint stands
 $("#btnDone").onclick=()=>enterFinished(false); $("#btnEdit").onclick=exitFinished;
 revealHandle.addEventListener("pointerdown",e=>{ e.preventDefault(); revealHandle.setPointerCapture(e.pointerId); revealHandle._d=true; revealHint.style.display="none"; });
 revealHandle.addEventListener("pointermove",e=>{ if(!revealHandle._d)return; const r=board.getBoundingClientRect(); revealX=Math.max(0.02,Math.min(0.98,(e.clientX-r.left)/r.width)); drawReveal(); });
