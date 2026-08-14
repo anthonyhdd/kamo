@@ -9422,16 +9422,34 @@ async function chUpload(){
     const mine=chId;
     bytes.then((up)=>{
       if(!up) return;                 // upload failed — stays private, stays out of the feed
-      /* NO SHEET IN FRONT OF THE SEND. The row on the share sheet is now visible in the peek
-         state — the state it presents itself in on every reveal — so the disclosure is made
-         where the eyes already are, before the send, without a modal interrupting the one
-         action this product exists to produce. */
-      kfApplyVisibility(mine,kfWantPublic());
-      /* HELD BACK A BEAT, and now behind the main upload rather than racing it: these are
-         two more encodes and two more uploads, and starting them while the photo itself is
-         still climbing the radio is exactly the contention this delay exists to avoid. The
-         snap is needed by the time a friend OPENS the link, minutes away at best. */
-      setTimeout(()=>chUploadReveal(name),1500);
+      /* CONSENT IS ASKED HERE, AND THIS IS THE LINE THAT MAKES A HIDE PUBLIC. Founder's call,
+         2026-08-14, re-enabling the path kfAskConsent() was kept wired-and-tested for.
+         WHAT IT REPLACES. The claim this comment used to make — "the row on the share sheet is
+         now visible in the peek state, so the disclosure is made where the eyes already are" —
+         rests entirely on the row being on screen in `peek`. The suite that asserts exactly
+         that, test-peek-dom.mjs, is CURRENTLY QUARANTINED AND RED. So the only guarantee that
+         anyone was told is a test nobody is running, on a product whose default publishes a
+         photo of a stranger's home to a public feed. That is not a defensible place to leave
+         it, and the earlier version of this file already measured the failure mode: 29 hides
+         public in 24h whose author never even tapped share.
+         WHY THIS POINT AND NOT EARLIER. The row and the bytes are already private at this
+         stage — the hide exists, out of the feed, reachable only by its link. This call is the
+         single thing that hands it to strangers, so gating it is what makes "nothing goes
+         public unasked" true by construction rather than by layout.
+         COSTS ONE MODAL, ONCE PER DEVICE. kfAskConsent() resolves immediately from the stored
+         answer on every later hide (kfAsked), so the friction lands on the first send only —
+         and it resolves FALSE if it cannot be shown at all, which keeps the failure direction
+         the same as every other branch here: private. */
+      return kfAskConsent().then((pub)=>{
+        kfApplyVisibility(mine,pub);
+        /* HELD BACK A BEAT, and now behind the main upload rather than racing it: these are
+           two more encodes and two more uploads, and starting them while the photo itself is
+           still climbing the radio is exactly the contention this delay exists to avoid. The
+           snap is needed by the time a friend OPENS the link, minutes away at best.
+           INSIDE the consent branch now: the reveal clip is the thing a stranger scrolling the
+           feed actually watches, so it must not be uploaded while the answer is still pending. */
+        setTimeout(()=>chUploadReveal(name),1500);
+      });
     }).catch(()=>{});
     track("hide_published",{public:kfWantPublic(),reply:!!chReplyTo});
     chAttachPush();
