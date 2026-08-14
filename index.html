@@ -10471,6 +10471,33 @@ function chSeek(hideId,opts){
        abandoned — abandoned aims ARE the hesitations), and the buzz instant. Recorded
        here, read later; sent once, fire-and-forget, at the end of the round. */
     let t0=0, done=false, clock=null, flipN=0, revealedSrc="", flipped=false, traceSent=false;
+    /* THE ROUND'S CLOCK RAN UNDER EVERYTHING THAT COVERED IT, and that was never only a
+       display bug: every time this round reports came from Date.now()-t0, so seconds spent
+       looking at something else were written into submit_attempt, into the percentile every
+       other player is ranked against, and into "found in 12s".
+       Measured 2026-08-14: open the profile card over a feed round, wait three seconds, and
+       the clock goes 3.0s → 6.1s. It never stopped. So opening your own profile mid-round
+       cost you the round, and so did taking a call.
+       THE APP ALREADY HAS THIS PRINCIPLE. TIMER_BLOCKERS and data-blocks-timer exist so that
+       an overlay cannot cost somebody time, and #kamoHome carries the attribute. But that
+       machinery drives pauseTimer(), which governs the PAINT clock — a different clock, in a
+       different module, that this one never asked.
+       Elapsed becomes an accumulator instead of a subtraction from wall time. document.hidden
+       rides along and fixes backgrounding for free, which was inflating rounds by however
+       long a phone call lasted.
+       Sampled from the 100ms clock tick rather than from a new observer: the worst error is
+       one tick, and a second MutationObserver over the same overlays is a second thing to
+       keep in step with the first. */
+    let paused=0, pausedAt=0;
+    const roundBlocked=()=>{ try{ return document.hidden||timerBlocked(); }catch(e){ return false; } };
+    const syncPause=()=>{ const b=roundBlocked();
+      if(b&&!pausedAt) pausedAt=Date.now();
+      else if(!b&&pausedAt){ paused+=Date.now()-pausedAt; pausedAt=0; } };
+    /* Never negative, and never counting a pause that is still open — a round read WHILE the
+       card is up reports the moment it was covered, instead of freezing and then jumping. */
+    const elapsed=()=>{ if(!t0) return 0;
+      const open=pausedAt?Date.now()-pausedAt:0;
+      return Math.max(0,Date.now()-t0-paused-open); };
     /* WHERE THIS HUNT CAME FROM. n_attempts counts every play into one number, so a creator
        reading "12 tried" cannot tell whether their feed is working or their friends are —
        the two things they would act on differently. Carried on the TRACE rather than added to
@@ -10488,7 +10515,7 @@ function chSeek(hideId,opts){
                  vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
     const clockEl=$$("chClock");
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
-      clock=setInterval(()=>{ clockEl.textContent=((Date.now()-t0)/1000).toFixed(1)+"s"; },100);
+      clock=setInterval(()=>{ syncPause(); clockEl.textContent=(elapsed()/1000).toFixed(1)+"s"; },100);
       ctl._clock=clock; };   // the handle destroy() clears — see `killed` above
     /* THE CLOCK STARTS AT DECODE, not at the first touch. With one buzz there is no
        "first tap" to start from, and every player must be measured from the same moment
@@ -10535,7 +10562,7 @@ function chSeek(hideId,opts){
     const stage=$$("chStage"), zoomEl=$$("chZoom");
     let k=1, tx=0, ty=0, lastS=0;
     const K_MAX=6;
-    const recZoom=()=>{ const t=t0?Date.now()-t0:0;
+    const recZoom=()=>{ const t=elapsed();
       if(t-lastS<120||trace.s.length>=500) return; lastS=t;
       trace.s.push([t,Math.round(k*100)/100,Math.round(tx),Math.round(ty)]); };
     const applyT=()=>{
@@ -10550,7 +10577,7 @@ function chSeek(hideId,opts){
     const RET_OFF=CH_RET_OFF;
     let ret=null, aimRec=null, aimId=-1, pinch=null, postDown=null;
     const closeAim=(committed)=>{
-      if(aimRec){ aimRec.c=committed?1:0; aimRec.u=t0?Date.now()-t0:0;
+      if(aimRec){ aimRec.c=committed?1:0; aimRec.u=elapsed();
         if(trace.a.length<40) trace.a.push(aimRec); aimRec=null; }
       if(ret){ ret.remove(); ret=null; } aimId=-1; };
     const retMove=(x,y)=>{
@@ -10558,7 +10585,7 @@ function chSeek(hideId,opts){
       const r=img.getBoundingClientRect();
       const cx=Math.max(r.left,Math.min(r.right,x)), cy=Math.max(r.top,Math.min(r.bottom,y-RET_OFF));
       ret.style.left=cx+"px"; ret.style.top=cy+"px"; ret._x=cx; ret._y=cy;
-      if(aimRec&&aimRec.p.length<160){ const t=t0?Date.now()-t0:0;
+      if(aimRec&&aimRec.p.length<160){ const t=elapsed();
         if(!aimRec._l||t-aimRec._l>=80){ aimRec._l=t;
           aimRec.p.push([t,Math.round((cx-r.left)/r.width*1000)/1000,Math.round((cy-r.top)/r.height*1000)/1000]); } } };
 
@@ -10578,7 +10605,7 @@ function chSeek(hideId,opts){
         aimId=e.pointerId;
         ret=document.createElement("div"); ret.className="chRet"; ret.innerHTML="<i></i>";
         w.appendChild(ret);
-        aimRec={d:t0?Date.now()-t0:0,u:0,c:0,p:[],_l:0};
+        aimRec={d:elapsed(),u:0,c:0,p:[],_l:0};
         retMove(e.clientX,e.clientY);
         buzzHaptic(8);
       } else {
@@ -10624,7 +10651,7 @@ function chSeek(hideId,opts){
     async function buzz(sx,sy){
       if(done) return; done=true;
       clearInterval(clock);
-      const ms=t0?Date.now()-t0:0;
+      const ms=elapsed();
       clockEl.textContent=(ms/1000).toFixed(1)+"s";
       quit.remove();
       const r=img.getBoundingClientRect();
@@ -10725,7 +10752,7 @@ function chSeek(hideId,opts){
       if(done) return; done=true;
       clearInterval(clock); clockEl.style.display="none";
       quit.remove(); closeAim(false);
-      const ms=t0?Date.now()-t0:0;
+      const ms=elapsed();
       trace.end={ms:ms,x:-1,y:-1};
       track("seek_failed",TP({reason:"giveup",ms:ms}));
       sendTrace("giveup");

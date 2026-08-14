@@ -267,6 +267,63 @@ console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
   await page.close();
 }
 
+/* AND THE CLOCK MUST STOP WHEN SOMETHING COVERS THE ROUND. Every time a round reports —
+ * submit_attempt, the percentile every other player is ranked against, "found in 12s" — came
+ * from Date.now()-t0, so seconds spent looking at the profile card were charged to the round.
+ * Opening your own profile mid-round cost you the round. So did taking a call.
+ * ASSERTED ON THE CLOCK'S OWN TEXT, not on an internal flag: the number on screen is the
+ * number that gets submitted, and a test that read a private accumulator could pass while the
+ * thing the player is judged on kept running. */
+console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
+{
+  /* ⚠️ ITS OWN PAGE, WITH A REAL PHOTO ROUTED IN. The shared open() lets the slide images
+     404, and startClock() hangs off img.onload — so the round never starts timing and every
+     assertion below reads 0s and passes against everything, including the bug. That is what
+     the first run of this block did. */
+  const PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAF0lEQVQIW2NkYGD4z8DAwMgABXAGNgEAJz0BAWv6xkkAAAAASUVORK5CYII=', 'base64');
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PX }));
+  await page.route('**/api.eu.amplitude.com/**', r => r.fulfill({ status: 200, body: '{}' }));
+  await page.addInitScript((r) => {
+    window.__seed = {
+      feed_page: r,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
+      set_hide_public: null,
+    };
+    localStorage.setItem('kamo_handle', 'tony');
+  }, ROWS(3));
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForFunction(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length >= 1, null, { timeout: 8000 });
+  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.waitForTimeout(1500);
+  const clock = () => page.evaluate(() => {
+    const e = [...document.querySelectorAll('.kfSlide *')].find(x => /^\d+(\.\d+)?s$/.test((x.textContent || '').trim()));
+    return e ? parseFloat(e.textContent) : null;
+  });
+  const t0 = await clock();
+  t0 === null ? bad('no round clock on screen — the rest of this block cannot mean anything') : ok(`the round is timing (${t0}s)`);
+
+  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.waitForTimeout(2500);
+  const t1 = await clock();
+  /* One 100ms tick of slop is the design: the pause is sampled from the clock's own interval
+     rather than from a second observer over the same overlays. */
+  t1 !== null && t0 !== null && (t1 - t0) < 0.5
+    ? ok(`2.5s with the card open costs the round ${((t1 - t0)).toFixed(1)}s`)
+    : bad(`the clock ran under the card: ${t0}s → ${t1}s — those seconds go into submit_attempt`);
+
+  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.waitForTimeout(900);
+  const t2 = await clock();
+  /* The other half, and the one a naive "just stop the timer" fix breaks: closing the card
+     must resume, not leave the round frozen for good. */
+  t2 !== null && (t2 - t1) > 0.4
+    ? ok(`and closing it resumes the round (${t1}s → ${t2}s)`)
+    : bad(`the clock did not restart after the card closed: ${t1}s → ${t2}s`);
+
+  await page.close();
+}
+
 /* A BUTTON THAT DOES EVERYTHING EXCEPT BE VISIBLE. The profile control in the feed bar
  * called openKamoHome() correctly from the day it shipped: the handler ran, the event fired,
  * the .show class landed. The card rendered at z-index 80 underneath a fullscreen #kfeed at
