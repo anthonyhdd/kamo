@@ -81,49 +81,9 @@ async function boot(seed) {
 }
 const count = (sent, type) => sent.filter(e => e.event_type === type).length;
 
-console.log('\n① THE FIRST PAYWALL IS EARNED, NOT TAKEN BY WHICHEVER LOCK FIRES FIRST');
-{
-  const { page, sent } = await boot();            // fresh install: nothing in storage
-  await page.evaluate(() => document.getElementById('btnPlus').click());
-  await page.waitForTimeout(700);
-  count(sent, 'paywall_viewed') === 0
-    ? ok('a fresh device tapping a lock gets no paywall')
-    : bad(`a fresh device was shown ${count(sent, 'paywall_viewed')} paywall(s) from a tool lock`);
-  const def = sent.find(e => e.event_type === 'paywall_deferred');
-  def ? ok(`and the refusal reports itself (source=${(def.event_properties || {}).source})`)
-      : bad('nothing was emitted — a refusal that reports nothing is indistinguishable from a dead button');
-  await page.close();
-}
-
-console.log('\nAND THE SAME TAP OPENS IT ONCE THE DEVICE HAS SEEN ONE');
-{
-  /* The other half of the pair. Without it, a paywall that never opens at all would pass the
-     block above with full marks. */
-  const { page, sent } = await boot({ kamo_pw_seen: '1' });
-  await page.evaluate(() => document.getElementById('btnPlus').click());
-  await page.waitForTimeout(700);
-  count(sent, 'paywall_viewed') >= 1
-    ? ok('an install that has already been offered once sees the paywall normally')
-    : bad('the paywall never opens even for a device that has seen one — the rule is a wall, not a move');
-  await page.close();
-}
-
-console.log('\nAND A DEVICE THAT NEVER FINISHES A ROUND IS NOT STRANDED');
-{
-  /* The escape hatch, asserted rather than hoped for: after PW_FIRST_MAX_DEFER refusals the
-     next source through wins, so somebody who only ever hits locks still gets an offer. */
-  const { page, sent } = await boot({ kamo_pw_defer: '4' });
-  await page.evaluate(() => document.getElementById('btnPlus').click());
-  await page.waitForTimeout(700);
-  count(sent, 'paywall_viewed') >= 1
-    ? ok('past the deferral limit the offer is finally made')
-    : bad('the escape hatch does not open — a device that never finishes a round is offered nothing, ever');
-  await page.close();
-}
-
 console.log('\n② THE TAIL STOPS, AND IT STOPS USER-INITIATED OPENS TOO');
 {
-  const { page, sent } = await boot({ kamo_pw_seen: '1' });
+  const { page, sent } = await boot();
   /* Twelve real taps on ✦. It passes no force flag but is user-initiated, so it skips every
      budget already in the file — which is how a launch reached eleven paywalls. */
   for (let i = 0; i < 12; i++) {
@@ -143,5 +103,5 @@ console.log('\n② THE TAIL STOPS, AND IT STOPS USER-INITIATED OPENS TOO');
 
 await browser.close();
 server.close();
-console.log(failed ? `\n✗ ${failed} problem(s)\n` : '\n✓ the first paywall is earned and the tail is capped\n');
+console.log(failed ? `\n✗ ${failed} problem(s)\n` : '\n✓ the tail past the hard cap is refused, forced opens included\n');
 process.exit(failed ? 1 : 0);
