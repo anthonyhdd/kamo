@@ -6222,7 +6222,7 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    measurable on the day it ships instead of after the next App Store review.
    They land on the WEB Amplitude user, same as hide_published and hide_sent, so
    feed_opened → feed_slide → hide_published joins at user level without a build. */
-"feed_opened","feed_closed","feed_slide","feed_empty","feed_empty_cta","feed_next_tapped",
+"feed_opened","feed_closed","feed_slide","feed_empty","feed_empty_cta",
 "feed_load_failed","hide_visibility_set",
 /* THE ONE THAT SAYS HOW LONG IT TOOK, and it has to travel with the rest of the family.
    `feed_first_paint` carries the milliseconds from the tap to the first photograph being
@@ -10920,18 +10920,28 @@ function chSeek(hideId,opts){
          also means the feed cannot bring a single new person in: it recirculates the people
          already here. The one gesture that would is the one nobody is offered — sending the
          photo you just got beaten by, at the moment you got beaten by it.
-         SECOND, not third, and deliberately above "Next hide ↑": the tap competes with the
-         next slide, and a share offered after the exit has already been named is a share
-         nobody sees. The primary stays "Hide one in this photo" — this borrows the position
-         under it, not the one above.
+         It used to be second of three, above a "Next hide" button that no longer exists —
+         the exit is the swipe now (founder's call, 2026-08-14). Two controls remain and the
+         order is unchanged: the primary is "Hide one in this photo", this borrows the
+         position under it.
          The link is THIS hide, not the player's own. chLink() is the round the player made
          last, which on a feed slide is either stale or empty, and sending it here would ship
          a stranger's caption over the sender's own photo. */
       $$("chFoot").innerHTML='<div class="chCard">'
         +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">'+(FEED?'Hide one in this photo':'Send one back')+'</button>':'')
         +(FEED?'<button class="chCta2" id="chSend">Send to a friend</button>':'')
+        /* "NEXT HIDE ↑" IS GONE — founder's call, 2026-08-14. It was a button that named the
+           gesture the screen is already built on: the feed is scroll-snap with
+           scroll-snap-stop:always, so a swipe is the exit and always was. The button was a
+           second way to do the same thing, sitting under the two controls that are about
+           THIS photo, and it turned the end of a round into a choice between three things
+           when only two of them go anywhere new.
+           WHAT REPLACES IT IS THE HINT, not nothing — see killHint below, which no longer
+           fires when the card appears. The pill only ever died there because it landed on
+           top of this button; with the button gone the collision is gone, and the one
+           instruction a first-round player needs stays on screen until they obey it. */
         +(FEED
-            ? '<button class="'+(eopts.rehide?'chCta2':'chCta')+'" id="chNext">Next hide ↑</button>'
+            ? ''
             /* THE SECOND ROUND SELLS THE APP — the half of #175 whose measurement shipped
                and whose product change never did. Somebody opening a SECOND stranger's hide
                has already answered the question the store page asks, so the store stops being
@@ -11056,7 +11066,6 @@ function chSeek(hideId,opts){
         b.innerHTML=ok?"Copied — send it to a friend":"Couldn't copy";
         setTimeout(()=>{ if(b) b.innerHTML=original; },1800);
       };
-      if($$("chNext")) $$("chNext").onclick=()=>{ track("feed_next_tapped",{}); if(OPT.onNext) OPT.onNext(); };
       if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc); }
       if($$("chRep")) $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
         /* Out of THIS device's feed straight away, not only out of everyone else's on the
@@ -11377,19 +11386,14 @@ function chFeed(){
       : {n:S.played,replay:!!s.replay});
     S.round=chSeek(s.row.id,{
       host:s.host, feed:true, replay:!!s.replay, firstInFeed:(S.played===1),
-      onNext:()=>goNext(),
-      onEnded:()=>{ if(S.killHint) S.killHint(); },
+      /* onEnded no longer kills the hint — see killHint. It still exists as the feed's signal
+         that the card is up, which the drop/block paths read; only the removal moved. */
+      onEnded:()=>{},
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       onReported:(id)=>drop(id),
       onBlocked:(id,stored)=>blockDrop(id,stored),
     });
     if(i>=S.slides.length-3) load();
-  }
-
-  function goNext(){
-    const nxt=S.slides[S.active+1];
-    if(nxt){ nxt.el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
-    load().then(()=>{ const n2=S.slides[S.active+1]; if(n2) n2.el.scrollIntoView({behavior:"smooth",block:"start"}); });
   }
 
   /* A REPORTED PHOTO LEAVES THIS SCREEN NOW. feed_page already excludes anything with a
@@ -11573,12 +11577,18 @@ function chFeed(){
     });
   },{root:scroll,threshold:[0.6]});
 
-  /* THE HINT ALSO DIES WHEN THE ROUND DOES. It only ever left on the first scroll, so a
-     player who finished a round without scrolling kept a floating pill at bottom:84px — and
-     once the ending card grew a second link (the block), the pill landed exactly on top of
-     the card's "Next hide ↑" button. It reads as if the button says "Swipe up for the next
-     hide", and it is pointer-events:none, so the tap goes through to a button nobody can
-     read. An instruction that outlives the moment it describes is an obstruction. */
+  /* THE HINT USED TO DIE WHEN THE ROUND DID, AND IT MUST NOT ANY MORE.
+     The reason it died there was a collision: a player who finished without scrolling kept a
+     floating pill at bottom:84px, and once the ending card grew a second link the pill landed
+     exactly on top of the card's "Next hide ↑" button — reading as if that button said "Swipe
+     up for the next hide", and pointer-events:none so the tap went through to a button nobody
+     could read.
+     That button is gone (founder, 2026-08-14), and with it the collision. What is left is the
+     opposite problem: the swipe is now the ONLY way out of a finished round, and killing its
+     one instruction at exactly the moment it becomes load-bearing would leave a first-round
+     player on a card with nowhere to go.
+     So it dies on the SCROLL and on nothing else — the moment the instruction is obeyed,
+     which is the only moment it stops being true. */
   const killHint=()=>{ S.hinted=true; const h=root.querySelector("#kfHint"); if(h) h.remove(); };
   S.killHint=killHint;
   scroll.addEventListener("scroll",()=>{
