@@ -6431,6 +6431,21 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    shape in Amplitude — a name with no data behind it — so adding it to this set replaced one
    permanent zero with another. The handler is removed in this change; see there. */
 "share_deferred","notif_opened_found",
+/* THE PUSH FUNNEL WORKS AND ONLY ITS REPORTING WAS BLIND. `push_attached` read as
+   NON-EXISTENT in the Amplitude project — not zero, absent — which is what a whole broken
+   feature looks like, and it was read as exactly that. The database says otherwise: 199 of
+   the 3094 hides created in the last seven days carry a push_token, and attach_push_token
+   has the signature the page calls. Tokens are landing. Nobody could see it.
+   The reason is the one this file has now hit twelve times: the name sits on the WRAPPER's
+   allow-list, and it was added there on 2026-08-10 — after 1.1.0 was cut. ~89% of the fleet
+   is 1.0.2, whose compiled list has never contained it, so the bridge discards it in silence
+   on almost every phone that fires it. The drift checker cannot catch this one: the name IS
+   on kamo-app's list, so it compares clean against main while being dropped on the devices
+   that matter. Its own header says so — "Already there? Then the fix is a RELEASE".
+   Routing it direct is that release, without the release. It is removed from WEB_EVENTS in
+   kamo-app in the same change, because check.mjs asserts the two lists stay disjoint and a
+   name on both is lost twice over. */
+"push_attached",
 /* THE REFUSALS THE FIRST-PAYWALL RULE PRODUCES. `paywall_deferred` is the audit trail for a
    rule that can, by construction, decide somebody sees no offer at all — so it has to be
    readable on the same Amplitude user as the `paywall_viewed` it replaced, and it has to
