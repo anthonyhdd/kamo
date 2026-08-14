@@ -67,7 +67,7 @@ console.log('\nTHE SEEKER IS TOLD WHO THEY ARE PLAYING');
 {
   const t=await head('tony');
   /* THE HEADLINE IS THE NAME NOW. It spent the widest line on the screen restating the
-     game ("hid a body in here") when the only thing that differs between two feed slides is
+     game ("hid a kamo here") when the only thing that differs between two feed slides is
      WHO made them; the sentence moved to the sub. What must not change is that the sender is
      named as the AUTHOR — the bug this assertion was written for was a headline that read as
      if @tony were the one hidden. */

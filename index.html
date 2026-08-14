@@ -18,12 +18,12 @@
      carries the same block against its own origin. -->
 <meta property="og:title" content="KAMO — Meccha IRL" />
 <meta property="og:site_name" content="KAMO" />
-<meta property="og:description" content="There's a body hidden in this photo. Find it." />
+<meta property="og:description" content="There's a kamo hidden in this photo. Find it." />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://anthonyhdd.github.io/kamo/icon.png" />
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content="KAMO — Meccha IRL" />
-<meta name="twitter:description" content="There's a body hidden in this photo. Find it." />
+<meta name="twitter:description" content="There's a kamo hidden in this photo. Find it." />
 <style>
   :root{
     --bg:#05060a; --panel:rgba(16,16,24,.72); --stroke:rgba(255,255,255,.14);
@@ -9590,7 +9590,7 @@ async function chShareHide(h,btn){
   const id=h&&h.id; if(!id) return;
   haptic(10);
   const link=KAMO_HOST+"?h="+id, who=(h&&h.name)||getHandle();
-  const head = who ? "🫥 @"+who+" hid a body in this photo." : "🫥 There's a body hidden in this photo.";
+  const head = who ? "🫥 @"+who+" hid a kamo in this photo." : "🫥 There's a kamo hidden in this photo.";
   /* One deal for every hide, old or new — the seeker plays one buzz on no clock, so the
      message never quotes seconds or taps again, whatever the row still stores. */
   const text = head+"\nOne tap to find it."+"\n\n"+link;
@@ -10481,7 +10481,7 @@ function chSeek(hideId,opts){
        who reads "Find @tony" spends their one tap looking for a person who was never in
        the picture. The headline states the dare and names its author; the sub carries the
        rule. */
-    /* THE NAME IS THE HEADLINE. "Someone hid a body in here" spent the widest line on the
+    /* THE NAME IS THE HEADLINE. The old headline (it said body, not kamo) spent the widest line
        screen saying nothing about who — and in a feed of strangers, who is the only thing
        that makes the next photo different from the last. The sentence moves to the sub. */
     /* FIRST SLIDE SAYS THE SENTENCE, THE REST SAY THE NAME. Somebody meeting the feed needs
@@ -11207,7 +11207,7 @@ function chFeed(){
     /* THE BAR IS THE ✕ AND NOTHING ELSE. It carried a centred "Hides from everyone" and the
        round's own headline is centred at the top of the same screen — the two printed
        through each other. The label was orientation for a screen that does not need any:
-       the player is looking at somebody's photo with "@tony hid a body in here" over it. */
+       the player is looking at somebody's photo with "@tony hid a kamo here" over it. */
     /* REPORT WITHOUT FINISHING. It only ever existed at the END of a round, so getting a
        photo out of the feed meant playing it first — which is exactly backwards for the
        photo you most want gone. One report already pulls a hide for everybody

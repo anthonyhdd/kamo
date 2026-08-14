@@ -21,7 +21,7 @@ const REAL = readFileSync(join(ROOT, 'index.html'), 'utf8');
 /* The challenge card the Worker's upstream renders — tiny on purpose. What matters about it
    is the og: tags and the RESPONSE HEADERS, not the body, which is the whole lesson of
    2026-08-12: the body was perfect and every human still got a blank page. */
-const CARD = '<!doctype html><html><head><meta property="og:title" content="@tony hid a body in here">'
+const CARD = '<!doctype html><html><head><meta property="og:title" content="@tony hid a kamo in here">'
   + '<meta property="og:image" content="https://qpztlobbnjyjbxqyuzgg.supabase.co/storage/v1/object/public/hides/x.jpg">'
   + '</head><body style="background:#000"><script>location.replace("/?h=abc")</script></body></html>';
 
