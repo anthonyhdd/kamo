@@ -4646,15 +4646,22 @@ const PW_GLOBAL_CAP=1;
    spends the single budget, and every later interruption is refused for the rest of the
    launch. The end of a round — the one moment the player has just felt the aim clock and
    the paint limit — stopped being asked at all.
-   So `round_end` draws on its own budget instead of racing for the shared one. Total
-   uninvited asks per launch goes 1 -> 2, not back to 3: the 11000-views-for-4-subscriptions
-   note above still stands, and this does not reopen it. It moves one ask to where the
-   intent is rather than adding volume.
+   So `round_end` draws on its own budget instead of racing for the shared one, and that
+   budget is its ORIGINAL per-source allowance — PW_CAP.round_end is 2, and the reserve
+   matches it, so the end of a round asks exactly as often as it did before the global cap
+   existed. Founder's call, made with the number in front of him.
+   READ THE ARITHMETIC HONESTLY: 2 reserved + 1 shared puts the uninvited ceiling back at 3,
+   which is where PW_GLOBAL_CAP was before it went to 1. The 11000-views-for-4-subscriptions
+   note above is NOT refuted by this change — it is overridden by a deliberate bet that the
+   views it measured were the wrong ones, bought at `color` and `size` rather than at the end
+   of a round. What settles it is round_end's own conversion, not the total: if
+   `paywall_viewed source=round_end` -> trial does not beat the other sources, this reserve
+   is paying the same fatigue cost the note describes and should go back to 1.
    pwInterruptions still counts EVERY uninvited open, reserved ones included, because it is
    what `nth_interruption` reports — the shared budget subtracts the reserved spend instead,
    so reserving cannot quietly widen the shared allowance. */
 const PW_RESERVED=new Set(["round_end"]);
-const PW_RESERVED_CAP=1;
+const PW_RESERVED_CAP=2;
 let pwReservedOpens=0;         // reserved-source opens this launch (subset of pwInterruptions)
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
