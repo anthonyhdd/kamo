@@ -267,6 +267,53 @@ console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
   await page.close();
 }
 
+/* THE EXIT IS THE SWIPE, AND NOTHING ELSE OFFERS IT. "Next hide ↑" was removed (founder,
+ * 2026-08-14): the feed is scroll-snap with scroll-snap-stop:always, so the swipe was always
+ * the exit and the button was a second way to do the same thing, sitting under two controls
+ * that are about THIS photo.
+ * WHICH MAKES THE HINT LOAD-BEARING. It used to be killed the moment the ending card appeared
+ * — correct then, because the pill landed on top of that button and swallowed its taps. With
+ * the button gone the collision is gone, and killing the only instruction for the only way
+ * out would leave a first-round player on a card with nowhere to go. Both halves are asserted
+ * here, because removing the button without this is a dead end and it looks like a tidy diff. */
+console.log('\nTHE ROUND ENDS ON TWO CONTROLS, AND THE SWIPE IS THE WAY OUT');
+{
+  const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [],
+    submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+    save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  await page.waitForSelector('#chFoot .chCard', { timeout: 8000 });
+
+  const card = await page.evaluate(() => ({
+    next: !!document.getElementById('chNext'),
+    reh: !!document.getElementById('chReh'),
+    send: !!document.getElementById('chSend'),
+    hint: !!document.getElementById('kfHint'),
+    labels: [...document.querySelectorAll('#chFoot .chCard button')].map(b => (b.textContent || '').trim()).filter(Boolean),
+  }));
+
+  card.next === false ? ok('the ending card has no Next control') : bad('#chNext is still on the card');
+  card.reh && card.send
+    ? ok('and it still offers both of the ones that go somewhere: ' + JSON.stringify(card.labels.slice(0, 2)))
+    : bad('the card lost a control it should have kept: ' + JSON.stringify(card.labels));
+  /* The half that turns a removal into a dead end if it is missed. */
+  card.hint ? ok('and the swipe hint survives the card, because it is now the only way out')
+            : bad('the hint was killed by the ending card — the round now has no exit at all');
+
+  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  await page.waitForTimeout(700);
+  const afterScroll = await page.evaluate(() => ({ hint: !!document.getElementById('kfHint'),
+    rounds: document.querySelectorAll('.chS').length }));
+  afterScroll.hint === false ? ok('and it dies on the scroll — the moment it stops being true') : bad('the hint outlived the swipe it describes');
+  afterScroll.rounds === 1 ? ok('and the swipe still advances the feed (1 round alive)') : bad(`after the swipe there are ${afterScroll.rounds} rounds`);
+
+  await page.close();
+}
+
 /* AND THE CLOCK MUST STOP WHEN SOMETHING COVERS THE ROUND. Every time a round reports —
  * submit_attempt, the percentile every other player is ranked against, "found in 12s" — came
  * from Date.now()-t0, so seconds spent looking at the profile card were charged to the round.
@@ -556,14 +603,20 @@ console.log('\nTHE FEED CAN SEND SOMEBODY ELSE\'S HIDE');
   await page.waitForSelector('#chSend', { timeout: 10000 }).catch(() => {});
   const there = await page.evaluate(() => !!document.querySelector('#chSend'));
   there ? ok('the ending card offers a way out of the app') : bad('#chSend is not on the card');
-  /* ABOVE THE EXIT. A share offered after "Next hide ↑" has already named the way out is a
-     share the thumb has passed by, so the ORDER is the feature and not a detail of markup. */
+  /* UNDER THE PRIMARY, AND NOTHING ELSE BETWEEN. This used to assert that the share sat above
+     "Next hide ↑" — a share offered after the way out has been named is a share the thumb has
+     passed by. That button was removed on 2026-08-14, which made the old comparison vacuous:
+     indexOf('chNext') is -1, so "above" could never be true again and the suite went red on a
+     control that no longer exists.
+     What survives the removal is the real claim: the share is the SECOND thing on the card,
+     directly under the one primary action, and no other button separates them. */
   const order = await page.evaluate(() => {
     const f = document.querySelector('#chFoot'); if (!f) return 'no card';
     const ids = [...f.querySelectorAll('button')].map(b => b.id).filter(Boolean);
-    return ids.indexOf('chSend') < ids.indexOf('chNext') ? 'above' : ids.join(',');
+    if (ids.indexOf('chNext') !== -1) return 'chNext is back: ' + ids.join(',');
+    return (ids[0] === 'chReh' && ids[1] === 'chSend') ? 'second' : ids.join(',');
   });
-  order === 'above' ? ok('and it sits above "Next hide ↑", not under it') : bad('button order: ' + order);
+  order === 'second' ? ok('and it is the second control, directly under the primary') : bad('button order: ' + order);
   await page.evaluate(() => document.querySelector('#chSend').click());
   await page.waitForFunction(() => (window.__share || []).length > 0, { timeout: 5000 }).catch(() => {});
   const msg = await page.evaluate(() => (window.__share[0] || {}).text || '');
