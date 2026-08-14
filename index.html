@@ -8479,14 +8479,26 @@ sizeBar.addEventListener("pointerdown",e=>{
          one, which is the pair whose ratio says whether the capped answer works. */
       const first=!sizeBar._askedFloor;
       track("size_floor_reached",{first:first,brush:brush});
-      if(first){ sizeBar._askedFloor=1; openPaywall("size_star",true); return; }
-      /* Only past the sheet: on the first reach a full screen is already answering, and a ring
-         behind it would be talking over it. */
+      sizeBar._askedFloor=1;
+      /* THE MINT REGION ALWAYS SELLS. Founder's call, 2026-08-14. It used to answer once per
+         launch and then go quiet — press again and the thumb bounced, the region glowed, and
+         nothing was for sale. `first` still rides on size_floor_reached, so the ratio that
+         judged the old arrangement is still readable: if the later presses convert at nothing,
+         the gate comes back.
+         `#sizeLock` is the only thing on this screen drawn in KAMO+ mint and shown to free
+         users alone. Pressing it is not a mis-drag past an invisible floor — the region that
+         was reached for is painted, bordered and 21px clear of its free neighbour. Every press
+         of it is the same sentence, and the answer should not depend on how many times today
+         they have already asked.
+         SOURCE IS `size`, NOT `size_star`, AND THAT IS A MEASUREMENT FIX. These presses have
+         been reported as `size_star` — the glyph — so the mint region and the ✦ have been
+         landing in one bucket, which is why `source:"size"` reads 0 on most days while
+         size_star reads 70-90. They are different gestures answering different questions and
+         they need to be separable before either can be judged. Still force:true, so PW_CAP.size
+         cannot swallow it; `size` is in PW_USER_INITIATED, so the global budget never sees it
+         either — a press here is a request, not an interruption. */
       flashLockedBrush();
-      sizeBar.classList.remove("floorBounce"); void sizeBar.offsetWidth;
-      sizeBar.classList.add("floorBounce");
-      clearTimeout(sizeBar._bt);
-      sizeBar._bt=setTimeout(()=>sizeBar.classList.remove("floorBounce"),420);
+      openPaywall("size",true);
       return; }
     /* AND THE FINGER CAN KEEP GOING. This branch used to end here: one snap on pointerdown,
        no capture, no move handler — `sizing` was deliberately left false so a free user could
