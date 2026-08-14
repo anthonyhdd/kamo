@@ -851,17 +851,31 @@
      mint-to-deep ramp, so "which lock opened this" still reads at a glance. drop-shadow
      replaces text-shadow: a shadow on clipped text paints over the fill. The solid color
      stays as the fallback for any renderer without background-clip:text. */
+  /* SOLID WHITE — founder's call, and the vertical gradient goes with it. These three lines
+     are the paywall's whole claim, set at 54px over a PHOTO, and the gradient ran white at
+     the cap height down to full mint at the baseline: the bottom third of every letter sat
+     at the lowest contrast on the screen, over an image nobody controls. A headline that
+     fades out its own feet is the wrong place to be clever. The gradient also forced
+     `-webkit-text-fill-color:transparent`, so the text was never actually painted — only
+     clipped — which is why it read thin against a bright shot.
+     The drop-shadow stays: that is what separates white type from a light photo. */
   .pwHeroLn{font-family:'KamoHero',var(--display),sans-serif;font-weight:400;font-size:clamp(36px,12.5vw,54px);line-height:1.06;letter-spacing:.2px;
-    color:var(--mint);background:linear-gradient(180deg,#ffffff 0%,#c8f7de 45%,var(--mint) 100%);
-    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    color:#fff;-webkit-text-fill-color:#fff;
     filter:drop-shadow(0 3px 14px rgba(0,0,0,.7));}
-  .pwHeroLn.on{background:linear-gradient(180deg,#eafff5 0%,var(--mint) 55%,#2fbf7d 100%);
-    -webkit-background-clip:text;background-clip:text;}
+  /* The lit state keeps its mint, because that is the line ANSWERING the tap — it has to be
+     distinguishable from the two that are merely present. */
+  .pwHeroLn.on{color:var(--mint);-webkit-text-fill-color:var(--mint);}
   /* The strike is mint on white and inverts when the line lights: two colours must always
      separate the word from its deletion, or the strike disappears into its own line. */
   .pwHeroLn s{text-decoration-thickness:.09em;text-decoration-color:var(--mint);}
   .pwHeroLn.on s{text-decoration-color:rgba(255,255,255,.94);}
-  #pwHeroCtx{margin:12px auto 0;max-width:260px;padding:0 10px;font-size:13.5px;font-weight:600;color:rgba(255,255,255,.8);text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  /* White and LIGHTER, and given the width to land on two lines. At .8 over a photo it was
+     the dimmest text on the paywall while carrying the one sentence that explains the three
+     lines above it; at weight 600 in a 260px column it broke into three or four ragged rows.
+     Full white for contrast, 400 so the hero leads, and a wider measure so the sentence
+     reads as two balanced lines instead of a stack of fragments. */
+  #pwHeroCtx{margin:12px auto 0;max-width:320px;padding:0 10px;font-size:13.5px;font-weight:400;
+    line-height:1.45;text-wrap:balance;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.8);}
   #pwLifeLine{display:none;background:none;border:none;color:var(--mint);font-weight:700;font-size:13.5px;font-family:inherit;
     padding:8px 10px;margin:9px auto 0;cursor:pointer;-webkit-tap-highlight-color:transparent;
     text-shadow:0 2px 10px rgba(0,0,0,.8);}
