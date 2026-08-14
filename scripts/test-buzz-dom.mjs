@@ -139,7 +139,9 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
   (src.includes('_b.jpg') || src.includes('_w.jpg'))
     ? ok(`THE SNAP: photo swapped to the revealed frame (${src.includes('_w') ? 'mid-wave — il bouge' : 'still'})`)
     : bad('no snap, src=' + src);
-  (await txt(page, 'chHead')) === 'They were right there.' ? ok('one miss ends the round') : bad('head after miss: ' + await txt(page, 'chHead'));
+  /* The loss names its clock now, like the win does. The reveal line moved to the subtitle. */
+  /^Lost in \d+\.\d+s$/.test(await txt(page, 'chHead')) ? ok('one miss ends the round, on the clock') : bad('head after miss: ' + await txt(page, 'chHead'));
+  (await txt(page, 'chSub')) === 'They were right there.' ? ok('and the reveal line carries under it') : bad('sub after miss: ' + await txt(page, 'chSub'));
   const reh = await page.evaluate(() => { const e = document.getElementById('chReh'); return e ? e.textContent : null; });
   reh === 'Send one back' ? ok('primary CTA is the no-install send-back') : bad('chReh: ' + reh);
   const go = await page.evaluate(() => { const e = document.getElementById('chGo'); return e ? e.textContent : null; });
@@ -184,7 +186,7 @@ console.log('\nGIVE UP — explicit, immediate reveal, same ending');
   await page.waitForTimeout(900);
   const src = await page.evaluate(() => document.querySelector('#chFrame img').src);
   src.includes('_b.jpg') ? ok('give up → immediate reveal') : bad('no reveal on give-up: ' + src);
-  (await txt(page, 'chHead')) === 'They were right there.' ? ok('same ending as a miss') : bad('head: ' + await txt(page, 'chHead'));
+  /^Lost in \d+\.\d+s$/.test(await txt(page, 'chHead')) ? ok('same ending as a miss') : bad('head: ' + await txt(page, 'chHead'));
   const cs = await calls(page);
   !cs.includes('submit_attempt') ? ok('giving up files no attempt') : bad('give-up filed an attempt');
   cs.includes('save_seek_trace') ? ok('trace still filed') : bad('no trace on give-up');

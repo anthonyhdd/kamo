@@ -261,7 +261,8 @@ console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
   await plain.mouse.move(200, 500); await plain.mouse.down(); await plain.waitForTimeout(80); await plain.mouse.up();
   await plain.waitForSelector('#chReh', { timeout: 10000 });
   const head = await plain.evaluate(() => document.getElementById('chHead').textContent);
-  head === 'They were right there.'
+  /* The loss states its clock; the reveal line is the subtitle now. */
+  /^Lost in \d+\.\d+s$/.test(head)
     ? ok('a miss that hit nothing still reads as a miss')
     : bad('plain miss reads ' + JSON.stringify(head));
   await plain.close();
