@@ -10162,6 +10162,38 @@ function chSeek(hideId,opts){
     try{ return parseInt(localStorage.getItem(CH_ROUNDS_KEY)||"0",10)||0; }catch(_){ return 0; } };
   const chBumpRounds=(n)=>{ if(!chCountsRounds()) return;
     try{ localStorage.setItem(CH_ROUNDS_KEY,String(n)); }catch(_){} };
+  /* THE SEEKER'S OWN RECORD, AND WHY IT NEEDS ITS OWN KEYS.
+     The card can say what happened to your hides and nothing about how good you are at
+     finding other people's — the one number that would be about YOU rather than about your
+     audience, and the only one that moves when you play rather than when a friend finally
+     opens a link.
+     It could not be derived from anything that already exists. CH_ROUNDS_KEY above counts
+     rounds only OUTSIDE the wrapper (chCountsRounds is `!window.ReactNativeWebView`, on
+     purpose — it drives the Get KAMO / Play KAMO split for web visitors), so inside the app
+     it is permanently 0; reusing it would both read zero and corrupt that CTA logic. And the
+     hit/miss itself was never written anywhere: submit_attempt answers the client and the
+     answer is used to draw the ending, then dropped. save_seek_trace does send `why` to the
+     server, but it is read back per HIDE by its creator (get_seek_traces(p_id)) — there is no
+     path from it to "this device's record".
+     So: two new keys, counted in EVERY environment, and a percentage is only honest once
+     there is something to average — the display should hold until CH_MIN_SEEKS.
+     WRITTEN BEFORE IT IS SHOWN, deliberately. A rate has no meaning on its first round, so
+     shipping the counter first means the number is already true when the card starts printing
+     it, instead of showing everybody 0% or 100% for a week. */
+  const CH_SEEN_KEY="kamo_seeks", CH_HIT_KEY="kamo_seek_hits";
+  const CH_MIN_SEEKS=5;
+  const chSeekRecord=()=>{ try{
+      return {n:parseInt(localStorage.getItem(CH_SEEN_KEY)||"0",10)||0,
+              hit:parseInt(localStorage.getItem(CH_HIT_KEY)||"0",10)||0};
+    }catch(_){ return {n:0,hit:0}; } };
+  /* Once per ROUND, from the one place a round can end — not from each branch, or a miss that
+     also reveals an ancestor would count twice. */
+  const chNoteSeek=(hit)=>{ try{
+      const r=chSeekRecord();
+      localStorage.setItem(CH_SEEN_KEY,String(r.n+1));
+      if(hit) localStorage.setItem(CH_HIT_KEY,String(r.hit+1));
+    }catch(_){} };
+  try{ window.KAMOSEEK={record:chSeekRecord,min:CH_MIN_SEEKS}; }catch(_){}
   const ctl={destroy:()=>{}};
   const st=document.createElement("style");
   st.textContent=
@@ -10698,6 +10730,12 @@ function chSeek(hideId,opts){
        product, not a punishment, and a second ending screen would be a second thing to
        maintain and diverge. */
     function ending(head,sub,eopts){
+      /* THE ONE PLACE A ROUND ENDS — found, missed, given up — which is exactly why the
+         seeker's record is counted here and not in the three branches above. `eopts.rehide`
+         is the same guard chBumpRounds uses: it marks a real round, so "this hide is gone"
+         (which arrives with no opts) cannot count as a seek nobody played. A win is the only
+         head that starts with Found. */
+      if(eopts&&eopts.rehide) chNoteSeek(/^Found/.test(String(head||"")));
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
       const q=$$("chQuit"); if(q) q.remove();
