@@ -973,9 +973,9 @@ try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-pwgate-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
     ? skipped('test-pwgate-dom.mjs', 'PAYWALL-GATE TEST', out)
-    : ok('the first paywall is earned and the tail is capped (node scripts/test-pwgate-dom.mjs)');
+    : ok('the paywall tail is capped, forced opens included (node scripts/test-pwgate-dom.mjs)');
 } catch (e) {
-  bad('THE PAYWALL IS SPENDING THE WRONG IMPRESSION:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE PAYWALL TAIL CAP IS NOT HOLDING:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
 /* ---- 12c. The spectator seat ------------------------------------------------------------
