@@ -963,6 +963,21 @@ try {
   bad('THE POST-SEND OFFER IS WRONG:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* WHICH IMPRESSION THE PAYWALL SPENDS, AND WHERE IT STOPS. The nth split says the first
+   paywall of an install converts at 3.4% and every later one at ~1.5%, and that nothing past
+   the 8th has ever converted at all. Both rules that follow are invisible in a screenshot and
+   fail silently — a paywall that opens when it should not looks exactly like a paywall — so
+   they are asserted on the wire, and as PAIRS: refused on a fresh device AND opened once it
+   has seen one, because a paywall that never opens would pass either half alone. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-pwgate-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-pwgate-dom.mjs', 'PAYWALL-GATE TEST', out)
+    : ok('the first paywall is earned and the tail is capped (node scripts/test-pwgate-dom.mjs)');
+} catch (e) {
+  bad('THE PAYWALL IS SPENDING THE WRONG IMPRESSION:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 12c. The spectator seat ------------------------------------------------------------
    The replay animates a recorded transform into a travelling viewport, and its ending has
    to differ by outcome. One assertion there is a security boundary rather than a polish
