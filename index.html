@@ -882,6 +882,17 @@
      from a dozen entry points and only some of them have a sheet underneath. */
   #paywall.pwFull{align-items:stretch;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
   #paywall.pwFull.pwOverSheet{background:linear-gradient(180deg,rgba(3,5,8,0) 6%,rgba(3,5,8,.5) 58%,rgba(3,5,8,.8));}
+  /* THE SAME EXCEPTION, WIDENED, BECAUSE THE OFFER NO LONGER OPENS ONLY OVER PAINT.
+     Everything above reasons about a photo underneath — true for every source that fires
+     from a locked tool, and false for all four beats of the first-offer guarantee: the hero
+     card, the seeker's ending card and the feed are UI, not scenery. Opened over them with
+     `background:none` the two headlines interleave line by line and neither can be read; it
+     is not a dim that is missing, it is a screen.
+     So those get a real backdrop rather than a gradient — near-opaque and blurred, which is
+     what the sheet arm has always done and the reason its copy is legible anywhere. The
+     photo case is untouched: `background:none` still wins wherever the thing behind is the
+     picture the user made. */
+  #paywall.pwFull.pwOverUI{background:rgba(3,5,8,.93);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
   /* No bottom scrim — founder's call, 2026-08-12. The card is fully transparent: the flat
      .44 dim on #paywall.pwFull is the only thing between the scene and the copy, so the
      photo reads all the way down. The CTA is a white slab and survives anything; the small
@@ -4806,6 +4817,93 @@ function pwRefused(src,force){
   if(!(force||PW_USER_INITIATED.has(src))) return;
   if(src==="size") flashSizeLock(); else showLockHint(src);
 }
+/* ---- ③ THE OFFER IS NOT OPTIONAL (2026-08-15, founder's call) ---------------------------
+   EVERY CEILING ABOVE GOVERNS THE WRONG POPULATION. PW_CAP, PW_GLOBAL_CAP, PW_RESERVED_CAP
+   and PW_HARD_CAP all answer "how often does somebody who already met the offer meet it
+   again", and they were all argued from users who had met it. Measured over the three hours
+   before this line was written: 1481 new users opened KAMO, 100 of them saw a paywall.
+   6.8%. Nothing in this file was the binding constraint on revenue — 93% of the population
+   never reached the screen those constants argue about.
+   The reason is structural, not a tuning error: every existing source (`color`, `size`,
+   `time`, `char`, `heatmap`, `plus`, `mark`) fires from a locked control on the PAINT
+   screen, and the paint screen is a minority of this product. 63% of today's users arrive on
+   a challenge link and hunt; 27% open the feed; 6.8% finish a paint round. A paywall wired
+   only to tool locks is a paywall wired to the smallest room in the app.
+   SO THE FIRST OFFER IS A BEAT, NOT A LOCK. Once per install, at whichever of the four
+   activation beats the user reaches first — the end of a hunt, the third feed slide, a hide
+   actually sent, or a dwell backstop for the ones who reach none of them. `force`, so no
+   budget above can refuse it; `once`, so it can never become the fatigue those budgets were
+   written against.
+   ⚠️ IT COSTS THE SHARED BUDGET, DELIBERATELY. This open counts in pwInterruptions, so the
+   guaranteed offer IS the one uninvited ask PW_GLOBAL_CAP allows — `color` and `size` are
+   refused for the rest of that launch instead of arriving on top of it. round_end keeps its
+   own reserve, untouched.
+   ⚠️ WHAT SETTLES IT, because this is a bet with a real downside: the seek ending card is
+   where "Send one back" lives, and that button is the entire viral loop. If `hide_published`
+   or `seek_cta_tapped` per new user drops after this ships, the loop is paying for the
+   offer and PW_FIRST_BEATS should lose "seek_end" first — it is one string. The number that
+   justifies it is the other direction: paywall_viewed per new user, 6.8% -> ~100%, split by
+   `first_beat`. */
+const PW_FIRST_KEY="kamo_pw_first";
+/* Whichever comes first. `dwell` is last on purpose — it is the only one that interrupts
+   nothing, because it only ever runs when the user reached none of the other three. */
+const PW_FIRST_BEATS=new Set(["seek_end","feed","sent","dwell"]);
+const PW_FIRST_DWELL_MS=45000;   // first ask for somebody who has done nothing else
+const PW_FIRST_RETRY_MS=10000;   // ...and they were busy, so ask again shortly
+/* Fails OPEN, unlike pwEverShown() did: a device with no storage reads as "not yet shown",
+   so a private window gets the offer rather than never being asked. The cost of the failure
+   direction is one extra paywall on a browser that cannot remember; the other direction
+   costs the whole change on every locked-down browser, which is a lot of iOS. */
+function pwFirstDone(){ try{ return localStorage.getItem(PW_FIRST_KEY)==="1"; }catch(e){ return false; } }
+function pwFirstMark(){ try{ localStorage.setItem(PW_FIRST_KEY,"1"); }catch(e){} }
+let pwFirstBeat="";            // rides on paywall_viewed as `first_beat`
+let pwFirstTimer=null;
+/* NOT NOW. Four states where a full screen would land on top of something the user is in the
+   middle of — and the dwell backstop is the only caller, because the other three beats fire
+   at a moment that is by definition over. Blocked is not refused: the timer re-arms. */
+function pwFirstBlocked(){
+  try{
+    if(document.hidden) return true;
+    if(paywallEl.classList.contains("show")) return true;
+    /* NO SPLASH GUARD, AND IT WAS TRIED. #start is hidden by enterCompose() and by nothing
+       else, so "the hero is up" is true for an entire session on two large populations that
+       never reach compose: a challenge link (chSeek mounts over the hero) and any browser
+       that cannot open a camera at all — which on iOS is every browser except Safari, per
+       the README. Both would have been excluded from the guarantee by an element neither of
+       them can see. The backstop is 45 seconds from boot; the splash disguise resolves in
+       600ms. It was never the thing at risk of being covered. */
+    if(mode==="paint" && !finished) return true;                    // painting a hide
+    if(chLive) return true;                                         // hunting one
+    if(shareSheetEl && (shareSheetEl.classList.contains("show")||shareSheetEl.classList.contains("peek")||shareSheetEl.classList.contains("ssMini"))) return true;
+    if(confirmSheet && confirmSheet.classList.contains("show")) return true;
+  }catch(e){}
+  return false;
+}
+/* MARKED ONLY WHEN IT ACTUALLY OPENED. openPaywall can still refuse at PW_HARD_CAP — the one
+   ceiling force cannot cross — and marking before that would spend the guarantee on a screen
+   nobody saw. Reading the class back is the only honest test: it is what "shown" means. */
+function pwFirstOffer(beat){
+  if(isPro || pwFirstDone()) return false;
+  if(!PW_FIRST_BEATS.has(beat)) return false;
+  if(paywallEl.classList.contains("show")) return false;
+  pwFirstBeat=beat;
+  openPaywall("first",true);
+  const shown=paywallEl.classList.contains("show");
+  if(shown){ pwFirstMark(); clearTimeout(pwFirstTimer); pwFirstTimer=null; }
+  return shown;
+}
+/* THE BACKSTOP IS WHAT MAKES THE NUMBER 100 AND NOT 80. The three real beats cover the hunt,
+   the feed and a send; they do not cover somebody who lands on the camera, points it at a
+   table and puts the phone down. That person is a paying customer as often as anyone else
+   and today is never asked anything at all. */
+function pwFirstArm(){
+  if(isPro || pwFirstDone()) return;
+  clearTimeout(pwFirstTimer);
+  pwFirstTimer=setTimeout(function tick(){
+    if(isPro || pwFirstDone()) return;
+    if(pwFirstBlocked() || !pwFirstOffer("dwell")) pwFirstTimer=setTimeout(tick,PW_FIRST_RETRY_MS);
+  },PW_FIRST_DWELL_MS);
+}
 let pwReservedOpens=0;         // reserved-source opens this launch (subset of pwInterruptions)
 let pwInterruptions=0;         // non-user-initiated opens this launch
 let pwOpens=0;                 // resets per app launch: the wrapper reloads the web each time
@@ -4998,11 +5096,24 @@ function openPaywall(source,force){
      only some of which have a sheet under them. Read once, at open, because the sheet can
      close underneath while the paywall is up and the backdrop must not change mid-read. */
   try{ const sh=shareSheetEl&&(shareSheetEl.classList.contains("show")||shareSheetEl.classList.contains("peek")||shareSheetEl.classList.contains("ssMini"));
-       paywallEl.classList.toggle("pwOverSheet",!!sh); }catch(e){}
+       paywallEl.classList.toggle("pwOverSheet",!!sh);
+       /* AND THE OTHER THREE SURFACES THAT ARE NOT A PHOTO — the hero, a seeker round and
+          the feed. Same reasoning as the sheet, same detection point (open time, never
+          assumed from the source), and mutually exclusive with it: the sheet's gradient is
+          tuned to a green card at the bottom of the screen, this one has to carry copy at
+          24% height over whatever is behind. */
+       const ui=(!sh)&&!!(kfState||chLive||document.querySelector(".chS")||(startEl&&startEl.style.display!=="none"));
+       paywallEl.classList.toggle("pwOverUI",ui); }catch(e){}
   if(pwArm==="full"){ stage.classList.add("pwCover"); document.body.classList.add("pwCover"); }
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
     source:src,
+    /* WHICH BEAT BOUGHT THE GUARANTEED OFFER — empty on every other source. The whole point
+       of ③ is that the offer now reaches people the paint screen never did, and this is the
+       only property that says which room they were in. Split trial_started by it and the
+       four beats stop being a guess: if `dwell` converts at zero, the backstop is exposure
+       for its own sake and can be cut without touching the three that follow a real move. */
+    first_beat: src==="first" ? pwFirstBeat : "",
     /* Which paywall they actually saw. After the 2.1(b) rejection this is the only way to
        tell "nobody taps Buy" from "we stopped promising a trial to this population". */
     trial_shown:trialAdvertised(),
@@ -5131,6 +5242,25 @@ function setBuyLabel(b,txt){ b.textContent=""; const sp=document.createElement("
    only the typography changed. "Cancel anytime" moves back OUTSIDE the button, on #pwTerms,
    which also keeps Apple's auto-renewal disclosure visible. Prices from the store-fed nodes,
    never typed. */
+/* IN A BROWSER, WITH NOTHING TO SELL. Both halves matter: outside the wrapper there is no
+   StoreKit at all, and `!storeReady` keeps this off the one web surface that COULD price —
+   a future web checkout would set prices and take the button back without touching a line
+   here. Read at every render rather than cached at load, because the wrapper injects its
+   bridge before this file runs but the prices arrive later. */
+function pwWebOffer(){ return !window.ReactNativeWebView && !storeReady; }
+/* THE TAP THAT LEAVES FOR THE STORE. Attributed through refLink() like every other outbound
+   link in this file — a bare appLink here would put the biggest install surface KAMO has
+   into "organic" and make the paywall look like it brings nobody.
+   A NEW EVENT NAME IS SAFE HERE, uniquely: the wrapper's WEB_EVENTS allow-list drops names
+   it does not know, and this path cannot run inside the wrapper by construction. In a
+   browser track() posts straight to Amplitude. */
+function pwWebInstall(){
+  const u=refLink("paywall",CH_SEEK||"");
+  track("paywall_install_tapped",{source:pwLastSource,nth:pwOpens,first_beat:pwFirstBeat,
+    tier:u===appLink?"plain":"onelink"});
+  haptic(16);
+  location.href=u;
+}
 function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is written only through setTerms() now */
   /* Buy stays disabled until a real localized price arrives. It used to be live from the
      first frame while the markup showed hardcoded $14.99/$2.99: on any non-USD storefront
@@ -5138,6 +5268,21 @@ function updatePwBuy(){ const b=$("#pwBuy"); if(!b) return;   /* #pwTerms is wri
      end in an error toast. No price → no purchasable plan → no Buy.
      Three states, because "still loading" and "nothing is for sale" must not look alike —
      otherwise a missing store key leaves a spinner-ish "Loading…" on screen forever. */
+  /* THE WEB'S CTA WAS A DEAD BUTTON, AND THE WEB IS 97% OF KAMO. Measured 2026-08-15:
+     4564 browser visitors against 141 inside the wrapper. setPrices() is posted by the
+     native layer and by nothing else, so `storeReady` is false forever in a browser — every
+     paywall a web visitor has ever seen ended on "Loading…" and then "Currently
+     unavailable". That is not a weak offer, it is no offer, and it is the state ③ above
+     would otherwise guarantee to the entire population.
+     A browser cannot sell KAMO+ and should not pretend to. What it can sell is the app —
+     free, on the store where the subscription is actually purchasable — so on the web the
+     CTA becomes exactly that. This is not a second paywall design: same screen, same pitch,
+     the one control at the bottom points at the only place the pitch can be honoured.
+     Deliberately ahead of the storeReady branch and gated on the ABSENCE of the wrapper, so
+     nothing about the in-app paywall changes: inside the app a missing price still reads
+     "Currently unavailable", because there the store really is the thing that failed. */
+  if(pwWebOffer()){ setBuyLabel(b,"Get KAMO — free"); b.disabled=false; b.classList.remove("pwBuyOff");
+    setTerms("Free on the App Store. KAMO+ is optional."); return; }
   if(!storeReady){ setBuyLabel(b,storeAnswered?"Currently unavailable":"Loading…"); b.disabled=true; b.classList.add("pwBuyOff");
     setTerms(storeAnswered?"Purchases aren't available right now.":""); return; }
   b.disabled=false; b.classList.remove("pwBuyOff");
@@ -5296,7 +5441,12 @@ function pwPurchase(planOverride){
    pwPurchase's first argument is now the plan — `pwPurchase` as a listener would read the
    event object as a plan override. It is falsy in neither sense that matters (an object is
    truthy), so the CTA would have started buying `WEEKLY_ID` regardless of the selected plan. */
-$("#pwBuy").onclick=()=>pwPurchase();
+/* The web arm intercepts BEFORE pwPurchase(), and that ordering is load-bearing rather than
+   tidy: pwPurchase's non-wrapper branch is `window.KAMO.setPro(true)` — a developer shortcut
+   that grants KAMO+ for nothing. It has been unreachable only because the button was
+   disabled in a browser. Enabling that button above without this line would give the
+   membership away to every web visitor who tapped it. */
+$("#pwBuy").onclick=()=>{ if(pwWebOffer()){ pwWebInstall(); return; } pwPurchase(); };
 updatePwBuy();
 $("#pwRestore").onclick=()=>{ if(pwRestoreHeld){ pwRestoreHeld=false; return; }   // the hold already acted
   doRestore(); };
@@ -9818,6 +9968,12 @@ function chMarkSent(){
   if(!chId) return;
   try{ chRpc("mark_hide_sent",{p_id:chId}).catch(()=>{}); }catch(e){}
   try{ track("hide_sent",{}); }catch(e){}
+  /* ③ BEAT THREE — AND THE ONLY ONE THAT IS SAFE TO SELL AGAINST WITHOUT ARGUING. The share
+     has ALREADY GONE OUT when this runs (chMarkSent is called on the send path, at the
+     moment sent_at is written), so the offer cannot cost a single link. This is the one beat
+     that sits after the loop instead of near it, which is why the delay is short: nothing
+     downstream of here is waiting on the user. */
+  try{ setTimeout(()=>pwFirstOffer("sent"),1200); }catch(e){}
   /* Same key, so this REPLACES the "you never sent that one" nudge armed at publish. */
   try{ armResultsPing(true); }catch(e){}
   /* THE WEB'S HALF OF THE LINE ABOVE. Inside the wrapper, armResultsPing schedules the nudge
@@ -10526,8 +10682,14 @@ const CH_TAPS=5;   // legacy: chStateLine still narrates pre-buzz hides in taps
  * Returns a handle with destroy(), because a feed that cannot unmount a round leaks a
  * setInterval and a full-screen listener per swipe.
  */
+/* IS A HUNT ON SCREEN RIGHT NOW. Read only by pwFirstBlocked(): the dwell backstop is a
+   timer, so it is the one paywall in this file that can land in the middle of somebody
+   guessing. Set here and cleared in ending(), which is the single exit — found, missed and
+   given up all pass through it — so this cannot be left stuck true by a branch. */
+let chLive=false;
 function chSeek(hideId,opts){
   opts=opts||{};
+  chLive=true;
   const HID=String(hideId||CH_SEEK);
   const HOST=opts.host||document.body;
   const FEED=!!opts.feed;
@@ -10720,7 +10882,11 @@ function chSeek(hideId,opts){
      await, so a cancelled round stops building instead of quietly finishing into a detached
      tree. */
   let killed=false;
-  ctl.destroy=()=>{ killed=true; try{ clearInterval(ctl._clock); }catch(_){} try{ w.remove(); }catch(_){} };
+  /* chLive OFF HERE TOO, and not only in ending(): the feed unmounts a round the moment the
+     user swipes past it, so a hide nobody answered would otherwise leave the flag stuck true
+     for the rest of the launch — and a stuck flag means the dwell backstop never fires for
+     exactly the population it exists for. */
+  ctl.destroy=()=>{ killed=true; chLive=false; try{ clearInterval(ctl._clock); }catch(_){} try{ w.remove(); }catch(_){} };
   const buzzHaptic=(p)=>{ try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){} };
 
   /* Self-removing on purpose: the ending card mounts a moment later, and an effect layer
@@ -11160,6 +11326,7 @@ function chSeek(hideId,opts){
        product, not a punishment, and a second ending screen would be a second thing to
        maintain and diverge. */
     function ending(head,sub,eopts){
+      chLive=false;   // the hunt is over — see the declaration for what reads this
       /* THE ONE PLACE A ROUND ENDS — found, missed, given up — which is exactly why the
          seeker's record is counted here and not in the three branches above. `eopts.rehide`
          is the same guard chBumpRounds uses: it marks a real round, so "this hide is gone"
@@ -11246,6 +11413,17 @@ function chSeek(hideId,opts){
       /* The feed is told the moment this card exists, so it can drop the swipe hint before
          the pill and the card's own buttons occupy the same 40 pixels. */
       if(OPT.onEnded) try{ OPT.onEnded(); }catch(_){}
+      /* ③ BEAT ONE, AND THE BIGGEST: 63% of everybody who opens KAMO opens it on a challenge
+         link, plays exactly this round, and meets no locked control in their entire visit.
+         This is the moment the round is OVER — the answer is revealed, the card is up — so
+         the offer lands on a finished thing rather than in front of one.
+         GUARDED ON `rehide`, the same marker chBumpRounds uses for a real round: "this hide
+         is gone" arrives with no opts, and somebody who met a dead link has been shown
+         nothing worth selling against.
+         DELAYED, and the delay is the whole difference between an offer and an ambush: the
+         head, the sub and the two buttons paint first, the reveal is read, and then the
+         sheet arrives over a screen the user has already seen. */
+      if(eopts&&eopts.rehide) setTimeout(()=>pwFirstOffer("seek_end"),1500);
       /* FOUR TAPS, ONE PER HIDE. Capped locally rather than server-side: there are no
          accounts here, so a cap is a courtesy and not a guarantee — and the honest place for
          a courtesy is the device that owes it. The counts come back from the server so the
@@ -11670,6 +11848,12 @@ function chFeed(){
     track("feed_slide", S.played===1
       ? {n:1,replay:!!s.replay,ms:Math.round(kfNow()-S.t0),ms_page:S.msPage|0,cached:!!S.cached}
       : {n:S.played,replay:!!s.replay});
+    /* ③ BEAT TWO — THE SWIPER. Somebody who finishes a feed round is already covered by
+       seek_end (the card fires it), so what is left here is the person who scrolls past
+       hides without answering any of them: a real session, several minutes long, that
+       reaches no ending and no locked control. Three slides in, because one is a glance and
+       the offer should not be the second thing that happens on this screen. */
+    if(S.played===3) setTimeout(()=>pwFirstOffer("feed"),800);
     S.round=chSeek(s.row.id,{
       host:s.host, feed:true, replay:!!s.replay, firstInFeed:(S.played===1),
       /* onEnded no longer kills the hint — see killHint. It still exists as the feed's signal
@@ -12012,6 +12196,14 @@ setTimeout(()=>{ if(startEl.style.display!=="none") revealHero("boot_pending"); 
 /* The denominator for every other KAMO funnel step. Fired last so the bridge and
    all handlers exist; native ignores it when running as plain web (no bridge). */
 track("app_opened",{referred:!!new URLSearchParams(location.search).get("r")});
+
+/* ③ BEAT FOUR — THE BACKSTOP, ARMED FOR EVERY LAUNCH AND DISARMED BY THE FIRST OF THE OTHER
+   THREE. It is what turns "most people" into "everybody": the three beats above all follow a
+   move, and a real share of this population makes no move at all — lands on the camera,
+   points it at a table, puts the phone down. Today that person is asked nothing, ever.
+   Armed after app_opened so the denominator is fired first either way, and one line to
+   remove if the dwell arm turns out to convert at zero (`first_beat` says so directly). */
+pwFirstArm();
 
 /* Referral welcome: someone opened the WEB build via a friend's …/?r=<code> link.
    This used to also stash the code in localStorage "for native to read on first run" —
