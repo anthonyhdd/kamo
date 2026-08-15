@@ -2189,7 +2189,7 @@
            and this is just the icon on black, matching the native splash. -->
       <div class="heroCard">
         <img id="heroIcon" src="icon.png" alt="KAMO"/>
-        <h1 class="heroTitle" id="heroTitle">Hide the body so well your friends can’t spot it</h1>
+        <h1 class="heroTitle" id="heroTitle">Hide a kamo so well your friends can’t spot it</h1>
         <button id="heroStart" class="heroCta" type="button">Start playing</button>
         <button id="heroPick" class="heroPick" type="button">Use a photo instead</button>
         <!-- Priming note. Two jobs, both worth the line: warn that a system sheet is about
@@ -5019,7 +5019,7 @@ const PW_PITCH={
      that made it. "They actually see" is doing real work in that sentence — it names why
      this is worth money and a finer brush is not. */
   char:  { t:"Nobody else is wearing this",
-           s:()=>"Every body and every finish, on the figure they actually see." },
+           s:()=>"Every kamo and every finish, on the figure they actually see." },
 };
 /* The generic pitch, for entry points that are not a specific locked tool. Built here rather
    than typed into the markup for the same reason as the rest — it carried "75s to paint
@@ -5041,7 +5041,7 @@ const pwGenericSub=()=>`Every body and every finish · any brush and color · ex
    that was their only trigger is off, so an entry for them would be copy nothing can reach. */
 const PW_HERO_LINE={ char:"char", size:"size", size_star:"size", mark:"mark" };
 const PW_HERO_CTX={
-  char:      ()=>"Every body and every finish.",
+  char:      ()=>"Every kamo and every finish.",
   size:      ()=>"Paint the details, not just the shape.",
   size_star: ()=>"Paint the details, not just the shape.",
   mark:      ()=>"Your exports, clean.",
@@ -5577,8 +5577,8 @@ function showKamoPlus(){ const el=$("#kamoPlus"); if(!el) return;
      ("Every camo brush" outlived the brushes by two releases before that — same failure,
      twice, which is why the pitch and this line should be changed together from now on.) */
   const sub=$("#kpSub"); if(sub) sub.textContent = lifetime
-    ? "Every body, every finish, and every tool — yours forever. Now go disappear."
-    : "Every body, every finish, and every tool — cancel anytime.";
+    ? "Every kamo, every finish, and every tool — yours forever. Now go disappear."
+    : "Every kamo, every finish, and every tool — cancel anytime.";
   el.classList.add("show"); haptic(20); kpConfetti(); track("kamo_plus_welcome_shown",{plan:pwPlan}); }
 { const g=$("#kpGo"); if(g) g.onclick=()=>{ const el=$("#kamoPlus"); if(el) el.classList.remove("show"); haptic(10); track("kamo_plus_welcome_done"); }; }
 

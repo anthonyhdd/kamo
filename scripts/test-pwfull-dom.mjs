@@ -147,7 +147,11 @@ await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
     ? ok('the character lock lights EVERY FINISH and nothing else')
     : bad(`from the character lock, lit = ${JSON.stringify(t.lit)}`);
   /* No numeral to check any more — the pitch stopped quoting a clock, which is the point. */
-  /Every body and every finish/.test(t.ctx)
+  /* `kamo`, not `body` — the brand's own noun for the figure, banned-word rule of 2026-08-13.
+     Asserted as the exact phrase rather than loosened to /finish/: the word IS the thing under
+     test here, and a check that survives the noun going back to `body` would be checking
+     nothing. */
+  /Every kamo and every finish/.test(t.ctx)
     ? ok(`and the context names what is bought ("${t.ctx}")`)
     : bad(`the character context reads: ${JSON.stringify(t.ctx)}`);
 
