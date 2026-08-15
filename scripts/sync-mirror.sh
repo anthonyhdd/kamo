@@ -40,24 +40,24 @@ for f in privacy.html terms.html icon.png; do
 done
 cp "$KAMO"/vendor/* "$MIRROR/vendor/"
 
-# THE ONE INTENTIONAL DIVERGENCE. og:image must be an absolute URL, so each origin points
-# at its own copy. Everything else is byte-identical — if this ever needs a second exception,
-# put it here rather than hand-editing the mirror, or the drift starts over.
-sed 's#<meta property="og:image" content="https://anthonyhdd.github.io/kamo/icon.png" />#<meta property="og:image" content="https://kamo.bliss-coach.com/icon.png" />#' \
-  "$KAMO/index.html" > "$MIRROR/index.html"
+# NO DIVERGENCE ANY MORE. og:image used to point at each origin's own icon, which made
+# one intentional sed here. Since 2026-08-15 the static-head card is the branded
+# https://playkamo.com/img/og.jpg — origin-neutral — so the two files are byte-identical.
+# If an origin-specific exception is ever needed again, put the sed back HERE rather than
+# hand-editing the mirror, or the drift starts over.
+cp "$KAMO/index.html" "$MIRROR/index.html"
 
-# Assert the divergence is exactly what we intended — one line, and the right one.
-DIFF_LINES=$(diff "$KAMO/index.html" "$MIRROR/index.html" | grep -c '^[<>]' || true)
-if [ "$DIFF_LINES" != "2" ]; then
-  echo "✗ mirror differs from kamo on $((DIFF_LINES / 2)) lines, expected exactly 1 (og:image)" >&2
+# Assert exactly zero divergence, and that the branded card is the one being served.
+if ! diff -q "$KAMO/index.html" "$MIRROR/index.html" >/dev/null; then
+  echo "✗ mirror differs from kamo — the copy above should have made them identical" >&2
   diff "$KAMO/index.html" "$MIRROR/index.html" >&2 || true
   exit 1
 fi
-if ! grep -q 'og:image" content="https://kamo.bliss-coach.com/icon.png"' "$MIRROR/index.html"; then
-  echo "✗ og:image rewrite did not apply — the tag in index.html must have changed" >&2
+if ! grep -q 'og:image" content="https://playkamo.com/img/og.jpg"' "$MIRROR/index.html"; then
+  echo "✗ expected the branded og:image (playkamo.com/img/og.jpg) in index.html" >&2
   exit 1
 fi
-echo "✓ mirror matches kamo (1 line diverges: og:image)"
+echo "✓ mirror matches kamo (byte-identical, branded og:image)"
 
 # CNAME is the mirror's own and must survive. Losing it un-attaches the custom domain.
 if [ ! -f "$MIRROR/CNAME" ] || [ "$(cat "$MIRROR/CNAME")" != "kamo.bliss-coach.com" ]; then
