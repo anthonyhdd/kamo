@@ -41,6 +41,15 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
    whole thing staying red — or, worse, going back to being green by doing nothing.
    ⚠️ Fix one and remove it from this list in the same commit. An entry here is a debt, and an
    entry that outlives the drift it describes is how this file lied in the first place. */
+/* THE QUARANTINE, AND IT IS EMPTY ON PURPOSE (2026-08-15). No suite calls stale() right now —
+   the last one, test-peek-dom, was rewritten against the sheet that ships and is a hard gate
+   again. The machinery stays because the alternative, when a suite genuinely does go stale, is
+   that somebody comments it out, and a commented-out suite is indistinguishable from a suite
+   that passes.
+   THE BAR FOR USING IT: the suite's assertions describe a design that was deliberately changed,
+   and you can say WHICH change, in the string. Not "it's red and I'm in a hurry" — a
+   quarantine is a promise to rewrite it, and the footer below prints that promise on every
+   run until somebody keeps it. */
 const staleSuites = [];
 const stale = (name, why) => { staleSuites.push(name); console.log(`  ! STALE — ${name}: ${why}`); };
 /* ===== AND A SKIP IS STILL A PASS, WHICH IS THE OTHER HALF OF THE SAME HOLE ==================
@@ -855,21 +864,20 @@ try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-peek-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
     ? skipped('test-peek-dom.mjs', 'DOM TEST', out)
-    : ok('the short sheet renders correctly (node scripts/test-peek-dom.mjs for the detail)');
+    : ok('the short sheet carries the whole ask (node scripts/test-peek-dom.mjs for the detail)');
 } catch (e) {
-  /* STILL QUARANTINED, but it no longer CRASHES, and the reason is now accurate rather than
-     a guess. It read CH_LIMIT_MIN/CH_LIMIT_MAX in page.evaluate — constants deleted with the
-     round settings — and a ReferenceError there aborts the run, so this printed "IS BROKEN"
-     with no detail and hid everything underneath. That is fixed, along with the tabs
-     assertion, which asked whether #ssMode was display:none when the element is gone from the
-     markup entirely and so reported "the tabs are showing" — the opposite of the truth.
-     WHAT IS ACTUALLY LEFT is not tabs at all: the sheet's LONG state measures 25px against a
-     372px peek in this harness, which cascades into most of the remaining failures (the drag,
-     the tap-outside handler, the third detent, the card-follows-finger assertions). Either
-     the long state genuinely regressed or the harness stopped building the content it
-     measures — and those are different bugs with different fixes, so it is not being guessed
-     at here. Run it and read the first failure; the rest follow from it. */
-  stale('the short sheet (test-peek-dom.mjs)', 'the LONG state measures 25px against a 372px peek — one root cause under most of its 14 failures. No longer crashes: the failures are readable now');
+  /* OUT OF QUARANTINE 2026-08-15, and worth recording what it was quarantined FOR, because
+     every one of the fourteen failures turned out to be the suite describing a sheet that no
+     longer existed rather than a sheet that had broken.
+     The headline symptom — "the LONG state measures 25px against a 372px peek" — was the
+     handle: taps used to step UP, and on 2026-08-12 the founder made them walk DOWN and wrap
+     from the floor. So the suite tapped the grabber expecting `open`, got the 25px folded bar,
+     and called it the long state; the drag, the third detent and the tap-outside assertions
+     all cascaded from that one wrong expectation. The rest were elements deleted out from
+     under it: the preview card, the rehearsal overlay, the Instagram slab.
+     It now asserts the sheet that ships, and the paywall-copy block it carries earned its
+     place on the way out — it caught three live strings calling the figurine a "body". */
+  bad('THE SHORT SHEET IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
 /* ---- 9. The results chip ---------------------------------------------------------------
