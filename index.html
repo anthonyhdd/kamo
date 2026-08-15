@@ -11975,6 +11975,8 @@ const KF_CSS=
      reason — three destinations behind one calm control instead of three controls. */
   +".kfScope{position:absolute;left:50%;transform:translateX(-50%);top:calc(8px + var(--safe-t));z-index:31;height:38px;display:flex;align-items:center;gap:7px;padding:0 15px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-family:var(--display);font-weight:700;font-size:13.5px;letter-spacing:-.2px;}"
   +".kfScope:active{transform:translateX(-50%) scale(.96);}"
+  +".kfMe{margin-left:auto;}"
+  +".kfMe svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}"
   +".kfScope i{font-style:normal;font-size:9px;opacity:.85;transform:translateY(1px);}"
   /* Same object as the pill that opens it: same translucent tint, same border weight, same
      display face at the same size — the menu is the pill unrolled, not a different
@@ -12064,7 +12066,16 @@ function chFeed(){
     +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button>'
     /* NEXT TO THE ✕, NOT OPPOSITE IT. On the right it landed on top of the round's own clock
        chip, which sits in that corner on every slide — the count showed through the flag. */
-    +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button></div>'
+    +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button>'
+    /* THE PROFILE DOOR, BACK IN THE BAR — but only on the My-kamos panel (founder's call,
+       2026-08-15: out of the dropdown, top-right of the grid). Hidden while the public
+       feed plays: that screen's top-right belongs to the round's clock chip, the very
+       collision that evicted the flag from that corner. On the grid the slide is covered,
+       the corner is free, and "my kamos" next to "my profile" is the pairing that makes
+       sense. mineShow()/mineHide() own its visibility. */
+    +'<button class="kfClose kfMe" id="kfMe" aria-label="Your profile" title="Your profile" style="display:none">'
+    +'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/>'
+    +'<path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0"/></svg></button></div>'
     /* THE PROFILE BUTTON IS GONE FROM THE BAR — it lives in the scope menu now ("Profile"),
        behind the centred pill. Founder's call, 2026-08-15: the bar was growing a third
        control per month and the ceiling is two. The ⚑ stays out of the menu on purpose —
@@ -12074,9 +12085,11 @@ function chFeed(){
     +'<div class="kfMenu" id="kfMenu">'
     +  '<button data-s="all" class="on">Everyone</button>'
     +  '<button data-s="mine">My kamos</button>'
-    +  '<button data-s="profile">Profile</button>'
     +'</div>'
-    +'<div class="kfMine" id="kfMine"></div>'
+    /* data-blocks-timer: while the grid covers a live round, the round's clock must not
+       run — same principle (and same machinery) as the profile card, timerBlocked() reads
+       the attribute on anything visible. */
+    +'<div class="kfMine" id="kfMine" data-blocks-timer></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
@@ -12386,8 +12399,11 @@ function chFeed(){
     scopeBtn.innerHTML='My kamos <i>▾</i>';
     mineEl.style.display="block";
     /* The flag reports the SLIDE, and the slide is under this panel — a report control over
-       somebody's own grid would report a photo they cannot see. Back with the feed. */
-    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="none"; }
+       somebody's own grid would report a photo they cannot see. Back with the feed.
+       The profile door is the opposite trade: it only exists HERE, where the corner is
+       free and the subject is you. */
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="none";
+      const me=root.querySelector("#kfMe"); if(me) me.style.display="flex"; }
     killHint();
     mineEl.innerHTML='<div class="kmMid"><div class="kfSpin"></div></div>';
     let t=null; try{ t=await chTally(); }catch(e){}
@@ -12437,23 +12453,23 @@ function chFeed(){
     mineOpen=false;
     scopeBtn.innerHTML='Everyone <i>▾</i>';
     mineEl.style.display="none"; mineEl.innerHTML="";
-    { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="";
+      const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
   }
   menuEl.querySelectorAll("button").forEach(b=>{ b.onclick=()=>{ haptic(8); menuShow(false);
     const s=b.dataset.s;
-    if(s==="profile"){
-      /* Same toggle contract the old bar button had; the menu row replaces it, the event
-         survives with a src so the two eras stay comparable. */
-      const el=document.getElementById("kamoHome");
-      const open=!!(el&&el.classList.contains("show"));
-      track("feed_profile_tapped",{open:!open,src:"menu"});
-      if(open) closeKamoHome(); else openKamoHome();
-      return;
-    }
     menuEl.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
     if(s==="mine"&&!mineOpen){ track("feed_scope_changed",{to:"mine"}); mineShow(); }
     else if(s==="all"&&mineOpen){ track("feed_scope_changed",{to:"all"}); mineHide(); }
   }; });
+  /* Profile left the dropdown for the grid's top-right corner (founder's call, 2026-08-15) —
+     same toggle contract the bar button always had, `src` keeps the eras comparable. */
+  { const me=root.querySelector("#kfMe");
+    if(me) me.onclick=()=>{ haptic(8);
+      const el=document.getElementById("kamoHome");
+      const open=!!(el&&el.classList.contains("show"));
+      track("feed_profile_tapped",{open:!open,src:"mine_bar"});
+      if(open) closeKamoHome(); else openKamoHome(); }; }
   /* Acts on whatever slide is live. Reports and drops in one move — the reporter should not
      have to look at it again while the page they are holding catches up. */
   root.querySelector("#kfFlag").onclick=()=>{
