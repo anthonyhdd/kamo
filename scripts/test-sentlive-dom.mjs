@@ -40,7 +40,9 @@ const html = real.slice(0, at)
   /* chId is what chMarkSent() bails on — it is the id of the hide that just went out, and
      without one nothing has provably been sent. Setting it is how the fixture says "a real
      send happened" without standing up Supabase. chRpc is neutered for the same reason. */
-  + 'send(){ chId="fixture-hide"; chRpc=async()=>null; chMarkSent(); return this.state(); },'
+  + 'send(){ chId="fixture-hide"; chRpc=async(fn)=>(fn==="get_hide"?{img_path:"x.jpg",name:"tony",n_attempts:0,n_found:0}:null); chMarkSent(); return this.state(); },'
+  + 'privateSend(){ kfSetWantPublic(false); return this.send(); },'
+  + 'hint(){ const h=document.getElementById("kfHint"); return h?h.textContent:null; },'
   + 'state(){ const v=(id)=>{const e=document.getElementById(id);'
   + 'return e?getComputedStyle(e).display!=="none":null;};'
   + 'return{live:v("ssLive"),get:v("ssGet")};},'
@@ -104,6 +106,24 @@ console.log('\nIN THE APP: THE CHALLENGE IS LIVE, AND NOBODY IS SOLD THE APP THE
   !t.sheet ? ok('the sheet closes first, so the feed is not stacked on top of it')
            : bad('the share sheet is still open under the feed');
   t.feed ? ok('and the feed actually opens') : bad('no #kfeed after the tap');
+
+  /* THE SLIDE IS THE PLAYER'S OWN, so the hint has to say so. Without it they meet a round
+     whose tap does nothing — the replay flag, working correctly — and read it as broken. */
+  await p.waitForTimeout(700);
+  const hint = await p.evaluate(() => window.__s.hint());
+  hint && /yours/i.test(hint) && /scroll/i.test(hint)
+    ? ok(`the first slide is named as theirs and points onward ("${hint}")`)
+    : bad(`hint reads ${JSON.stringify(hint)} — the seeded slide is unlabelled`);
+  await p.close();
+}
+
+console.log('\nA PRIVATE HIDE IS NEVER TOLD IT IS IN THE FEED');
+{
+  const p = await open(true);
+  const s = await p.evaluate(() => window.__s.privateSend());
+  !s.live
+    ? ok('somebody who chose private gets no "see it in the feed" — it would not be there')
+    : bad('#ssLive offered the feed for a hide that was never published to it');
   await p.close();
 }
 
