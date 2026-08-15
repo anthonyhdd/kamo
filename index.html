@@ -2788,6 +2788,50 @@ try{
   }
 }catch(e){}
 
+/* ===== WHICH PLAN IS THE HERO — weekly vs lifetime =====
+ *
+ * The full arm shows ONE CTA and offers the other plan as the quiet #pwLifeLine underneath.
+ * Until now the hero was always the weekly and lifetime was always the small line. Nothing
+ * ever tested that ordering, and two numbers say it is the wrong way round:
+ *   - Of 19 StoreKit sheets opened over the 60 days to 2026-08-03, 12 were lifetime and 7
+ *     weekly. Lifetime outsold the weekly 4:3 from the SMALL line, against a hero.
+ *   - Of the 69 users who reached Apple's sheet in the 14 days to 08-15, 49 cancelled there
+ *     — 71%. They read the price and the commitment and left. That is a subscription
+ *     objection, and the one thing on that sheet we have never tried changing is which
+ *     product it is for.
+ * So: half the devices get lifetime as the hero. Nothing else moves — updatePwBuy() already
+ * renders "Unlock forever — <price>" for pwPlan==="lifetime", and updatePwLifeLine() already
+ * renders the weekly as the secondary line in that direction. This flips a default, it does
+ * not add a screen.
+ *
+ * ⚠️ ON 1.0.2 THIS IS A PER-LAUNCH COIN FLIP, NOT A PER-DEVICE ONE, and that is not fixable
+ * from here: that build runs the WebView with `incognito`, so localStorage is wiped at every
+ * app close and the sticky read below always misses. 1.0.2 is still ~52% of the fleet
+ * (1769 of ~3400 users over the 7 days to 08-15). The measurement survives it anyway,
+ * because the arm is stamped on `paywall_viewed` at the moment it fires and the purchase
+ * happens in the SAME launch — and because the two arms buy two different product ids, so
+ * `product_id` on the native outcome events is an independent arm label. What it costs is
+ * consistency for the user, who may meet a different hero tomorrow. Accepted deliberately:
+ * waiting for 1.0.2 to drain is waiting weeks for a question worth answering this week.
+ *
+ * READ IT AS: paywall_viewed (plan_arm) → purchase_initiated (plan_arm) → trial_started /
+ * purchase_completed / purchase_cancelled (product_id). Kill it by setting the rollout to 0
+ * or 100 — at 100 a stored "weekly" is NOT promoted, unlike PW_FULL_ROLLOUT above, because
+ * this one may well need to be rolled back rather than out. */
+const PLAN_LIFETIME_ROLLOUT=50;
+let planArm="weekly";
+try{
+  const s=localStorage.getItem("kamo_plan_arm");
+  if(s==="weekly"||s==="lifetime") planArm=s;
+  /* Pinned for the harness for the same reason pwArm is: every DOM test in scripts/ boots
+     this page in headless Chromium, and a coin flipped at load makes the CTA assertions
+     flaky. A test that wants the lifetime arm seeds kamo_plan_arm="lifetime" before load. */
+  else if(!navigator.webdriver){
+    planArm=(Math.random()*100<PLAN_LIFETIME_ROLLOUT)?"lifetime":"weekly";
+    localStorage.setItem("kamo_plan_arm",planArm);
+  }
+}catch(e){}
+
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
    on every single use, forever. Users run ~8 hides a day, so by the third round these are not
@@ -5457,6 +5501,21 @@ function applyTrialCopy(fromStore){ if(fromStore) trialLabel=String(fromStore);
   const holder=fb||f;
   if(holder) holder.style.display=trialAdvertised()?(fb?"inline-flex":""):"none"; }
 applyTrialCopy();
+/* THE HERO-PLAN ARM, APPLIED. Runs once, before any paywall opens, so the very first
+   paywall_viewed already carries the arm it is showing.
+   SAFE WHEN LIFETIME CANNOT BE SOLD, and that safety is not written here: the lifetime row
+   ships display:none and only setPrices() reveals it, so applyPlanAvailability() sees the
+   selected row still hidden and falls back to whatever IS sellable — the existing branch,
+   unchanged. Until a price arrives updatePwBuy() bails at !storeReady, so this can never
+   put "Unlock forever" on a button with nothing behind it.
+   Only touches the DOM in the lifetime arm: the markup already ships weekly as .active, so
+   the control arm must stay byte-identical to what shipped yesterday or the comparison is
+   against a moved baseline. */
+if(planArm==="lifetime"){
+  const row=document.querySelector('#pwPlans .pwPlan[data-plan="lifetime"]');
+  if(row){ pwPlan="lifetime";
+    document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===row)); }
+}
 document.querySelectorAll("#pwPlans .pwPlan").forEach(p=>p.onclick=()=>{ pwPlan=p.dataset.plan; document.querySelectorAll("#pwPlans .pwPlan").forEach(x=>x.classList.toggle("active",x===p)); updatePwBuy(); haptic(8); track("plan_selected",{plan:pwPlan}); });
 /* THE LINE IS A BUY BUTTON, NOT A SWITCH. It selects its plan and goes straight to StoreKit
    — the hidden rows' .active is kept in sync on the way through, because updatePwBuy() and the
@@ -6893,7 +6952,10 @@ function track(event,props){
      WITHOUT emit="web" is provably not from this page, and the split shows up within hours
      instead of after another day of reasoning about it.
      Cheap on purpose — one short string on an event that already carries five. */
-  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,emit:"web"};
+  /* `plan_arm` rides along for the same reason design_arm does: the assignment is never its
+     own event (a track() during module evaluation would be a TDZ crash on WEB_ONLY), so the
+     property on the events IS the assignment record. */
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
