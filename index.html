@@ -5024,6 +5024,14 @@ const PW_PITCH={
      this is worth money and a finer brush is not. */
   char:  { t:"Nobody else is wearing this",
            s:()=>"Every kamo and every finish, on the figure they actually see." },
+  /* THE SPECTATOR PITCHES. Both fire from a ✦ on the creator's OWN results — the ask is
+     "show me what they did", so the generic brushes-and-watermark line answered a question
+     nobody was asking (founder's report, 2026-08-15). Sold as one seat: the person who
+     wants the replay wants the map, and the sheet should not split the hair. */
+  replay:  { t:"Watch them hunt you",
+             s:()=>"Every hunt on your hides, replayed — the hesitations, the wrong taps, the heat map of where they all looked." },
+  heatmap: { t:"See where they all looked",
+             s:()=>"Every tap on your photo, mapped — plus the replay of each hunt, hesitation by hesitation." },
 };
 /* The generic pitch, for entry points that are not a specific locked tool. Built here rather
    than typed into the markup for the same reason as the rest — it carried "75s to paint
@@ -5049,6 +5057,8 @@ const PW_HERO_CTX={
   size:      ()=>"Paint the details, not just the shape.",
   size_star: ()=>"Paint the details, not just the shape.",
   mark:      ()=>"Your exports, clean.",
+  replay:    ()=>"Watch every hunt on your hides.",
+  heatmap:   ()=>"See where they all looked.",
 };
 function pwHeroApply(src){
   const hero=$("#pwHero"); if(!hero) return;
@@ -11801,6 +11811,15 @@ function kfAddBlock(tag){
  * This is a gate, not a kill switch — the day somebody publishes publicly, the button appears
  * by itself, for everybody, with no deploy. */
 let kfHasContent=false;
+/* THE PROBE'S ANSWER, REMEMBERED. "Not cached across launches" (below) was written when the
+   feed was empty for everybody and a stale `true` meant re-opening a dead end. The feed has
+   had public content every single launch since 08-13 — and the cost of re-asking was a
+   button that popped in ~2s late on EVERY open (1200ms deliberate delay + a network round
+   trip), which reads as jank, not honesty (founder's report, 2026-08-15). So the last
+   answer shows the button instantly, and the probe still runs every launch to correct it:
+   an explicit empty answer clears the cache AND the button. First launch ever, and 1.0.2's
+   wiped storage, keep today's behaviour. */
+try{ if(localStorage.getItem("kamo_feed_has")==="1") kfHasContent=true; }catch(e){}
 /* THE PAGE THE PROBE ALREADY PAID FOR, held for the tap that is going to want it.
    Consumed once, and only for the very first load of a feed session — everything after it is
    a normal paged fetch from the cursor these rows set. */
@@ -11843,18 +11862,29 @@ function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b
    kilobytes of JSON on a query that is indexed either way, and it happens at launch, minutes
    before anybody taps anything. What it buys is the whole wait: the feed opens on rows it
    already holds. */
+let kfProbedOnce=false;
 async function kfProbe(){
-  if(kfHasContent) return;
+  /* Guarded on "asked", not on "has content": with the cached `true` above, the old guard
+     would skip the probe entirely — no first-page warmup, and a cache that could never be
+     corrected. */
+  if(kfProbedOnce) return; kfProbedOnce=true;
   try{
     const rows=await kfRpc("feed_page",{p_before:null,p_limit:KF_PAGE});
     if(rows&&rows.length){
       kfFirstPage={rows:rows,at:Date.now()};
       kfHasContent=true;
+      try{ localStorage.setItem("kamo_feed_has","1"); }catch(e){}
       track("feed_available",{});
       /* Only reveal it if the camera screen is the thing on screen — the same condition
          every other caller of kfShowBtn is already gated on. */
       const sw=document.getElementById("shutterWrap");
       if(sw&&sw.style.display!=="none") kfShowBtn(true);
+    } else {
+      /* An explicit empty answer — not a network failure, the catch below owns that case —
+         takes the cached button back down. */
+      kfHasContent=false;
+      try{ localStorage.removeItem("kamo_feed_has"); }catch(e){}
+      kfShowBtn(false);
     }
   }catch(e){}
 }
@@ -11883,8 +11913,11 @@ const KF_CSS=
   +".kfScope{position:absolute;left:50%;transform:translateX(-50%);top:calc(8px + var(--safe-t));z-index:31;height:38px;display:flex;align-items:center;gap:7px;padding:0 15px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-family:var(--display);font-weight:700;font-size:13.5px;letter-spacing:-.2px;}"
   +".kfScope:active{transform:translateX(-50%) scale(.96);}"
   +".kfScope i{font-style:normal;font-size:9px;opacity:.85;transform:translateY(1px);}"
-  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:190px;border-radius:18px;border:1px solid rgba(255,255,255,.18);background:rgba(10,13,20,.96);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 10px 34px rgba(0,0,0,.5);overflow:hidden;display:none;}"
-  +".kfMenu button{display:block;width:100%;padding:13px 18px;background:none;border:none;color:#fff;font-weight:700;font-size:14px;text-align:left;}"
+  /* Same object as the pill that opens it: same translucent tint, same border weight, same
+     display face at the same size — the menu is the pill unrolled, not a different
+     component (founder's call, 2026-08-15). */
+  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:190px;border-radius:18px;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.62);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.5);overflow:hidden;display:none;}"
+  +".kfMenu button{display:block;width:100%;padding:13px 17px;background:none;border:none;color:#fff;font-family:var(--display);font-weight:700;font-size:13.5px;letter-spacing:-.2px;text-align:left;}"
   +".kfMenu button.on{color:var(--mint);}"
   +".kfMenu button:active{background:rgba(255,255,255,.07);}"
   +".kfMenu button+button{border-top:1px solid rgba(255,255,255,.08);}"
