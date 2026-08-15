@@ -204,17 +204,22 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       + 'Both are regressions that already shipped once');
   } else if (!/classList\.add\("peek/.test(peekFn[0])) {
     bad('peekShareSheet() does not add .peek — the sheet is no longer arriving short');
-  } else if (!/chPrevRender\(/.test(peekFn[0])) {
-    /* The peek CSS exempts .chPrev from its hide-everything rule, but .chPrev is display:none
-       until chPrevRender() adds `.on`. Whitelisting it in CSS and never rendering it is a
-       silent no-op — the short sheet shows a headline and a button and no preview, which is
-       exactly the arrangement the card was added to replace. Shipped that way once. */
-    bad('peekShareSheet() does not call chPrevRender() — .chPrev is display:none until it runs, '
-      + 'so the short sheet is whitelisting a card that never gets turned on');
-  } else ok('the sheet arrives short, renders the card, and does not publish');
+  } else if (!/kfRenderVis\(/.test(peekFn[0])) {
+    /* THE SHORT SHEET MAKES A CLAIM, SO SOMETHING HAS TO WRITE IT. Since 2026-08-15 the
+       headline says "Your challenge is now live!" for a public hide and "Only people you
+       send it to" for a private one, and #ssSeeLive is shown or hidden on the same answer.
+       All three are painted by kfRenderVis(). Skip it here and the short sheet — which is
+       where most sends happen, because almost nobody swipes it open — keeps whatever the
+       markup shipped with: the PUBLIC wording, over a toggle that may say Private, next to a
+       "See it live" button pointing at a feed the hide is not in.
+       This replaces the same assertion about chPrevRender(), which had the same shape: a peek
+       whitelist for something nothing ever turned on. */
+    bad('peekShareSheet() does not call kfRenderVis() — the short sheet will claim the hide is '
+      + 'public whatever the toggle says, and offer "See it live" on a private hide');
+  } else ok('the sheet arrives short, states the right visibility, and does not publish');
 
   /* The other half of that rule. Not publishing on presentation is right; never publishing
-     is what makes "Challenge a friend" — visible in the short state — send the generic
+     is what makes "Send to a friend" — visible in the short state — send the generic
      invite, because chLink() is "" without a published hide. The upload has to start on the
      first TOUCH of the card. Both halves or neither. */
   /* Structural, not literal. The first version matched the exact expression
@@ -225,50 +230,71 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     .map((m) => m[0]);
   pointerdowns.some((b) => b.includes('chUpload('))
     ? ok('touching the sheet starts the upload, so the link is ready to send')
-    : bad('no pointerdown listener calls chUpload() — Challenge a friend will send the generic '
+    : bad('no pointerdown listener calls chUpload() — Send to a friend will send the generic '
         + 'invite instead of a challenge link');
 
-  /* THE CTA IS A DIRECT CHILD OF THE CARD, AND IT COMES AFTER THE PREVIEW.
-     Two invariants, one line of markup, and moving that line is the most ordinary edit on
-     this sheet — "put the card above the button" was a request, not a refactor. It landed
-     the button INSIDE .chPrev, which is `display:flex` in a row: the full-width CTA turned
-     into a cell squeezed between the caption and the gear icon. Nothing threw, no test
-     noticed, and the diff read exactly like the change that was asked for.
-     Two things have to hold. (1) Direct child of .ssCard — .ssCard is the column, and the
-     peek rule is `.ssCard > *`, so a nested button is not governed by it at all. (2) After
-     .chPrev — see what goes out, then send it. Depth is counted rather than pattern-matched
-     so this survives the markup around it changing. */
+  /* THE SEND AND THE PROOF ARE BOTH DIRECT CHILDREN OF THE CARD, AND THE SEND COMES FIRST.
+     Moving one of these lines is the most ordinary edit on this sheet — "put X above the
+     button" is a request, not a refactor — and it has already gone wrong once: the CTA landed
+     INSIDE a row element that was `display:flex`, so the full-width button turned into a cell
+     squeezed beside an icon. Nothing threw, no test noticed, and the diff read exactly like
+     the change that was asked for.
+     Two things have to hold. (1) Direct children of .ssCard — .ssCard is the column and the
+     peek rule is `.ssCard > *`, so a nested button is not governed by it at all, which means
+     it vanishes from the state most sends happen in. (2) #ssInvite before #ssSeeLive: the send
+     is what the session is for, and "See it live" is what you do while waiting for an answer.
+     Depth is counted rather than pattern-matched so this survives the markup around it
+     changing. */
   {
     const cardAt = html.indexOf('<div class="ssCard');
-    const prevAt = html.indexOf('<div class="chPrev"');
     const btnAt = html.indexOf('id="ssInvite"');
-    if (cardAt < 0 || prevAt < 0 || btnAt < 0) bad('.ssCard / .chPrev / #ssInvite not all found in the sheet markup');
+    const liveAt = html.indexOf('id="ssSeeLive"');
+    if (cardAt < 0 || btnAt < 0 || liveAt < 0) bad('.ssCard / #ssInvite / #ssSeeLive not all found in the sheet markup');
     else {
-      const between = html.slice(html.indexOf('>', cardAt) + 1, btnAt);
-      const depth = (between.match(/<div\b/g) || []).length - (between.match(/<\/div>/g) || []).length;
-      depth === 0
-        ? ok('#ssInvite is a direct child of .ssCard (the peek rule reaches it, and it is full width)')
-        : bad(`#ssInvite is nested ${depth} level(s) deep inside .ssCard — if that is .chPrev it is a `
-            + 'flex ROW, so the CTA renders as a squeezed cell beside the gear, and `.ssCard > *` '
-            + 'in the peek rule no longer governs it');
-      btnAt > prevAt
-        ? ok('the preview card comes before the CTA')
-        : bad('#ssInvite appears before .chPrev — the button asks for trust before showing what it sends');
-      /* THE ROUND'S TERMS APPEAR ONCE. A kicker above the headline used to print "20S · 5 TAPS"
-         while the preview card ~100px below printed the same two numbers as chips. It was not
-         a duplicate when it was written — the card was only drawn after a share had gone out —
-         and it became one silently the day the card became permanent in the short sheet. The
-         same drift will happen again the moment anything is added above the title, so the
-         invariant is stated where it can be checked: this sheet has no kicker. .pwKick itself
-         stays legitimate on the paywall and the preview overlay, where it is the only place
-         the terms are stated at all. */
+      const depthTo = (at) => {
+        const between = html.slice(html.indexOf('>', cardAt) + 1, at);
+        return (between.match(/<div\b/g) || []).length - (between.match(/<\/div>/g) || []).length;
+      };
+      const dInv = depthTo(btnAt), dLive = depthTo(liveAt);
+      dInv === 0 && dLive === 0
+        ? ok('#ssInvite and #ssSeeLive are direct children of .ssCard (the peek rule reaches both, full width)')
+        : bad(`#ssInvite is nested ${dInv} level(s) deep and #ssSeeLive ${dLive} — anything inside a `
+            + 'flex ROW renders as a squeezed cell, and `.ssCard > *` in the peek rule no longer '
+            + 'governs it, so it disappears from the short sheet entirely');
+      liveAt > btnAt
+        ? ok('the send leads and "See it live" follows it')
+        : bad('#ssSeeLive appears before #ssInvite — the sheet leads with the detour instead of the send');
+      /* NO KICKER, AND NO TERMS ANYWHERE ON THIS SHEET. A kicker above the headline used to
+         print "20S · 5 TAPS" while the preview card ~100px below printed the same two numbers
+         as chips. Both are gone: the deal is one buzz on no clock for every hide there is, so
+         the terms are a constant and the seeker screen is where they are read. The invariant
+         survives them because the drift will recur the moment anything is added above the
+         title. .pwKick itself stays legitimate on the paywall and on the creator's spectator
+         screens, where it labels what is being shown. */
       const sheetAt = html.indexOf('<div id="shareSheet">');
       const sheetEnd = html.indexOf('<div id="confirmSheet">', sheetAt);
       const sheetHtml = sheetAt >= 0 && sheetEnd > sheetAt ? html.slice(sheetAt, sheetEnd) : '';
       !/class="pwKick"/.test(sheetHtml)
-        ? ok("the round's terms are stated once, on the card that sends them")
-        : bad('the share sheet has a .pwKick again — it prints the same seconds and taps the '
-            + 'preview card already carries on its chips, twice in one glance');
+        ? ok('the share sheet quotes no terms — the round is one buzz on no clock, everywhere')
+        : bad('the share sheet has a .pwKick again — it prints seconds and taps that no round '
+            + 'honours any more');
+      /* THE HEADLINE AND ITS GREY LINE ARE ONE UNIT, AND BOTH SURVIVE THE PEEK. The line under
+         the title is the only context the notification permission prompt ever gets (see #ssSub
+         in the markup): armResultsPing() fires seconds later, iOS asks exactly once, and a
+         prompt with nothing in front of it gets refused. Losing it to the peek rule would be
+         invisible in a diff and would cost the app its only way of telling a creator that
+         somebody played their hide. */
+      const peekRule = html.match(/^\s*#shareSheet\.peek \.ssCard > \*[^\n]*$/m);
+      if (!peekRule) bad('the peek hide-everything rule is gone — the short sheet is no longer short');
+      else {
+        const named = ['.ssGrab', '.pwTitle', '.ssSub', '.ssInvite', '.ssSeeLive', '.ssVis', '.ssGet'];
+        const missing = named.filter((c) => !peekRule[0].includes(`:not(${c})`));
+        missing.length === 0
+          ? ok('the short sheet keeps the headline, its notification line, the toggle and both buttons')
+          : bad(`the peek rule hides ${missing.join(', ')} — anything not exempted here is, for `
+              + 'practical purposes, not shipped: the swipe that opens the long sheet is a gesture '
+              + 'almost nobody performs');
+      }
     }
   }
 
@@ -531,9 +557,15 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     ['the reveal starts the upload without publishing', 'function enterFinished(', 'chPrepare()',
       'enterFinished() no longer calls chPrepare() — the image upload goes back to starting '
       + 'on the same gesture as the tap, which is the eight-second wait this split removed'],
-    ['openShareSheet renders the challenge card', 'function openShareSheet(', 'chPrevRender()',
-      'openShareSheet() does not call chPrevRender() — the card is display:none until something '
-      + 'adds .on, so it will only appear after a share instead of before one'],
+    /* Same guard as the peek path above, on the other door into the sheet. The visibility
+       answer is remembered across rounds, so a sheet opened without this paints the previous
+       hide's wording — and one of the two wordings is a claim the toggle underneath it
+       contradicts. It replaces the chPrevRender() assertion that lived here; the card it
+       protected is the feed now. */
+    ['openShareSheet states the hide\'s real visibility', 'function openShareSheet(', 'kfRenderVis()',
+      'openShareSheet() does not call kfRenderVis() — the headline, the toggle and "See it live" '
+      + 'are one answer painted by one function, and skipping it leaves the sheet claiming '
+      + 'whatever the last round chose'],
     /* The chSetOk / chSetReset rows are gone WITH the settings sheet: the seeker plays one
        buzz on no clock, so there are no taps or seconds left to save. chRepublish() is still
        guarded — the handle's blur handler is its remaining caller. */
@@ -942,17 +974,19 @@ try {
   bad('THE HINT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
-/* ---- 11f. What comes after the send ----------------------------------------------------- */
-/* Two offers, opposite audiences, and the failure mode is showing the wrong one: #ssGet sells
-   the app to a browser, #ssLive fills the same beat inside the wrapper. Either appearing in
-   the other's context is a visible mistake to the user and an invisible one in a diff. */
+/* ---- 11f. What the sheet claims, and to whom --------------------------------------------- */
+/* The headline announces that the hide is live, and the toggle 40px below it can make that
+   false. Same shape for the two offers underneath: "See it live" must not point at a feed a
+   private hide is not in, and #ssGet must not promise a notification inside a wrapper that
+   already has one. Every one of these is a visible mistake to the user and an invisible one
+   in a diff. */
 try {
-  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-sentlive-dom.mjs')], { stdio: 'pipe' }).toString();
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-sheetlive-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
-    ? skipped('test-sentlive-dom.mjs', 'SENT-LIVE TEST', out)
-    : ok('the post-send offer matches its audience and opens the feed (node scripts/test-sentlive-dom.mjs)');
+    ? skipped('test-sheetlive-dom.mjs', 'SHEET-LIVE TEST', out)
+    : ok('the sheet claims only what the toggle allows, and opens the feed on that hide (node scripts/test-sheetlive-dom.mjs)');
 } catch (e) {
-  bad('THE POST-SEND OFFER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE SHEET IS CLAIMING THE WRONG THING:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */

@@ -1,19 +1,28 @@
 #!/usr/bin/env node
 /**
- * WHAT COMES AFTER THE SEND.
+ * THE SHARE SHEET SAYS WHAT JUST HAPPENED, AND IT HAS TO BE TRUE.
  *
- * The share sheet ended on itself: #ssGet returns early inside the wrapper and #ssAgain was
- * deleted from the markup, so somebody who had just sent a challenge — the highest-intent
- * moment in the session, and the 24% who actually finished the loop — was shown no next step
- * at all. #ssLive is that step, and the two things worth asserting are both about WHO sees it:
+ * The sheet used to ask a question ("Can they find you?"), which cannot be wrong. Since
+ * 2026-08-15 it makes a CLAIM — "Your challenge is now live!" — and directly underneath it
+ * sits the control that decides whether that claim holds. 23% of publishers turn that control
+ * off. So the whole surface is one answer with three faces, and this suite exists because
+ * nothing else can see them disagree:
  *
- *   · in the app  → #ssLive, never #ssGet   (selling the app to somebody holding it)
- *   · in a browser → #ssGet, never #ssLive  (there is no push to promise)
+ *   · the headline follows the toggle, both ways
+ *   · "See it live" is not offered for a private hide — it would open a feed the hide is not
+ *     in, about a link nobody else has
+ *   · the grey line under the headline promises a notification only where one can be
+ *     delivered. It is the only context iOS's permission prompt ever gets (armResultsPing
+ *     fires seconds later and iOS asks exactly once), and in a browser it would also be
+ *     arguing with #ssGet three rows below, which sells that exact gap.
  *
- * Neither may appear before something has actually been sent. An unearned button on a sheet
- * nobody has used is noise, and #ssGet has shipped that rule since it existed.
+ * It replaces the #ssLive suite. That button waited for a proven send before offering the
+ * feed, which made the feed a reward rather than the proof the hide exists — and publishing
+ * happens one tap EARLIER, when the sheet is touched. #ssSeeLive is on the sheet from the
+ * first frame instead, so the same lie (offering the feed to a private hide) is now reachable
+ * by more people, not fewer. That is why the assertion moved here rather than being deleted.
  *
- *   PW_CORE=<dir with node_modules> node scripts/test-sentlive-dom.mjs
+ *   PW_CORE=<dir with node_modules> node scripts/test-sheetlive-dom.mjs
  */
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -29,7 +38,7 @@ for (const base of pwBases(ROOT)) {
   try { ({ chromium } = req(base ? join(base, 'node_modules/playwright-core') : 'playwright-core')); break; } catch {}
 }
 if (!chromium) {
-  console.log('· playwright-core not installed — skipping the sent-live test — run: ' + PW_SETUP);
+  console.log('· playwright-core not installed — skipping the sheet-live test — run: ' + PW_SETUP);
   process.exit(0);
 }
 
@@ -37,18 +46,24 @@ const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const at = real.lastIndexOf('</script>');
 const html = real.slice(0, at)
   + '\nwindow.__s={'
-  /* chId is what chMarkSent() bails on — it is the id of the hide that just went out, and
-     without one nothing has provably been sent. Setting it is how the fixture says "a real
-     send happened" without standing up Supabase. chRpc is neutered for the same reason. */
-  + 'send(){ chId="fixture-hide"; chRpc=async(fn)=>(fn==="get_hide"?{img_path:"x.jpg",name:"tony",n_attempts:0,n_found:0}:null); chMarkSent(); return this.state(); },'
-  + 'privateSend(){ kfSetWantPublic(false); return this.send(); },'
+  /* THROUGH kfSetWantPublic + kfRenderVis, which is the pair the real toggle runs. Writing
+     localStorage and reading the DOM would assert that the key round-trips, which was never
+     in doubt; what is under test is that ONE function paints all three faces of the answer. */
+  + 'vis(pub){ kfSetWantPublic(!!pub); kfRenderVis(); return this.state(); },'
+  /* chId is the id of the hide that has been published — chUpload() sets it for real, and it
+     is what "See it live" seeds the feed with. Set directly so the fixture never needs
+     Supabase; chRpc is stubbed to answer the one call chFeed makes with it. */
+  + 'publish(){ chId="fixture-hide"; chRpc=async(fn)=>(fn==="get_hide"'
+  + '?{img_path:"x.jpg",name:"tony",n_attempts:0,n_found:0}:null); },'
+  + 'send(){ this.publish(); chMarkSent(); return this.state(); },'
   + 'hint(){ const h=document.getElementById("kfHint"); return h?h.textContent:null; },'
   + 'state(){ const v=(id)=>{const e=document.getElementById(id);'
   + 'return e?getComputedStyle(e).display!=="none":null;};'
-  + 'return{live:v("ssLive"),get:v("ssGet")};},'
+  + 'const txt=(id)=>{const e=document.getElementById(id);return e?e.textContent.trim():null;};'
+  + 'return{live:v("ssSeeLive"),get:v("ssGet"),title:txt("ssTitle"),sub:txt("ssSub")};},'
   + 'tap(){ window.__tracked=[]; const t=track;'
   + 'track=(n,p)=>{window.__tracked.push(n);return t(n,p);};'
-  + 'try{ document.getElementById("ssLive").click(); }finally{ track=t; }'
+  + 'try{ document.getElementById("ssSeeLive").click(); }finally{ track=t; }'
   + 'return{tracked:window.__tracked,sheet:shareSheetEl.classList.contains("show"),'
   + 'feed:!!document.getElementById("kfeed")};}};\n'
   + real.slice(at);
@@ -83,25 +98,67 @@ async function open(wrapper) {
   return page;
 }
 
-console.log('\nNEITHER OFFER EXISTS BEFORE SOMETHING IS SENT');
+console.log('\nTHE HEADLINE FOLLOWS THE TOGGLE, BOTH WAYS');
 {
   const p = await open(true);
-  const s = await p.evaluate(() => window.__s.state());
-  !s.live && !s.get ? ok('a sheet nobody has used shows no post-send offer') : bad(`before send: ${JSON.stringify(s)}`);
+  const pub = await p.evaluate(() => window.__s.vis(true));
+  /live/i.test(pub.title || '')
+    ? ok(`public says the challenge is live ("${pub.title}")`)
+    : bad(`public headline reads ${JSON.stringify(pub.title)}`);
+
+  const priv = await p.evaluate(() => window.__s.vis(false));
+  priv.title && priv.title !== pub.title && !/\blive\b/i.test(priv.title)
+    ? ok(`private stops claiming it ("${priv.title}")`)
+    : bad(`private headline reads ${JSON.stringify(priv.title)} — the sheet is announcing a `
+        + 'public hide directly above a control that says Private');
+
+  /* Back again, because a one-way switch is the failure that ships: the first render is the
+     one everybody tests, and nobody taps the toggle twice. */
+  const back = await p.evaluate(() => window.__s.vis(true));
+  back.title === pub.title
+    ? ok('and it comes back when the toggle does')
+    : bad(`switching back left the headline at ${JSON.stringify(back.title)}`);
   await p.close();
 }
 
-console.log('\nIN THE APP: THE CHALLENGE IS LIVE, AND NOBODY IS SOLD THE APP THEY HAVE');
+console.log('\nA PRIVATE HIDE IS NEVER OFFERED THE FEED');
 {
   const p = await open(true);
-  const s = await p.evaluate(() => window.__s.send());
-  s.live ? ok('#ssLive appears after a proven send') : bad('#ssLive did not appear in the wrapper');
-  !s.get ? ok('and #ssGet stays hidden — it would sell the app to somebody holding it')
-         : bad('#ssGet is showing inside the wrapper');
+  const pub = await p.evaluate(() => window.__s.vis(true));
+  pub.live ? ok('"See it live" is there for a public hide') : bad('#ssSeeLive is hidden for a public hide');
+  const priv = await p.evaluate(() => window.__s.vis(false));
+  !priv.live
+    ? ok('and gone for a private one — it would open a feed the hide is not in')
+    : bad('#ssSeeLive offered the feed for a hide that was never published to it');
+  await p.close();
+}
 
+console.log('\nTHE NOTIFICATION IS PROMISED ONLY WHERE IT CAN BE DELIVERED');
+{
+  const inApp = await open(true);
+  const a = await inApp.evaluate(() => window.__s.vis(true));
+  /tell you/i.test(a.sub || '')
+    ? ok(`the wrapper promises the ping ("${a.sub}") — the context iOS's prompt needs`)
+    : bad(`in the app the line reads ${JSON.stringify(a.sub)} — armResultsPing() is about to ask `
+        + 'for permission with nothing in front of it, and iOS asks exactly once');
+  await inApp.close();
+
+  const web = await open(false);
+  const b = await web.evaluate(() => window.__s.vis(true));
+  b.sub && !/tell you/i.test(b.sub)
+    ? ok(`a browser promises something it can keep instead ("${b.sub}")`)
+    : bad(`a browser tab is promising a notification: ${JSON.stringify(b.sub)} — and #ssGet three `
+        + 'rows below is selling the app on exactly that gap');
+  await web.close();
+}
+
+console.log('\nTAPPING IT OPENS THE FEED ON THAT HIDE');
+{
+  const p = await open(true);
+  await p.evaluate(() => { window.__s.vis(true); window.__s.publish(); });
   const t = await p.evaluate(() => window.__s.tap());
   t.tracked.includes('sent_feed_tapped')
-    ? ok('the tap is counted as sent_feed_tapped, so hide_sent → feed_opened has a middle step')
+    ? ok('the tap is counted as sent_feed_tapped, so hide_published → feed_opened has a middle step')
     : bad(`tap tracked ${JSON.stringify(t.tracked)}`);
   !t.sheet ? ok('the sheet closes first, so the feed is not stacked on top of it')
            : bad('the share sheet is still open under the feed');
@@ -117,28 +174,24 @@ console.log('\nIN THE APP: THE CHALLENGE IS LIVE, AND NOBODY IS SOLD THE APP THE
   await p.close();
 }
 
-console.log('\nA PRIVATE HIDE IS NEVER TOLD IT IS IN THE FEED');
-{
-  const p = await open(true);
-  const s = await p.evaluate(() => window.__s.privateSend());
-  !s.live
-    ? ok('somebody who chose private gets no "see it in the feed" — it would not be there')
-    : bad('#ssLive offered the feed for a hide that was never published to it');
-  await p.close();
-}
-
-console.log('\nIN A BROWSER: THE OPPOSITE HALF, AND ONLY THAT HALF');
+console.log('\nTHE BROWSER OFFER IS STILL EARNED, AND STILL BROWSER-ONLY');
 {
   const p = await open(false);
-  const s = await p.evaluate(() => window.__s.send());
-  s.get ? ok('#ssGet appears — a browser tab cannot promise a notification')
-        : bad('#ssGet did not appear in a browser');
-  !s.live ? ok('and #ssLive stays hidden, so the two are never two asks at once')
-          : bad('#ssLive is showing in a browser');
+  const before = await p.evaluate(() => window.__s.state());
+  !before.get ? ok('a sheet nobody has used sells nothing') : bad('#ssGet is showing before any send');
+  const after = await p.evaluate(() => window.__s.send());
+  after.get ? ok('#ssGet appears once something has provably been sent')
+            : bad('#ssGet did not appear in a browser after a send');
   await p.close();
+
+  const inApp = await open(true);
+  const s = await inApp.evaluate(() => window.__s.send());
+  !s.get ? ok('and never inside the wrapper — it would sell the app to somebody holding it')
+         : bad('#ssGet is showing inside the wrapper');
+  await inApp.close();
 }
 
 await browser.close();
 server.close();
-console.log(failed ? `\n✗ ${failed} sent-live check(s) failed` : '\n✓ sent-live checks passed');
+console.log(failed ? `\n✗ ${failed} sheet-live check(s) failed` : '\n✓ sheet-live checks passed');
 process.exit(failed ? 1 : 0);
