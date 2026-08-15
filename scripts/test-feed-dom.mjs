@@ -435,6 +435,87 @@ console.log('\nA CARD IN YOUR OWN GRID OPENS THAT HIDE, AS A REPLAY');
   await page.close();
 }
 
+/* ONE CONTROL PER CARD, ON EVERY CARD, IN ONE COLOUR.
+ * All three of these regress by looking reasonable. A `plays > 0` guard round the button reads
+ * like an optimisation and takes the feature off three cards in four — which is how it shipped
+ * for weeks, with most of this grid showing no control at all under the photo. A second button
+ * "while we're here" reads like generosity and puts two 12px words in a 32px strip. And a
+ * conditional tint on the send glyph reads like information right up until somebody asks why
+ * some of them are green, which is the point at which it stops being information.
+ * Run twice rather than seeded with two different rows: the harness answers get_hide with one
+ * value for every id, so a played hide and an unplayed one cannot share a grid here. Both
+ * states matter — the dim one is the one nobody would think to check. */
+for (const [label, attempts] of [['nobody has played it', 0], ['five people have', 5]]) {
+  console.log(`\nEVERY CARD CARRIES ONE BUTTON — ${label}`);
+  const page = await open(ROWS(3), { get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: attempts, n_found: 2, name: 'tony' } },
+    (p) => p.addInitScript(() => { localStorage.setItem('kamo_hides', JSON.stringify(['mine-1'])); }));
+  await page.evaluate(() => { document.getElementById('kfScope').click();
+    document.querySelector('#kfMenu [data-s="mine"]').click(); });
+  await page.waitForTimeout(1200);
+
+  const card = await page.evaluate(() => {
+    const cell = document.querySelector('#kfMine .kmCell');
+    const btns = [...cell.querySelectorAll('.kmActs .kmBtn')];
+    const b = btns[0];
+    return {
+      count: btns.length,
+      label: b ? b.textContent.trim() : null,
+      dim: b ? b.classList.contains('dim') : null,
+      lock: b ? b.classList.contains('lock') : null,
+      disabled: b ? b.disabled : null,
+      /* Infinite animations anywhere in the grid, pseudo-elements included — the shimmer lived
+         on the element itself, but "nothing in here loops" is the invariant, not one selector. */
+      spin: (document.getAnimations ? document.getAnimations() : [])
+        .filter((a) => a.effect && a.effect.target && a.effect.target.closest
+          && a.effect.target.closest('#kfMine') && a.effect.getTiming().iterations === Infinity)
+        .map((a) => a.animationName || 'anim'),
+    };
+  });
+  card.count === 1
+    ? ok(`exactly one button under the photo ("${card.label}")`)
+    : bad(`${card.count} buttons in the action row — a half-width cell fits one 12px word, and `
+        + 'two of them are told apart only by a glyph');
+  card.dim === (attempts < 1)
+    ? ok(attempts < 1 ? 'and it is dim, because there is nothing behind it yet'
+                      : 'and it is live, because there are taps to show')
+    : bad(`dim=${card.dim} on a hide with ${attempts} plays`);
+  card.spin.length === 0
+    ? ok('nothing in the grid animates on a loop')
+    : bad(`${card.spin.join(', ')} is looping in the grid — four cells means four mint edges `
+        + 'travelling out of phase behind photographs, for a control nobody has tapped');
+
+  /* THE DEAD ONE SELLS NOTHING. A paywall over a map of a hide nobody has played is charging
+     for an empty room, and it is the fastest way to make KAMO+ look like it sells nothing.
+     Driven through a real click, because `disabled` and the handler's own guard are two
+     separate defences and only one of them is visible in the markup. */
+  await page.evaluate(() => { const b = document.querySelector('#kfMine .kmActs .kmBtn'); if (b) b.click(); });
+  await page.waitForTimeout(600);
+  const after = await page.evaluate(() => ({
+    paywall: !!document.querySelector('#paywall.show'),
+    heat: !!document.getElementById('khHeat'),
+  }));
+  if (attempts < 1) {
+    !after.paywall && !after.heat
+      ? ok('and tapping it does nothing at all — no paywall for a map of an empty hide')
+      : bad(`tapping the dim button opened paywall=${after.paywall} heat=${after.heat}`);
+  } else {
+    after.paywall
+      ? ok('and a free user tapping a played one meets the paywall')
+      : bad('the locked button opened nothing — the ✦ is promising a door that is not there');
+  }
+
+  /* ONE COLOUR ON THE SEND GLYPH. It went mint on hides that had never been sent, which made a
+     grid of photographs read as two kinds of control. The count is still said, in words, by the
+     "N to send" chip above the grid — and the cell keeps its brighter border. */
+  const sendColours = await page.evaluate(() =>
+    [...new Set([...document.querySelectorAll('#kfMine .kmShare')].map((e) => getComputedStyle(e).color))]);
+  sendColours.length === 1
+    ? ok(`every send icon is the same colour (${sendColours[0]})`)
+    : bad(`the send icons render in ${sendColours.length} colours (${sendColours.join(', ')}) — a `
+        + 'colour that has to be asked about is not a signal');
+  await page.close();
+}
+
 /* A BUTTON THAT DOES EVERYTHING EXCEPT BE VISIBLE. The profile control in the feed bar
  * called openKamoHome() correctly from the day it shipped: the handler ran, the event fired,
  * the .show class landed. The card rendered at z-index 80 underneath a fullscreen #kfeed at
