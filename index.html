@@ -20,8 +20,11 @@
 <meta property="og:site_name" content="KAMO" />
 <meta property="og:description" content="There's a kamo hidden in this photo. Find it." />
 <meta property="og:type" content="website" />
-<meta property="og:image" content="https://anthonyhdd.github.io/kamo/icon.png" />
-<meta name="twitter:card" content="summary" />
+<meta property="og:image" content="https://playkamo.com/img/og.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://playkamo.com/img/og.jpg" />
 <meta name="twitter:title" content="KAMO — Meccha IRL" />
 <meta name="twitter:description" content="There's a kamo hidden in this photo. Find it." />
 <style>
@@ -2557,6 +2560,35 @@
 <input type="file" accept="image/*" id="fileInput" style="display:none" />
 
 <script>
+/* BOOT-CRASH BEACON — classic script, registered before the module on purpose.
+   The whole toy is one 9,500-line module: a parse error or a top-level throw kills
+   everything, and until now it produced a black screen and ZERO telemetry — a boot
+   crash was indistinguishable from churn (the module's own error overlay is __DBG-only,
+   and the module may never have run at all). This duplicates the public client key and
+   the device-id read deliberately: it must not depend on anything the module defines.
+   Capped at 3 per page load; ships direct to Amplitude EU like chWebTrack does. */
+(function(){
+  var sent=0;
+  function beacon(kind,msg,src,line){
+    try{
+      if(sent>=3) return; sent++;
+      var did; try{ did=localStorage.getItem("kamo_did")||"web-error-anon"; }catch(_){ did="web-error-anon"; }
+      fetch("https://api.eu.amplitude.com/2/httpapi",{method:"POST",keepalive:true,
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({api_key:"c3970f8e3ccf035f1f3a001831dc3414",events:[{
+          device_id:did,event_type:"web_error",time:Date.now(),
+          event_properties:{kind:kind,message:String(msg||"").slice(0,300),
+            source:String(src||"").slice(0,120),line:line||0,
+            href:location.href.split("?")[0],wrapper:!!window.ReactNativeWebView,emit:"web"}
+        }]})}).catch(function(){});
+    }catch(_){}
+  }
+  window.addEventListener("error",function(e){ beacon("error",(e&&e.message)||e,(e&&e.filename)||"",(e&&e.lineno)||0); },true);
+  window.addEventListener("unhandledrejection",function(e){ var r=e&&e.reason; beacon("unhandledrejection",(r&&r.message)||r,"",0); });
+})();
+</script>
+
+<script>
 /* FIRST PAINT SIGNAL — runs here on purpose.
    This classic script sits after the #start markup and before the module script, so it
    executes as soon as the hero is parsed and BEFORE ./vendor/three.module.js is even
@@ -3672,6 +3704,7 @@ let sceneCanvas=null, maskCanvas=null, blurCanvas=null, hiderPoints=[], currentS
    updateCoverageHud(). Lives out here with currentScore because it is the same lifetime:
    both are the round's, both are reset by the capture that starts one. */
 let covCrossed=false;
+let blockedTracked=false;   // one hide_publish_blocked per round — 2026-08-14's 515 were touches, not rounds; every tap under the floor re-fired it
 let roundStartedAt=0, roundMs=0, captureWasAuto=false, aimStartedAt=0, aimGiven=0;   // capture -> Done. The number the user is actually playing against.
 /* FRAMING — fit the camera to the board's WIDTH, don't crop to its aspect.
    The board is the whole screen: 9:19.5 on a modern iPhone (dr ~0.46). The camera hands
@@ -3790,7 +3823,7 @@ function capture(){
   tlCaptureOpen();   // ...and it opens on the untouched shot, which is where the round starts — see tlCaptureOpen()
   chResetRound();   // ...and so does the published hide — see chResetRound()
   currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
-  covCrossed=false; updateCoverageHud();   // ...and the floor's chip opens the round at 0%, saying what it will take
+  covCrossed=false; blockedTracked=false; updateCoverageHud();   // ...and the floor's chip opens the round at 0%, saying what it will take
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
   /* KAMO+ paints with no clock (was PRO_PAINT_SECONDS=75 until 2026-08-11). The round ends
@@ -6268,7 +6301,8 @@ window.KAMO.openFound=(id)=>{
 window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn();
   /* The boot camera decision is waiting on exactly this. Resolving it here rather than on
      the 700ms timer means a returning user reaches compose as fast as they always did. */
-  if(typeof bootCamera==="function" && bootCamera.decide) bootCamera.decide(); };
+  if(typeof bootCamera==="function" && bootCamera.decide) bootCamera.decide();
+  maybeUpdateBanner(); };
 /* This web build deploys to GitHub Pages on its own schedule, so it can end up running
    inside an OLDER App Store wrapper that has no `invite` message handler — the button
    would post into the void and look broken. Show it only when the wrapper says it can
@@ -6575,7 +6609,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -6737,6 +6771,41 @@ const WEB_ONLY=new Set(["brush_changed","size_floor_reached","camera_lenses","se
    the version whose save is known broken. Not exact, and not pretending to be: it separates
    "the new build" from "the old one", which is the comparison being made. */
 function saveWrapperTag(){ return (nativeCaps && nativeCaps.settings) ? "1.0.8+" : "pre-1.0.8"; }
+
+/* ---- UPDATE NUDGE FOR STALE WRAPPERS ----
+   ~89% of the fleet runs 1.0.2: localStorage wiped on every launch, a purchase handler
+   with silent exits, a frozen event allow-list, no notif-schedule. The web ships daily
+   but everything that crosses the bridge is pinned by the binary — so the only lever
+   that reaches those users is asking for the update in-page.
+   Gated on capability, not version string: a wrapper that cannot schedule the
+   results-ping (nativeCaps.notifSchedule, the 1.1.x marker) is too old, full stop.
+   Browsers never see it. The caps are re-checked inside the timeout because they can
+   arrive after the first call queues the banner. Both events are WEB_ONLY — the very
+   builds this targets would drop them at the bridge. */
+let updBannerQueued=false;
+function maybeUpdateBanner(){
+  if(updBannerQueued) return;
+  if(!window.ReactNativeWebView) return;
+  try{ if(sessionStorage.getItem("kamo_upd_dismissed")) return; }catch(_){}
+  updBannerQueued=true;
+  setTimeout(function(){
+    try{
+      if(nativeCaps && nativeCaps.notifSchedule) return;   // caps landed late: current build, no nudge
+      if(document.getElementById("updBanner")) return;
+      const b=document.createElement("div");
+      b.id="updBanner";
+      b.style.cssText="position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:10px;right:10px;z-index:9990;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:rgba(10,12,20,.92);border:1px solid rgba(255,255,255,.14);color:#fff;font:600 13px/1.35 -apple-system,system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.45)";
+      b.innerHTML='<span style="flex:1">A new KAMO is out — smoother, faster, and it can tell you when someone finds your kamo.</span>'
+        +'<button id="updGo" style="flex:none;background:#fff;color:#000;border:0;border-radius:10px;padding:8px 12px;font:700 13px -apple-system,system-ui,sans-serif">Update</button>'
+        +'<button id="updX" aria-label="Dismiss" style="flex:none;background:none;border:0;color:rgba(255,255,255,.6);font:700 16px -apple-system,system-ui,sans-serif;padding:4px 6px">✕</button>';
+      document.body.appendChild(b);
+      track("update_banner_shown",{wrapper:saveWrapperTag()});
+      document.getElementById("updGo").onclick=function(){ track("update_banner_tapped",{wrapper:saveWrapperTag()}); openURL(appLink); };
+      document.getElementById("updX").onclick=function(){ try{sessionStorage.setItem("kamo_upd_dismissed","1");}catch(_){} b.remove(); };
+    }catch(_){}
+  },6000);
+}
+if(window.ReactNativeWebView) setTimeout(maybeUpdateBanner, 3000);   // fallback for a wrapper that never sends caps at all
 function track(event,props){
   /* `emit` STAMPS EVERY EVENT THIS FILE SENDS, and it exists because of a question the data
      could not answer. 21 of 29 purchase_initiated over three days arrived carrying NOTHING —
@@ -9781,7 +9850,7 @@ async function chUpload(){
      produced two and three identical rows (verified in the table: 2-3 hides on the same
      second). An in-flight flag is the missing half of the idempotence. */
   if(chUpload._busy) return;
-  if(Math.round(currentScore||0)<CH_MIN_COVERAGE){ track("hide_publish_blocked",{coverage:Math.round(currentScore||0)}); return; }
+  if(Math.round(currentScore||0)<CH_MIN_COVERAGE){ if(!blockedTracked){ blockedTracked=true; track("hide_publish_blocked",{coverage:Math.round(currentScore||0)}); } return; }
   chUpload._busy=true;
   const myRound=chRound;
   try{
