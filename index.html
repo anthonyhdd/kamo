@@ -2235,7 +2235,7 @@
          above it, and Clean export has to stay because it is the only perk here with
          no free substitute. Both sheets keep the same row - see TWO SHEETS, ONE LOOK. -->
     <div class="kpChips">
-      <span class="kpChip">Every body</span>
+      <span class="kpChip">Every kamo</span>
       <span class="kpChip">Every finish</span>
       <span class="kpChip">Clean export</span>
     </div>
@@ -5041,7 +5041,12 @@ PW_PITCH.size_star=PW_PITCH.size;
 /* LEADS WITH THE BODY NOW. It used to lead with brushes and close on two clock promises —
    one of which the free round has since been given. The order here is the order of the
    argument: the thing that shows in the photo first, the tools after. */
-const pwGenericSub=()=>`Every body and every finish · any brush and color · exports without our mark`;
+/* "kamo", NEVER "body". The figurine is a kamo everywhere a user can read it (founder's
+   copy rule) — and this line said "Every body" while PW_PITCH.char two screens away said
+   "Every kamo and every finish". Two names for the same object, on the same paywall, is the
+   product failing to know what it sells. test-peek-dom fails the push if any of these lines
+   says it again. */
+const pwGenericSub=()=>`Every kamo and every finish · any brush and color · exports without our mark`;
 /* THE HERO'S CONTEXT LINE, per SOURCE — not per highlighted line, because the same line can
    be reached from two different moments that deserve different sentences: `time` fires
    mid-round (the clock just took the round, which is frozen behind the paywall) and
@@ -11317,7 +11322,7 @@ function chSeek(hideId,opts){
           const whose=mine ? "the one you hid in round "+res.old_round
                     : res.old_name ? "@"+res.old_name+"'s, from round "+res.old_round
                     : "the one from round "+res.old_round;
-          ending("Wrong body.",
+          ending("Wrong kamo.",
                  "That's "+whose+". The new one is still in there.",
                  {rehide:true,camoSrc:camoSrc});
         } else {

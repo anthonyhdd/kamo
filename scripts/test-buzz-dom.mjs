@@ -184,6 +184,76 @@ console.log('\nWIN — percentile spoken, same snap');
   (await txt(page, 'chSub')) === 'Faster than 78% of players.' ? ok('percentile line') : bad('sub after win: ' + await txt(page, 'chSub'));
   const found = await page.evaluate(() => document.getElementById('chFrame').classList.contains('found'));
   found ? ok('green frame on the find') : bad('no found state');
+
+  /* THE CONFETTI, ASSERTED WHERE ITS ONLY CALLER LIVES. These three checks used to sit in
+     test-peek-dom, which reached confettiBurst() through the sender's local rehearsal of their
+     own hide — an overlay deleted on 2026-08-15, when "See it live" replaced a simulated round
+     with the real one in the feed. The burst itself is not dead: this is the other call site
+     and always was the one that matters, a stranger actually finding you.
+     EXACTLY ONE LAYER. It is a full-screen canvas and a second one is a second full-screen
+     canvas; nothing about that is visible, because they are transparent and stack perfectly.
+     POLLED, NOT SAMPLED AT A FIXED INSTANT. The effect has a lifetime, so any single moment is
+     either too early or too late — and the reduce-motion bloom below lives about 870ms, which
+     is exactly the kind of number a hardcoded wait gets wrong the first time somebody tunes
+     the animation. Both windows are asserted by waiting for the condition instead. */
+  const layers = await page.waitForFunction(() => document.querySelectorAll('.kConfetti').length === 1,
+    null, { timeout: 2500 }).then(() => true).catch(() => false);
+  layers ? ok('one confetti layer is thrown')
+         : bad(`${await page.evaluate(() => document.querySelectorAll('.kConfetti').length)} confetti `
+             + 'layers within 2.5s of the find — expected exactly 1');
+
+  /* AND IT HAS TO LEAVE. The canvas sits at z-index 95, above the ending card's own buttons.
+     One left behind is an invisible sheet over every control on the screen — the loop's most
+     valuable moment ends on a card nobody can tap. */
+  const gone = await page.waitForFunction(() => document.querySelectorAll('.kConfetti').length === 0,
+    null, { timeout: 4000 }).then(() => true).catch(() => false);
+  gone
+    ? ok('and it removes itself when the last piece dies')
+    : bad('a confetti canvas is still in the DOM 4s after the find — at z-index 95 that is an '
+        + 'invisible sheet over "Send one back" and every other control on the ending');
+  await page.close();
+}
+
+/* REDUCED MOTION IS A REAL PATH, NOT A SWITCH THAT TURNS THE FEATURE OFF. confettiBurst()
+   returned early under it once, which left those users with a green frame, a headline, and
+   nothing else — the setting asks for less movement, not for less feedback. It draws a still
+   mint bloom instead, carrying the same class, so the cleanup rule above covers it too.
+   Emulated for real: asserting on the CSS text would prove nothing about what the branch does. */
+console.log('\nWIN UNDER REDUCE MOTION — a still bloom, and it still leaves');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
+  await page.route('**/storage/v1/object/public/hides/**', route =>
+    route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG }));
+  await page.addInitScript(() => {
+    window.__calls = [];
+    window.__rpc = (fn, body) => {
+      window.__calls.push([fn, body]);
+      if (fn === 'get_hide') return Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 3, n_found: 1, limit_s: null, max_taps: null, name: 'tony' });
+      if (fn === 'submit_attempt') return Promise.resolve({ hit: true, tries: 4, missed: 3, secs: 9, pct: 78, others: 12 });
+      if (fn === 'reveal_hide') return Promise.resolve({ cx: 0.5, cy: 0.5, r: 0.1 });
+      return Promise.resolve(null);
+    };
+  });
+  await page.goto(base + '?h=abc123', { waitUntil: 'load' });
+  await page.waitForTimeout(700);
+  await page.mouse.move(200, 500); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
+  /* The bloom's whole life is ~870ms (a frame, 300ms held, a 560ms fade-out), so it is gone
+     well before the 1.2s these blocks usually wait for the ending card. Waited for, not
+     sampled — a fixed instant here asserts the timing rather than the behaviour, and this one
+     failed exactly that way the first time it was written. */
+  const bloomed = await page.waitForFunction(() => document.querySelectorAll('.kConfetti').length === 1,
+    null, { timeout: 2500 }).then(() => true).catch(() => false);
+  const rmFound = await page.evaluate(() => document.getElementById('chFrame').classList.contains('found'));
+  bloomed && rmFound
+    ? ok('it still celebrates — green frame and a still bloom, no flying particles')
+    : bad(`Reduce Motion gets found=${rmFound}, bloom=${bloomed} — the setting asks for less `
+        + 'movement, not for no feedback');
+  const rmGone = await page.waitForFunction(() => document.querySelectorAll('.kConfetti').length === 0,
+    null, { timeout: 3000 }).then(() => true).catch(() => false);
+  rmGone
+    ? ok('and the bloom cleans up too')
+    : bad('a bloom is left at z-index 95 — an invisible sheet over every control');
   await page.close();
 }
 
