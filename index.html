@@ -6150,6 +6150,12 @@ function brandTap(){ if(brandLongPressed){ brandLongPressed=false; return; }   /
      would put the wordmark over the reveal canvas and let it eat drags of the handle. */
   const onBrand=(e)=>{ if(!b) return false; const r=b.getBoundingClientRect();
     if(!r.width) return false;                       // hidden (KAMO Home, share sheet)
+    /* THE FEED COVERS THE WORDMARK BUT NOT ITS RECT. This hit-test is coordinate-based on
+       purpose (see the note above), which also means z-index means nothing to it — and the
+       feed's scope pill sits exactly in the wordmark's box. Shipped 2026-08-15, reported
+       within the hour: tapping "Everyone ▾" opened the handle modal over the menu. While
+       the feed is up, every touch belongs to the feed. */
+    if(document.getElementById("kfeed")) return false;
     return e.clientX>=r.left-10 && e.clientX<=r.right+10 && e.clientY>=r.top-10 && e.clientY<=r.bottom+10; };
   let sx=0, sy=0;
   let downAt=0, downOk=false;
