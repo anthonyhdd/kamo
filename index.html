@@ -11870,8 +11870,16 @@ const KF_CSS=
   +".kmStat b{font-size:14.5px;color:#fff;font-family:var(--display);}"
   +".kmStat.mint{border-color:rgba(61,220,151,.4);color:var(--mint);}"
   +".kmStat.mint b{color:var(--mint);}"
-  +".kmStat.send{background:#fff;border-color:#fff;color:#0a0b0e;}"
-  +".kmStat.send b{color:#0a0b0e;}"
+  /* NOT A WHITE SLAB. A solid white pill is this app's PRIMARY BUTTON — .ssInvite, .kpGo,
+     .pwBuy, every one of them a thing you press — and this is a counter that does nothing when
+     tapped. It was the loudest object on the screen wearing the one skin that promises an
+     action, on the one chip whose label ("to send") names an action. Everything about it
+     invited a tap that is a no-op.
+     It stays the loudest of the three, because it is the only one of the three that is a TASK
+     rather than a result: full-strength white against the others' 80%, and a real border
+     against their barely-there one. Loud is right; pretending to be a button is not. */
+  +".kmStat.send{border-color:rgba(255,255,255,.85);color:#fff;background:rgba(255,255,255,.06);}"
+  +".kmStat.send b{color:#fff;}"
   +".kmGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
   /* align-self:start — kept, though every cell now carries the same one-button row and so the
      heights already match. It is what stops a cell stretching to its neighbour's height and
@@ -11927,13 +11935,19 @@ const KF_CSS=
      #btnShare two-background construction because these squares clip their overflow. The icon
      stays full white; the ✦ goes mint. A member's buttons keep the quiet grey: for them these
      are tools, not doors.
-     THE SHIMMER IS GONE (founder, 2026-08-15). It ran pwShimmer on a 3.4s infinite loop, on
-     every locked cell at once — so a grid of four hides had four mint edges travelling out of
-     phase behind photographs, which is a lot of motion to spend on a control nobody has tapped
-     yet. The edge still says premium; it just says it once instead of continuously. */
+     THE SHIMMER IS BACK (founder, 2026-08-15, reversing a call made the same day). It was cut
+     on the argument that four locked cells meant four mint edges travelling out of phase behind
+     photographs — true, and not the point: this is the only paid surface on the screen, the
+     grid it sits in is the one place a creator's own results make the upsell make sense, and a
+     static edge is a badge where a moving one is a door. Same --ring and the same 3.4s
+     pwShimmer clock as the paywall's selected plan, so it costs no new vocabulary.
+     ⚠️ background-size has to go back with it: at 100% the gradient has nowhere to travel and
+     the animation runs while nothing moves — which is the worst of both, motion cost with no
+     motion. 260% is the width pwShimmer is written against. */
   +".kmIco.lock{color:#fff;border:1.5px solid transparent;overflow:hidden;"
   +  "background:linear-gradient(180deg,#0f2a22,#0e2419 78%) padding-box,var(--ring) border-box;"
-  +  "background-size:auto,100% 100%;box-shadow:0 3px 14px rgba(95,230,164,.16);}"
+  +  "background-size:auto,260% 100%;box-shadow:0 3px 14px rgba(95,230,164,.16);"
+  +  "animation:pwShimmer 3.4s linear infinite;}"
   +".kmIco.lock::after{color:var(--mint);opacity:1;}"
   /* NOTHING TO SHOW YET, AND IT SAYS SO BY BEING GREY. The button used to be absent below one
      play, which is what made most of this grid look like it had no controls at all — and an
@@ -11944,7 +11958,7 @@ const KF_CSS=
      selling nothing, and the mint edge is a door; a door on a room with nothing in it is worse
      than no door. */
   +".kmBtn.dim,.kmIco.lock.dim{color:rgba(255,255,255,.34);border:1px solid rgba(255,255,255,.1);"
-  +  "background:rgba(255,255,255,.03);box-shadow:none;}"
+  +  "background:rgba(255,255,255,.03);box-shadow:none;animation:none;}"
   +".kmBtn.dim::after{content:none;}"
   +".kmBtn.dim:active{transform:none;}"
   +".kmSendNow{background:#fff;color:#0a0b0e;border:none;}"
