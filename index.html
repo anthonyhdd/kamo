@@ -1019,11 +1019,10 @@
      The comment on that handler says the card "opens ON TOP of it". The CSS never agreed.
      THE FILE HAS TWO BANDS AND #kamoHome WAS IN THE WRONG ONE. Everything that layers over
      the app sits at 0-95 (#shareSheet 58, #paywall 60, this at 80); everything that TAKES
-     THE SCREEN sits at 9000+ (.chS 9000, #kfeed 9400, secretAsk 9500, .kfCons 9600). This
-     card is reachable from inside the feed, so it belongs in the second band.
-     9450, precisely: above the feed, and below both secretAsk and the visibility consent —
-     a pass prompt or a question about publishing somebody's photo must never end up behind
-     a profile card. And `fixed` rather than `absolute`, because over a fixed fullscreen
+     THE SCREEN sits at 9000+ (.chS 9000, #kfeed 9400, secretAsk 9500). This card is reachable
+     from inside the feed, so it belongs in the second band.
+     9450, precisely: above the feed and below secretAsk — a pass prompt must never end up
+     behind a profile card. And `fixed` rather than `absolute`, because over a fixed fullscreen
      surface an absolutely-positioned overlay is sized by the document rather than the
      viewport, which is how a raised z-index alone would have produced a card in the wrong
      place instead of no card at all.
@@ -1845,13 +1844,12 @@
      defensible if the sentence saying so is on the screen they are already looking at, at
      the size of everything else on it. It sits directly above the send buttons for the same
      reason — it has to be read before the tap, not found after it. */
-  /* COLOUR, DECLARED — and this is the same bug .kfConsCard already fixed one sheet over.
-     A <button> does NOT inherit `color` in WebKit the way the divs around it do: it falls
-     back to system link blue unless something says otherwise. .ssVis carried no colour of
-     its own and the note under .kfCons says so in as many words, but the fix was applied
-     only to the consent card — so on the SHARE sheet, the one surface this row actually
-     ships on, "Public" and its subtitle rendered blue. Blue is not in this app's palette
-     anywhere; it read as an unstyled web form dropped into the sheet.
+  /* COLOUR, DECLARED. A <button> does NOT inherit `color` in WebKit the way the divs around
+     it do: it falls back to system link blue unless something says otherwise. .ssVis carries
+     no colour of its own, so "Public" and its subtitle rendered blue — not a colour in this
+     app's palette anywhere, and it read as an unstyled web form dropped into the sheet. The
+     same bug was fixed on the consent card first and only there, which is why it survived on
+     the SHARE sheet, the one surface this row actually ships on.
      AND IT IS DELIBERATELY QUIET NOW. This row is a disclosure, not an alert: it must be
      readable before the send without competing with the button underneath it that the whole
      sheet exists to produce. So it weighs no more than the rows around it — no accent on the
@@ -1881,37 +1879,6 @@
      switch in the same state on the sheet a second later, which is the difference between a
      disclosure and a formality. Three parts and no paragraph: what it is, the control, the
      way out. Above the share sheet's own layer so it cannot open behind it. */
-  /* VISIBLE THE MOMENT IT IS IN THE DOM. This opened at opacity:0 and was lit by a class
-     added in requestAnimationFrame — which does not fire in a backgrounded page. The sheet
-     would then sit invisible over the reveal while the promise behind it never resolved, so
-     the hide never published at all. A CSS animation needs no JS tick and cannot be skipped:
-     worst case somebody sees the final frame immediately, which is a sheet. */
-  .kfCons{position:fixed;inset:0;z-index:9600;display:flex;align-items:flex-end;justify-content:center;
-    padding:0 14px;background:linear-gradient(180deg,rgba(3,5,8,0) 26%,rgba(3,5,8,.86));
-    animation:kfConsIn .26s ease both;}
-  .kfCons.gone{opacity:0;transition:opacity .24s ease;}
-  /* COLOUR IS DECLARED HERE OR iOS PICKS IT. .ssVis sets no colour of its own — on the share
-     sheet it inherits white from .ssCard — so dropped into a card that declares none, every
-     word inside the <button> fell back to system link blue. It read as a web form, not as
-     KAMO. */
-  .kfConsCard{color:#fff;width:min(92vw,420px);margin-bottom:calc(18px + var(--safe-b));padding:20px 18px 16px;
-    border-radius:24px;border:1px solid rgba(255,255,255,.16);
-    background:linear-gradient(180deg,rgba(15,42,34,.96),rgba(7,13,11,.98));
-    box-shadow:0 18px 50px rgba(0,0,0,.5);
-    animation:kfConsUp .3s cubic-bezier(.2,.9,.3,1) both;}
-  @keyframes kfConsIn{from{opacity:0}to{opacity:1}}
-  @keyframes kfConsUp{from{transform:translateY(18px)}to{transform:none}}
-  /* The kicker/headline pair every other KAMO sheet wears, so this one is recognisably the
-     same object as the share sheet it precedes rather than a dialog from somewhere else. */
-  .kfConsK{font-family:var(--display);font-size:11px;font-weight:800;letter-spacing:1.6px;
-    text-transform:uppercase;color:var(--mint);text-align:center;margin:0 0 6px;opacity:.9;}
-  .kfConsT{font-family:var(--display);font-size:19px;font-weight:800;letter-spacing:-.3px;
-    text-align:center;margin:0 0 14px;color:#fff;}
-  .kfConsGo{display:flex;align-items:center;justify-content:center;width:100%;height:52px;
-    margin-top:12px;border:none;border-radius:16px;background:#fff;color:#04120c;
-    font-family:var(--display);font-size:16.5px;font-weight:800;cursor:pointer;
-    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
-  .kfConsGo:active{transform:scale(.98);}
   /* Same quiet dismiss as the paywall's "Maybe later". */
   .ssClose{display:block;width:100%;margin-top:2px;background:none;border:none;color:rgba(255,255,255,.55);font-size:14px;font-weight:700;cursor:pointer;padding:8px;}
   /* QUIET WAS TOO QUIET. This was mint text on nothing — no slab, no border — sitting last
@@ -7655,34 +7622,50 @@ function ssOfferApp(){
      that exact hide as slide 0, fetched by id from the server — so what appears is the row
      that was actually published, not a local rendering of it. Empty when the upload has not
      landed yet, which degrades to a normal feed open rather than to an error. */
-  /* IT HAS TO WAIT FOR THE ID, AND IT DID NOT. Founder's report, 2026-08-15: "j'ai tappé le
-     see it live et ça m'a pas ouvert mon paint dans le feed". It read chId straight off the
-     module and chId is only set once create_hide RESOLVES — so a tap inside the first couple
-     of seconds of the sheet passed "", and chFeed opened the plain public feed: a screen full
-     of strangers' photos, in answer to "show me mine". Silent, and indistinguishable from the
-     button being broken, which is exactly how it was reported.
-     chAwaitId() is the bounded wait this file already uses on the native share path, and it
-     kicks chUpload() rather than only polling — so a publish that never started gets started.
-     2.5s: long enough for the round trip on a phone network, short enough that a tap which
-     cannot be answered still opens the feed rather than hanging on a dead button.
-     AWAITING IS SAFE HERE, and that is worth saying because the rule two hundred lines up is
-     the opposite: #ssInvite must never await, because the first await spends the user
-     activation navigator.share needs. This opens an in-page overlay. There is no activation to
-     spend.
-     THE SHEET CLOSES FIRST, before the wait — the feed is a full-screen overlay and leaving
-     the sheet under it is how you end up with two dismissals to get back to the camera, and a
-     sheet that sits there for two seconds after a tap reads as a dead button twice over. */
-  if(l) l.onclick=async()=>{ haptic(10); closeShareSheet();
-    /* Captured BEFORE the await, because chAwaitId resolves by setting the very module
-       variable this would otherwise read afterwards — `waited` would then be false on every
-       tap that actually had to wait, which is the only population it exists to count. */
-    const had=!!chId;
+  /* IT MUST NEVER OPEN THE PUBLIC FEED. Two founder reports, one behaviour: first "ça m'a pas
+     ouvert mon paint dans le feed", then, after a bounded wait was added, "dirige vers le feed
+     mais n'ouvre toujours pas la bonne". Waiting was half the fix and the wrong half to stop at.
+     THE WAIT WAS NEVER GOING TO BE ENOUGH, because for a large share of taps there is nothing
+     to wait FOR. chUpload() refuses to publish a hide under CH_MIN_COVERAGE and chSlot()
+     returns null for the same reason — so a bare paint has no row, will never have one, and
+     chAwaitId() polls a publish that is not happening for its whole ceiling before giving up.
+     THE FAILURE WAS THE REAL BUG. Whatever the reason, the old code then called chFeed("") —
+     which opens the plain public feed. A screen full of strangers' photos, in answer to "show
+     me mine", with nothing on it saying why. That is indistinguishable from the button taking
+     you to the wrong place, which is exactly how it was reported both times.
+     So there are three outcomes now and only one of them opens anything: bare (never going to
+     publish — say what would fix it), still uploading (say so, keep the sheet, the tap costs
+     nothing), or an id, which is the only case that leaves this screen. The sheet stays put
+     until we know, so a tap that cannot be answered leaves the user exactly where they were
+     rather than somewhere they did not ask for. */
+  if(l) l.onclick=async()=>{
+    haptic(10);
     let id=chId;
-    try{ if(!id) id=await chAwaitId(2500); }catch(e){}
-    /* `own` separates "the feed opened on your hide" from "the feed opened at all": without
-       it a tap that lost the race and a tap that worked are one number. */
+    const had=!!id;
+    if(!id){
+      /* UNDER THE FLOOR IS NOT A WAIT, IT IS AN ANSWER. Quoting the constant rather than a
+         typed number, and the same sentence the coverage chip uses while it can still be acted
+         on — the two must never disagree about what the floor is. */
+      if(Math.round(currentScore||0)<CH_MIN_COVERAGE){
+        track("sent_feed_tapped",{own:false,lost:true,bare:true});
+        showHint("Paint more of it first — under "+CH_MIN_COVERAGE+"% there's no challenge to look at",3600);
+        return;
+      }
+      /* The same "…" the spectator buttons wear while they fetch. Without it the button is
+         inert for up to 2.5 seconds and reads as the dead control it is being fixed for. */
+      const o=l.textContent; l.textContent="…"; l.disabled=true;
+      try{ id=await chAwaitId(2500); }catch(e){}
+      l.textContent=o; l.disabled=false;
+    }
+    /* `waited` is captured from `had`, taken BEFORE the await: chAwaitId resolves by setting
+       the very module variable it would otherwise be read from, so reading chId here would
+       report false on every tap that actually had to wait. */
     track("sent_feed_tapped",{own:!!id,waited:!had&&!!id,lost:!id});
-    try{ chFeed({first:id||""}); }catch(e){} }; }
+    if(!id){ showHint("Still going up — give it a second and tap again",3000); return; }
+    /* Closes the sheet ONLY once there is something to open: the feed is a full-screen overlay
+       and leaving the sheet under it is how you end up with two dismissals to get back. */
+    closeShareSheet();
+    try{ chFeed({first:id}); }catch(e){} }; }
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
   if(typeof ssShowAgain==="function") ssShowAgain();
   track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
@@ -9592,86 +9575,6 @@ function kfApplyVisibility(id,pub){
   try{ chRpc("set_hide_public",{p_id:id,p_public:!!pub}).catch(()=>{}); }catch(e){}
 }
 
-/* SAID ONCE, BEFORE THE FIRST PHOTO GOES ANYWHERE.
- *
- * The switch has always existed and has always said the right words — it lives on the share
- * sheet and reads "Anyone can play it in the KAMO feed". The problem is WHEN it is legible.
- * The sheet presents itself on the reveal in the `peek` state, and that state hides every
- * child except the grabber, the title, the send button and the preview; the visibility row
- * is not on that list. So the row is behind a drag most people never perform, while the hide
- * goes public on its own a second after the reveal.
- * Measured over 24h: 29 hides were public whose author never even tapped share. Those people
- * were never shown anything.
- *
- * PUBLIC STAYS THE DEFAULT — founder's call, 2026-08-13, and the existing public hides stay
- * public. What changes is that nobody reaches it without having been told, in words, once.
- * The row on this sheet IS the row from the share sheet: same control, same copy, already
- * switched on. Somebody who taps straight through has consented to the default; somebody who
- * flips it has set a preference that sticks forever.
- *
- * UNANSWERED IS PRIVATE. Not as a policy about defaults, but because an unanswered question
- * is not an answer — if the app is killed on this sheet the hide simply stays out of the
- * feed, which is the direction everything else in this file fails in. */
-const KF_ASKED_KEY="kamo_vis_asked";
-function kfAsked(){ try{ return localStorage.getItem(KF_ASKED_KEY)==="1"; }catch(e){ return false; } }
-function kfMarkAsked(){ try{ localStorage.setItem(KF_ASKED_KEY,"1"); }catch(e){} }
-/* NOT WIRED, AND NOT DEAD EITHER — read this before deleting it.
-   Nothing in the app calls this. The sheet was removed from the flow on purpose (founder's
-   call): the disclosure now lives on the share sheet's own .ssVis row, which is visible in
-   the peek state, and a modal in front of the reveal was costing the send. That decision
-   stands, and this is deliberately NOT being re-wired.
-   It is kept, and kept TESTED (scripts/test-feed-dom.mjs drives it through
-   window.KAMOFEED.askConsent), because of what it is: the one-time, explicit, in-words opt-in
-   for a product whose default publishes a stranger's photo to a public feed. That default is
-   defensible today because the row states it before the send. If that ever stops being
-   enough — a store review, a regulator, a jurisdiction with a different answer, or simply a
-   change of mind — the fix must be one line re-enabling a path that already works, not a
-   rebuild under time pressure. Dead code that cannot run is drift; this is a switch with the
-   wiring already run to it, and the wiring is what takes the time.
-   If it is ever deleted, delete its tests in the same commit, and say in the message that the
-   opt-in path is gone rather than letting it disappear as a cleanup.
-   Resolves to the answer. Resolves FALSE if it cannot be shown at all rather than assuming
-   consent nobody gave. */
-function kfAskConsent(){
-  if(kfAsked()) return Promise.resolve(kfWantPublic());
-  return new Promise((done)=>{
-    let settled=false;
-    const finish=(v)=>{ if(settled) return; settled=true;
-      kfMarkAsked(); kfSetWantPublic(v); kfRenderVis();
-      try{ wrap.classList.add("gone"); setTimeout(()=>wrap.remove(),260); }catch(e){}
-      track("visibility_consent",{public:v});
-      done(v); };
-    let wrap;
-    try{
-      wrap=document.createElement("div");
-      wrap.id="kfCons"; wrap.className="kfCons";
-      /* The same three parts as every sheet in this app, and nothing else: what it is, the
-         control, the way out. No paragraph — a wall of text on a reveal is a wall nobody
-         reads, and the row underneath already says the sentence that matters. */
-      wrap.innerHTML=
-        '<div class="kfConsCard">'
-        +'<div class="kfConsK">Before you send</div>'
-        +'<div class="kfConsT">Your hides are public</div>'
-        +'<button class="ssVis" id="kfConsVis" aria-pressed="true">'
-        +'<span class="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/>'
-        +'<path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>'
-        +'<span class="ssVisTxt"><b id="kfConsVT">Public</b><i id="kfConsVS">Anyone can play it in the KAMO feed</i></span>'
-        +'<span class="ssVisSw"><i></i></span></button>'
-        +'<button class="kfConsGo" id="kfConsGo">Got it</button>'
-        +'</div>';
-      document.body.appendChild(wrap);
-      let on=true;
-      const vis=wrap.querySelector("#kfConsVis");
-      vis.onclick=()=>{ on=!on; haptic(10);
-        vis.setAttribute("aria-pressed",on?"true":"false");
-        wrap.querySelector("#kfConsVT").textContent=on?"Public":"Private";
-        wrap.querySelector("#kfConsVS").textContent=on?"Anyone can play it in the KAMO feed"
-                                                     :"Only whoever you send the link to"; };
-      wrap.querySelector("#kfConsGo").onclick=()=>{ haptic(10); finish(on); };
-      track("visibility_consent_shown",{});
-    }catch(e){ done(false); }   // could not be shown → nothing goes public
-  });
-}
 /* THE ICON HAS TO CHANGE WITH THE ANSWER, not just its tint. A globe means "the world sees
    this"; leaving a globe on the row while it says Private and only greying it out asks the
    eye to read a colour rather than a symbol — and the one glance this row gets is the glance
@@ -9807,34 +9710,32 @@ async function chUpload(){
     const mine=chId;
     bytes.then((up)=>{
       if(!up) return;                 // upload failed — stays private, stays out of the feed
-      /* CONSENT IS ASKED HERE, AND THIS IS THE LINE THAT MAKES A HIDE PUBLIC. Founder's call,
-         2026-08-14, re-enabling the path kfAskConsent() was kept wired-and-tested for.
-         WHAT IT REPLACES. The claim this comment used to make — "the row on the share sheet is
-         now visible in the peek state, so the disclosure is made where the eyes already are" —
-         rests entirely on the row being on screen in `peek`. The suite that asserts exactly
-         that, test-peek-dom.mjs, is CURRENTLY QUARANTINED AND RED. So the only guarantee that
-         anyone was told is a test nobody is running, on a product whose default publishes a
-         photo of a stranger's home to a public feed. That is not a defensible place to leave
-         it, and the earlier version of this file already measured the failure mode: 29 hides
-         public in 24h whose author never even tapped share.
-         WHY THIS POINT AND NOT EARLIER. The row and the bytes are already private at this
-         stage — the hide exists, out of the feed, reachable only by its link. This call is the
-         single thing that hands it to strangers, so gating it is what makes "nothing goes
-         public unasked" true by construction rather than by layout.
-         COSTS ONE MODAL, ONCE PER DEVICE. kfAskConsent() resolves immediately from the stored
-         answer on every later hide (kfAsked), so the friction lands on the first send only —
-         and it resolves FALSE if it cannot be shown at all, which keeps the failure direction
-         the same as every other branch here: private. */
-      return kfAskConsent().then((pub)=>{
-        kfApplyVisibility(mine,pub);
-        /* HELD BACK A BEAT, and now behind the main upload rather than racing it: these are
-           two more encodes and two more uploads, and starting them while the photo itself is
-           still climbing the radio is exactly the contention this delay exists to avoid. The
-           snap is needed by the time a friend OPENS the link, minutes away at best.
-           INSIDE the consent branch now: the reveal clip is the thing a stranger scrolling the
-           feed actually watches, so it must not be uploaded while the answer is still pending. */
-        setTimeout(()=>chUploadReveal(name),1500);
-      });
+      /* THE ROW IS THE DISCLOSURE, AND THIS IS THE LINE THAT ACTS ON IT. Founder's call,
+         2026-08-15: the consent modal is gone and this reads the answer the user has already
+         given — or already been shown — on the share sheet's own .ssVis row.
+         WHY THAT IS ENOUGH NOW, stated so the next person does not have to reconstruct it.
+         The modal was re-enabled on 2026-08-14 on one explicit ground: the claim "the row is
+         visible in the peek state" rested on test-peek-dom.mjs, and that suite was quarantined
+         and red — so the only guarantee anybody had been told was a test nobody was running.
+         That suite was rewritten on 2026-08-15 and asserts exactly that: #ssVis is displayed in
+         the short sheet, above the send, in the state the sheet actually arrives in. The ground
+         the modal stood on is gone with the red.
+         WHAT THE MODAL COST. It fired from HERE — chained on the photo upload, seconds after
+         the sheet was already on screen and under a thumb heading for "Send to a friend". A
+         question that lands on top of the surface you are using gets answered by whatever your
+         finger was already doing, and the answer LATCHED FOREVER: kfAsked() short-circuited
+         every later call, so one mis-tap made every hide that device ever made private, with
+         no way back except a row nobody knew to look for. The founder hit exactly that.
+         THE DEFAULT IS UNCHANGED and so is the failure direction: kfWantPublic() is true unless
+         this device has turned the row off, an upload that never lands never reaches this line,
+         and a device that answered Private keeps that answer — the key it is stored under is
+         untouched. */
+      kfApplyVisibility(mine,kfWantPublic());
+      /* HELD BACK A BEAT, and behind the main upload rather than racing it: these are two more
+         encodes and two more uploads, and starting them while the photo itself is still
+         climbing the radio is exactly the contention this delay exists to avoid. The snap is
+         needed by the time a friend OPENS the link, minutes away at best. */
+      setTimeout(()=>chUploadReveal(name),1500);
     }).catch(()=>{});
     track("hide_published",{public:kfWantPublic(),reply:!!chReplyTo});
     chAttachPush();
@@ -12676,9 +12577,7 @@ window.KAMOFEED={ open:chFeed, setVisibility:kfApplyVisibility, wantPublic:kfWan
      never rendered — so a test that could not read it could only assert that a button was
      clicked, which is the half that was never in doubt. */
   blocked:kfBlocked,
-  /* The consent sheet has no other door: it is built and torn down inside one promise, at a
-     moment that needs a painted board and an upload to reach for real. */
-  askConsent:kfAskConsent, asked:kfAsked };
+  };
 
 /* THE SEEKER NEVER MEETS THE CAMERA. Arriving on ?h= means someone sent you a hide to
    find: no permission sheet, no hero, no three.js scene — just the photo and a tap. The

@@ -932,64 +932,71 @@ console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
   await page.close();
 }
 
-/* CONSENT, WHICH IS THE ONE SCREEN IN THIS APP WHERE BEING WRONG PUBLISHES SOMEBODY'S ROOM.
-   Public stays the default and the sheet says so with the switch already on — what is
-   asserted here is that the default is REACHED THROUGH A CHOICE, never behind one. */
-console.log('\nNOTHING GOES PUBLIC BEFORE ANYBODY HAS BEEN TOLD');
+/* THE CONSENT MODAL IS GONE (2026-08-15) AND THE COVERAGE DID NOT GO WITH IT — it moved to
+   the two places that now carry the same guarantee. That guarantee is worth restating, because
+   this is the one screen in the app where being wrong publishes somebody's room: nobody
+   reaches the public feed without the sentence saying so having been on screen first.
+     · IT IS ON SCREEN — test-peek-dom.mjs asserts #ssVis is displayed in the SHORT sheet,
+       above the send, in the state the sheet actually arrives in. That assertion is what the
+       modal was reinstated for on 2026-08-14, when the suite proving it was quarantined and
+       red; it is green now, which is what let the modal go.
+     · IT IS OBEYED — check.mjs asserts chUpload() publishes through
+       kfApplyVisibility(mine,kfWantPublic()), so the row's answer is the only thing that
+       decides, and the call site cannot quietly start passing `true`.
+   What is left here is the half neither of those can see: that the stored answer survives and
+   reaches the wire as the value the user chose. Driven through the exported doors rather than
+   a real publish, which would need a painted board and a storage round trip to say the same
+   thing. */
+console.log('\nTHE VISIBILITY ANSWER IS WHAT REACHES THE WIRE');
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.addInitScript(() => { window.__seed = { set_hide_public: null }; });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(600);
 
-  const asked = await page.evaluate(() => window.KAMOFEED.asked());
-  !asked ? ok('a fresh device has not been asked yet') : bad('a fresh device reads as already asked');
+  /* PUBLIC IS STILL THE DEFAULT — founder's call, 2026-08-13, unchanged by removing the modal.
+     A fresh device that has never touched the row wants public, and the row on the sheet is
+     what tells it so before the send. */
+  (await page.evaluate(() => window.KAMOFEED.wantPublic())) === true
+    ? ok('a fresh device wants public — the default did not move when the modal went')
+    : bad('a fresh device reads as private: the default flipped silently, which is a different '
+        + 'product from the one the share sheet describes');
 
-  const p = page.evaluate(() => window.KAMOFEED.askConsent());
-  await page.waitForSelector('#kfCons', { timeout: 8000 }).catch(() => {});
-  const sheet = await page.evaluate(() => ({
-    title: (document.querySelector('.kfConsT') || {}).textContent,
-    pressed: document.getElementById('kfConsVis').getAttribute('aria-pressed'),
-    sub: (document.getElementById('kfConsVS') || {}).textContent,
-    cta: (document.getElementById('kfConsGo') || {}).textContent,
-  }));
-  sheet.pressed === 'true'
-    ? ok(`the switch is already on — public is still the default ("${sheet.title}")`)
-    : bad('the consent sheet does not default to public: ' + JSON.stringify(sheet));
-  /feed/i.test(sheet.sub || '')
-    ? ok(`and it names where the photo goes ("${sheet.sub}")`)
-    : bad('the sheet does not say where the photo goes: ' + JSON.stringify(sheet.sub));
+  const sent = await page.evaluate(async () => {
+    const before = (window.__rpc || []).length;
+    window.KAMOFEED.setVisibility('hide-1', window.KAMOFEED.wantPublic());
+    await new Promise((r) => setTimeout(r, 200));
+    return (window.__rpc || []).slice(before).filter((c) => c[0] === 'set_hide_public').map((c) => c[1]);
+  });
+  sent.length === 1 && sent[0].p_public === true
+    ? ok('and publishing sends p_public:true for it')
+    : bad(`the wire carried ${JSON.stringify(sent)} for a device that wants public`);
 
-  /* THE ASSERTION THAT MATTERS. Before the tap there must be no set_hide_public on the wire:
-     29 hides went public in 24h whose author never saw anything, and that is the hole. */
-  const early = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'set_hide_public').length);
-  early === 0 ? ok('and nothing has been published while the question is still open')
-              : bad(`set_hide_public fired ${early}x before the user answered`);
+  /* AND TURNING IT OFF IS A REAL ANSWER, not decoration. This is the state the founder was
+     stuck in for a day: the row had been switched off once and every hide since was private.
+     It must stay private — removing the modal must not re-consent anybody. */
+  const off = await page.evaluate(async () => {
+    const el = document.getElementById('ssVis');
+    if (el) el.click();                       // the row's own handler, the way a thumb does it
+    const before = (window.__rpc || []).length;
+    window.KAMOFEED.setVisibility('hide-2', window.KAMOFEED.wantPublic());
+    await new Promise((r) => setTimeout(r, 200));
+    return { want: window.KAMOFEED.wantPublic(),
+             wire: (window.__rpc || []).slice(before).filter((c) => c[0] === 'set_hide_public').map((c) => c[1]) };
+  });
+  off.want === false && off.wire.length === 1 && off.wire[0].p_public === false
+    ? ok('switching the row off keeps the hide off the feed, all the way to the wire')
+    : bad(`after switching off: ${JSON.stringify(off)} — a row that does not reach set_hide_public `
+        + 'is a privacy control that does nothing');
 
-  await page.evaluate(() => document.getElementById('kfConsGo').click());
-  const answer = await p;
-  const after = await page.evaluate(() => ({ asked: window.KAMOFEED.asked(), want: window.KAMOFEED.wantPublic() }));
-  answer === true && after.asked && after.want
-    ? ok('tapping through consents to the default, and the answer sticks')
-    : bad('after Got it: ' + JSON.stringify({ answer, ...after }));
-  await page.close();
-}
-
-/* Turning it off on the sheet must be a real answer, not decoration. */
-{
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-  await page.addInitScript(() => { window.__seed = { set_hide_public: null }; });
-  await page.goto(base, { waitUntil: 'load' });
+  /* AND IT SURVIVES THE RELAUNCH, which is the property that made the old latch dangerous and
+     is the same property that makes the row trustworthy: an answer that evaporates would put
+     somebody back in the feed they left. */
+  await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(600);
-  const p = page.evaluate(() => window.KAMOFEED.askConsent());
-  await page.waitForSelector('#kfCons', { timeout: 8000 }).catch(() => {});
-  await page.evaluate(() => document.getElementById('kfConsVis').click());
-  await page.evaluate(() => document.getElementById('kfConsGo').click());
-  const answer = await p;
-  const want = await page.evaluate(() => window.KAMOFEED.wantPublic());
-  answer === false && want === false
-    ? ok('switching it off keeps the hide private, and that choice sticks too')
-    : bad('after choosing private: ' + JSON.stringify({ answer, want }));
+  (await page.evaluate(() => window.KAMOFEED.wantPublic())) === false
+    ? ok('and the answer survives a relaunch')
+    : bad('the private answer did not survive a reload — the next hide goes public');
   await page.close();
 }
 
