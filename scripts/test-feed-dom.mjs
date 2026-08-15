@@ -55,6 +55,16 @@ html = stub(html, 'async function chRpc(fn,body){');
    ARRAY and chRpc unwraps to the first element — the reaction counts come through it, so a
    harness that stubs only the other two sends them at the real network and paints nothing. */
 html = stub(html, 'async function chRpcRows(fn,body){');
+/* THE FOURTH DOOR, AND IT IS NOT AN RPC. `replay` is the flag that stops a tap on your own
+   hide reaching submit_attempt and inflating your own attempt count with a guess from the one
+   person who painted it — and it lives on a slide object with no DOM at all. What it DOES
+   reach is the analytics: activate() stamps every feed_slide with it. So the tap-a-card path
+   is asserted through the number the product already emits, rather than through a hook added
+   to window.KAMOFEED, which is the wrapper's bridge contract and has no business carrying a
+   test affordance. Recorded at the declaration for the same reason as the RPCs above: the
+   first slide activates before anything appended to the module could run. */
+html = html.replace('function track(event,props){',
+  'function track(event,props){window.__tr=window.__tr||[];window.__tr.push([event,props]);');
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.css': 'text/css' };
 const server = createServer((rq, rs) => {
@@ -372,6 +382,56 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
     ? ok(`and coming back resumes the round (${t1}s → ${t2}s)`)
     : bad(`the clock did not restart after the grid closed: ${t1}s → ${t2}s`);
 
+  await page.close();
+}
+
+/* TAPPING YOUR OWN CARD PUTS THE HIDE ON THE SCREEN, AND NEVER COUNTS AS A PLAY.
+ * A photo-sized cell looks tappable and used to forward to Watch — which is behind KAMO+ and
+ * does not exist at all on a hide nobody has played, so most of this grid was inert. It opens
+ * the hide in the feed now, which works on every cell.
+ * THE FLAG IS THE WHOLE CORRECTNESS ARGUMENT. Your own hide is skipped by feed_page on purpose
+ * (playing it is never a round — you painted it), so the slide has to be seeded by hand, and a
+ * seeded slide without `replay` sends the buzz to submit_attempt: your own attempt count goes
+ * up, recorded against the one person on earth who knew the answer. It is invisible on screen
+ * and permanent in the table, which is why it is asserted rather than assumed. */
+console.log('\nA CARD IN YOUR OWN GRID OPENS THAT HIDE, AS A REPLAY');
+{
+  const page = await open(ROWS(3), null, (p) => p.addInitScript(() => {
+    localStorage.setItem('kamo_hides', JSON.stringify(['mine-1']));
+  }));
+  await page.evaluate(() => { document.getElementById('kfScope').click();
+    document.querySelector('#kfMenu [data-s="mine"]').click(); });
+  await page.waitForTimeout(1200);
+  const cells = await page.evaluate(() => document.querySelectorAll('#kfMine .kmCell').length);
+  cells === 1 ? ok('the grid draws a cell for the remembered hide') : bad(`the grid drew ${cells} cells`);
+
+  const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+  /* On the CELL, not on a button inside it — the guard that leaves Send and Watch to their
+     own handlers is part of what is under test, and clicking a button would step past it. */
+  await page.evaluate(() => { window.__tr = []; document.querySelector('#kfMine .kmCell').click(); });
+  await page.waitForTimeout(900);
+
+  const after = await page.evaluate(() => ({
+    slides: document.querySelectorAll('.kfSlide').length,
+    gridShown: getComputedStyle(document.getElementById('kfMine')).display !== 'none',
+    pill: document.getElementById('kfScope').textContent.trim(),
+    ticked: (document.querySelector('#kfMenu button.on') || {}).dataset,
+    slide: (window.__tr.find((e) => e[0] === 'feed_slide') || [])[1] || null,
+    tapped: window.__tr.some((e) => e[0] === 'mine_cell_tapped'),
+  }));
+  after.slides === before + 1
+    ? ok('the hide is added to the feed as a slide of its own')
+    : bad(`slides went ${before} → ${after.slides} — feed_page skips your own hides, so nothing seeds it`);
+  !after.gridShown ? ok('and the grid gets out of the way') : bad('#kfMine is still covering the slide it just opened');
+  /^Everyone/.test(after.pill) && after.ticked && after.ticked.s === 'all'
+    ? ok('the pill and the menu tick agree that the feed is back')
+    : bad(`the pill reads "${after.pill}" while the menu has ${JSON.stringify(after.ticked)} ticked`);
+  after.tapped ? ok('the tap is counted, so a dead grid is distinguishable from an unused one')
+               : bad('no mine_cell_tapped — the cell is doing something nothing can see');
+  after.slide && after.slide.replay === true
+    ? ok('and the round is mounted as a REPLAY — the buzz cannot reach submit_attempt')
+    : bad(`feed_slide carries ${JSON.stringify(after.slide)} — without replay:true a tap on your own `
+        + 'hide is filed as somebody having played it, by the person who painted it');
   await page.close();
 }
 

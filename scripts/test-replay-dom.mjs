@@ -33,7 +33,18 @@ if (!chromium) {
 }
 const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const anchor = 'async function chRpc(fn,body){';
-const html = real.replace(anchor, anchor + 'if(window.__rpc) return window.__rpc(fn,body);');
+const withRpc = real.replace(anchor, anchor + 'if(window.__rpc) return window.__rpc(fn,body);');
+/* A HOOK INSIDE THE MODULE, because the rows this suite needs are behind module state.
+   The results box used to expand in place on its own click, so this file reached it with
+   `document.getElementById('khScore').onclick()` and needed nothing else. Since 2026-08-15
+   that click LEAVES the card — it opens the My-kamos grid — and the in-place expansion is
+   reachable only through khOpenNext, a module-scoped `let` that no DOM handler exposes.
+   Same pattern as window.__h in test-home-dom.mjs, and the same reason: what is under test
+   here is the replay machinery, and the list is only the way to reach it. */
+const at = withRpc.lastIndexOf('</script>');
+const html = withRpc.slice(0, at)
+  + '\nwindow.__rows=()=>{khOpenNext=true;return khResults();};\n'
+  + withRpc.slice(at);
 
 const JPG = Buffer.from(
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a' +
@@ -102,8 +113,9 @@ async function open(why) {
     return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
   await page.mouse.click(bb.x, bb.y);
   await page.waitForTimeout(700);
-  // The rows live behind "Show each one" — the summary is the closed state by design.
-  await page.evaluate(() => { const e = document.getElementById('khScore'); if (e && e.onclick) e.onclick(); });
+  // The rows live behind the folded row, which is a door to the grid now — see window.__rows.
+  await page.waitForFunction(() => !!window.__rows, null, { timeout: 10000 });
+  await page.evaluate(() => window.__rows());
   await page.waitForTimeout(500);
   return page;
 }
