@@ -127,7 +127,7 @@ console.log('\nTHE REPLY KNOWS WHO IT IS FOR');
     window.KAMO.usePickedPhoto('data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==');
     return { st: window.KAMOREPLY.state(), label: window.KAMOREPLY.label() };
   });
-  cleared.st.to === '' && cleared.label === 'Challenge a friend'
+  cleared.st.to === '' && cleared.label === 'Send to a friend'
     ? ok('picking a different photo ends the conversation — no target, generic label')
     : bad('after a new photo: ' + JSON.stringify(cleared));
 

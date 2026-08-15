@@ -1196,7 +1196,7 @@
      the pale mint label — because it is the same offer in the same voice, but the geometry
      belongs to this card. Deliberately quieter than the Discord slab above it: the community
      is the thing this card is for, the upsell is the thing it also happens to sell. */
-  /* THE APP'S PRIMARY TREATMENT, the one "Challenge a friend" wears on the share sheet. White
+  /* THE APP'S PRIMARY TREATMENT, the one "Send to a friend" wears on the share sheet. White
      is the only value nothing else on this card uses, so it wins without a colour to shout
      with — which is exactly what two competing mint slabs could not do. */
   .kpPrimary{display:flex;align-items:center;justify-content:center;width:100%;height:54px;
@@ -1291,10 +1291,9 @@
     align-items:stretch;}
   .khRowTxt{min-width:0;font-size:12.5px;line-height:1.35;display:block;}
   .khRowTxt b{display:block;font-family:inherit;font-weight:700;font-size:12.5px;color:inherit;}
-  /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR. Same 46x60 box and same cover-crop as
-     .chPrevShot in the share sheet, so the two read as the same object — but with an <img>
-     rather than a canvas, because these hides are on the server, not in this session's memory.
-     No ::after play glyph: that one opens a preview, this one is a label. */
+  /* THE PICTURE IS WHAT IDENTIFIES A HIDE TO ITS AUTHOR — a photograph is the only label a
+     creator recognises across ten rows, and it is the same crop the My-kamos grid uses.
+     No ::after play glyph: this one is a label, not a control. */
   .khShot{flex:0 0 auto;width:34px;height:44px;border-radius:7px;overflow:hidden;
     border:1px solid rgba(255,255,255,.18);background:#0a0f0d;display:block;}
   .khShot img{width:100%;height:100%;object-fit:cover;display:block;}
@@ -1634,22 +1633,21 @@
   /* Everything except the grabber, the kicker, the headline and the one primary action is
      hidden — so the card is SHORT by construction rather than by a translateY guess that
      breaks the moment the content changes height. Swiping up brings the rest back. */
-  /* The card sits ABOVE the CTA and is kept in the short state too. It is the only thing on
-     the sheet that shows what "Challenge a friend" actually sends — the frame, the seconds
-     and the taps — so hiding it left the button asking for trust. Reading order matches
-     intent: see what goes out, then send it. */
-  /* INSTAGRAM IS IN THE SHORT SHEET TOO, and the numbers are why. Over the 7 days to
-     2026-08-07 the destination row was tapped 28 times in total (invite 18 — a button that no
-     longer exists — instagram 7, more 3) against roughly 2,000 hides published. Those buttons
-     are not unpopular, they are unreachable: they only exist once someone swipes the sheet
-     open, and almost nobody does. Anything left below the fold here is the same as not shipped.
-     It stays SECOND, under the white CTA, because the two shares are not worth the same:
-     "Challenge a friend" carries a link, files an attempt and recruits a named player, whereas
-     Instagram Stories cannot render a caption at all (see nativeShare) — a story is reach and a
-     watermark, nothing clickable. Reach is still the cheaper half of the loop right now, which
-     is the whole argument for putting it where it can be seen. */
+  /* WHAT IS ON THIS LIST IS WHAT ANYBODY EVER SEES, and that is the standard the list is held
+     to. Most sends happen from the short sheet: it presents itself on the reveal, and the
+     swipe that opens the long one is a gesture almost nobody performs. Anything excluded here
+     is, for practical purposes, not shipped.
+     `.ssSub` joins it because it is half of the headline — the headline announces the hide is
+     live and this line says what happens next, and splitting them across a swipe would leave
+     the claim without the thing that makes it worth anything.
+     `.ssSeeLive` joins it because the proof belongs next to the claim. A sheet that says "Your
+     challenge is now live!" and hides the button that shows you is asking for trust it does
+     not need to ask for.
+     `.chPrev` and `.ig` are OFF it, with the elements they protected (2026-08-15). The preview
+     card is the feed now; Instagram is 6.8% of destination taps and lives in `more`. An
+     exemption for something that cannot exist is a note about the past. */
   /* `.pwKick` is out of this list with the element it protected — the sheet has no kicker any
-     more, and an exemption for something that cannot exist is a note about the past. */
+     more, for the same reason. */
   /* .ssVis JOINS THE PEEK. The sheet presents itself on every reveal in this state, and this
      rule hid everything except the grabber, the title, the send button and the preview — so
      the one row that says the photo will play in a public feed sat behind a drag most people
@@ -1666,7 +1664,7 @@
      It costs the peek nothing until it is earned: #ssGet ships display:none and only
      chMarkSent() reveals it, so the sheet still ARRIVES short — the card's height is
      content-driven, so it simply grows by one row at the moment there is something to say. */
-  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssInvite):not(.chPrev):not(.ig):not(.ssVis):not(.ssGet){display:none!important;}
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssSub):not(.ssInvite):not(.ssSeeLive):not(.ssVis):not(.ssGet){display:none!important;}
   /* RESIZING BETWEEN THE TWO STATES IS A TRANSITION, NOT A CUT. Short and long differ by a few
      hundred pixels and the card used to jump between them in one frame, which on a bottom sheet
      reads as a glitch rather than as a change of size.
@@ -1710,7 +1708,19 @@
      anchored to the edge, the way a sheet does, so the open bottom stays. */
   .ssCard{width:100%;max-width:460px;padding:20px 20px calc(16px + var(--safe-b));
     background:linear-gradient(180deg,#14382d,#0f2a22 55%,#0c1f19);}
-  .ssCard .pwTitle{font-size:22px;}
+  /* CENTRED, AND IT IS THE ONLY CENTRED HEADLINE IN THE APP. Everywhere else a title sits
+     left over content that is also left — but this one is an announcement about something
+     that just happened rather than a label for what is under it, and the two rows beneath it
+     (the toggle, then the send) are the content. margin sits on .ssSub instead, so the
+     headline and its grey line read as one block with 14px under the pair rather than 14px
+     between them. */
+  .ssCard .pwTitle{font-size:22px;text-align:center;}
+  /* SMALL, GREY, AND NOT A SECOND HEADLINE. It exists to give the notification prompt a
+     reason before iOS asks (see #ssSub in the markup) — which it can only do if it is read,
+     and a line this size is read once and believed. Any louder and it argues with the
+     headline; any quieter and it is decoration. */
+  .ssSub{text-align:center;font-size:12.5px;line-height:1.4;color:rgba(255,255,255,.5);
+    margin:4px 0 14px;}
   .ssCard .pwSub{margin-bottom:14px;}
   #ssMode{display:flex;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--stroke);border-radius:14px;padding:4px;margin-bottom:12px;}
   .ssTab{flex:1;height:38px;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,.6);font-size:14px;font-weight:800;cursor:pointer;transition:background .18s,color .18s;}
@@ -1722,15 +1732,6 @@
      least-used actions in the sheet, and they pushed the KAMO+ line and Cancel toward the
      fold. Side by side costs one line instead of two. On the web Save stays on the action
      row, so this row holds More alone and it simply spans the width. */
-  /* Three social destinations over two lines. Full-width each would be three slabs plus
-     the More/Save row, which pushed the KAMO+ line and the dismiss toward the fold — and a
-     share sheet that runs past the fold costs shares, which is the growth loop. Smaller
-     too: 54 -> 48px and 15px type, so the pair reads as one unit rather than as two
-     shrunken versions of the row above. */
-  .ssRow3{display:flex;gap:9px;}
-  .ssRow3 .ssBtn{flex:1 1 0;min-width:0;height:48px;font-size:15px;gap:8px;}
-  .ssRow3 .ssBtn svg{width:20px;height:20px;}
-  .ssBtn.ig{height:48px;font-size:15px;}
   /* The post-send slot. It held "Hide another" until that button was cut for being a third
      pill in a row built for two — the styling stayed because the slot is right: mint-tinted
      rather than white, so it reads as an offer and never out-ranks the send above it.
@@ -1747,9 +1748,15 @@
      secondary line of a two-line label, and an italic subtitle in this sheet would be the
      only italic type in the product. */
   .ssGetTxt i{font-style:normal;font-size:12.5px;opacity:.72;}
-  /* TikTok is black on a dark card, so unlike IG's gradient and Snap's yellow it needs an
-     edge to exist at all. */
-  .ssBtn.tiktok{background:#000;color:#fff;border-color:rgba(255,255,255,.26);}
+  /* OUTLINED, NEXT TO A FILLED ONE. Two white buttons stacked is two primaries, which is no
+     primary at all — and the send is the primary here without argument. This is the ghost
+     underneath: the sheet's own border and its own faint fill, one weight down on the label,
+     so it reads as the second thing you might do rather than as a competing ask.
+     It sits directly under #ssInvite with no top margin of its own: the pair is one control
+     group ("send it" / "look at it"), and a gap between them would make it a third section. */
+  .ssBtn.ssSeeLive{height:48px;font-size:15px;font-weight:700;
+    background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.22);color:rgba(255,255,255,.88);}
+  .ssBtn.ssSeeLive:active{transform:scale(.985);}
   .ssRow2{display:flex;gap:9px;}
   /* EQUAL HEIGHT, ONE LINE EACH. These are siblings in a flex row, so a label that wraps
      makes its button taller than the others and the whole row loses its baseline — which
@@ -1757,152 +1764,36 @@
      on one line; the fixed height and nowrap keep it true if a label ever grows. */
   .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;height:48px;font-size:15px;
     white-space:nowrap;line-height:1;}
-  /* NO SHEEN ON INSTAGRAM. It carried the paywall CTA's pwBuySheen — added when it was "the one
-     destination we most want tapped", which is no longer true: the sheet leads with the send,
-     and Instagram is second on purpose. Two moving highlights side by side made the sheet
-     twitchy and, worse, the brighter of the two was on the button we do NOT want tapped first.
-     One animation on this card, and it is the ring around "Challenge a friend". */
   .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
-  .ssBtn.ig{background:linear-gradient(135deg,#feda75,#d62976 45%,#962fbf 80%,#4f5bd5);border:none;}
-  .ssBtn.snap{background:#fffc00;color:#111;border:none;}
-  /* REAL MARKS, NOT EMOJI. 📸 is a generic camera and 👻 is a generic ghost — neither is
-     Instagram or Snapchat, they were just the nearest emoji to hand, and next to the real
-     brand colours they read as placeholders. These are the actual glyphs: Instagram's
-     rounded-square outline with lens and flash dot, Snapchat's ghost.
-     The ghost is a filled silhouette (the mark has no outline form), so it sets fill and
-     clears the stroke inherited from `.ssBtn svg`; Instagram's is a stroked outline and
-     inherits it as-is. Sized up slightly — an outline mark reads lighter than an emoji at
-     the same box, and these sit on saturated backgrounds. */
-  .ssBtn.ig svg{width:23px;height:23px;stroke-width:1.9;}
-  .ssBtn.snap .snapIc{width:24px;height:24px;}
   /* THE SELECTED-PLAN TREATMENT, ON PURPOSE. Same --ring gradient, same 3.4s pwShimmer
      clock and the same mask-composite trick as .pwPlan.active — the sheet already teaches
      that a shimmering mint edge means "this is the one", so reusing it costs no new
      vocabulary. border-color goes transparent because the ::before IS the edge now. */
-  /* The preview and the settings share one shell: same backdrop, same card, same rise as
-     the paywall, because they are the same class of object — a sheet that interrupts the
-     share sheet and must hand it back. */
+  /* THE SHELL FOR THE CREATOR'S TWO SPECTATOR SCREENS — the replay of one hunt (khRp) and
+     the map of every tap (khHeat). Same backdrop, same card, same rise as the paywall,
+     because they are the same class of object: a sheet that interrupts what is under it and
+     has to hand it back.
+     It was shared with a third screen until 2026-08-15 — the sender's local rehearsal of
+     their own hide — and that is what the frame, the clock bar, the tap pips and the shake
+     were for. The rehearsal is gone: the sheet's "See it live" opens the real hide in the
+     feed instead, which is the same picture playing the real round rather than a simulation
+     of it. The rules those parts styled went with them; what is left is what the two
+     surviving screens actually wear. */
   .chPP{position:fixed;inset:0;z-index:90;display:flex;align-items:flex-end;justify-content:center;
     background:rgba(3,5,8,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
-  /* SAME FAMILY AS THE PAYWALL. This screen was built with its own components while the
+  /* SAME FAMILY AS THE PAYWALL. These screens were built with their own components while the
      right ones already existed: the card's gradient and 26px corners are .pwCard's, the
-     kicker is .pwKick, and the CTA below is .pwBuy. It is the same sales moment — the only
-     screen where the sender feels their own hide as the receiver — so it gets the same voice
-     instead of a quieter one. */
+     kicker is .pwKick, and the CTA is .pwBuy. It is the same sales moment — the creator being
+     shown what KAMO+ sees — so it gets the same voice instead of a quieter one. */
   .chPPin{width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px;
     padding:22px 22px calc(18px + var(--safe-b));border-top-left-radius:26px;border-top-right-radius:26px;
     border:1px solid rgba(255,255,255,.22);border-bottom:none;
     background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);
     box-shadow:0 -14px 50px rgba(0,0,0,.6);animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}
   .chPPh{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.3px;color:#fff;line-height:1.18;}
-  /* NO BARS. The frame used to be a fixed box wider than the board, so a portrait hide sat
-     between two black pillars — the most visible flaw on the screen. aspect-ratio is set from
-     the board at render time, so the frame is exactly the shape of what is inside it. */
-  .chPPframe{position:relative;width:100%;border-radius:18px;overflow:hidden;
-    border:1px solid rgba(255,255,255,.14);background:#080c0a;display:block;}
-  .chPPframe canvas{width:100%;height:100%;display:block;object-fit:cover;cursor:pointer;}
-  /* FOUND — a real 3px green ring, floated just off the image, over a mint bloom.
-     `outline`, not a border and not a fake ring made of box-shadow. An outline is drawn
-     outside the border box and NEVER participates in layout, so it can be as thick as it
-     deserves to be without moving the picture by a pixel — which is the whole reason the
-     first version settled for a box-shadow. It follows border-radius, so it hugs the frame's
-     18px corners. The box-shadows are left doing what they are actually good at: a soft outer
-     bloom and a wide, faint halo, so the ring reads as lit rather than drawn. */
-  .chPPframe.found{border-color:rgba(95,230,164,.55);
-    outline:3px solid var(--mint);outline-offset:3px;
-    box-shadow:0 0 0 10px rgba(95,230,164,.09),0 0 44px rgba(95,230,164,.4);
-    animation:foundPop .52s cubic-bezier(.3,1.5,.5,1);}
-  @keyframes foundPop{0%{transform:scale(1)}40%{transform:scale(1.028)}100%{transform:scale(1)}}
-  /* REDUCED MOTION LOSES THE MOVEMENT, NOT THE MOMENT. This is a switch the user turns on
-     themselves in iOS Accessibility, and honouring it is not optional — but "honour it" means
-     stop moving things, not stop celebrating. The ring and the bloom are colour, so they stay
-     exactly as they are; only the scale bounce goes, replaced by a fade so the ring still
-     arrives rather than blinking into place. confettiBurst() does the same thing: a still
-     bloom instead of flying particles. */
-  @media (prefers-reduced-motion:reduce){
-    .chPPframe.found{animation:foundFade .3s ease-out;}
-    @keyframes foundFade{from{outline-color:transparent;box-shadow:none}to{}}
-  }
-  .chPPbar{height:5px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
-  .chPPbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#8ef0bd);
-    transition:width 1s linear,background .3s;}
-  .chPPbar.warn i{background:linear-gradient(90deg,#ffb648,#ffd08a);}
-  .chPPbar.crit i{background:linear-gradient(90deg,#ff5f57,#ff9a94);}
-  .chPPmeta{display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:800;
-    color:rgba(255,255,255,.85);letter-spacing:.02em;font-family:var(--display);}
-  /* Same escalation the seeker screen uses, so the sender sees the colours the receiver will. */
-  .chPPmeta .warn{color:#ffd08a;}
-  .chPPmeta .crit{color:#ff8b84;}
-  /* Pips: what is LEFT is mint and solid, what is spent is a hollow outline. */
-  .chPPpip{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:5px;
-    background:var(--mint);box-shadow:0 0 8px rgba(95,230,164,.5);}
-  .chPPpip.off{background:none;border:1.5px solid rgba(255,255,255,.28);box-shadow:none;}
-  .chPPpip:first-child{margin-left:0;}   /* the row is right-aligned; a leading gap shifts it off the edge */
   .chPPfoot{display:flex;flex-direction:column;gap:8px;}
-  .chPPsub{font-size:12.5px;color:rgba(255,255,255,.58);line-height:1.45;}
   .chPPclose{background:none;border:none;color:rgba(255,255,255,.45);font-size:14px;font-weight:700;
     padding:8px;cursor:pointer;font-family:var(--font);}
-  @keyframes chPPshake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}
-    30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
-  .chPPshake{animation:chPPshake .5s cubic-bezier(.36,.07,.19,.97) both;}
-  .chSetRow{display:flex;align-items:center;justify-content:space-between;gap:12px;
-    padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:14.5px;color:#fff;}
-  .chSetCtl{display:flex;align-items:center;gap:12px;}
-  .chSetCtl button{width:40px;height:40px;border-radius:13px;border:1px solid var(--stroke);
-    background:rgba(255,255,255,.07);color:#fff;font-size:19px;font-weight:700;cursor:pointer;
-    -webkit-tap-highlight-color:transparent;font-family:var(--font);}
-  /* The value is what is being changed, so it is set like every other number on these
-     screens: display face, and larger than its own label rather than smaller. */
-  .chSetCtl b{min-width:46px;text-align:center;font-family:var(--display);font-size:22px;font-weight:700;color:var(--mint);}
-  /* ===== chPreview — the card that shows what the recipient receives =====================
-     PERMANENT, where this used to be a 4.2s toast. A strip that deletes itself cannot carry
-     a settings control or a tap target, and the sender's most common question at this exact
-     moment ("what are they actually getting?") does not have a 4-second shelf life.
-     TWO TARGETS, ONE GESTURE EACH. The thumbnail opens the preview; the gear opens the
-     settings. Neither overlaps: the gear stops propagation, so a thumb landing on it never
-     also launches the preview. */
-  .chPrev{display:none;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:10px 11px;
-    background:rgba(255,255,255,.05);border:1px solid var(--stroke);border-radius:16px;text-align:left;}
-  .chPrev.on{display:flex;}
-  /* The whole row is the tap target for the preview (chPrevRender binds it), so it has to say
-     so — and press like the things it contains. */
-  .chPrev{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
-  .chPrev:active{transform:scale(.985);}
-  .chPrevShot{flex:0 0 auto;width:46px;height:60px;border-radius:10px;overflow:hidden;position:relative;
-    border:1px solid rgba(255,255,255,.18);background:#0a0f0d;padding:0;cursor:pointer;
-    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
-  .chPrevShot:active{transform:scale(.94);}
-  /* Fills the box outright. It used to be max-width/max-height, which is a FIT: a full-screen
-     board in a 3:4 box left a black band down one side. chPrevRender() now crops to this exact
-     box, so the canvas is already the right shape and only has to be told to occupy it. */
-  .chPrevShot canvas{width:100%;height:100%;display:block;}
-  /* A play glyph, so the thumbnail reads as something you can open rather than as decoration.
-     Small and low-contrast on purpose: it is a hint, not a second CTA competing with Share. */
-  .chPrevShot::after{content:"";position:absolute;left:50%;top:50%;width:0;height:0;
-    transform:translate(-42%,-50%);border-left:9px solid rgba(255,255,255,.92);
-    border-top:6px solid transparent;border-bottom:6px solid transparent;
-    filter:drop-shadow(0 1px 3px rgba(0,0,0,.75));pointer-events:none;}
-  .chPrevTxt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px;}
-  /* THE PAYWALL'S FACE. Same --display used by .pwTitle and the wordmark, so this row reads
-     as part of the app rather than as a system label. */
-  .chPrevTxt b{font-family:var(--display);font-weight:700;font-size:15.5px;letter-spacing:-.2px;color:#fff;}
-  .chPrevChips{display:flex;gap:6px;flex-wrap:wrap;}
-  /* The two numbers are the DEAL being offered, so they stop being grey run-on text and
-     become the only coloured thing in the row. "no app needed" is gone: it answered a
-     question nobody was asking here and diluted the two that matter. */
-  /* THE TWO NUMBERS ARE THE OFFER, so they are set in the paywall's own display face rather
-     than the UI font — the same treatment the price gets, for the same reason: this line is
-     what the receiver's round will be. Brighter than the old mint-on-mint too, which at
-     11.5px read as a disabled label rather than the terms. */
-  .chChip{font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:.1px;
-    color:#c9ffe4;background:rgba(95,230,164,.16);
-    border:1px solid rgba(95,230,164,.38);border-radius:999px;padding:4px 11px;white-space:nowrap;}
-  .chPrevGear{flex:0 0 auto;width:38px;height:38px;border-radius:13px;padding:0;
-    border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:rgba(255,255,255,.72);
-    display:flex;align-items:center;justify-content:center;cursor:pointer;
-    -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
-  .chPrevGear:active{transform:scale(.9);}
-  .chPrevGear svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;}
   .ivPrev{display:flex;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:9px 11px;
     border-radius:14px;border:1px solid rgba(95,230,164,.28);background:rgba(95,230,164,.08);
     animation:ivIn .28s cubic-bezier(.2,1.2,.4,1);}
@@ -2412,7 +2303,7 @@
     <!-- TWO SLABS IN THE SAME MINT WAS THE PROBLEM. Discord and the upsell were both green
          and both full-width, so neither won and the pair read as a mistake. They are different
          KINDS of action, so they now look it: the upsell takes the app's primary treatment —
-         the white slab "Challenge a friend" wears — and Discord is the tinted secondary.
+         the white slab "Send to a friend" wears — and Discord is the tinted secondary.
          The upsell leads because it is the only thing on this card that is worth money; the
          card still exists for the other two rows. -->
     <!-- Free users only — see khSetPlus(). Tagged `home`, not `brand`, so the ~9 paywall views
@@ -2456,7 +2347,30 @@
          A question opens it, and the button directly below is the answer. It is also the only
          line on this sheet that puts the other person at the centre; everything else is about
          the hide you just made. -->
-    <div class="pwTitle" style="margin-bottom:14px">Can they find you?</div>
+    <!-- THE HEADLINE STATES WHAT JUST HAPPENED, AND IT FOLLOWS THE TOGGLE.
+         It asked "Can they find you?" — a good question about a hide that had not gone
+         anywhere yet, and the wrong sentence for a sheet the app now PRESENTS on the reveal:
+         by the time it is on screen the photo is uploaded and the hide is published, so the
+         news is that it exists. Saying so is also the only place the app ever tells anyone
+         their hide is in the feed.
+         Which means it has to follow #ssVis directly underneath it. 23% of publishers turn
+         that row off, and "Your challenge is now live!" over a control that says Private is
+         the app contradicting itself inside one glance — so kfRenderVis() writes both.
+         Filled from JS, but with the public wording in the markup: it is what most people
+         see, and a JS failure should leave the common truth rather than an empty line. -->
+    <div class="pwTitle" id="ssTitle">Your challenge is now live!</div>
+    <!-- THE ONE LINE THAT PAYS FOR THE NOTIFICATION PERMISSION.
+         It replaces the sentence deleted with #ssLive ("We'll tell you when they tap"), and
+         deleting that without putting it back would have been the expensive half of this
+         change: armResultsPing() fires a permission prompt seconds later, iOS asks exactly
+         once, and a prompt with no preceding context gets refused. Notifications are the only
+         mechanism this app has for telling a creator somebody played their hide — there is no
+         other return path — so the sentence is load-bearing, not decoration.
+         Two audiences, two truths. Inside the wrapper there IS something that will tell them.
+         In a browser there is not, and #ssGet directly below sells exactly that gap ("KAMO can
+         notify you. A browser tab can't."); promising a notification here would be the sheet
+         arguing with itself two rows apart. kfRenderVis() picks. -->
+    <div class="ssSub" id="ssSub">We'll tell you when someone taps.</div>
     <!-- THE TABS ARE GONE — CHALLENGE IS THE ONLY FORMAT (founder, 2026-08-12). ~93% never
          switched, and the challenge link is a playable game where Before/After was a
          caption; a selector between the product and a lesser copy of it was one more
@@ -2468,34 +2382,34 @@
          destinations below it are reach; this is recruitment, so it leads.
          Kept hidden until updateInviteBtn() runs, so a JS failure cannot leave a button
          that no handler is listening to. -->
-    <!-- Declared here rather than built in JS so the pre-push check can see its ids, and so a
-         JS failure leaves an empty card instead of a half-built one. Shown by chPrevRender(). -->
-    <div class="chPrev" id="chPrev">
-      <button class="chPrevShot" id="chPrevShot" aria-label="Preview what they receive"></button>
-      <div class="chPrevTxt">
-        <b>My challenge</b>
-        <div class="chPrevChips"><span class="chChip" id="chChipS">1 tap</span><span class="chChip" id="chChipT">no clock</span></div>
-      </div>
-      <button class="chPrevGear" id="chPrevGear" aria-label="Challenge settings"><svg viewBox="0 0 24 24"><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="19" cy="15" r="2"/></svg></button>
-    </div>
-    <!-- AFTER the preview card, as its SIBLING — not inside it. Putting the card above the
-         button is a one-line move and the last one dropped the button INSIDE .chPrev, which
-         is a flex ROW: the full-width CTA became a squeezed cell between the caption and the
-         gear. It has to be a direct child of .ssCard (a column), and the peek rule below only
-         reveals direct children. check.mjs now asserts both, because this is invisible in a
-         diff and obvious on a phone. -->
+    <!-- A DIRECT CHILD OF .ssCard, ALWAYS. .ssCard is a column and the peek rule below only
+         reveals direct children — a control nested inside another row becomes a squeezed cell
+         AND disappears from the short sheet, which is where most sends actually happen.
+         check.mjs asserts it, because it is invisible in a diff and obvious on a phone. -->
     <!-- PUBLIC OR NOT, decided here, in front of the send. Declared in markup rather than
-         built in JS for the same reason as the preview card above it: check.mjs can see its
-         ids, and a JS failure leaves a row that says nothing rather than a hide that has
-         quietly gone public with no row to say so. Free either way — nothing about this is
-         behind KAMO+, because charging somebody to NOT be published is a toll on a default
-         they did not choose. -->
+         built in JS so check.mjs can see its ids, and so a JS failure leaves a row that says
+         nothing rather than a hide that has quietly gone public with no row to say so. Free
+         either way — nothing about this is behind KAMO+, because charging somebody to NOT be
+         published is a toll on a default they did not choose. -->
     <button class="ssVis" id="ssVis" aria-pressed="true">
       <span class="ssVisIco" id="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
       <span class="ssVisTxt"><b id="ssVisT">Public</b><i id="ssVisS">Anyone can play it in the KAMO feed</i></span>
       <span class="ssVisSw"><i></i></span>
     </button>
-    <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Challenge a friend</button>
+    <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Send to a friend</button>
+    <!-- THE PROOF, AND IT REPLACES A SIMULATION. Until now the only way to see what you had
+         made was a local rehearsal drawn from the board still in memory — which could not
+         prove the photo uploaded, the link resolved, or the hide reached the feed. This opens
+         the real row, by id, in the screen everyone else plays it in. Same journey as
+         #ssLive, which it retires: that one appeared only after a send and only as a slab
+         inside a headline, so the sheet had two things saying "live" and one of them was a
+         paragraph.
+         SECOND, AND OUTLINED. The send is what the session is for; this is what you do while
+         waiting for it. A filled second button would make the sheet ask two questions.
+         PUBLIC ONLY — kfRenderVis() hides it for a private hide. "See it live" about something
+         reachable solely by the link they are about to send would be a straight lie to the
+         23% who chose privacy, and it would send them into a feed their hide is not in. -->
+    <button class="ssBtn ssSeeLive" id="ssSeeLive">See it live</button>
     <!-- WHAT THE SEND EARNS, AND THE ONLY THING THE APP HAS THAT A BROWSER DOES NOT.
          1141 people a month reach the reveal of somebody's hide in a plain browser, and 353
          of them send one back — three times the number who tap Get KAMO on the same card.
@@ -2513,35 +2427,22 @@
     <button class="ssBtn ssGet" id="ssGet" style="display:none">
       <span class="ssGetTxt"><b>Know when they find you</b><i>KAMO can notify you. A browser tab can't.</i></span>
     </button>
-    <!-- WHAT COMES AFTER THE SEND, INSIDE THE APP. The mirror of #ssGet above: that one
-         sells the app to a browser, this one fills the beat for somebody already holding it.
-         Until now there was nothing here at all — #ssGet returns early in the wrapper and
-         #ssAgain was deleted from the markup — so the highest-intent moment in the session
-         ended on a sheet that just sat there. 2266 users published a hide in the 14 days to
-         2026-08-15 and 538 sent one; the ones who got this far are the 24% who finished the
-         loop, and they were shown no next step.
-         THE HEADLINE IS THE POINT, NOT THE TAP. At this instant nobody is wondering what
-         other people hid — they are wondering whether their friend will find THEIRS. So the
-         first line answers that (and arms the notification armResultsPing already schedules),
-         and the feed is offered underneath as the thing to do while waiting. Leading with the
-         feed would answer a question nobody asked and spend the anticipation that brings them
-         back tomorrow.
-         Revealed from chMarkSent() like #ssGet, so it cannot appear on a sheet nobody has
-         used, and mutually exclusive with it: two slabs would be two asks. -->
-    <button class="ssBtn ssGet ssLive" id="ssLive" style="display:none">
-      <span class="ssGetTxt"><b>Your challenge is live</b><i>We'll tell you when they tap. See it in the feed &rarr;</i></span>
-    </button>
-    <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
-    <!-- SNAPCHAT AND TIKTOK ARE GONE AS BUTTONS, not as destinations. This sheet had nine
-         tappable things in it; a share sheet that asks nine questions gets answered by the
-         Cancel at the bottom. Four decisions now: challenge one person, post to Instagram,
-         everything else, keep it.
-         Nothing is lost. `more` opens the system sheet, where TikTok, Snapchat, Messages and
-         the rest all live — and TikTok was ALREADY going through it, because App.js only
-         branches on 'instagram' and 'snapchat'. What went away is two full-width slabs, not
-         two channels.
-         Instagram keeps its own button: it is the one destination the wrapper handles
-         directly, and the only one the before/after reveal is built for. -->
+    <!-- #ssLive IS GONE, AND ITS TWO JOBS WERE SPLIT UP THE SHEET. It was a slab revealed
+         after a send carrying a headline ("Your challenge is live") and a promise ("We'll
+         tell you when they tap") and a destination ("See it in the feed →") — three different
+         kinds of thing in one button, below a headline that was asking a question. The
+         headline states it now, the grey line under it makes the promise, and "See it live"
+         is the destination as an actual button. Same journey, three rows earlier, and it no
+         longer waits for a send to appear: the hide is published the moment this sheet opens,
+         so there was never a reason to hide the proof of it behind the share. -->
+    <!-- INSTAGRAM IS GONE AS A BUTTON, not as a destination. Seven days of
+         share_target_tapped: invite 2804 (86.6%), instagram 221 (6.8%), save 189, more 33.
+         A full-width gradient slab is what you spend on the thing people do; 6.8% is what
+         `more` is for — and `more` opens the system sheet, where Instagram, TikTok, Snapchat
+         and Messages all live. It is the only route to a stranger this app has, so it stays
+         reachable; it just stops out-ranking the send by width.
+         SNAPCHAT AND TIKTOK went the same way earlier and for the same reason. What is left
+         is three decisions: send it to someone, watch it live, everything else. -->
 
     <!-- More and Save share this line — see .ssRow2. On native, JS moves #btnSave in here;
          on the web it stays on the action row and More spans the width alone. -->
@@ -2551,8 +2452,8 @@
          without becoming a third slab, and it costs no extra height at all: Save is dead on
          native (see the `if(false &&` below), so More was spanning the width alone.
          Same id, same handler, same isPro gating — only its weight and its place changed. And
-         it stays TINTED rather than white or brand-coloured: it is an offer, not a
-         destination, and it must not out-rank the send or Instagram above it. -->
+         it stays TINTED rather than white: it is an offer, not a destination, and it must not
+         out-rank the send above it. -->
     <div class="ssRow2" id="ssRow2">
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
     <!-- WHAT COMES AFTER THE SEND. Every ending in this product closes on itself: you share a
@@ -5917,11 +5818,15 @@ function khShowField(on){
 function khRenderName(){
   const t=$("#khTitle"), sub=$("#khSub"), h=getHandle();
   if(t) t.textContent = h ? "@"+h : "Sign your hides";
-  /* PLAIN. This said "A dare from nobody is easy to ignore" — a construction you have to stop
-     and parse, on a line whose whole job is to make an unfamiliar field obvious in one glance.
-     Clever and opaque is the worst trade available here. This states the consequence instead,
-     in the words someone would use out loud. */
-  if(sub) sub.textContent="So they know who they're trying to beat.";
+  /* THE SUBLINE IS GONE, AND THE ELEMENT STAYS. It read "So they know who they're trying to
+     beat." — an argument for filling in a field that is already the loudest thing on the card
+     (it is the headline until it is filled), sitting above the one row anybody opens this card
+     to read. Argued copy under an obvious control is the cheapest thing to cut on a card that
+     has run out of vertical room, and this card has: ten hides plus a summary plus a name plus
+     a badge, all anchored to the bottom edge.
+     Emptied rather than deleted from the markup: #khSub is one of the ids check.mjs resolves,
+     and a card that has to grow a line back should find the line still there. */
+  if(sub){ sub.textContent=""; sub.style.display="none"; }
 }
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
@@ -6154,7 +6059,7 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
       inp.value=setHandle(inp.value);
       if(getHandle()!==before){
         track("hide_signed",{had_name:!!before,named:!!getHandle()});
-        chRepublish(); chPrevRender();
+        chRepublish();
       }
       khRenderName();
       khShowField(!inp.value);
@@ -6489,8 +6394,13 @@ function updateInviteBtn(){ const b=document.getElementById("ssInvite"); if(!b) 
      hides carry a name, so the generic label stays the common case and must not regress for
      it. textContent, never innerHTML — the handle comes off another user's device, the same
      boundary the seeker headline crosses. */
+  /* "Send to a friend", not "Challenge a friend". The headline above it now says the challenge
+     exists — "Your challenge is now live!" — so a button that says "Challenge" is offering to
+     do a thing the sheet has just finished announcing. What is left to do is send it, and that
+     is the word the two labels below already use. Kept in step with the markup, which ships
+     the same string so a JS failure leaves the right one. */
   b.textContent = chReplyTo ? (chReplyName ? "Send it back to @"+chReplyName : "Send it back")
-                            : "Challenge a friend"; }
+                            : "Send to a friend"; }
 // native torch refused/failed → don't leave the button lit claiming it's on
 window.KAMO.torchFailed=()=>{ torchOn=false; if(typeof updateLightBtn==="function") updateLightBtn(); showHint("Couldn't turn the light on"); };
 window.KAMO.revealDone=()=>{ clearTimeout(showBusy._t); try{ busyEl.style.display="none"; }catch(e){} };
@@ -7190,11 +7100,11 @@ function openShareSheet(via){
      invite URL, which is exactly the previous behaviour. */
   /* Reached either from the Share CTA (hidden → open, skipping peek) or from expandShareSheet.
      Both land here, so the state is settled here rather than in two callers. */
-  /* ssState FIRST, THE SIZE LAST. syncShareMode() branches on ssState, so it has to be true
-     before any of the fill functions below run — but the resize has to happen AFTER them, or it
-     measures a target height the content is about to invalidate. It did exactly that: the
-     "Remove the KAMO mark" row is un-hidden 8 lines down, so the card animated to a height 38px
-     short of where it actually ends up and then snapped the rest of the way on settle. */
+  /* ssState FIRST, THE SIZE LAST. The fill functions below read ssState, so it has to be true
+     before any of them runs — but the resize has to happen AFTER them, or it measures a target
+     height the content is about to invalidate. It did exactly that: the "Remove the KAMO mark"
+     row is un-hidden 8 lines down, so the card animated to a height 38px short of where it
+     actually ends up and then snapped the rest of the way on settle. */
   ssState="open";
   chUpload();
   /* Re-evaluated every open, not once at load: setPro() can flip mid-session (purchase,
@@ -7204,17 +7114,11 @@ function openShareSheet(via){
      forcing block would kill that centring the first time the sheet opens. Empty string
      hands the element back to the stylesheet. */
   { const p=$("#ssPlus"); if(p) p.style.display = isPro ? "none" : ""; }
-  /* THE CARD IS SUPPOSED TO BE PERMANENT, AND IT WAS INVISIBLE.
-     .chPrev is display:none until chPrevRender() adds .on, and chPrevRender() was only ever
-     reached from invitePreview() — which runs AFTER a share completes — and from the
-     settings sheet. So the "They get this" card, the thing that shows the sender what their
-     friend receives, only appeared once they had already sent it. Backwards, and it is why
-     it looked like the challenge "does not generate the card".
-     Rendered on every open: it redraws the thumbnail from the current board and re-reads
-     chEffective(), so a hide painted since the last open, or taps/timer changed in the gear,
-     are both reflected. It is wrapped in its own try/catch inside, so a failure here cannot
-     take the share sheet down with it. */
-  chPrevRender();
+  /* THE HEADLINE AND THE FEED BUTTON BOTH FOLLOW THE VISIBILITY TOGGLE, so they are painted
+     from the same function that paints the toggle — on every open, because the answer is
+     remembered across rounds and the sheet must never arrive claiming the opposite of what
+     the row underneath it says. */
+  kfRenderVis();
   /* Moved here from peekShareSheet. #ssInvite ships display:none so a JS failure cannot leave
      a button nothing is listening to, and only updateInviteBtn() un-hides it — so it has to
      run on EVERY path into the open sheet, not just the one that used to go through the peek
@@ -7247,7 +7151,7 @@ function sheetToFloor(){
 /* TWO STATES, NOT THREE. mini was a third — grabber only — and it rendered wrong: .ssCard
    carries .pwCard, which is sized for the paywall, so hiding everything inside it left a tall
    empty green block instead of a tab. Worse, it was a state with nothing in it to act on.
-   Short (peek: the round, the headline, Challenge a friend) or long (the full sheet). The
+   Short (peek: the round, the headline, Send to a friend) or long (the full sheet). The
    sheet is one of those two the whole time it is on the reveal, and never anything else. */
 const SHEET_STEPS=["mini","peek","open"];
 /* THE ONE PLACE THE SHEET CHANGES SIZE. Three callers used to swap the classes themselves —
@@ -7361,15 +7265,13 @@ function peekShareSheet(){
   if(!finished) return;   // the reveal went away before this could run
   ssState="peek";
   updateInviteBtn();
-  /* THE CARD IS WHITELISTED IN THE SHORT STATE, AND IT WAS STILL INVISIBLE. `.chPrev` ships
-     display:none and only chPrevRender() adds `.on` — and chPrevRender() was only ever
-     called from openShareSheet(), which the short state deliberately does not go through.
-     So the CSS exempted `.chPrev` from the peek's hide-everything rule while nothing had
-     ever turned it on: on a fresh reveal the short sheet showed the headline and a button
-     and no preview at all, which is the arrangement the card was added to replace.
-     It costs nothing here — it draws a 168px thumbnail off the board and reads chEffective();
-     no network, no upload, so the short state still publishes nothing. */
-  chPrevRender();
+  /* THE SHORT STATE SHOWS THE HEADLINE, AND THE HEADLINE MAKES A CLAIM — "Your challenge is
+     now live!" or "Only people you send it to". It is whitelisted through the peek rule, so
+     it has to be painted on this path too: openShareSheet() is the other door and the short
+     state deliberately does not go through it. Costs nothing — it reads one localStorage key
+     and writes three strings; no network, no upload, so the short state still publishes
+     nothing. */
+  kfRenderVis();
   shareSheetEl.classList.add("peek");
   haptic(8);
   /* THE SHEET THAT COMES TO THEM WAS INVISIBLE TO THE FUNNEL. `share_opened` fires only from
@@ -7395,14 +7297,14 @@ function expandShareSheet(){
    was rewritten to carry the round's terms because those "exist nowhere else on this screen".
    That stopped being true the day the preview card became permanent in the short sheet and
    put the same two numbers on chips right underneath. Twice in one glance, again, by the same
-   mechanism. The chips win: they sit on the card that shows what is actually being sent, and
-   chPrevRender() already keeps them current when the gear changes them. */
+   mechanism. Both are gone now: the deal is one buzz on no clock for every hide there is, so
+   the terms are a constant and the seeker screen is where they are read. */
 
 /* SWIPE UP OPENS, SWIPE DOWN PUTS IT AWAY — on the card itself, so the gesture works
    wherever the thumb lands rather than only on the 38px grabber.
    A drag is only a swipe past 24px; anything shorter is left alone so it lands on whatever
    button is underneath. That is why nothing is preventDefault()ed until the threshold is
-   crossed: a tap on "Challenge a friend" must still be a tap. */
+   crossed: a tap on "Send to a friend" must still be a tap. */
 (function shareSheetSwipe(){
   /* THE GRABBER, NOT THE CARD. Listening on the whole card meant any downward drag while
      touching it — a thumb settling on a button, a scroll that was not a scroll — collapsed
@@ -7413,7 +7315,7 @@ function expandShareSheet(){
   /* THE UPLOAD STARTS ON THE FIRST TOUCH, NOT ON THE PRESENTATION.
      The peek deliberately does not publish — it is shown for every finished round, and
      uploading all of those puts five strangers' rooms on a public URL for each one that
-     gets sent. But "Challenge a friend" is VISIBLE in the peek, and without a published
+     gets sent. But "Send to a friend" is VISIBLE in the peek, and without a published
      hide chLink() is "" and the message degrades to the generic invite. A change made to
      increase challenge sends would have sent fewer of them.
      Touching the card is the middle ground: a deliberate reach, a far smaller population
@@ -7543,7 +7445,7 @@ function expandShareSheet(){
      nothing. Closing was a downward drag or nothing, and a drag is the harder gesture of the
      two. Same control, both directions.
      The handle and not the card: the card is almost entirely buttons, and a tap anywhere on it
-     resizing the sheet would fire every time a thumb missed "Challenge a friend" by a few
+     resizing the sheet would fire every time a thumb missed "Send to a friend" by a few
      pixels — a mis-tap that hides the thing you were reaching for. */
   const grab=$("#ssGrab");
   /* NOT AFTER A DRAG. The drag settles on pointerup and a click follows it on the same finger,
@@ -7732,23 +7634,24 @@ function ssOfferApp(){
   try{ if(window.ReactNativeWebView) return;
        const g=$("#ssGet"); if(g) g.style.display="flex"; }catch(e){}
 }
-/* THE IN-APP HALF. Same trigger, opposite audience: ssOfferApp() sells the app to a browser,
-   this fills the same beat for a wrapper that already has one. Gated on
-   window.ReactNativeWebView rather than nativeCaps for the reason spelled out above — the
-   question is "is there an app around this page", which is true in every wrapper ever
-   shipped, including the ones that never call setNativeCaps. */
-function ssOfferFeed(){
-  try{ if(!window.ReactNativeWebView) return;
-       /* NOT OFFERED FOR A PRIVATE HIDE. 23% of publishers turn the visibility row off, and
-          "See it in the feed" to somebody who chose private is a straight lie — their hide is
-          reachable only by the link they just sent. kfWantPublic() is the same value the app
-          used when it published, so the two can never disagree. */
-       if(!kfWantPublic()) return;
-       const l=$("#ssLive"); if(l) l.style.display="flex"; }catch(e){}
-}
-{ const l=$("#ssLive");
+/* ssOfferFeed() IS GONE, AND THE BUTTON IT REVEALED WITH IT.
+   It waited for chMarkSent() before showing "Your challenge is live · See it in the feed" —
+   which made the feed a reward for sending rather than the proof that the hide exists. But
+   publishing happens the moment this sheet is touched, one tap BEFORE the send, and only
+   about one in four published hides is ever sent: three quarters of the people who could
+   have seen their own photo in the feed were shown nothing at all, on the grounds that they
+   had not done the next thing yet.
+   #ssSeeLive is on the sheet from the first frame instead, and it answers to the visibility
+   toggle rather than to the send — see kfRenderVis(), which hides it for a private hide for
+   the same reason ssOfferFeed() used to. Not gated on the wrapper either: chFeed() is this
+   page's own overlay and works exactly as well in a browser tab. */
+{ const l=$("#ssSeeLive");
   /* Closes the sheet first: the feed is a full-screen overlay and leaving the sheet under it
-     is how you end up with two dismissals to get back to the camera. */
+     is how you end up with two dismissals to get back to the camera.
+     `first: chId` is what makes this "see it LIVE" rather than "open the feed": chFeed seeds
+     that exact hide as slide 0, fetched by id from the server — so what appears is the row
+     that was actually published, not a local rendering of it. Empty when the upload has not
+     landed yet, which degrades to a normal feed open rather than to an error. */
   if(l) l.onclick=()=>{ haptic(10); track("sent_feed_tapped",{own:!!chId}); closeShareSheet();
     try{ chFeed({first:chId||""}); }catch(e){} }; }
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
@@ -7787,118 +7690,6 @@ function chCopy(text){
   });
 }
 
-/* ===== chPreview =========================================================================
- * The card under "Challenge a friend" that shows the recipient's side of the deal.
- *
- * THE SETTINGS ERA IS OVER. chSettings/chEffective/chDerivedLimit and the kamo_ch_* keys
- * used to let KAMO+ choose the seeker's clock and tap budget. The seeker plays one buzz
- * on no clock now — difficulty comes from the paint, never from a knob — so the whole
- * apparatus is deleted rather than parked: a paid control that changes nothing is a
- * refund waiting to be asked for. Old rows keep their limit_s/max_taps values; nothing
- * reads them. */
-function chPrevRender(){
-  try{
-    const row=document.getElementById("chPrev"); if(!row) return;
-    /* UNDER THE PUBLISH FLOOR, THE CARD IS AN OFFER — NOT A REFUSAL ANY MORE.
-       It used to be the explanation for a send that was blocked. The send is no longer
-       blocked (see #ssInvite): a bare hide goes out as the invite, immediately. So what is
-       left for this card to say is not "you may not" but "this one is not a puzzle yet, and
-       here is what would make it one" — with the tap still going back to the brush, because
-       that remains the only thing that changes the answer.
-       The distinction is not pedantry. The copy below used to read "needs 30%" and the hint
-       "…before you can send it", and both were statements of a rule. Leaving them in place
-       over a send that now works would be the app describing a wall that is not there. */
-    const bare=Math.round(currentScore||0)<CH_MIN_COVERAGE;
-    /* The two chips ARE the deal the friend gets, and the deal is fixed now: one tap,
-       no clock. Constants, so the card can never disagree with the seeker screen. */
-    /* WHEN IT IS BARE, THE CARD SAYS HOW FAR OFF YOU ARE AND IN WHAT UNIT — that part was
-       right and stays. "not hidden yet" / "paint them first" named a state the user could
-       already see and gave an instruction with no target: no idea whether one more stroke was
-       needed or twenty. Numbers instead, both interpolated from CH_MIN_COVERAGE so the card
-       can never quote a floor the publish does not use.
-       "to challenge", not "needs": the number is now the price of a PUZZLE, not the price of
-       being allowed to press the button. */
-    const pct=Math.round(currentScore||0);
-    const title=row.querySelector(".chPrevTxt b");
-    if(title) title.textContent=bare?"Too easy to spot":"My challenge";
-    document.getElementById("chChipS").textContent=bare?(pct+"% painted"):"1 tap";
-    document.getElementById("chChipT").textContent=bare?(CH_MIN_COVERAGE+"% to challenge"):"no clock";
-    /* THE NAME CHIP IS GONE — founder's call, 2026-08-11. It sat here as "the middle" between
-       an ask nobody sees (the player card) and a prompt in front of the send, and it was cut
-       because a third chip made the card read as clutter. What survives it: the share MESSAGE
-       still signs itself when a handle exists, the seeker screen still names the sender, and
-       the player card is the one place to set the name — whose blur handler now owns the
-       republish this chip's dialog used to do. Do not re-add a prompt in front of the send. */
-    const shot=document.getElementById("chPrevShot");
-    shot.querySelector("canvas")?.remove();
-    /* COVER-CROP, NOT FIT — this is what made the thumbnail look broken. `board` is the whole
-       screen (~9:19.5 on a modern phone); the box is 46x60 (~3:4). Fitting the board inside it
-       by its longest side left the frame 28px wide in a 46px box, flush left, with 18px of the
-       box's near-black background down the right. That does not read as a small preview, it
-       reads as an image that failed to load. Crop to the box instead, centred, and let it fill.
-       Backing store follows the device pixel ratio (capped at 3) so it is not soft on retina —
-       46x60 CSS pixels is small enough that a 1x canvas is visibly mushy.
-       The crop is honest here: this is the "open me" affordance, and tapping it plays the real
-       full-frame preview (chPrevPlay) — the thumbnail is not the deliverable. */
-    const c=document.createElement("canvas");
-    /* Floor of 2, not just a cap of 3. dpr is the device's, and this thumbnail is 46x60 CSS
-       pixels — the smallest image in the app and the one that shows softness first. Two extra
-       device pixels per side costs nothing here and stops a 1x display drawing it mushy. */
-    const BOX_W=46, BOX_H=60, ratio=Math.max(2,Math.min(3,window.devicePixelRatio||2));
-    c.width=Math.round(BOX_W*ratio); c.height=Math.round(BOX_H*ratio);
-    const cover=Math.max(c.width/Math.max(1,board.width),c.height/Math.max(1,board.height));
-    const dw=board.width*cover, dh=board.height*cover;
-    c.getContext("2d").drawImage(board,(c.width-dw)/2,(c.height-dh)/2,dw,dh);
-    shot.appendChild(c);
-    /* BOUND HERE, not at load: this is the only point where the card is guaranteed to exist
-       and to be about to be shown. onclick (not addEventListener) on purpose — chPrevRender
-       runs again on every share sheet open, and a listener would stack a duplicate each
-       time, so the preview would open twice, then three times. */
-    /* THE BARE TAP CLOSES THE SHEET ON PURPOSE — it is taking you back to the brush, which is
-       the only thing that turns this into a challenge. It was reported as "tapping the card
-       closes the modal instead of opening the share", and that report was right about the
-       experience: the card gave no reason, so the close read as a dismissal rather than as a
-       destination. The copy above is what makes it legible; the hint names it before the tap.
-       THE HINT NO LONGER STATES A RULE. It said "…before you can send it", which was true of
-       a send that refused and is a lie about the one that ships now. Send is always available
-       — the sheet the user just left has the button — so the line offers the alternative
-       instead of gating on it. */
-    const go=bare
-      ? ()=>{ haptic(10); track("prev_blocked_tapped",{coverage:pct}); closeShareSheet();
-              if($("#btnEdit").style.display!=="none") $("#btnEdit").click();
-              showHint("Paint them out and it becomes a challenge — or send it as is",3600); }
-      : ()=>{ haptic(10); chPrevPlay(); };
-    shot.onclick=(ev)=>{ ev.stopPropagation(); go(); };
-    /* THE WHOLE ROW OPENS IT, not just the 46px thumbnail. The card is one object that says
-       "here is what they get", and only the picture answered to a tap — so the title, the two
-       chips and all the space between them were dead, and the tap target for the only way to
-       SEE the challenge was the smallest thing on the card. The gear stops propagation, so
-       settings still win on their own corner. */
-    row.onclick=go;
-    /* The gear set seconds and taps. Nothing consumes them any more — the deal is one buzz
-       on no clock, and difficulty comes from the paint, never from a knob — so the control
-       is hidden rather than left selling a setting the round ignores. Markup stays so the
-       row's layout and the static checks are untouched. */
-    const gear=document.getElementById("chPrevGear");
-    if(gear) gear.style.display="none";
-    /* `ready` records that the thumbnail is actually drawn, so syncShareMode() can put the
-       card back when the user leaves the Before/After tab without ever showing an empty one. */
-    row.dataset.ready="1";
-    row.classList.add("on");
-    syncShareMode();   // respect the tab that is currently selected
-  }catch(e){}
-}
-
-/* LOCAL, AND IT MUST STAY LOCAL. The real seeker sends every tap to submit_attempt, and the
- * hide carries the counters the receiver screen reads back out ("X of Y never found them").
- * Previewing against the live link would file the sender's own taps as real attempts and
- * corrupt the one number this whole feature exists to produce. So nothing here touches the
- * network: the board and chGeom() are already on this device — the sender painted them.
- *
- * AND IT IS A PREVIEW, NOT A ROUND. They know where it is; they painted it. The clock and
- * the pips are here so they see the frame their friend gets, not to test them. That is why
- * the ending button is "Challenge a friend" and not "Try again": the detour has to come back
- * to the send, or it is just a toy inside the one sheet whose job is to produce a share. */
 /* CONFETTI, ON A CANVAS, THAT REMOVES ITSELF.
  * One burst shared by both success screens — the sender's preview and the receiver's real
  * find — because they are the same moment seen from two sides and they should feel the same.
@@ -7985,15 +7776,6 @@ function confettiBurst(originEl){
     })();
   }catch(e){}
 }
-/* THE REHEARSAL, NOT THE ROUND. This is the sender trying their own hide, and the first
-   one-buzz version treated it like the real thing: one miss and the overlay froze on a
-   dead card — no retry, no motion, a grey sub nobody could read. Wrong stakes: the ONE
-   buzz belongs to the friend, who has never seen the answer; the sender is REHEARSING,
-   and a rehearsal you can only run once is a punishment. So this now plays like the
-   seeker screen it previews — the same reticle held above the finger, release commits,
-   marks, sparks, shake — but with infinite tries, and the headline (never a sub) narrates
-   each result. The CTA and Back never move: the send stays one tap away from the first
-   frame to the last. */
 /* HOW FAR THE RING SITS ABOVE THE FINGER, IN ONE PLACE.
    The ring is held above the thumb so the thumb does not cover the thing being aimed at,
    and the point committed is the RING, not the fingertip. That makes this number part of
@@ -8003,175 +7785,17 @@ function confettiBurst(originEl){
    sender practised their aim at one offset on the share sheet and then played at another,
    14px higher, on every hide they opened; reported as taps landing above the finger in the
    feed, which is simply where most rounds are played now.
-   Was 56 — the rehearsal's own value, chosen because that is what a thumb practises with.
-   Reported still too high twice after that, on the rehearsal AND in the feed, so the number
-   itself was wrong in both places rather than merely inconsistent.
+   Was 56 — the sender's rehearsal screen's own value, chosen because that is what a thumb
+   practises with. Reported still too high twice after that, on the rehearsal AND in the feed,
+   so the number itself was wrong in both places rather than merely inconsistent.
    38, and the arithmetic is why: the ring is 58px across, so at 56 its BOTTOM EDGE floats 27
    pixels clear of the fingertip — a gap you have to aim across. At 38 the ring sits just on
    top of the finger, still clear of the thing being aimed at, which is the only job the
-   offset ever had. One constant, so the two cannot drift apart again. */
+   offset ever had. The rehearsal is gone (2026-08-15) and the real seeker is the one consumer
+   left; the constant stays, because a number this hard-won belongs somewhere it can be found
+   and argued with rather than inlined into the one call site. */
 const CH_RET_OFF=38;
-function chPrevPlay(){
-  try{
-    const g=chGeom(); if(!g) return;
-    track("challenge_preview_opened",{});
-    document.getElementById("chPP")?.remove();
-    /* The seeker's visual vocabulary, scoped to this overlay. The seeker page injects its
-       own copies of these names — but chSeek() only runs on ?h= loads, where this overlay
-       cannot exist, so they never meet. */
-    if(!document.getElementById("chPPfx")){
-      const fx=document.createElement("style"); fx.id="chPPfx";
-      fx.textContent=
-        ".chPP{animation:ppFade .22s ease-out;}"
-        +"@keyframes ppFade{from{opacity:0}to{opacity:1}}"
-        +".chPPin{animation:ppUp .38s cubic-bezier(.2,.9,.3,1);}"
-        +"@keyframes ppUp{from{transform:translateY(26px);opacity:0}to{transform:translateY(0);opacity:1}}"
-        +".chRet{position:fixed;z-index:95;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);pointer-events:none;}"
-        +".chRet i{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}"
-        +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
-        +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
-        +".chMark.stay{animation:chHold 1.6s ease-in-out infinite;opacity:1;}"
-        +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
-        +"@keyframes chHold{0%,100%{transform:scale(1);box-shadow:0 0 0 6px rgba(95,230,164,.22)}50%{transform:scale(1.12);box-shadow:0 0 0 12px rgba(95,230,164,.05)}}"
-        +".chWin{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:hidden;}"
-        +".chRing{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:3px solid var(--mint);animation:chRing .72s cubic-bezier(.2,.7,.3,1) forwards;}"
-        +"@keyframes chRing{0%{transform:scale(1);opacity:.95}100%{transform:scale(9);opacity:0}}"
-        +".chFlash{position:absolute;inset:0;background:radial-gradient(circle at var(--fx) var(--fy),rgba(95,230,164,.45),transparent 60%);animation:chFlash .6s ease-out forwards;}"
-        +"@keyframes chFlash{0%{opacity:1}100%{opacity:0}}"
-        +".chSpark{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--mint);animation:chSpark .8s cubic-bezier(.15,.8,.3,1) forwards;}"
-        +"@keyframes chSpark{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx),var(--sy)) scale(.2);opacity:0}}"
-        /* The headline replaces the grey sub as the narrator, and each change lands with a
-           small rise so the words visibly answer the buzz instead of mutating in place. */
-        +".chPPh.swap{animation:ppUp .3s cubic-bezier(.2,.9,.3,1);}";
-      document.head.appendChild(fx);
-    }
-    const w=document.createElement("div"); w.id="chPP"; w.className="chPP";
-    /* KICKER = the terms, headline = the EXACT line the friend will read. The preview's one
-       job is to show the other side of the deal, and the other side opens on "Find @tony" —
-       which is also the only place the sender ever SEES their signature working (the handle
-       is set on the player card, two screens away from the send). Unsigned keeps the
-       seeker's own unsigned line, not a placeholder. Written below via textContent, never
-       into this HTML string: the handle is typed by a user. */
-    w.innerHTML='<div class="chPPin">'
-      +'<div class="pwKick">ONE TAP · NO CLOCK</div>'
-      +'<div class="chPPh" id="chPPh"></div>'
-      +'<div class="chPPframe" id="chPPframe"></div>'
-      +'<div class="chPPfoot" id="chPPfoot">'
-      /* THE SEND IS AVAILABLE FROM THE FIRST FRAME, not only after a result. Making someone
-         finish a rehearsal before they can send is a toll on the one action this sheet
-         exists to produce. */
-      +'<button class="pwBuy" id="chPPsend"><span class="pwBuyTxt">Challenge a friend</span></button>'
-      +'<button class="chPPclose" id="chPPx0">Back</button>'
-      +'</div></div>';
-    document.body.appendChild(w);
-    const who=getHandle();
-    document.getElementById("chPPh").textContent = who ? "@"+who+" hid a kamo here" : "Someone hid a kamo here";
 
-    const frame=document.getElementById("chPPframe");
-    /* The frame takes the BOARD's shape, so the hide fills it edge to edge instead of sitting
-       between two black pillars. Capped at 46vh so the card still fits with the CTA visible —
-       the button must never be below the fold on the screen whose job is to be pressed. */
-    frame.style.aspectRatio=board.width+" / "+board.height;
-    frame.style.maxHeight="46vh";
-    frame.style.margin="0 auto";
-    frame.style.touchAction="none";
-    const img=document.createElement("canvas");
-    img.width=board.width; img.height=board.height;
-    img.getContext("2d").drawImage(board,0,0);
-    frame.appendChild(img);
-
-    const say=(t)=>{ const h=document.getElementById("chPPh"); if(!h) return;
-      h.textContent=t; h.classList.remove("swap"); void h.offsetWidth; h.classList.add("swap"); };
-    function ppCelebrate(x,y){
-      const win=document.createElement("div"); win.className="chWin";
-      const fl=document.createElement("div"); fl.className="chFlash";
-      fl.style.setProperty("--fx",x+"px"); fl.style.setProperty("--fy",y+"px"); win.appendChild(fl);
-      const ring=document.createElement("div"); ring.className="chRing";
-      ring.style.left=x+"px"; ring.style.top=y+"px"; win.appendChild(ring);
-      for(let i=0;i<8;i++){
-        const a=(Math.PI*2*i)/8+Math.random()*0.4, d=60+Math.random()*50;
-        const sp=document.createElement("div"); sp.className="chSpark";
-        sp.style.left=x+"px"; sp.style.top=y+"px";
-        sp.style.setProperty("--sx",Math.round(Math.cos(a)*d)+"px");
-        sp.style.setProperty("--sy",Math.round(Math.sin(a)*d)+"px");
-        win.appendChild(sp);
-      }
-      frame.appendChild(win); setTimeout(()=>win.remove(),900);
-    }
-
-    function close(){ w.remove(); }
-    const send=()=>{ close(); document.getElementById("ssInvite")?.click(); };
-    document.getElementById("chPPsend").onclick=send;
-    document.getElementById("chPPx0").onclick=close;
-
-    /* THE SAME GESTURE THE FRIEND GETS: finger down raises the reticle above the finger,
-       drag adjusts, release buzzes. Rehearsing the real move is the whole preview — a plain
-       tap taught the sender a game that does not exist on the other side. */
-    let ret=null, aimId=-1, found=false;
-    const RET_OFF=CH_RET_OFF;
-    const retMove=(x,y)=>{
-      if(!ret) return;
-      const r=img.getBoundingClientRect();
-      const cx=Math.max(r.left,Math.min(r.right,x)), cy=Math.max(r.top,Math.min(r.bottom,y-RET_OFF));
-      ret.style.left=cx+"px"; ret.style.top=cy+"px"; ret._x=cx; ret._y=cy;
-    };
-    frame.addEventListener("pointerdown",e=>{
-      try{ frame.setPointerCapture(e.pointerId); }catch(_){}
-      aimId=e.pointerId;
-      ret=document.createElement("div"); ret.className="chRet"; ret.innerHTML="<i></i>";
-      w.appendChild(ret);
-      retMove(e.clientX,e.clientY);
-      haptic(8);
-    });
-    frame.addEventListener("pointermove",e=>{ if(ret&&e.pointerId===aimId) retMove(e.clientX,e.clientY); });
-    const ppUp=e=>{
-      if(!ret||e.pointerId!==aimId) return;
-      const sx=ret._x, sy=ret._y;
-      ret.remove(); ret=null; aimId=-1;
-      if(e.type!=="pointerup") return;
-      const r=img.getBoundingClientRect();
-      const x=(sx-r.left)/r.width, y=(sy-r.top)/r.height;
-      const fx=x*(r.width), fy=y*(r.height);
-      const hit=Math.hypot(x-g.cx,y-g.cy)<=g.r;
-      const mk=document.createElement("div");
-      mk.style.left=fx+"px"; mk.style.top=fy+"px";
-      frame.appendChild(mk);
-      if(hit){
-        mk.className="chMark hit stay";
-        haptic(18);
-        ppCelebrate(fx,fy);
-        /* NOT A CAPTION. The one thing the sender does not know they know: the rehearsal
-           is rigged — they painted it. The person on the other end will not have that. */
-        say(found?"Again. They still won't.":"You knew. They won't.");
-        if(!found){ frame.classList.add("found"); confettiBurst(frame); }
-        found=true;
-      }else{
-        mk.className="chMark";
-        setTimeout(()=>mk.remove(),500);
-        haptic(8);
-        img.classList.remove("chPPshake"); void img.offsetWidth; img.classList.add("chPPshake");
-        /* The stake, said at the moment it is felt — and then the finger is free to try
-           again, because this is a rehearsal and the ONE buzz is the friend's problem. */
-        say("Missed — they only get one.");
-        frame.classList.remove("found"); found=false;
-      }
-    };
-    frame.addEventListener("pointerup",ppUp);
-    frame.addEventListener("pointercancel",ppUp);
-    w.onclick=(ev)=>{ if(ev.target===w) close(); };
-  }catch(e){}
-}
-
-/* chPrevSettings IS GONE — the gear it answered to is hidden and the values it wrote are
-   read by nothing. See the note above chPrevRender. chRepublish() stays: the handle's blur
-   handler still republishes a signed hide. */
-
-/* THE TOAST IS GONE. It lived here for one reason — the card had not been seen by anyone
-   yet — and it deleted itself after 4.2s, which is why it could never carry the settings
-   control or a tap target. chPrevRender() draws the permanent card instead, for everyone.
-   The old body is deleted rather than left behind a flag: dead code that cannot run is the
-   drift this file keeps paying for elsewhere. */
-function invitePreview(){ chPrevRender(); }
 /* WAIT FOR THE ID THE SHARE IS ABOUT TO NEED — bounded, and never on the web path.
    chUpload() is fire-and-forget: it encodes a full-size JPEG, uploads it, then calls
    create_hide. Seconds, on a phone network. That was harmless while the sheet only opened
@@ -8432,7 +8056,7 @@ $("#ssInvite").onclick=async()=>{
     if(shared&&typeof ssShowAgain==="function") ssShowAgain();
     if(b){
       b.innerHTML = shared ? '<span class="ic">✅</span>Sent' : original;
-      if(shared){ invitePreview(); setTimeout(()=>{ if(b) b.innerHTML=original; },1500); }
+      if(shared) setTimeout(()=>{ if(b) b.innerHTML=original; },1500);
     }
     return;
   }
@@ -8442,12 +8066,11 @@ $("#ssInvite").onclick=async()=>{
   if(b){
     b.innerHTML = ok ? '<span class="ic">✅</span>Copied — send it to a friend'
                      : '<span class="ic">↗</span>Tap again to open the share sheet';
-    /* SHOW THEM WHAT THEY JUST SENT. Nothing in this flow ever revealed that the link is a
-       playable game — the sender taps, a link is copied, and for all they know it points at
-       an App Store page. A thing you cannot picture is a thing you do not send twice.
-       AFTER the copy, never before: an preview screen between intent and action is how share
-       flows die, and this button just went from 0 to 25 taps a day by being more direct. */
-    if(ok) invitePreview();
+    /* SHOWING THEM WHAT THEY JUST SENT USED TO HAPPEN HERE — a local rehearsal of their own
+       hide, drawn from the board still in memory. It is the sheet's "See it live" button now,
+       and that one is better in the way that matters: it opens the hide that actually went
+       out, from the server, in the feed everyone else plays it in. A simulation could not
+       prove the link works; this can. */
     if(!ok){
       /* Last rung, and it needs its own gesture: navigator.share must be called from a
          fresh user activation, so it cannot be chained onto the tap that already failed. */
@@ -8472,27 +8095,15 @@ updateInviteBtn();   // plain browser → visible immediately; native → waits 
 /* The mode tabs are gone with their markup — shareMode is the "challenge" constant now
    (see the sheet comment). share_mode_selected retires with them. */
 
-/* BEFORE/AFTER IS NOT A CHALLENGE. That tab produces a reveal of YOUR OWN hide — a clip to
- * post — while "Challenge a friend" and the card beneath it describe a link somebody else
- * plays. Offering both said the sheet would do two contradictory things with one tap.
- * Both are hidden on that tab and the sheet simply gets shorter: .ssCard has no fixed height,
- * so removing two rows IS the height change. Nothing animates — a sheet that resizes under
- * the thumb between a tap and its target is how people hit the wrong button.
- *
- * ONLY IN THE OPEN STATE. In peek the challenge CTA is the only control there is, so hiding
- * it would leave a card with a headline and nothing to press. Someone who picked Before/After
- * and then collapsed the sheet gets the challenge affordance back, which is the right default
- * for the state whose whole purpose is to offer it. */
-function syncShareMode(){
-  const ba = shareMode==="ba" && ssState==="open";
-  const inv=document.getElementById("ssInvite"); if(inv) inv.style.display = ba ? "none" : "";
-  const card=document.getElementById("chPrev");
-  /* `on` is what chPrevRender() adds once the thumbnail is drawn. Re-adding it here without
-     that would show an empty card, so the rendered flag is the gate, not this function. */
-  if(card) card.classList.toggle("on", !ba && card.dataset.ready==="1");
-}
-/* 1-tap → Instagram Stories: send the static image to native, which pushes it
-   straight into IG Stories via react-native-share (no share sheet). */
+/* syncShareMode() IS GONE — it hid the send and the preview card while the Before/After tab
+ * was selected, and it outlived both of them. The tabs were removed on 2026-08-12 (shareMode
+ * has been the "challenge" constant ever since), which made its one branch permanently false;
+ * the preview card went on 2026-08-15, which took its last statement. What was left was a
+ * function that could only ever set #ssInvite's display to the empty string — which
+ * updateInviteBtn() already does, on every path into the sheet.
+ * Its last caller was chPrevRender(), so deleting the card left it unreachable and the orphan
+ * check found it. That is the check doing its job: a stale function outliving two features is
+ * how a file grows a layer nobody can explain. */
 /* ===== ONBOARDING (once) ===== */
 function firstRun(){ try{ return !localStorage.getItem("kamo_onb"); }catch(e){ return !seenPaint; } }
 /* THE FIRST-RUN HINTS ARE OFF TOO — they were the two biggest pills, 7.2 seconds of text
@@ -9722,7 +9333,7 @@ let chPrep=null, chSlotV=null;
  * create_hide needs the storage PATH, not the file — and that path is a string this device
  * makes up locally. It was nevertheless being generated inside the upload, so the row (and
  * therefore chId, and therefore the link) could not exist until a ~200KB JPEG had finished
- * crossing an LTE connection: 3-6 seconds in which "Challenge a friend" has nothing to point
+ * crossing an LTE connection: 3-6 seconds in which "Send to a friend" has nothing to point
  * at and falls through to the generic invite and a ?i=1 link with no hide behind it.
  *
  * Measured over 11-13 Aug, by the `link` property on the send itself: on the native path,
@@ -10042,6 +9653,15 @@ function kfAskConsent(){
    the plate the globe already sits in. */
 const VIS_ICO_PUBLIC='<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>';
 const VIS_ICO_PRIVATE='<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/>';
+/* THE ROW, THE HEADLINE ABOVE IT AND THE BUTTON BELOW IT ARE ONE ANSWER, PAINTED ONCE.
+   The headline used to be static ("Can they find you?") and could not be wrong. It makes a
+   claim now — "Your challenge is now live!" — and that claim is false for the 23% who turn
+   this row off: their hide is reachable only by the link they are about to send, which is
+   the entire point of turning it off. A sentence contradicted by the control 40 pixels
+   underneath it is worse than no sentence, because it teaches that the app does not know
+   what it just did.
+   So all three are written here, from one read of kfWantPublic(), and there is no path that
+   can move one without the others. */
 function kfRenderVis(){
   const b=$("#ssVis"); if(!b) return;
   const pub=kfWantPublic();
@@ -10051,6 +9671,25 @@ function kfRenderVis(){
   if(s) s.textContent=pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to";
   const ico=$("#ssVisIco"); const svg=ico&&ico.querySelector("svg");
   if(svg) svg.innerHTML = pub ? VIS_ICO_PUBLIC : VIS_ICO_PRIVATE;
+  /* "Only people you send it to" is deliberately not a sentence about the feed. A private
+     hide is not a lesser public one — it is a hide with an audience of exactly the people who
+     get the link — so the headline names that audience rather than announcing an absence. */
+  const h=$("#ssTitle");
+  if(h) h.textContent = pub ? "Your challenge is now live!" : "Only people you send it to";
+  /* WHOEVER IS GOING TO TELL THEM. Inside the wrapper armResultsPing() schedules the local
+     nudge and attach_push_token buys the real one, so the promise is kept. In a browser
+     neither exists — and #ssGet three rows down is selling exactly that gap, so promising a
+     notification here would have the sheet contradicting its own upsell. Both lines are true
+     of a private hide too: the notification is about somebody playing it, not about who can
+     find it. */
+  const sub=$("#ssSub");
+  if(sub) sub.textContent = window.ReactNativeWebView
+    ? "We'll tell you when someone taps."
+    : "Come back to see who tried.";
+  /* NOT OFFERED FOR A PRIVATE HIDE — kfApplyVisibility has already pulled it from the feed
+     (or never put it there), so this button would open a screen the hide is not on. */
+  const live=$("#ssSeeLive");
+  if(live) live.style.display = pub ? "" : "none";
 }
 try{
   const vb=$("#ssVis");
@@ -10308,7 +9947,8 @@ function chMarkSent(){
      and no way to schedule it — so the browser is offered the thing that could, at the exact
      moment it is worth having. Same promise, same moment, told honestly. */
   try{ ssOfferApp(); }catch(e){}
-  try{ ssOfferFeed(); }catch(e){}
+  /* Nothing to reveal for the wrapper any more: its half of this beat is "See it live", which
+     has been on the sheet since it opened rather than waiting to be earned by a send. */
 }
 
 /* WHAT HAPPENED WHILE THEY WERE AWAY.
@@ -10880,15 +10520,30 @@ async function khResults(){
        of the open state now, which also gives the collapse a visible word instead of leaving
        "tap anything" as folklore. scrollTop resets on both directions: the box is a scroll
        container now and it would otherwise reopen halfway down where it was left. */
+    /* THE FOLDED STATE IS A DOOR NOW, NOT A SUMMARY. It carried `head` — "12 played your
+       hides · 3 found you" — over a button offering to show each one, and both halves are
+       said better one screen away: the My-kamos grid opens with those exact two numbers as
+       chips across the top, and then shows the photos they are about. Two renderings of one
+       fact, and the smaller one was the one blocking the card's only remaining vertical room.
+       So the row states what is behind it and nothing else. The numbers are not lost — they
+       are one tap away, on the screen that can also show WHICH hide each of them came from. */
     const paint=()=>{
       if(khOpen) khRenderRows(el,rows,head);
-      else el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+      else el.innerHTML = '<span class="khMore">My kamos ('+rows.length+')</span>';
       el.scrollTop=0;
     };
     paint();
+    /* AND THE TAP LEAVES THE CARD. Expanding in place is what the accordion did, and it was
+       built when the grid did not exist: at ten rows it needs its own scroll container inside
+       a card anchored to the bottom edge, which is the fight this file has already lost twice.
+       The grid is the same data with room to render it.
+       The in-place expansion is NOT deleted — khOpenNext still reaches it, and that is the
+       path a "somebody found your hide" notification takes (window.KAMO.openFound): that one
+       has a specific hide to point at and must not dump the reader into a scope switch. */
     el.onclick=()=>{
-      khOpen=!khOpen; paint();
-      if(khOpen) track("home_results_expanded",{hides:rows.length,tried:tried});
+      track("home_results_expanded",{hides:rows.length,tried:tried,to:"mine"});
+      closeKamoHome();
+      try{ chFeed({mine:true}); }catch(e){}
     };
     el.dataset.filled="1";
     el.style.display="block";
@@ -12683,6 +12338,14 @@ function chFeed(opts){
   const scopeBtn=root.querySelector("#kfScope"), menuEl=root.querySelector("#kfMenu"), mineEl=root.querySelector("#kfMine");
   let mineOpen=false;
   const menuShow=(on)=>{ if(menuEl) menuEl.style.display=on?"block":"none"; };
+  /* THE MENU'S TICK BELONGS TO THE PANEL, NOT TO THE BUTTON THAT WAS PRESSED. It used to be
+     set inside the menu's own click handler, which is correct for exactly one of the three
+     ways the scope changes and wrong for the other two: opening straight onto the grid
+     (chFeed({mine:true})) and leaving it by tapping a card both moved the panel without ever
+     touching the menu, so the pill said Everyone while the dropdown still had My kamos
+     ticked. Owned by mineShow()/mineHide() now, which are the two functions that actually
+     know which scope is on screen. */
+  const scopeMark=(s)=>{ try{ menuEl.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.s===s)); }catch(_){} };
   scopeBtn.onclick=()=>{ haptic(8); menuShow(menuEl.style.display!=="block"); };
   /* A scroll is an answer: whatever the menu offered, the user chose the feed. */
   scroll.addEventListener("scroll",()=>menuShow(false),{passive:true});
@@ -12745,6 +12408,7 @@ function chFeed(opts){
   async function mineShow(){
     mineOpen=true;
     scopeBtn.innerHTML='My kamos <i>▾</i>';
+    scopeMark("mine");
     mineEl.style.display="block";
     /* The flag reports the SLIDE, and the slide is under this panel — a report control over
        somebody's own grid would report a photo they cannot see. Back with the feed.
@@ -12781,25 +12445,50 @@ function chFeed(opts){
     mineEl.querySelectorAll("[data-h]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
       if(!isPro){ track("heat_paywall_tapped",{n:(rows[+b.dataset.h]||{}).n_attempts|0,src:"mine"}); openPaywall("heatmap"); return; }
       khHeat(rows[+b.dataset.h],b); }; });
-    /* THE WHOLE CELL IS THE TAP TARGET — same contract as the card rows ("IT DOES WHAT
-       WATCH DOES", khRenderRows): a photo-sized cell looks tappable, and until now a tap
-       on it did nothing at all (founder's report, 2026-08-15). It forwards to Watch —
-       the cell's own story — and deliberately not to Send: a share sheet must never open
-       from a stray tap. A cell with nothing to watch stays inert; its one action is the
-       explicit Send button. Delegated through the button so there is exactly one path. */
-    mineEl.querySelectorAll(".kmCell").forEach(cell=>{
-      const w=cell.querySelector("[data-w]");
-      if(!w) return;
+    /* THE WHOLE CELL IS THE TAP TARGET, AND IT OPENS THE HIDE IN THE FEED.
+       It forwarded to Watch, which was the nearest thing that existed when the cell first
+       became tappable — but Watch is a replay of one stranger's hunt, it is behind KAMO+, and
+       on a cell nobody has played yet it does not exist at all, so most of this grid was
+       inert. What a photo-sized cell promises is the photo: tapping it puts the hide on the
+       screen the rest of the app plays it on, full-bleed, with the sender's name over it.
+       That works on every cell, paid or not, played or not.
+       replay:true IS THE WHOLE CORRECTNESS ARGUMENT, not a detail. Without it the buzz
+       reaches submit_attempt and files a tap from the one person on earth who painted the
+       thing as an attempt — inflating your own hide's play count with a guess that was never
+       a guess. The flag routes it through reveal_hide instead, the same path the seeded
+       first slide and the second lap already take.
+       Send still wins on its own button (the `closest("button")` guard): a share sheet must
+       never open from a stray tap. */
+    function kmOpenInFeed(row){
+      if(!row||!row.id||!row.img_path) return;
+      haptic(10);
+      track("mine_cell_tapped",{plays:(row.n_attempts)|0,to:"feed"});
+      mineHide();
+      /* The feed may be sitting on "Nothing here yet" — an empty PUBLIC feed says nothing
+         about whether this creator has hides, and leaving that card up behind their own
+         photo is how a screen ends up reading as broken. */
+      midOff();
+      let i=S.slides.findIndex(s=>s.row.id===row.id);
+      if(i<0){
+        addSlide({id:row.id,img_path:row.img_path,name:row.name,
+                  n_attempts:row.n_attempts|0,n_found:row.n_found|0},true);
+        i=S.slides.length-1;
+      }
+      try{ S.slides[i].el.scrollIntoView({block:"start"}); }catch(_){}
+      activate(i);
+    }
+    mineEl.querySelectorAll(".kmCell").forEach((cell,i)=>{
       cell.addEventListener("click",(ev)=>{
         if(ev.target.closest("button")) return;
         ev.stopPropagation();
-        w.click();
+        kmOpenInFeed(rows[i]);
       });
     });
   }
   function mineHide(){
     mineOpen=false;
     scopeBtn.innerHTML='Everyone <i>▾</i>';
+    scopeMark("all");
     mineEl.style.display="none"; mineEl.innerHTML="";
     { const f=root.querySelector("#kfFlag"); if(f) f.style.display="";
       const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
@@ -12884,6 +12573,15 @@ function chFeed(opts){
     }
     load().then(paint);
   })();
+  /* OPENED STRAIGHT ONTO YOUR OWN GRID. The player card's results row leads here, and it
+     leads to My kamos rather than to the public feed — the question it answers is "what
+     happened to mine", and landing on strangers' photos first would be an answer to a
+     different one.
+     Deferred one tick rather than called inline, so chFeed() returns having done exactly what
+     it has always done and the grid is a second, separate act on top of it. The public feed
+     still loads underneath (the panel covers it at z 26, midCard included), which is what
+     makes switching the pill back to Everyone cost no round trip. */
+  if(opts&&opts.mine) setTimeout(()=>{ try{ mineShow(); }catch(e){} },0);
 }
 /* TEST HOOK, and deliberately not on window.KAMO. That object is the wrapper's bridge
    contract — everything on it is something App.js calls — and a test affordance has no

@@ -68,10 +68,13 @@ const html = real.slice(0, at)
      stored value is handle-shaped and reachable, not the string concatenation, which
      test-share.mjs already covers against the real function body. */
   + 'handle(){return getHandle();},'
-  /* Opening the accordion goes through the box's own click handler, the way a finger does —
-     khOpen is module state, and flipping it directly would exercise a paint() that nothing
-     calls. */
-  + 'expand(){document.getElementById("khScore").click();return this.fit();},'
+  /* THE BOX'S OWN CLICK LEAVES THE CARD NOW — it closes the home and opens the My-kamos grid
+     (2026-08-15), so clicking it here would tear down the very thing this block measures.
+     The in-place expansion survives on exactly one path and this is it: khOpenNext is the
+     one-shot khResults() consumes, and it is how a "somebody found your hide" notification
+     (window.KAMO.openFound) lands on the list rather than on a scope switch. Set the flag and
+     re-render, which is precisely what that path does. */
+  + 'expand(){khOpenNext=true;return khResults().then(()=>this.fit());},'
   /* WHAT THE USER CAN ACTUALLY SEE. The card is anchored to the bottom edge, so overflow goes
      off the TOP of the screen — and every element up there is still laid out, still styled,
      still `display:block`. getComputedStyle cannot tell you the badge is sitting at y=-180.
@@ -266,9 +269,14 @@ console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
   await page.evaluate(() => window.__h.open(false));
   await page.waitForTimeout(250);
   const quiet = await page.evaluate(() => window.__h.state());
-  /2 challenges sent/.test(quiet.scoreText) && /nobody has played yet/.test(quiet.scoreText)
-    ? ok(`sent but unplayed says so ("${quiet.scoreText.trim()}")`)
-    : bad(`zero attempts renders ${JSON.stringify(quiet.scoreText)}`);
+  /* THE SUMMARY MOVED, THE RULE DID NOT. The folded row used to spell the outcome out
+     ("2 challenges sent · nobody has played yet"); it now names the door it opens, because
+     the grid behind it carries those same two numbers as chips AND the photos they are
+     about. What is still asserted is the part that was ambiguous in the wrong direction:
+     somebody who has sent gets a row at all, counting the hides they actually have. */
+  /My kamos \(2\)/.test(quiet.scoreText)
+    ? ok(`somebody who has sent gets the door, counted ("${quiet.scoreText.trim()}")`)
+    : bad(`two published hides render ${JSON.stringify(quiet.scoreText)}`);
 
   /* But someone who has never sent anything still gets nothing — that row would be about
      their own inactivity rather than about other people. */
@@ -284,9 +292,12 @@ console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
   await page.evaluate(() => window.__h.open(false));
   await page.waitForTimeout(250);
   const many = await page.evaluate(() => window.__h.state());
-  /12 played your hides/.test(many.scoreText) && /3 found you/.test(many.scoreText)
-    ? ok(`it sums every hide and drops the expired one ("${many.scoreText.trim()}")`)
-    : bad(`the aggregate is wrong: ${JSON.stringify(many.scoreText)}`);
+  /* Three ids in, two counted: get_hide answers an expired or blocked hide with nothing, and
+     a row about a hide that no longer exists is a row the user cannot act on. The drop has to
+     happen BEFORE the count, which is the half a folded summary can still prove. */
+  /My kamos \(2\)/.test(many.scoreText)
+    ? ok(`the expired hide is dropped before the count ("${many.scoreText.trim()}")`)
+    : bad(`three ids with one dead renders ${JSON.stringify(many.scoreText)}`);
 
   /* NOT GATED ON THE HANDLE. The score is about hides you sent, and you can send hides
      without ever naming yourself — most people will. */
@@ -294,9 +305,9 @@ console.log('\nTHE CARD REPORTS WHAT HAPPENED TO THE HIDES YOU SENT');
   await page.evaluate(() => window.__h.open(false));
   await page.waitForTimeout(250);
   const none = await page.evaluate(() => window.__h.state());
-  /^1 played your hide ·/.test(none.scoreText.trim()) && /nobody found you/.test(none.scoreText)
-    ? ok('one player, none found → singular, and the loss is stated plainly')
-    : bad(`the singular / nobody-found case reads: ${JSON.stringify(none.scoreText)}`);
+  /My kamos \(1\)/.test(none.scoreText)
+    ? ok('and an unsigned sender gets it too — the score is about hides, not about names')
+    : bad(`with no handle set the row reads: ${JSON.stringify(none.scoreText)}`);
 
   /* THE ROW IS A BUTTON, AND TAPPING IT MUST NOT DISMISS THE CARD.
      Reported from the field: "quand on tap sur la card ça ferme au lieu d'ouvrir le preview
@@ -366,7 +377,7 @@ console.log('\nTEN CHALLENGES STILL FIT ON THE SCREEN');
 
   const open = await page.evaluate(() => window.__h.expand());
   open.rows === 10
-    ? ok('"Show each one" renders all ten rows')
+    ? ok('the notification path renders all ten rows in place')
     : bad(`expanding rendered ${open.rows} rows — the accordion is not opening`);
   open.cardTop >= 0 && open.badgeTop >= 0
     ? ok(`and the top of the card is still visible (card ${open.cardTop}px, badge ${open.badgeTop}px)`)
