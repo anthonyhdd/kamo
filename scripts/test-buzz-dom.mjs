@@ -148,8 +148,11 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
      2026-08-14 change: the feed said "Hide one in this photo" and converted at 7% against the
      link path's 222% on the same button in the same position, so the sentence names a person
      on both surfaces now. Still an EXACT match either way: a regression that empties the
-     handle must fail here rather than pass a substring check on "Send one back". */
-  /^Send one back( to @[^@\s]+)?$/.test(reh || '')
+     handle must fail here rather than pass a substring check on "Challenge back".
+     RENAMED 2026-08-15: "Send one back" described a mechanism that does not happen — nothing
+     is sent, the reply is published and the creator finds it — and what the recipient gets is
+     a round, not a message. */
+  /^Challenge( @[^@\s]+)? back$/.test(reh || '')
     ? ok(`primary CTA is the no-install send-back${/ to @/.test(reh) ? ', naming the sender' : ''}`)
     : bad('chReh: ' + reh);
   const go = await page.evaluate(() => { const e = document.getElementById('chGo'); return e ? e.textContent : null; });

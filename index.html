@@ -1753,6 +1753,15 @@
      so it reads as the second thing you might do rather than as a competing ask.
      It sits directly under #ssInvite with no top margin of its own: the pair is one control
      group ("send it" / "look at it"), and a gap between them would make it a third section. */
+  /* THE TAP HAS A BODY. A send that is instant and silent reads as a button that did nothing
+     — the founder asked for the animation on exactly this one, and it is the only control in
+     the app whose result is invisible: no sheet opens, no screen changes, the reply just goes.
+     Two beats: a pulse while the id lands, then a mint receipt that stays. */
+  .ssBtn.ssSending{animation:ssPulse .9s ease-in-out infinite;}
+  @keyframes ssPulse{0%,100%{opacity:1}50%{opacity:.55}}
+  .ssBtn.ssSent{background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.55);color:#c9ffe4;
+    animation:ssPop .42s cubic-bezier(.3,1.6,.5,1);}
+  @keyframes ssPop{0%{transform:scale(.94)}55%{transform:scale(1.035)}100%{transform:scale(1)}}
   .ssBtn.ssSeeLive{height:48px;font-size:15px;font-weight:700;
     background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.22);color:rgba(255,255,255,.88);}
   .ssBtn.ssSeeLive:active{transform:scale(.985);}
@@ -6450,7 +6459,13 @@ function updateInviteBtn(){ const b=document.getElementById("ssInvite"); if(!b) 
      do a thing the sheet has just finished announcing. What is left to do is send it, and that
      is the word the two labels below already use. Kept in step with the markup, which ships
      the same string so a JS failure leaves the right one. */
-  b.textContent = chReplyTo ? (chReplyName ? "Send it back to @"+chReplyName : "Send it back")
+  /* "CHALLENGE BACK", NOT "SEND ONE BACK" — founder, 2026-08-15: "on send rien en vrai".
+     He is right twice over. Nothing is sent in the ordinary sense: the reply is published and
+     the original creator finds it, so "send" describes a mechanism that does not happen. And
+     what the recipient actually receives is not a message, it is a round — the same thing they
+     just made you play. "Challenge" is the word the rest of this product uses for that object,
+     and it names the reciprocity the button exists to produce. */
+  b.textContent = chReplyTo ? (chReplyName ? "Challenge @"+chReplyName+" back" : "Challenge back")
                             : "Send to a friend"; }
 // native torch refused/failed → don't leave the button lit claiming it's on
 window.KAMO.torchFailed=()=>{ torchOn=false; if(typeof updateLightBtn==="function") updateLightBtn(); showHint("Couldn't turn the light on"); };
@@ -7936,6 +7951,38 @@ function chAwaitId(ms){
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
+  /* A REPLY IS DELIVERED BY BEING PUBLISHED, so it must not open the system share sheet.
+     Founder, 2026-08-15: "après done y'a un bouton send one back → il ouvre la share modal au
+     lieu d'envoyer direct au user".
+     He is right, and the reason is structural rather than cosmetic. create_hide carries
+     p_reply_to; the original creator reads it back through my_replies on their next launch —
+     that is what lights the dot on the wordmark — and the server pushes it if they have a
+     token. The address is already known. Handing the user iOS's sheet at that point asks them
+     to choose a recipient the app has had all along, and every tap in that sheet is a chance
+     to back out of a message that was already addressed.
+     SO THIS BRANCH SENDS, AND SAYS SO. It publishes (chAwaitId kicks chUpload if it has not
+     started), stamps, and turns the button into its own receipt. No sheet, no target picker,
+     no link to paste — the reply is on its way the moment the button changes.
+     The rest of the sheet stays exactly where it is: somebody who ALSO wants to send the link
+     to a third person still has More, and the visibility row still governs the feed. */
+  if(chReplyTo){
+    const b=$("#ssInvite"), original=b?b.innerHTML:"";
+    if(b){ b.disabled=true; b.classList.add("ssSending"); }
+    let id=chId;
+    if(!id){ try{ id=await chAwaitId(4000); }catch(e){} }
+    track("reply_sent",{to_named:!!chReplyName,score:sc,seconds:secs,published:!!id});
+    try{ chMarkSent(); }catch(e){}
+    if(b){
+      b.classList.remove("ssSending"); b.classList.add("ssSent");
+      /* textContent, not innerHTML — chReplyName comes off another user's device. */
+      b.textContent = chReplyName ? ("Challenged @"+chReplyName+" back") : "Challenge sent";
+      haptic(14);
+      /* THE LABEL DOES NOT COME BACK. A receipt that reverts to "Send it back" invites a
+         second reply to the same hide, which is a duplicate the recipient has to read as two
+         answers to one question. The button stays spent; leaving the reveal is what resets it. */
+    }
+    return;
+  }
   /* THE FLOOR STOPS BEING A DOOR — founder's call, 2026-08-13, stated as a rule: there is
      never a mandatory paint percentage to share. This used to refuse the send outright —
      "🖌️ Paint them invisible first", sheet closed, straight back to the brush — and it fired
@@ -11642,7 +11689,7 @@ function chSeek(hideId,opts){
            knew who it was answering the whole time and declined to say so.
            The handle itself is attached below via textContent, never interpolated here — same
            rule as the seeker headline, and check.mjs asserts it. */
-        +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">Send one back</button>':'')
+        +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
         +(FEED?'<button class="chCta2" id="chSend">Send to a friend</button>':'')
         /* "NEXT HIDE ↑" IS GONE — founder's call, 2026-08-14. It was a button that named the
            gesture the screen is already built on: the feed is scroll-snap with
@@ -11802,7 +11849,7 @@ function chSeek(hideId,opts){
            naming the sender there is not a change, it is the thing that was already working
            said out loud. */
         const who=(h&&h.name)?String(h.name):"";
-        if(who) $$("chReh").textContent="Send one back to @"+who; }
+        if(who) $$("chReh").textContent="Challenge @"+who+" back"; }
       if($$("chRep")) $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
         /* Out of THIS device's feed straight away, not only out of everyone else's on the
            next page. n_reported=1 already excludes it server-side (see feed_page), but the
@@ -12174,7 +12221,13 @@ const KF_CSS=
 
   /* The swipe affordance. Shown on the first slide only and killed by the first scroll — an
      instruction that stays on screen after it has been obeyed is a permanent obstruction. */
-  +".kfHint{position:absolute;left:50%;transform:translateX(-50%);max-width:88vw;white-space:normal;text-align:center;bottom:calc(84px + var(--safe-b));z-index:25;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.82);background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:7px 14px;border-radius:999px;pointer-events:none;animation:kfBob 1.9s ease-in-out infinite;}"
+  /* IT GOES ON ITS OWN. The hint died only on the scroll it was asking for, so somebody who
+     read it and then took their time sat under a bobbing pill for as long as they looked at
+     the photo — on the one screen whose whole job is the photograph. Six seconds is long
+     enough to be read twice and short enough that it is gone before it becomes furniture; the
+     scroll still kills it instantly, which is the case it was written for. */
+  +"@keyframes kfHintOut{to{opacity:0;transform:translate(-50%,6px)}}"
+  +".kfHint{animation:kfBob 1.9s ease-in-out infinite,kfHintOut .5s ease-in 6s forwards;position:absolute;left:50%;transform:translateX(-50%);max-width:88vw;white-space:normal;text-align:center;bottom:calc(84px + var(--safe-b));z-index:25;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.82);background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:7px 14px;border-radius:999px;pointer-events:none;}"
   +"@keyframes kfBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-6px)}}"
   +".kfMid{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}"
   +".kfMid .kfCard{width:min(90vw,380px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:22px 20px 18px;display:flex;flex-direction:column;gap:12px;align-items:center;}"
