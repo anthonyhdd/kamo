@@ -233,14 +233,14 @@
     background:rgba(95,230,164,.10);}
   .hint.tap:active{transform:translateX(-50%) scale(.96);}
 
-  #scoreChip{position:absolute;top:calc(56px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:16;display:none;
-    background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);padding:7px 15px;border-radius:999px;
-    font-family:var(--display);font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.5);}
-  #scoreChip b{color:var(--accent);font-weight:850;}
-  /* THE COVERAGE FLOOR, SAID WHILE IT CAN STILL BE ACTED ON.
-     Same slot and shape as #scoreChip, its OWN id on purpose: scoreChip belongs to the
-     reveal and this belongs to paint mode, and the two must stay independently ownable —
-     see the note under scoreChip for why sharing that slot is a rule and not an accident.
+  /* #scoreChip IS GONE (founder, 2026-08-15). It sat in this slot on the reveal, saying
+     "X% hidden · Ns" — a scorecard for a round that has just ended, printed over the
+     photograph the round was about, at the exact moment the screen's job becomes "send this".
+     Nothing downstream reads the number: it is not a leaderboard, there is nothing to beat,
+     and the two figures are already the two the share sheet does not quote on purpose.
+     The slot below is the one that survives, and it is the one that is actionable.
+
+     THE COVERAGE FLOOR, SAID WHILE IT CAN STILL BE ACTED ON.
      On 2026-08-14 the browser reply path produced 423 hide_publish_blocked against 73
      published hides: five out of six people who tapped "Send one back" painted something,
      tapped Challenge, and were told only then that it was not enough. The floor is not the
@@ -259,10 +259,10 @@
   #covHud.ready{border-color:rgba(95,230,164,.55);box-shadow:0 6px 20px rgba(0,0,0,.5),0 0 0 3px rgba(95,230,164,.22);}
   #covHud.ready b{color:var(--mint);}
   /* THE ONE PIECE OF NEWS THIS APP CAN GIVE SOMEONE FOR COMING BACK.
-     Same slot and same shape as #scoreChip — they can never be on screen together, because
-     scoreChip belongs to the reveal and this belongs to the camera screen someone lands on
-     when they reopen the app. Mint rather than accent: it is not a score, it is something
-     that happened while they were away. */
+     Same slot and same shape as #covHud, and the two can never be on screen together: the
+     floor belongs to paint mode and this belongs to the camera screen someone lands on when
+     they reopen the app. Mint rather than accent: it is not a score, it is something that
+     happened while they were away. */
   /* A dot on the wordmark when a hide this device sent has been played since it was last
      read. Absolutely positioned off the mark itself so it cannot change the wordmark's
      metrics, and it breathes on the same clock as everything else that wants attention here.
@@ -976,7 +976,7 @@
   #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
-  #stage.pwCover #flip,#stage.pwCover #scoreChip{visibility:hidden!important;}
+  #stage.pwCover #flip{visibility:hidden!important;}
   /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
      #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
      descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
@@ -1991,7 +1991,6 @@
     <div id="timerBar"></div><div id="timerTag"></div><div id="timerNum"></div>
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
     <div class="hint" id="hint"></div>
-    <div id="scoreChip"></div>
     <div id="covHud"></div>
     <button id="btnBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Retake</button>
     <button id="btnDone" class="navbtn">Done</button>
@@ -2353,12 +2352,14 @@
          by the time it is on screen the photo is uploaded and the hide is published, so the
          news is that it exists. Saying so is also the only place the app ever tells anyone
          their hide is in the feed.
-         Which means it has to follow #ssVis directly underneath it. 23% of publishers turn
-         that row off, and "Your challenge is now live!" over a control that says Private is
-         the app contradicting itself inside one glance — so kfRenderVis() writes both.
-         Filled from JS, but with the public wording in the markup: it is what most people
-         see, and a JS failure should leave the common truth rather than an empty line. -->
-    <div class="pwTitle" id="ssTitle">Your challenge is now live!</div>
+         ONE SENTENCE, NOT TWO. It briefly followed the visibility toggle and said "Only
+         people you send it to" on a private hide — true, and the wrong question answered: who
+         can see it is what the row directly below is for, and it has a switch. "Live" is a
+         claim about EXISTING, and the hide exists and is playable by anyone holding the link
+         the moment this sheet opens, private or not. Same headline both ways, both times true.
+         Written by kfRenderVis() so there is one owner, and repeated in the markup so a JS
+         failure leaves the sentence rather than an empty line. -->
+    <div class="pwTitle" id="ssTitle">Your kamo is live!</div>
     <!-- THE ONE LINE THAT PAYS FOR THE NOTIFICATION PERMISSION.
          It replaces the sentence deleted with #ssLive ("We'll tell you when they tap"), and
          deleting that without putting it back would have been the expensive half of this
@@ -2406,9 +2407,11 @@
          paragraph.
          SECOND, AND OUTLINED. The send is what the session is for; this is what you do while
          waiting for it. A filled second button would make the sheet ask two questions.
-         PUBLIC ONLY — kfRenderVis() hides it for a private hide. "See it live" about something
-         reachable solely by the link they are about to send would be a straight lie to the
-         23% who chose privacy, and it would send them into a feed their hide is not in. -->
+         ALWAYS, INCLUDING FOR A PRIVATE HIDE. It was gated on the visibility toggle for one
+         release on the theory that it would open a feed the hide is not in — it does not.
+         chFeed({first}) fetches that hide BY ID and seeds it as slide 0, so the creator sees
+         their own photo playing the real round whatever the toggle says; only the slides below
+         come from the public feed. See kfRenderVis(). -->
     <button class="ssBtn ssSeeLive" id="ssSeeLive">See it live</button>
     <!-- WHAT THE SEND EARNS, AND THE ONLY THING THE APP HAS THAT A BROWSER DOES NOT.
          1141 people a month reach the reveal of somebody's hide in a plain browser, and 353
@@ -2564,7 +2567,7 @@ import * as THREE from './vendor/three.module.js';
 const $=s=>document.querySelector(s);
 const stage=$("#stage"), cam=$("#cam"), camView=$("#camView"), photo=$("#photo"), glCanvas=$("#gl"), board=$("#board");
 const startEl=$("#start"), hintEl=$("#hint"), shutterWrap=$("#shutterWrap"), flipBtn=$("#flip");
-const wheelEl=$("#wheel"), wheelCenter=$("#wheelCenter"), flashEl=$("#flash"), scoreChip=$("#scoreChip"), busyEl=$("#busy");
+const wheelEl=$("#wheel"), wheelCenter=$("#wheelCenter"), flashEl=$("#flash"), busyEl=$("#busy");
 const ctx=board.getContext("2d",{willReadFrequently:true});
 let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
 /* WHO THIS ROUND IS ANSWERING, when it is an answer.
@@ -3592,7 +3595,7 @@ function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
   sessReset();   // the pre-roll belongs to the hide about to be shot — a Retake starts aiming again, and the old seconds are not that round's
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none"; scoreChip.style.display="none";
+  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
@@ -3615,7 +3618,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
-  mode="compose"; $("#paintUI").style.display="none"; scoreChip.style.display="none"; board.style.display="none";
+  mode="compose"; $("#paintUI").style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
@@ -3821,7 +3824,7 @@ function capture(){
   tlReset();   // the timelapse belongs to THIS hide — see tlCapture()
   tlCaptureOpen();   // ...and it opens on the untouched shot, which is where the round starts — see tlCaptureOpen()
   chResetRound();   // ...and so does the published hide — see chResetRound()
-  currentScore=0; scoreChip.style.display="none";   // the chip now reports the round TIME, on the reveal only
+  currentScore=0;
   covCrossed=false; blockedTracked=false; updateCoverageHud();   // ...and the floor's chip opens the round at 0%, saying what it will take
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
@@ -3881,15 +3884,10 @@ function computeScore(){
   if(!fig) return 0; return Math.max(0,Math.min(100,Math.round(painted/fig*100)));
 }
 function roundSeconds(){ return Math.max(1,Math.round((roundMs||(roundStartedAt?Date.now()-roundStartedAt:0))/1000)); }
-/* Shown once, on the reveal. Time is the score people can compare, brag about and beat —
-   "% hidden" was a number nobody could act on. */
-function showScore(){
-  scoreChip.style.display="block";
-  /* Coverage first, time second. The chip used to report only the round time — a
-     speedrun number. How well it is hidden is the thing worth bragging about and the
-     reason to go again, and it was computed (currentScore) and shown nowhere. */
-  scoreChip.innerHTML=`🫥 <b>${Math.max(0,Math.min(100,Math.round(currentScore||0)))}%</b> hidden · ${roundSeconds()}s`;
-}
+/* showScore() IS GONE WITH #scoreChip (founder, 2026-08-15). It printed "X% hidden · Ns" over
+   the reveal — a scorecard, on the one screen whose whole job is to get the photo sent. There
+   is nothing to beat and nobody to beat it against; roundSeconds() survives because the share
+   message and recordHide() still use it. */
 
 /* THE FLOOR, SAID WHILE IT CAN STILL BE ACTED ON — see #covHud in the stylesheet for the
    423-against-73 that this exists for.
@@ -3901,8 +3899,8 @@ function showScore(){
    double the cost of every single brush lift to print an identical number. */
 function updateCoverageHud(){
   const el=$("#covHud"); if(!el) return;
-  /* Paint mode only. The reveal owns this slot's twin (#scoreChip) and the two may never be
-     on screen together — enterFinished() hides this one on its way past. */
+  /* Paint mode only, and the slot is now its alone on this screen — enterFinished() calls
+     this on its way past to empty it, and nothing replaces it there any more. */
   if(mode!=="paint"||finished){ el.style.display="none"; return; }
   const pct=Math.max(0,Math.min(100,Math.round(currentScore||0)));
   const ready=pct>=CH_MIN_COVERAGE;
@@ -7657,8 +7655,34 @@ function ssOfferApp(){
      that exact hide as slide 0, fetched by id from the server — so what appears is the row
      that was actually published, not a local rendering of it. Empty when the upload has not
      landed yet, which degrades to a normal feed open rather than to an error. */
-  if(l) l.onclick=()=>{ haptic(10); track("sent_feed_tapped",{own:!!chId}); closeShareSheet();
-    try{ chFeed({first:chId||""}); }catch(e){} }; }
+  /* IT HAS TO WAIT FOR THE ID, AND IT DID NOT. Founder's report, 2026-08-15: "j'ai tappé le
+     see it live et ça m'a pas ouvert mon paint dans le feed". It read chId straight off the
+     module and chId is only set once create_hide RESOLVES — so a tap inside the first couple
+     of seconds of the sheet passed "", and chFeed opened the plain public feed: a screen full
+     of strangers' photos, in answer to "show me mine". Silent, and indistinguishable from the
+     button being broken, which is exactly how it was reported.
+     chAwaitId() is the bounded wait this file already uses on the native share path, and it
+     kicks chUpload() rather than only polling — so a publish that never started gets started.
+     2.5s: long enough for the round trip on a phone network, short enough that a tap which
+     cannot be answered still opens the feed rather than hanging on a dead button.
+     AWAITING IS SAFE HERE, and that is worth saying because the rule two hundred lines up is
+     the opposite: #ssInvite must never await, because the first await spends the user
+     activation navigator.share needs. This opens an in-page overlay. There is no activation to
+     spend.
+     THE SHEET CLOSES FIRST, before the wait — the feed is a full-screen overlay and leaving
+     the sheet under it is how you end up with two dismissals to get back to the camera, and a
+     sheet that sits there for two seconds after a tap reads as a dead button twice over. */
+  if(l) l.onclick=async()=>{ haptic(10); closeShareSheet();
+    /* Captured BEFORE the await, because chAwaitId resolves by setting the very module
+       variable this would otherwise read afterwards — `waited` would then be false on every
+       tap that actually had to wait, which is the only population it exists to count. */
+    const had=!!chId;
+    let id=chId;
+    try{ if(!id) id=await chAwaitId(2500); }catch(e){}
+    /* `own` separates "the feed opened on your hide" from "the feed opened at all": without
+       it a tap that lost the race and a tap that worked are one number. */
+    track("sent_feed_tapped",{own:!!id,waited:!had&&!!id,lost:!id});
+    try{ chFeed({first:id||""}); }catch(e){} }; }
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
   if(typeof ssShowAgain==="function") ssShowAgain();
   track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
@@ -8994,8 +9018,7 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   postNative({type:"review-moment",reason:"finish",score:Math.round(currentScore||0)});
   ["swatchRow","paintBadge"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display="none"; });
   sizeBar.style.display="none"; $("#btnDone").style.display="none"; $("#btnEdit").style.display="block";
-  updateCoverageHud();   // paint mode is over: the floor's chip vacates the slot showScore() is about to take
-  showScore();   // "vanished in Xs" — the number the round was played for
+  updateCoverageHud();   // paint mode is over: the floor's chip vacates the slot, and nothing takes it
   /* THE PICTURE STARTS ITS JOURNEY NOW, and this is the whole reason the share stopped
      taking eight seconds. It does NOT publish — see chPrepare(): no row is created, so
      there is still no hide until the sender reaches for the sheet, which is the invariant
@@ -9033,7 +9056,6 @@ function exitFinished(){ finished=false; stage.classList.remove("done");
   ["swatchRow"].forEach(id=>{ const el=$("#"+id); if(el) el.style.display=""; });
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
-  scoreChip.style.display="none";   // the time belongs to the reveal, not the editor
   updateCoverageHud(); }   // ...and back in the editor the floor is actionable again, so it says where the paint stands
 $("#btnDone").onclick=()=>enterFinished(false); $("#btnEdit").onclick=exitFinished;
 revealHandle.addEventListener("pointerdown",e=>{ e.preventDefault(); revealHandle.setPointerCapture(e.pointerId); revealHandle._d=true; revealHint.style.display="none"; });
@@ -9676,11 +9698,18 @@ function kfRenderVis(){
   if(s) s.textContent=pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to";
   const ico=$("#ssVisIco"); const svg=ico&&ico.querySelector("svg");
   if(svg) svg.innerHTML = pub ? VIS_ICO_PUBLIC : VIS_ICO_PRIVATE;
-  /* "Only people you send it to" is deliberately not a sentence about the feed. A private
-     hide is not a lesser public one — it is a hide with an audience of exactly the people who
-     get the link — so the headline names that audience rather than announcing an absence. */
+  /* THE HEADLINE DOES NOT FOLLOW THE TOGGLE ANY MORE, AND THAT IS THE FIX RATHER THAN A
+     RETREAT (founder, 2026-08-15). It said "Only people you send it to" on a private hide,
+     which is a true sentence and the wrong one: it answers "who can see it" — the question the
+     row directly underneath already answers, with a switch — while leaving the actual news
+     unsaid. A creator who has just made something wants to know it EXISTS.
+     "Your kamo is live!" is true in both states, and the reason is worth writing down because
+     it is what makes one headline honest here: the hide is uploaded and playable by anyone
+     holding the link from the moment this sheet opens. Private does not make it less live; it
+     keeps it out of the public feed. Live and public are two different claims, and only the
+     first one belongs in a headline about what just happened. The second is the row below. */
   const h=$("#ssTitle");
-  if(h) h.textContent = pub ? "Your challenge is now live!" : "Only people you send it to";
+  if(h) h.textContent="Your kamo is live!";
   /* WHOEVER IS GOING TO TELL THEM. Inside the wrapper armResultsPing() schedules the local
      nudge and attach_push_token buys the real one, so the promise is kept. In a browser
      neither exists — and #ssGet three rows down is selling exactly that gap, so promising a
@@ -9691,10 +9720,15 @@ function kfRenderVis(){
   if(sub) sub.textContent = window.ReactNativeWebView
     ? "We'll tell you when someone taps."
     : "Come back to see who tried.";
-  /* NOT OFFERED FOR A PRIVATE HIDE — kfApplyVisibility has already pulled it from the feed
-     (or never put it there), so this button would open a screen the hide is not on. */
-  const live=$("#ssSeeLive");
-  if(live) live.style.display = pub ? "" : "none";
+  /* OFFERED FOR A PRIVATE HIDE TOO, and the reason it was not is a mistake worth naming: the
+     button was gated on kfWantPublic() on the grounds that it "would open a screen the hide is
+     not on". It does not. chFeed({first}) seeds that exact hide as slide 0 by fetching it with
+     get_hide BY ID — the same call the My-kamos grid makes, which is how private hides render
+     there at all — so what the creator sees is their own photo, playing the real round, exactly
+     as the person they send the link to will. Only the slides BELOW it come from the public
+     feed. Gating it hid the proof from the 23% who most need it: a private hide is one nobody
+     will stumble across, so its creator has fewer ways than anyone to check it works.
+     Founder's report, 2026-08-15: "la share modal ne montre pas le bouton See it live". */
 }
 try{
   const vb=$("#ssVis");
@@ -11938,10 +11972,11 @@ const KF_CSS=
   +".kmStat.send{background:#fff;border-color:#fff;color:#0a0b0e;}"
   +".kmStat.send b{color:#0a0b0e;}"
   +".kmGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
-  /* align-self:start — WITHOUT IT A CELL WITH NO ACTION ROW STRETCHES to the height of the
-     one beside it that has Watch and Taps, and pays for it with a strip of empty card under
-     its photo. The founder read that gap as a missing control, which is exactly what it looks
-     like. Each cell is now as tall as its own contents. */
+  /* align-self:start — kept, though every cell now carries the same one-button row and so the
+     heights already match. It is what stops a cell stretching to its neighbour's height and
+     paying for it with a strip of empty card under its photo, which the founder read as a
+     missing control — exactly what it looks like. The row is uniform today; the rule is what
+     makes that a property of the layout rather than a coincidence of the content. */
   +".kmCell{align-self:start;border-radius:16px;overflow:hidden;background:#0a0e14;border:1px solid rgba(255,255,255,.1);}"
   +".kmCell.kmUnsent{border-color:rgba(255,255,255,.32);}"
   +".kmShot{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:#0d1117;}"
@@ -11960,37 +11995,57 @@ const KF_CSS=
   /* The play triangle is the one solid glyph — an outlined triangle at 13px reads as noise. */
   +".kmM svg path[d^=\"M7 4.5\"]{fill:currentColor;stroke:none;}"
   /* Top right, away from the numbers, and big enough to be a thumb target on a half-width
-     cell. White when the hide has never been sent — that is the one state this grid exists
-     to clear, and it is the only white thing on the card. */
+     cell. */
+  /* ONE COLOUR, AND IT IS WHITE. Never-sent hides used to turn this glyph mint, which made a
+     grid of four photos read as two kinds of control — the founder's question was literally
+     "why are some green?", which is the whole indictment: a colour that has to be asked about
+     is not a signal, it is a puzzle. The information is not lost, it is said twice already and
+     in words: the "N to send" chip above the grid counts them, and .kmCell.kmUnsent gives the
+     cell itself a brighter border. Both are readable without a legend. */
   +".kmShare{position:absolute;top:5px;right:5px;z-index:3;width:34px;height:34px;"
   +  "display:flex;align-items:center;justify-content:center;padding:0;"
   +  "border:none;background:none;color:#fff;}"
   +".kmShare svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;"
   +  "filter:drop-shadow(0 1px 4px rgba(0,0,0,.6));}"
-  /* Mint, not white-on-white: the only thing that has to stand out is a hide nobody has been
-     sent yet, and a white plate on a bright photo disappeared into it. */
-  +".kmShare.now{color:var(--mint);}"
   +".kmShare:active{transform:scale(.94);}"
-  +".kmActs{display:flex;gap:6px;padding:9px 8px 10px;}"
+  /* ONE BUTTON, FULL WIDTH (founder, 2026-08-15). There were two — a replay of one hunt and a
+     map of every tap — and on a half-width cell they were two 12px words fighting for the same
+     32px strip, distinguishable only by a glyph. One control, and the thing it opens is the map
+     of everyone's taps: the replay describes a single stranger, the map describes the hide, and
+     the map is the one that gets better as the hide gets played. The replay is not gone — it
+     is still on the player card's rows, which is where a per-hunt object belongs. */
+  +".kmActs{display:flex;padding:9px 8px 10px;}"
   +".kmBtn{flex:1;min-width:0;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:12px;white-space:nowrap;padding:0 4px;}"
-  /* Watch and Heat are icon squares in the grid — a half-width cell cannot afford three
-     words, and the photo above them is all the context the icons need. Send keeps the word:
-     it is the action this surface exists for. */
   +".kmIco{flex:1 1 0;font-size:12px;letter-spacing:-.1px;}"
   +".kmBtn:active{transform:scale(.96);}"
   +".kmBtn.lock{color:rgba(255,255,255,.55);}"
   +".kmBtn.lock::after{content:\" ✦\";font-size:9px;opacity:.9;}"
   /* LOCKED = PREMIUM, NOT DISABLED. The dim grey square read as a dead control (founder's
      report: \"ils ne font rien\" — half stacking bug, half this styling saying broken).
-     The lit mint edge is the vocabulary the paywall already teaches — same --ring, same
-     3.4s pwShimmer clock, the #btnShare two-background construction because these squares
-     clip their overflow. The icon stays full white; the ✦ goes mint. A member's buttons
-     keep the quiet grey: for them these are tools, not doors. */
+     The lit mint edge is the vocabulary the paywall already teaches — same --ring, the
+     #btnShare two-background construction because these squares clip their overflow. The icon
+     stays full white; the ✦ goes mint. A member's buttons keep the quiet grey: for them these
+     are tools, not doors.
+     THE SHIMMER IS GONE (founder, 2026-08-15). It ran pwShimmer on a 3.4s infinite loop, on
+     every locked cell at once — so a grid of four hides had four mint edges travelling out of
+     phase behind photographs, which is a lot of motion to spend on a control nobody has tapped
+     yet. The edge still says premium; it just says it once instead of continuously. */
   +".kmIco.lock{color:#fff;border:1.5px solid transparent;overflow:hidden;"
   +  "background:linear-gradient(180deg,#0f2a22,#0e2419 78%) padding-box,var(--ring) border-box;"
-  +  "background-size:auto,260% 100%;box-shadow:0 3px 14px rgba(95,230,164,.16);"
-  +  "animation:pwShimmer 3.4s linear infinite;}"
+  +  "background-size:auto,100% 100%;box-shadow:0 3px 14px rgba(95,230,164,.16);}"
   +".kmIco.lock::after{color:var(--mint);opacity:1;}"
+  /* NOTHING TO SHOW YET, AND IT SAYS SO BY BEING GREY. The button used to be absent below one
+     play, which is what made most of this grid look like it had no controls at all — and an
+     absent control cannot teach anybody that the feature exists. Present and dim teaches it:
+     the reward for getting somebody to play is visible before anybody has.
+     .dim WINS OVER .lock — declared after it and repeating every property it sets — because a
+     hide with no plays is not a paywall moment. Selling the map of an empty hide would be
+     selling nothing, and the mint edge is a door; a door on a room with nothing in it is worse
+     than no door. */
+  +".kmBtn.dim,.kmIco.lock.dim{color:rgba(255,255,255,.34);border:1px solid rgba(255,255,255,.1);"
+  +  "background:rgba(255,255,255,.03);box-shadow:none;}"
+  +".kmBtn.dim::after{content:none;}"
+  +".kmBtn.dim:active{transform:none;}"
   +".kmSendNow{background:#fff;color:#0a0b0e;border:none;}"
   +".kmMid{display:flex;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:0 12px;}"
 
@@ -12395,20 +12450,34 @@ function chFeed(opts){
     /* AN ICON, NOT AN ICON IN A BOX. A 34px plate with an emoji envelope inside it read as two
        controls stacked; the glyph alone, in the same stroke vocabulary as the rest, is the
        control. It keeps its hit area — the button is still 34px, only its skin is gone. */
+    /* A PAPER PLANE, NOT AN ENVELOPE. An envelope is mail: something that sits in an inbox and
+       waits. This is the gesture every app the recipient already uses puts on exactly this
+       action — Instagram's DM, Telegram, Messenger — and it means "off it goes to a person",
+       which is the whole of what this button does. Learned once, everywhere, by everyone.
+       The crease is a separate stroke on purpose: without it the shape is an arrowhead, and an
+       arrowhead is "next", not "send". */
     const lbl=unsent?'Send it':'Send again';
-    const send='<button class="kmShare'+(unsent?' now':'')+'" data-i="'+i+'" title="'+lbl+'" aria-label="'+lbl+'">'
-      +'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 5.5h16.8v13H3.6z"/>'
-      +'<path d="M3.6 6.4 12 12.6l8.4-6.2"/></svg></button>';
-    /* WORDS, NOT BARE ICONS. ▶ and ◈ side by side did not distinguish a film of ONE hunt from
-       a map of EVERYONE'S taps — the founder could not tell them apart, and he wrote them.
-       Two half-width buttons can carry one word each. */
-    const watch=(plays>0)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-w="'+i+'" title="Watch one hunt, as it happened" aria-label="Watch one hunt">▶ Watch</button>':'';
-    const heat =(plays>1)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-h="'+i+'" title="Where everyone tapped" aria-label="Where everyone tapped">◈ Taps</button>':'';
-    /* No row at all when there is nothing to report — an empty strip of padding under a photo
-       reads as a control that failed to load. */
-    const acts=(watch||heat)?'<span class="kmActs">'+watch+heat+'</span>':'';
+    const send='<button class="kmShare" data-i="'+i+'" title="'+lbl+'" aria-label="'+lbl+'">'
+      +'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 2.5 10.6 13.4"/>'
+      +'<path d="M21.5 2.5 14.6 21.6 10.6 13.4 2.4 9.4z"/></svg></button>';
+    /* ONE CONTROL, AND IT IS ALWAYS THERE (founder, 2026-08-15). Two things changed here.
+       WHAT IT OPENS: the map of everyone's taps, not the replay of one hunt. Two buttons on a
+       half-width cell were two 12px words told apart by a glyph, and of the two the map is the
+       one that is about the HIDE rather than about one stranger — it is also the one that gets
+       richer every time somebody plays. The replay survives on the player card's rows.
+       WHEN IT IS THERE: always. It used to appear only past the first play, so three of the
+       four cells in a typical grid had no control at all under the photo — which is how a
+       feature stays unknown to the person it is for. Dim and inert below one play, because
+       there is genuinely nothing to open; the button is the promise, not a door to an empty
+       room. Free users still meet the ✦ and the paywall, but only once there is a map behind
+       it — see the .dim rule, which deliberately outranks .lock. */
+    const dead=plays<1;
+    const watch='<button class="kmBtn kmIco'+(dead?' dim':(isPro?'':' lock'))+'" data-h="'+i+'"'
+      +(dead?' disabled aria-disabled="true"':'')
+      +' title="'+(dead?'Nobody has played this one yet':'Watch where everyone tapped')+'"'
+      +' aria-label="'+(dead?'Watch where everyone tapped — nobody has played this one yet':'Watch where everyone tapped')+'">Watch</button>';
     return '<div class="kmCell'+(unsent?' kmUnsent':'')+'">'
-      +'<span class="kmPic">'+shot+stat+send+'</span>'+acts+'</div>';
+      +'<span class="kmPic">'+shot+stat+send+'</span><span class="kmActs">'+watch+'</span></div>';
   }
   async function mineShow(){
     mineOpen=true;
@@ -12444,12 +12513,21 @@ function chFeed(opts){
     mineEl.innerHTML='<div class="kmStats">'+chips+'</div><div class="kmGrid">'+rows.map(kmCellHtml).join("")+'</div>';
     track("mine_grid_shown",{hides:rows.length,tried:t.tried,found:t.found,unsent:waiting});
     mineEl.querySelectorAll("[data-i]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); }; });
-    mineEl.querySelectorAll("[data-w]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
-      if(!isPro){ track("replay_paywall_tapped",{n:(rows[+b.dataset.w]||{}).n_attempts|0,src:"mine"}); openPaywall("replay"); return; }
-      khReplay(rows[+b.dataset.w],b); }; });
-    mineEl.querySelectorAll("[data-h]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
-      if(!isPro){ track("heat_paywall_tapped",{n:(rows[+b.dataset.h]||{}).n_attempts|0,src:"mine"}); openPaywall("heatmap"); return; }
-      khHeat(rows[+b.dataset.h],b); }; });
+    /* ONE HANDLER, because there is one button. The replay path went with its control (it is
+       still wired on the player card's rows, where khReplay's other caller lives).
+       THE DEAD BUTTON IS STILL WIRED, and it has to be: `disabled` stops the click in every
+       browser this ships to, but the cell underneath it is itself a tap target now, and a
+       stopPropagation that never runs would send a tap meant for a disabled control through to
+       "open this hide in the feed". Cheap insurance, and it keeps the guard in one place. */
+    mineEl.querySelectorAll("[data-h]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation();
+      const row=rows[+b.dataset.h]||{}, n=row.n_attempts|0;
+      /* NOTHING TO OPEN, AND NOTHING TO SELL. A paywall here would be charging for a map of an
+         empty hide — the fastest way to make KAMO+ look like it sells nothing. The button is
+         dim for exactly this reason; the tap is a no-op rather than a disappointment. */
+      if(n<1) return;
+      haptic(10);
+      if(!isPro){ track("heat_paywall_tapped",{n:n,src:"mine"}); openPaywall("heatmap"); return; }
+      khHeat(row,b); }; });
     /* THE WHOLE CELL IS THE TAP TARGET, AND IT OPENS THE HIDE IN THE FEED.
        It forwarded to Watch, which was the nearest thing that existed when the cell first
        became tappable — but Watch is a replay of one stranger's hunt, it is behind KAMO+, and
