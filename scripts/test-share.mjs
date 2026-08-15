@@ -39,13 +39,28 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  * Run the handler in one simulated environment.
  * `share` describes what navigator.share does: 'ok' | 'abort' | 'throw' | null (absent).
  */
-async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40, slotId = 'dddddddddddddddd' }) {
+async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40, slotId = 'dddddddddddddddd', replyTo = '', replyName = '' }) {
   const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0, sheetClosed: 0, hints: [] };
-  const btn = { innerHTML: 'Send to a friend', onclick: null };
+  /* classList and textContent are real here because the reply path is the one send whose ONLY
+     visible result is on this button — no sheet opens and no screen moves, so the label and
+     the state classes are the whole of the feedback. */
+  const cls = new Set();
+  const btn = { innerHTML: 'Send to a friend', textContent: 'Send to a friend', onclick: null, disabled: false,
+    classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) } };
 
   const env = {
     haptic: () => {},
     currentScore: score,
+    /* THE REPLY BRANCH IS THE FIRST THING THE HANDLER READS, so it has to exist in this
+       sandbox or every case below dies on a ReferenceError before reaching the path it is
+       about. Empty by default: these cases are ordinary sends. A reply never touches
+       navigator.share or postNative at all — it is delivered by being published — so it has
+       its own case at the bottom rather than a flag threaded through these. */
+    chReplyTo: replyTo,
+    chReplyName: replyName,
+    /* The handler reads chId directly now (the reply branch stamps without waiting when the
+       publish already landed), so the sandbox has to carry it the way the module does. */
+    chId,
     /* The publish floor and its escape hatch — the handler refuses to wait for an upload
        that chUpload() will never run, closes the sheet and routes to the brush. */
     CH_MIN_COVERAGE: 30,
@@ -408,6 +423,30 @@ console.log('\nTHE WEB SHARE STOPS LOSING THE RACE TO create_hide');
   !/playkamo\.com\/h\//.test(calls.text || '') && /paint yourself into the background/.test(calls.text || '')
     ? ok('a bare hide still sends the honest invite — no link is guessed under the floor')
     : bad(`a bare hide promised a puzzle: ${JSON.stringify(calls.text)}`);
+}
+
+/* A REPLY DELIVERS ITSELF, AND MUST NOT OPEN A PICKER.
+   create_hide carries p_reply_to and the original creator reads it back through my_replies —
+   the address is already known, so handing the user iOS's sheet asks them to choose a
+   recipient the app has had all along, and every tap in that sheet is a chance to back out of
+   a message that was already addressed. Founder's report, 2026-08-15. */
+{
+  const r = await run({ nativeInvite: true, share: 'ok', replyTo: 'hide-42', replyName: 'tony' });
+  r.calls.native === 0 && r.calls.webShare === 0
+    ? ok('a reply opens no share sheet at all — neither native nor navigator.share')
+    : bad(`a reply reached for a picker: native=${r.calls.native} webShare=${r.calls.webShare}`);
+  r.calls.markedSent === 1
+    ? ok('and it is stamped as sent, which is what puts it in front of the creator')
+    : bad(`chMarkSent ran ${r.calls.markedSent} times on a reply`);
+  r.calls.events.some((e) => (Array.isArray(e) ? e[0] : e) === 'reply_sent')
+    ? ok('and reported as reply_sent, so replies stop being counted as ordinary shares')
+    : bad(`a reply fired ${JSON.stringify(r.calls.events)}`);
+  /* THE BUTTON IS ITS OWN RECEIPT. Nothing else on screen changes — no sheet opens, no screen
+     pushes — so if the label does not answer, the send is indistinguishable from a dead tap. */
+  /tony/.test(String(r.btn.textContent || ''))
+    ? ok(`and the button says who it went to ("${r.btn.textContent}")`)
+    : bad(`the button reads ${JSON.stringify(r.btn.textContent)} — a silent send on a screen `
+        + 'that does not move reads as a button that did nothing');
 }
 
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ share paths behave');
