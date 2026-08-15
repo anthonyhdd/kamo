@@ -942,6 +942,19 @@ try {
   bad('THE HINT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
+/* ---- 11f. What comes after the send ----------------------------------------------------- */
+/* Two offers, opposite audiences, and the failure mode is showing the wrong one: #ssGet sells
+   the app to a browser, #ssLive fills the same beat inside the wrapper. Either appearing in
+   the other's context is a visible mistake to the user and an invisible one in a diff. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-sentlive-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-sentlive-dom.mjs', 'SENT-LIVE TEST', out)
+    : ok('the post-send offer matches its audience and opens the feed (node scripts/test-sentlive-dom.mjs)');
+} catch (e) {
+  bad('THE POST-SEND OFFER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+}
+
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-seek-dom.mjs')], { stdio: 'pipe' }).toString();
