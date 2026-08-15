@@ -41,7 +41,14 @@ const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
    of the module is too late for anything it reads while building the screen. Both of these
    are values native pushes in AFTER load in production — seeding them at their declaration is
    the only way to have them in place when the hunt boots. */
-let html = real;
+/* THE THIRD GATE IS DRIVEN, NOT BYPASSED. HINTS_LIVE ships false — the product is a separate
+   Apple approval from the binary, and between the two every tap on Hint would open a purchase
+   sheet for something that does not exist. The served copy reads it off window so BOTH states
+   are reachable here; the shipped file is asserted to be false further down, which is the half
+   that actually protects the fleet. */
+let real2 = real.replace('const HINTS_LIVE=false;', 'const HINTS_LIVE=(window.__hintsLive===true);');
+if (real2 === real) { console.error('  ✗ HINTS_LIVE anchor missing from index.html'); process.exit(1); }
+let html = real2;
 for (const [anchor, patch] of [
   ['async function chRpc(fn,body){', 'if(window.__seed&&window.__seed[fn]!==undefined) return window.__seed[fn];'],
   ['let nativeCaps={};', 'try{ if(window.__caps) nativeCaps=window.__caps; }catch(e){}'],
@@ -79,6 +86,7 @@ const HIDE = { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 2
 async function hunt({ caps = {}, uid = '', spend = undefined } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript(([h, c, u, s]) => {
+    window.__hintsLive = true;          // on, unless a case below turns it off
     window.__seed = { get_hide: h, save_seek_trace: null };
     if (s !== undefined) window.__seed.hint_spend = s;
     window.__caps = c; window.__uid = u;
@@ -211,6 +219,41 @@ console.log('\n⑤ THE ROUND IS OVER — THE HINT GOES WITH IT');
     ? ok('one tap ends the round and the hint button leaves with the give-up button')
     : bad('the hint button survived the buzz — it would sell help for a shot already spent');
   await p.close();
+}
+
+/* THE FLAG THAT SHIPS, AND THE ONE THAT MATTERS. Everything above runs with HINTS_LIVE forced
+   on, so none of it can see the state the fleet is actually in. Two assertions close that:
+   the button must be absent when the flag is off even with every other gate open, and the
+   FILE must ship with it off until com.blisscoach.kamo.hints5 reads APPROVED in App Store
+   Connect. Apple will not take a first consumable without a version, so the binary lands
+   before the product does — and in that window a visible Hint sells a product that does not
+   exist. */
+console.log('\nTHE HINT STAYS OFF UNTIL THE PACK IS APPROVED');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.addInitScript((h) => {
+    window.__hintsLive = false;                     // the flag as it ships
+    window.__seed = { get_hide: h, save_seek_trace: null };
+    window.__caps = { hints: true };                // the build DOES advertise it
+    window.__uid = 'user-1';                        // and the wallet exists
+    window.ReactNativeWebView = { postMessage() {} };
+  }, HIDE);
+  await page.goto(base + '?h=abc123', { waitUntil: 'load' });
+  await page.waitForTimeout(900);
+  const b = await btn(page);
+  !b
+    ? ok('with the flag off there is no button, even on a build that advertises hints')
+    : bad('the hint button is on screen with HINTS_LIVE off — between the build landing and '
+        + 'the pack being approved, every tap opens a purchase sheet for a product Apple has '
+        + 'not accepted yet');
+  await page.close();
+}
+{
+  const shipped = /const HINTS_LIVE=(\w+);/.exec(real);
+  shipped && shipped[1] === 'false'
+    ? ok('and index.html ships with HINTS_LIVE=false — flip it when the pack reads APPROVED')
+    : bad(`index.html ships HINTS_LIVE=${shipped && shipped[1]} — if the pack is not APPROVED in `
+        + 'App Store Connect this is selling a product that does not exist');
 }
 
 await browser.close();
