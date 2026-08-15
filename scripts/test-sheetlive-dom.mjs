@@ -56,7 +56,17 @@ const html = real.slice(0, at)
   + 'publish(){ chId="fixture-hide"; chRpc=async(fn)=>(fn==="get_hide"'
   + '?{img_path:"x.jpg",name:"tony",n_attempts:0,n_found:0}:null); },'
   + 'send(){ this.publish(); chMarkSent(); return this.state(); },'
-  + 'hint(){ const h=document.getElementById("kfHint"); return h?h.textContent:null; },'
+  /* NO ID, WHICH IS THE STATE THE BUTTON WAS REPORTED BROKEN IN. chId is only set once
+     create_hide resolves, and for a paint under the floor it is never set at all —
+     chUpload() and chSlot() both refuse. currentScore is the module variable both of
+     them read, so setting it is how the fixture picks which of the two failures to be. */
+  + 'unpublished(score){ chId=""; currentScore=score; chRpc=async()=>null; },'
+  + 'hint(){ const h=document.getElementById("hint"); return h?h.textContent:""; },'
+  /* The sheet has to be genuinely OPEN for "it stays put" to mean anything — a class
+     that was never added cannot be observed surviving. */
+  + 'openSheet(){ ssState="open"; shareSheetEl.classList.add("show"); return shareSheetEl.classList.contains("show"); },'
+  + 'live(){ return{sheet:shareSheetEl.classList.contains("show"),feed:!!document.getElementById("kfeed")}; },'
+  + 'feedHint(){ const h=document.getElementById("kfHint"); return h?h.textContent:null; },'
   + 'state(){ const v=(id)=>{const e=document.getElementById(id);'
   + 'return e?getComputedStyle(e).display!=="none":null;};'
   + 'const txt=(id)=>{const e=document.getElementById(id);return e?e.textContent.trim():null;};'
@@ -186,10 +196,47 @@ console.log('\nTAPPING IT OPENS THE FEED ON THAT HIDE');
   /* THE SLIDE IS THE PLAYER'S OWN, so the hint has to say so. Without it they meet a round
      whose tap does nothing — the replay flag, working correctly — and read it as broken. */
   await p.waitForTimeout(700);
-  const hint = await p.evaluate(() => window.__s.hint());
+  const hint = await p.evaluate(() => window.__s.feedHint());
   hint && /yours/i.test(hint) && /scroll/i.test(hint)
     ? ok(`the first slide is named as theirs and points onward ("${hint}")`)
     : bad(`hint reads ${JSON.stringify(hint)} — the seeded slide is unlabelled`);
+  await p.close();
+}
+
+/* AND IT NEVER ANSWERS "SHOW ME MINE" WITH STRANGERS' PHOTOS.
+   Reported twice, the second time after a bounded wait had already been added: "dirige vers le
+   feed mais n'ouvre toujours pas la bonne". The wait was the wrong half to stop at, because for
+   a bare paint there is nothing to wait for — chUpload() refuses to publish under the floor and
+   chSlot() returns null, so the id is never coming. The old code then opened chFeed(""), which
+   is the plain public feed: the right screen for a different question.
+   Both no-id paths are asserted, because they fail identically from the outside and need
+   different sentences: one is "this will never publish, here is what would fix it", the other
+   is "it has not landed yet, that tap cost you nothing". */
+console.log('\nWITH NO HIDE TO SHOW, IT SAYS SO AND STAYS PUT');
+for (const [label, score, needle] of [
+  ['a paint under the publish floor', 5, /paint more/i],
+  ['a publish still in flight', 90, /second|going up/i],
+]) {
+  const p = await open(true);
+  await p.evaluate((sc) => { window.__s.vis(true); window.__s.openSheet(); window.__s.unpublished(sc); }, score);
+  await p.evaluate(() => window.__s.tap());
+  /* PAST THE CEILING. The in-flight branch waits on chAwaitId(2500) before it can say anything,
+     so anything read on the same tick reads the state of a handler that has not run yet — which
+     is a green light for a button that never speaks. */
+  await p.waitForTimeout(3200);
+  const t = await p.evaluate(() => window.__s.live());
+  !t.feed
+    ? ok(`${label}: the public feed is not opened`)
+    : bad(`${label}: chFeed ran with no id — that is a screen of strangers' hides in answer to `
+        + '"show me mine", which is exactly how this was reported');
+  t.sheet
+    ? ok('and the sheet stays, so the tap costs nothing')
+    : bad('the sheet closed on a tap that could not be answered, leaving the reveal with no sheet');
+  const said = await p.evaluate(() => window.__s.hint());
+  needle.test(said || '')
+    ? ok(`and it says why ("${said}")`)
+    : bad(`the hint reads ${JSON.stringify(said)} — a button that silently does nothing is the `
+        + 'defect being fixed, not the fix');
   await p.close();
 }
 
