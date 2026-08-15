@@ -914,6 +914,19 @@ try {
   bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
+/* ---- 11d. Which plan the CTA sells ------------------------------------------------------ */
+/* The other half of the same screen, and the one with a failure mode that costs money rather
+   than looking wrong: a device in the lifetime arm whose store cannot sell the lifetime must
+   fall back to the weekly, not show a hero for a product that does not exist. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-planarm-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-planarm-dom.mjs', 'PLAN-ARM TEST', out)
+    : ok('the hero-plan arm sells the plan it selected, and falls back when it cannot (node scripts/test-planarm-dom.mjs)');
+} catch (e) {
+  bad('THE HERO-PLAN ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+}
+
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-seek-dom.mjs')], { stdio: 'pipe' }).toString();
