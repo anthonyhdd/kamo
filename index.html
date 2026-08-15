@@ -4784,7 +4784,11 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    request. It already opens with force:true, so the cap cannot swallow it either way — but
    leaving it out would charge a paywall the user asked for against the budget reserved for
    the ones they did not, which is the accounting bug that note above describes. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size","char"]);
+/* `heatmap` and `replay` join for the reason `char` is here: the tap on a ✦-marked control
+   on the creator's OWN results IS the request. `heatmap` was missing — after the shared
+   budget was spent, a tap on the locked Heat button got a lock hint instead of the sheet it
+   was explicitly asking for. `replay` is the Watch button, KAMO+ since 2026-08-15. */
+const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size","char","heatmap","replay"]);
 
 /* 3 -> 1. The note above asked for `nth_interruption` to settle whether 3 was too low; the
    revenue settled it from the other side first. ~11000 views over 14 days bought 4 active
@@ -6609,7 +6613,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -10223,7 +10227,10 @@ function khRowHtml(h,i){
      than as a dashboard. */
   /* WATCH comes before SEND on a hide somebody has already played. The row's job is to
      report what other people did; until now it could only say it in numbers. */
-  const watch = (h&&h.n_attempts>0) ? '<button class="khWatch" data-w="'+i+'">Watch</button>' : '';
+  /* KAMO+ SINCE 2026-08-15 (founder's call), same contract as Heat below: the ✦ is on the
+     button BEFORE the tap, and the tap goes straight to the paywall with nothing fetched.
+     The numbers stay free — they fuel resends — the footage is the candy. */
+  const watch = (h&&h.n_attempts>0) ? '<button class="khWatch'+(isPro?'':' lock')+'" data-w="'+i+'">Watch</button>' : '';
   /* ONLY FROM TWO. One hunt is a replay and Watch already tells that story better; a heat map
      of a single dot is a dot. From two upward the picture starts saying something no counter
      can — that they all looked in the same wrong place, or that nobody came near. */
@@ -10283,6 +10290,9 @@ function khRenderRows(el,rows,head){
   el.querySelectorAll(".khRow").forEach((row)=>{
     const w=row.querySelector(".khWatch:not(.khHeatBtn)");
     if(!w) return;
+    /* The contract below ("IT DOES WHAT WATCH DOES") survives the KAMO+ gate unchanged: for
+       a free user Watch is now the paywall door, so the row tap is too — the row and its
+       button never disagree about what a tap means. */
     row.classList.add("khRowTap");
     row.addEventListener("click",(ev)=>{
       /* The controls own their own taps — this only catches what falls between them. */
@@ -10300,7 +10310,12 @@ function khRenderRows(el,rows,head){
   });
   el.querySelectorAll(".khWatch").forEach((b)=>{
     if(b.dataset.h!=null) return;   // the heat button is wired below
-    b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10); khReplay(rows[+b.dataset.w],b); };
+    b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
+      /* Same shape as Heat directly below: lock known on-device, nothing fetched, one tap
+         one destination. `replay` is user-initiated so no budget can refuse it. */
+      if(!isPro){ track("replay_paywall_tapped",{n:(rows[+b.dataset.w]||{}).n_attempts|0,src:"row"});
+                  closeKamoHome(); openPaywall("replay"); return; }
+      khReplay(rows[+b.dataset.w],b); };
   });
   el.querySelectorAll(".khHeatBtn").forEach((b)=>{
     b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
@@ -10394,6 +10409,7 @@ function khShowHeat(h,pts,src){
   try{
     document.getElementById("khHeat")?.remove();
     const w=document.createElement("div"); w.id="khHeat"; w.className="chPP";
+    w.style.zIndex="9700";   // same reason as the replay modal: reachable from over the feed now
     const found=pts.filter(p=>p.hit).length, n=pts.length;
     /* SAID FROM THE CREATOR'S SIDE, like every other line on this card. "16 tried" is a
        statistic; "16 people searched your photo" is what happened to them. */
@@ -10454,6 +10470,9 @@ function khPlayTrace(h,rec){
   try{
     document.getElementById("khRp")?.remove();
     const w=document.createElement("div"); w.id="khRp"; w.className="chPP";
+    /* .chPP's stylesheet z-index (90) sits UNDER the feed (9400) and the card (9450); this
+       modal can now be reached from both, so it takes the top of that stack explicitly. */
+    w.style.zIndex="9700";
     const found=rec.why==="hit", gave=rec.why==="giveup";
     const secs=((rec.ms||0)/1000).toFixed(1);
     /* The headline is the verdict, said from the creator's side. */
@@ -11843,10 +11862,45 @@ const KF_CSS=
   +".kfBar>*{pointer-events:auto;}"
   +".kfClose{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;}"
   +".kfClose:active{transform:scale(.92);}"
-  /* Set apart from the two controls that act on the PHOTO — same shape so it reads as part of
-     the bar, its own gap so it does not read as a third thing to do to this hide. */
-  +".kfMe{margin-left:6px;}"
-  +".kfMe svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}"
+  /* THE SCOPE PILL — Instagram-home grammar: one centred title, a chevron, a two-line menu.
+     Absolutely centred rather than flexed into the bar so the ✕/⚑ cluster cannot push it
+     off-centre, and so the bar keeps exactly two buttons (founder's call, 2026-08-15:
+     "pas trop d'éléments en haut"). The profile door moved INTO this menu for the same
+     reason — three destinations behind one calm control instead of three controls. */
+  +".kfScope{position:absolute;left:50%;transform:translateX(-50%);top:calc(8px + var(--safe-t));z-index:31;height:38px;display:flex;align-items:center;gap:7px;padding:0 15px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-family:var(--display);font-weight:700;font-size:13.5px;letter-spacing:-.2px;}"
+  +".kfScope:active{transform:translateX(-50%) scale(.96);}"
+  +".kfScope i{font-style:normal;font-size:9px;opacity:.85;transform:translateY(1px);}"
+  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:190px;border-radius:18px;border:1px solid rgba(255,255,255,.18);background:rgba(10,13,20,.96);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 10px 34px rgba(0,0,0,.5);overflow:hidden;display:none;}"
+  +".kfMenu button{display:block;width:100%;padding:13px 18px;background:none;border:none;color:#fff;font-weight:700;font-size:14px;text-align:left;}"
+  +".kfMenu button.on{color:var(--mint);}"
+  +".kfMenu button:active{background:rgba(255,255,255,.07);}"
+  +".kfMenu button+button{border-top:1px solid rgba(255,255,255,.08);}"
+
+  /* MY KAMOS — the creator's grid, painted OVER the slides (z 26: above rounds, below the
+     bar at 30) so the active round survives a round trip through it untouched. Cells reuse
+     the card's facts (chStateLine) and actions (Send / ✦Watch / ✦Heat); the photo is the
+     identifier, exactly as on the card rows. */
+  +".kfMine{position:absolute;inset:0;z-index:26;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#04060a;padding:calc(62px + var(--safe-t)) 12px calc(26px + var(--safe-b));}"
+  +".kmHead{font-size:12.5px;font-weight:700;opacity:.75;padding:2px 4px 12px;}"
+  +".kmGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
+  +".kmCell{border-radius:16px;overflow:hidden;background:#0a0e14;border:1px solid rgba(255,255,255,.1);}"
+  +".kmCell.kmUnsent{border-color:rgba(255,255,255,.32);}"
+  +".kmShot{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:#0d1117;}"
+  +".kmState{display:block;font-size:11.5px;font-weight:700;line-height:1.35;padding:9px 10px 0;}"
+  +".kmState .khWin{color:var(--mint);}"
+  +".kmState .khHit{color:rgba(255,255,255,.92);}"
+  +".kmState .khNone{color:rgba(255,255,255,.55);font-weight:600;}"
+  +".kmActs{display:flex;gap:6px;padding:9px 8px 10px;}"
+  +".kmBtn{flex:1;min-width:0;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:12px;white-space:nowrap;padding:0 4px;}"
+  /* Watch and Heat are icon squares in the grid — a half-width cell cannot afford three
+     words, and the photo above them is all the context the icons need. Send keeps the word:
+     it is the action this surface exists for. */
+  +".kmIco{flex:0 0 38px;font-size:13px;}"
+  +".kmBtn:active{transform:scale(.96);}"
+  +".kmBtn.lock{color:rgba(255,255,255,.55);}"
+  +".kmBtn.lock::after{content:\" ✦\";font-size:9px;opacity:.9;}"
+  +".kmSendNow{background:#fff;color:#0a0b0e;border:none;}"
+  +".kmMid{display:flex;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:0 12px;}"
 
   /* The swipe affordance. Shown on the first slide only and killed by the first scroll — an
      instruction that stays on screen after it has been obeyed is a permanent obstruction. */
@@ -11880,20 +11934,19 @@ function chFeed(){
     +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button>'
     /* NEXT TO THE ✕, NOT OPPOSITE IT. On the right it landed on top of the round's own clock
        chip, which sits in that corner on every slide — the count showed through the flag. */
-    +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button>'
-    /* THE PROFILE DOOR, AND IT IS ON THE LEFT FOR THE REASON WRITTEN DIRECTLY ABOVE.
-       The obvious home for it is the top-right corner — and that corner already belongs to
-       the round's clock chip, on every single slide. The flag was moved off it for exactly
-       that collision; putting a profile button there would re-create the bug the comment
-       above exists to prevent, and it would land under the thumb on the one control that
-       must stay readable while a round is running.
-       So it joins the left cluster, pushed to the far end of it by margin-left:auto on
-       nothing — the bar is a flex row and this is simply its third child. A gap separates it
-       from the two round controls, because closing and reporting are about THIS photo and
-       this one is about the person looking at it. */
-    +'<button class="kfClose kfMe" id="kfMe" aria-label="Your profile" title="Your profile">'
-    +'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/>'
-    +'<path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0"/></svg></button></div>'
+    +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button></div>'
+    /* THE PROFILE BUTTON IS GONE FROM THE BAR — it lives in the scope menu now ("Profile"),
+       behind the centred pill. Founder's call, 2026-08-15: the bar was growing a third
+       control per month and the ceiling is two. The ⚑ stays out of the menu on purpose —
+       a report is a safety action and must never be two taps deep (the child-photo incident
+       is why it is in the bar at all). */
+    +'<button class="kfScope" id="kfScope">Everyone <i>▾</i></button>'
+    +'<div class="kfMenu" id="kfMenu">'
+    +  '<button data-s="all" class="on">Everyone</button>'
+    +  '<button data-s="mine">My kamos</button>'
+    +  '<button data-s="profile">Profile</button>'
+    +'</div>'
+    +'<div class="kfMine" id="kfMine"></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
@@ -12170,17 +12223,93 @@ function chFeed(){
   },{passive:true});
 
   root.querySelector("#kfClose").onclick=()=>close();
-  /* TOGGLE, not open. The feed is a fullscreen surface and the card opens ON TOP of it, so a
-     button that only ever opens would leave the user tapping the same spot twice with nothing
-     happening the second time — the card's own backdrop is behind the bar here. Reading the
-     class rather than tracking state: the card can also be closed from its own Back button,
-     and a private flag would drift out of step the first time that happened. */
-  { const me=root.querySelector("#kfMe");
-    if(me) me.onclick=()=>{ haptic(8);
+  /* ---- THE SCOPE PILL AND ITS MENU ------------------------------------------------------
+     One centred control, three destinations: the public feed, the creator's own grid, and
+     the profile card. The pill names the CURRENT scope, the menu switches it — Instagram's
+     home grammar, chosen over side-by-side tabs (founder's call, 2026-08-15). */
+  const scopeBtn=root.querySelector("#kfScope"), menuEl=root.querySelector("#kfMenu"), mineEl=root.querySelector("#kfMine");
+  let mineOpen=false;
+  const menuShow=(on)=>{ if(menuEl) menuEl.style.display=on?"block":"none"; };
+  scopeBtn.onclick=()=>{ haptic(8); menuShow(menuEl.style.display!=="block"); };
+  /* A scroll is an answer: whatever the menu offered, the user chose the feed. */
+  scroll.addEventListener("scroll",()=>menuShow(false),{passive:true});
+
+  /* ONE CELL PER HIDE, THE PHOTO AS THE IDENTIFIER — same doctrine as the card rows, same
+     data (chTally -> get_hide), same three actions. The round under this panel stays
+     mounted: the panel covers it (z 26 vs the slides) and uncovers it untouched, so
+     Everyone -> My kamos -> Everyone costs zero refetches and zero replays lost. */
+  function kmCellHtml(h,i){
+    const shot = h&&h.img_path
+      ? '<img class="kmShot" loading="lazy" alt="" src="'+CH_URL+'/storage/v1/object/public/hides/'+encodeURIComponent(h.img_path)+'">'
+      : '<span class="kmShot"></span>';
+    const unsent=!!(h&&h.sent===false);
+    const watch=(h&&h.n_attempts>0)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-w="'+i+'" title="Watch their hunt" aria-label="Watch their hunt">▶</button>':'';
+    const heat =(h&&h.n_attempts>1)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-h="'+i+'" title="Where they looked" aria-label="Where they looked">◈</button>':'';
+    return '<div class="kmCell'+(unsent?' kmUnsent':'')+'">'+shot
+      +'<span class="kmState">'+chStateLine(h)+'</span>'
+      +'<span class="kmActs">'+watch+heat
+      +'<button class="kmBtn'+(unsent?' kmSendNow':'')+'" data-i="'+i+'">'+(unsent?'Send it':'Send')+'</button>'
+      +'</span></div>';
+  }
+  async function mineShow(){
+    mineOpen=true;
+    scopeBtn.innerHTML='My kamos <i>▾</i>';
+    mineEl.style.display="block";
+    /* The flag reports the SLIDE, and the slide is under this panel — a report control over
+       somebody's own grid would report a photo they cannot see. Back with the feed. */
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="none"; }
+    killHint();
+    mineEl.innerHTML='<div class="kmMid"><div class="kfSpin"></div></div>';
+    let t=null; try{ t=await chTally(); }catch(e){}
+    if(!mineOpen||kfState!==S) return;   // switched away or the feed closed while fetching
+    /* Empty and offline are different sentences, same honesty rules as khResults(). */
+    if(!t){
+      mineEl.innerHTML='<div class="kmMid"><div class="kfCard" style="display:flex;flex-direction:column;gap:12px;align-items:center;width:min(90vw,380px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:22px 20px 18px;"><h2 style="font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:-.3px;margin:0;">Nothing of yours yet</h2><p style="font-size:13.5px;line-height:1.45;opacity:.8;margin:0;">Hide a kamo and it lives here — with who tried, who found you, and who answered.</p><button id="kmCta" style="width:100%;height:50px;border:none;border-radius:15px;background:#fff;color:#0a0b0e;font-family:var(--display);font-size:16px;font-weight:700;">Make a hide</button></div></div>';
+      const c=mineEl.querySelector("#kmCta"); if(c) c.onclick=()=>{ track("feed_empty_cta",{src:"mine"}); close(); };
+      track("mine_grid_shown",{hides:0});
+      return;
+    }
+    if(t.offline){
+      mineEl.innerHTML='<div class="kmMid"><div style="font-weight:700;opacity:.85;">Results didn\'t load<br><button class="kmBtn" id="kmRetry" style="margin-top:12px;padding:0 18px;">Retry</button></div></div>';
+      const r=mineEl.querySelector("#kmRetry"); if(r) r.onclick=()=>mineShow();
+      return;
+    }
+    const rows=t.rows, waiting=rows.filter(r=>r&&r.sent===false).length;
+    const head = '<b>'+t.hides+'</b> kamo'+(t.hides===1?'':'s')
+      + (t.tried?' · <b>'+t.tried+'</b> played':'')
+      + (t.found?' · <b>'+t.found+'</b> found you':'')
+      + (waiting?' · <b>'+waiting+'</b> still on your phone':'');
+    mineEl.innerHTML='<div class="kmHead">'+head+'</div><div class="kmGrid">'+rows.map(kmCellHtml).join("")+'</div>';
+    track("mine_grid_shown",{hides:rows.length,tried:t.tried,found:t.found,unsent:waiting});
+    mineEl.querySelectorAll("[data-i]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); }; });
+    mineEl.querySelectorAll("[data-w]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
+      if(!isPro){ track("replay_paywall_tapped",{n:(rows[+b.dataset.w]||{}).n_attempts|0,src:"mine"}); openPaywall("replay"); return; }
+      khReplay(rows[+b.dataset.w],b); }; });
+    mineEl.querySelectorAll("[data-h]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
+      if(!isPro){ track("heat_paywall_tapped",{n:(rows[+b.dataset.h]||{}).n_attempts|0,src:"mine"}); openPaywall("heatmap"); return; }
+      khHeat(rows[+b.dataset.h],b); }; });
+  }
+  function mineHide(){
+    mineOpen=false;
+    scopeBtn.innerHTML='Everyone <i>▾</i>';
+    mineEl.style.display="none"; mineEl.innerHTML="";
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
+  }
+  menuEl.querySelectorAll("button").forEach(b=>{ b.onclick=()=>{ haptic(8); menuShow(false);
+    const s=b.dataset.s;
+    if(s==="profile"){
+      /* Same toggle contract the old bar button had; the menu row replaces it, the event
+         survives with a src so the two eras stay comparable. */
       const el=document.getElementById("kamoHome");
       const open=!!(el&&el.classList.contains("show"));
-      track("feed_profile_tapped",{open:!open});
-      if(open) closeKamoHome(); else openKamoHome(); }; }
+      track("feed_profile_tapped",{open:!open,src:"menu"});
+      if(open) closeKamoHome(); else openKamoHome();
+      return;
+    }
+    menuEl.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    if(s==="mine"&&!mineOpen){ track("feed_scope_changed",{to:"mine"}); mineShow(); }
+    else if(s==="all"&&mineOpen){ track("feed_scope_changed",{to:"all"}); mineHide(); }
+  }; });
   /* Acts on whatever slide is live. Reports and drops in one move — the reporter should not
      have to look at it again while the page they are holding catches up. */
   root.querySelector("#kfFlag").onclick=()=>{
