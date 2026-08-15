@@ -6209,6 +6209,34 @@ function applyPlanAvailability(p){
 }
 window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
+/* THE ONE LINE THAT MAKES HALF THE ANALYTICS JOINABLE.
+ *
+ * Events from this file take one of two roads (see track()): through the bridge to the
+ * native Amplitude SDK, or — for every name in WEB_ONLY — straight to the HTTP API from the
+ * page. The two roads land under DIFFERENT AMPLITUDE USERS. Native has a user_id (the
+ * RevenueCat app user id, set by setAnalyticsUserId in kamo-app/analytics.js); the page has
+ * only its own generated device_id and no user_id at all.
+ *
+ * Daily counts are unaffected — each road counts its own uniques correctly, which is what
+ * they are mostly used for. FUNNELS ACROSS THE TWO ARE NOT. They do not error, they do not
+ * warn: they return ZERO, and a zero reads exactly like a wall. That is not hypothetical.
+ * `essay_finished` (native) -> `sheet_presented` (WEB_ONLY) reports 324 people painting a
+ * hide and none of them ever reaching the share sheet. The share sheet is fine. The join is
+ * not, and the number is a fabrication that took a code read to disbelieve.
+ *
+ * It is also blocking a live experiment: `invite_native` is WEB_ONLY and `share_completed`
+ * is native, so "does a bare invite convert like a challenge" cannot be answered end to end
+ * as things stand.
+ *
+ * The fix is the id, and native already owns one. Passing it here puts every web-direct
+ * event under the same Amplitude user as the app's own events, and Amplitude stitches the
+ * earlier device_id-only events to it retroactively.
+ *
+ * NO EFFECT IN A BROWSER, and that is not a gap this can close: a stranger opening a
+ * challenge link has no app and therefore no RevenueCat id. Seeker-to-install stays a
+ * question for AppsFlyer and the referral link, which is what refLink() is for. */
+let chUserId="";
+window.KAMO.setAnalyticsUserId=(id)=>{ chUserId=(id||"").toString().trim(); };
 window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
 /* WHERE A TAPPED NOTIFICATION LANDS. "Someone found your hide / see how" opened the camera,
    which is the screen with the least to do with what just happened — the notification
@@ -6746,7 +6774,13 @@ function chWebTrack(event,props){
     fetch("https://api.eu.amplitude.com/2/httpapi",{method:"POST",keepalive:true,
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({api_key:CH_AMP,events:[{
-        event_type:event, device_id:chDeviceId(), time:Date.now(), platform:"Web",
+        /* user_id ALONGSIDE device_id, never instead of it. The device_id is what holds a
+           browser seeker's miss and their eventual find together across a reload, and it is
+           the only identity most of these events will ever have. The user_id is present only
+           inside the app, and only once native has handed it over — see setAnalyticsUserId
+           above for what it buys. `undefined` is dropped by JSON.stringify, so a browser
+           sends exactly the payload it sends today. */
+        event_type:event, device_id:chDeviceId(), user_id:chUserId||undefined, time:Date.now(), platform:"Web",
         /* app_variant matches the user property the native SDK sets, so KAMO's web traffic
            lands in the same segment as its app traffic instead of a nameless bucket. */
         /* `host` — WHICH SIDE OF THE WRAPPER THIS CAME FROM, the one dimension the WEB_ONLY
