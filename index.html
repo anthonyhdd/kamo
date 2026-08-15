@@ -11922,6 +11922,17 @@ const KF_CSS=
   +".kmBtn:active{transform:scale(.96);}"
   +".kmBtn.lock{color:rgba(255,255,255,.55);}"
   +".kmBtn.lock::after{content:\" ✦\";font-size:9px;opacity:.9;}"
+  /* LOCKED = PREMIUM, NOT DISABLED. The dim grey square read as a dead control (founder's
+     report: \"ils ne font rien\" — half stacking bug, half this styling saying broken).
+     The lit mint edge is the vocabulary the paywall already teaches — same --ring, same
+     3.4s pwShimmer clock, the #btnShare two-background construction because these squares
+     clip their overflow. The icon stays full white; the ✦ goes mint. A member's buttons
+     keep the quiet grey: for them these are tools, not doors. */
+  +".kmIco.lock{color:#fff;border:1.5px solid transparent;overflow:hidden;"
+  +  "background:linear-gradient(180deg,#0f2a22,#0e2419 78%) padding-box,var(--ring) border-box;"
+  +  "background-size:auto,260% 100%;box-shadow:0 3px 14px rgba(95,230,164,.16);"
+  +  "animation:pwShimmer 3.4s linear infinite;}"
+  +".kmIco.lock::after{color:var(--mint);opacity:1;}"
   +".kmSendNow{background:#fff;color:#0a0b0e;border:none;}"
   +".kmMid{display:flex;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:0 12px;}"
 
