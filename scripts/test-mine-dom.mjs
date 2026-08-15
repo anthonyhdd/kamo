@@ -47,15 +47,28 @@ const html = real.slice(0, at)
   + 'seen==null?localStorage.removeItem("kamo_seen_tries"):localStorage.setItem("kamo_seen_tries",String(seen));}catch(e){}'
   + 'chRpc=(fn,b)=>Promise.resolve(rows[b.p_id]||null);},'
   + 'async check(){await chNewsCheck();return this.dot();},'
+  /* THE ROW'S REAL CLICK, through the handler a thumb reaches — the whole change is that the
+     summary became a DOOR, and calling chFeed() directly would pass with the handler unwired.
+     kfRpc is left alone deliberately: the public feed loading or failing behind the grid is
+     not what this asserts, and stubbing it would hide the fact that the grid does not need it. */
+  + 'async door(){document.getElementById("khScore").click();await new Promise(r=>setTimeout(r,600));'
+  + 'const g=document.getElementById("kfMine");'
+  + 'return{home:document.getElementById("kamoHome").classList.contains("show"),'
+  + 'feed:!!document.getElementById("kfeed"),'
+  + 'grid:!!g&&getComputedStyle(g).display!=="none",'
+  + 'cells:document.querySelectorAll("#kfMine .kmCell").length,'
+  + 'pill:(document.getElementById("kfScope")||{}).textContent||""};},'
   + 'async openCard(){await khResults();return{dot:this.dot(),'
   + 'seen:(()=>{try{return localStorage.getItem("kamo_seen_tries")}catch(e){return null}})(),'
   + 'text:(document.getElementById("khScore")||{}).textContent||"",'
   + 'shown:(document.getElementById("khScore")||{}).style.display};},'
   + 'dot(){const b=document.querySelector(".brand");return !!b&&b.classList.contains("hasNews");},'
-  /* The accordion is driven through a real click on the box rather than by calling the paint
-     function: the whole point of the change is that the summary IS the tap target, and a test
-     that calls the renderer directly would pass with the handler unwired. */
-  + 'expand(){const e=document.getElementById("khScore");e.click();'
+  /* THE BOX'S CLICK LEAVES THE CARD NOW (2026-08-15) — it opens the My-kamos grid, so a real
+     click here would destroy the list this block is about to read. What survives in place is
+     the khOpenNext path, which is the one a "somebody found your hide" notification takes
+     (window.KAMO.openFound); it is set and consumed by khResults() exactly as below. The rows
+     it renders are the same rows, from the same renderer. */
+  + 'async expand(){khOpenNext=true;await khResults();const e=document.getElementById("khScore");'
   + 'return[...e.querySelectorAll(".khRow")].map(r=>({txt:(r.querySelector(".khRowTxt")||{}).textContent||"",'
   + 'send:!!r.querySelector(".khSend"),'
   + 'shot:((r.querySelector(".khShot img")||{}).getAttribute?r.querySelector(".khShot img").getAttribute("src"):null)}));},'
@@ -133,9 +146,14 @@ console.log('\nREADING IT CLEARS IT, AND ONLY NEW PLAY BRINGS IT BACK');
   card.seen === '12'
     ? ok('and the count that was read is remembered (12)')
     : bad(`kamo_seen_tries is ${JSON.stringify(card.seen)} after reading 12 attempts`);
-  /12 played your hides/.test(card.text) && /3 found you/.test(card.text)
-    ? ok(`the card shows the same total the dot was about ("${card.text.trim()}")`)
-    : bad(`the card and the dot disagree: ${JSON.stringify(card.text)}`);
+  /* THE ROW IS A DOOR, NOT A SUMMARY, since 2026-08-15 — the two numbers the dot was raised
+     about are chips at the top of the grid it opens. What the card still has to get right is
+     that the row EXISTS for somebody with results to read, and that it counts the hides that
+     resolved (three ids seeded, one of them expired). Both halves of the dot's meaning are
+     still asserted above: it goes out, and `kamo_seen_tries` remembers the 12 it was about. */
+  /My kamos \(2\)/.test(card.text)
+    ? ok(`the card offers the hides the dot was about ("${card.text.trim()}")`)
+    : bad(`the row that should open the grid reads: ${JSON.stringify(card.text)}`);
 
   /* THE ONE THAT WOULD SHIP BROKEN. A flag instead of a count either latches on forever or
      never speaks again; both look fine on day one and wrong on day two. */
@@ -156,6 +174,33 @@ console.log('\nREADING IT CLEARS IT, AND ONLY NEW PLAY BRINGS IT BACK');
    attempts rows, and this is where the four states are held to their wording: being found on
    the first tap and burning every tap are opposite outcomes and must never render the same
    phrase, because the whole point of the row is which one it was. */
+/* THE ROW IS A DOOR NOW, AND A DOOR THAT OPENS ONTO NOTHING IS WORSE THAN A CLOSED ONE.
+   It used to expand ten rows in place, inside a card anchored to the bottom edge — a fight
+   over vertical room this file has already lost twice (the badge and the name went off the
+   top of the screen, and the fix was to make the box its own scroll container). The grid is
+   the same data with a screen to render it on.
+   THE HANDOFF IS THE FRAGILE PART. Three things have to happen in order and none of them is
+   visible in a diff: the card closes, the feed opens, and the feed lands on MY KAMOS rather
+   than on strangers' photos. Miss the last one and the row answering "what happened to mine"
+   delivers somebody else's hides. */
+console.log('\nTHE SUMMARY IS A DOOR ONTO YOUR OWN GRID');
+{
+  await page.evaluate(() => window.__m.seed(['a', 'b'],
+    { a: { n_attempts: 4, n_found: 1, img_path: 'aaa.jpg' }, b: { n_attempts: 2, n_found: 0, img_path: 'bbb.jpg' } }, null));
+  await page.evaluate(() => window.__m.openCard());
+  const d = await page.evaluate(() => window.__m.door());
+  !d.home ? ok('the card closes behind you') : bad('#kamoHome is still open under the feed — two dismissals to get back');
+  d.feed ? ok('the feed opens') : bad('no #kfeed after tapping the summary');
+  d.grid && /My kamos/.test(d.pill)
+    ? ok(`and it lands on your own grid, not on strangers' photos ("${d.pill.trim()}")`)
+    : bad(`the feed opened on ${JSON.stringify(d.pill.trim())} with the grid ${d.grid ? 'shown' : 'hidden'} — `
+        + 'the row asks "what happened to mine" and answers with everybody else');
+  d.cells === 2
+    ? ok('with one cell per hide (2)')
+    : bad(`the grid drew ${d.cells} cells for 2 hides`);
+  await page.evaluate(() => { const f = document.getElementById('kfeed'); if (f) f.remove(); });
+}
+
 console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
 {
   await page.evaluate(() => window.__m.seed(['a', 'b', 'c', 'd'], {

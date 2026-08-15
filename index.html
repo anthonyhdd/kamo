@@ -5917,11 +5917,15 @@ function khShowField(on){
 function khRenderName(){
   const t=$("#khTitle"), sub=$("#khSub"), h=getHandle();
   if(t) t.textContent = h ? "@"+h : "Sign your hides";
-  /* PLAIN. This said "A dare from nobody is easy to ignore" — a construction you have to stop
-     and parse, on a line whose whole job is to make an unfamiliar field obvious in one glance.
-     Clever and opaque is the worst trade available here. This states the consequence instead,
-     in the words someone would use out loud. */
-  if(sub) sub.textContent="So they know who they're trying to beat.";
+  /* THE SUBLINE IS GONE, AND THE ELEMENT STAYS. It read "So they know who they're trying to
+     beat." — an argument for filling in a field that is already the loudest thing on the card
+     (it is the headline until it is filled), sitting above the one row anybody opens this card
+     to read. Argued copy under an obvious control is the cheapest thing to cut on a card that
+     has run out of vertical room, and this card has: ten hides plus a summary plus a name plus
+     a badge, all anchored to the bottom edge.
+     Emptied rather than deleted from the markup: #khSub is one of the ids check.mjs resolves,
+     and a card that has to grow a line back should find the line still there. */
+  if(sub){ sub.textContent=""; sub.style.display="none"; }
 }
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
@@ -10880,15 +10884,30 @@ async function khResults(){
        of the open state now, which also gives the collapse a visible word instead of leaving
        "tap anything" as folklore. scrollTop resets on both directions: the box is a scroll
        container now and it would otherwise reopen halfway down where it was left. */
+    /* THE FOLDED STATE IS A DOOR NOW, NOT A SUMMARY. It carried `head` — "12 played your
+       hides · 3 found you" — over a button offering to show each one, and both halves are
+       said better one screen away: the My-kamos grid opens with those exact two numbers as
+       chips across the top, and then shows the photos they are about. Two renderings of one
+       fact, and the smaller one was the one blocking the card's only remaining vertical room.
+       So the row states what is behind it and nothing else. The numbers are not lost — they
+       are one tap away, on the screen that can also show WHICH hide each of them came from. */
     const paint=()=>{
       if(khOpen) khRenderRows(el,rows,head);
-      else el.innerHTML = head + '<span class="khMore">'+(rows.length===1?"Send it again":"Show each one")+'</span>';
+      else el.innerHTML = '<span class="khMore">My kamos ('+rows.length+')</span>';
       el.scrollTop=0;
     };
     paint();
+    /* AND THE TAP LEAVES THE CARD. Expanding in place is what the accordion did, and it was
+       built when the grid did not exist: at ten rows it needs its own scroll container inside
+       a card anchored to the bottom edge, which is the fight this file has already lost twice.
+       The grid is the same data with room to render it.
+       The in-place expansion is NOT deleted — khOpenNext still reaches it, and that is the
+       path a "somebody found your hide" notification takes (window.KAMO.openFound): that one
+       has a specific hide to point at and must not dump the reader into a scope switch. */
     el.onclick=()=>{
-      khOpen=!khOpen; paint();
-      if(khOpen) track("home_results_expanded",{hides:rows.length,tried:tried});
+      track("home_results_expanded",{hides:rows.length,tried:tried,to:"mine"});
+      closeKamoHome();
+      try{ chFeed({mine:true}); }catch(e){}
     };
     el.dataset.filled="1";
     el.style.display="block";
@@ -12884,6 +12903,15 @@ function chFeed(opts){
     }
     load().then(paint);
   })();
+  /* OPENED STRAIGHT ONTO YOUR OWN GRID. The player card's results row leads here, and it
+     leads to My kamos rather than to the public feed — the question it answers is "what
+     happened to mine", and landing on strangers' photos first would be an answer to a
+     different one.
+     Deferred one tick rather than called inline, so chFeed() returns having done exactly what
+     it has always done and the grid is a second, separate act on top of it. The public feed
+     still loads underneath (the panel covers it at z 26, midCard included), which is what
+     makes switching the pill back to Everyone cost no round trip. */
+  if(opts&&opts.mine) setTimeout(()=>{ try{ mineShow(); }catch(e){} },0);
 }
 /* TEST HOOK, and deliberately not on window.KAMO. That object is the wrapper's bridge
    contract — everything on it is something App.js calls — and a test affordance has no
