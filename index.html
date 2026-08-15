@@ -2586,10 +2586,19 @@
     try{
       var did; try{ did=localStorage.getItem("kamo_did")||"web-error-anon"; }catch(_){ did="web-error-anon"; }
       props.href=location.href.split("?")[0]; props.wrapper=!!window.ReactNativeWebView; props.emit="web";
+      /* app_variant on BOTH sides, for the same reason chWebTrack sets it on both — and here it
+         was missing from both. A boot crash is the one event you most need to find in a report,
+         and `web_error` was landing in the project with no variant at all: absent from the
+         per-variant dashboards (which segment on the USER property `gp:app_variant`) AND absent
+         from any event-property breakdown someone might fall back to. The beacon duplicates the
+         key and the device-id read on purpose — it must not depend on anything the module
+         defines — so it duplicates this too rather than reaching for CH_AMP. */
+      props.app_variant="kamo";
       fetch("https://api.eu.amplitude.com/2/httpapi",{method:"POST",keepalive:true,
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({api_key:"c3970f8e3ccf035f1f3a001831dc3414",events:[{
-          device_id:did,event_type:type,time:Date.now(),event_properties:props
+          device_id:did,event_type:type,time:Date.now(),
+          user_properties:{app_variant:"kamo"},event_properties:props
         }]})}).catch(function(){});
     }catch(_){}
   }
@@ -6986,8 +6995,23 @@ function chWebTrack(event,props){
            above for what it buys. `undefined` is dropped by JSON.stringify, so a browser
            sends exactly the payload it sends today. */
         event_type:event, device_id:chDeviceId(), user_id:chUserId||undefined, time:Date.now(), platform:"Web",
-        /* app_variant matches the user property the native SDK sets, so KAMO's web traffic
-           lands in the same segment as its app traffic instead of a nameless bucket. */
+        /* A USER PROPERTY, NOT JUST AN EVENT PROPERTY — and that distinction was the bug.
+           Every per-variant dashboard in the portfolio segments on `gp:app_variant`, which is
+           the USER property kamo-app/analytics.js sets with Identify() at init. This path only
+           ever wrote app_variant into event_properties, so a browser user carried the value on
+           their events and nothing on themselves. Result: every one of those dashboards, and
+           every retention or cohort query built on that segment, silently reported the NATIVE
+           population alone — ~2,390 new users over 14 days — while the same window grouped by
+           the EVENT property showed 5,627 uniques on 2026-08-14 by itself. 97% of KAMO is a
+           plain browser, and none of it was in the segment. Nothing looked broken; the reports
+           simply answered a much narrower question than the one being asked of them.
+           A bare object is an implicit $set on Amplitude's HTTP V2 API. The value never changes
+           for this page, so re-sending it on every event is idempotent.
+           ⚠️ NOT RETROACTIVE. Amplitude denormalizes user properties onto each event at ingest,
+           so events already in the project stay unattributed forever. Any window that predates
+           this ship must be read with the EVENT property `app_variant` below instead — which is
+           exactly why that one stays where it is rather than moving up here. */
+        user_properties:{app_variant:"kamo"},
         /* `host` — WHICH SIDE OF THE WRAPPER THIS CAME FROM, the one dimension the WEB_ONLY
            set has never carried. Those events bypass the bridge, so they land on the web
            Amplitude user, which has no `version` user property — the note above says so, and
