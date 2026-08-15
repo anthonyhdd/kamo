@@ -6863,6 +6863,13 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    shape in Amplitude — a name with no data behind it — so adding it to this set replaced one
    permanent zero with another. The handler is removed in this change; see there. */
 "share_deferred","notif_opened_found",
+/* `sign_row_tapped` SHIPPED ON 2026-08-15 AND WOULD HAVE BEEN DROPPED BY EVERY PHONE. It is a
+   new name, so no compiled allow-list in the field contains it — and the wrapper's WEB_EVENTS
+   is a strict allow-list that discards anything it does not know, in silence. Adding it THERE
+   would have fixed it only for a build nobody is running yet; WEB_ONLY covers every installed
+   binary at once, 1.0.2 included. This is the twelfth time this file has paid for that lesson,
+   and the first time it was caught before the number was read rather than after. */
+"sign_row_tapped",
 /* THE PUSH FUNNEL WORKS AND ONLY ITS REPORTING WAS BLIND. `push_attached` read as
    NON-EXISTENT in the Amplitude project — not zero, absent — which is what a whole broken
    feature looks like, and it was read as exactly that. The database says otherwise: 199 of
