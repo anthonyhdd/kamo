@@ -98,38 +98,55 @@ async function open(wrapper) {
   return page;
 }
 
-console.log('\nTHE HEADLINE FOLLOWS THE TOGGLE, BOTH WAYS');
+/* THE HEADLINE IS ONE SENTENCE, AND IT IS TRUE IN BOTH STATES.
+   It followed the toggle for one release and said "Only people you send it to" on a private
+   hide — a true sentence answering the wrong question, since the row directly below it answers
+   that one with a switch. "Live" is a claim about EXISTING, and the hide is uploaded and
+   playable by anyone holding the link the moment this sheet opens. Private keeps it out of the
+   public feed; it does not make it less live.
+   So what is asserted is the opposite of what used to be: the headline must NOT change, and it
+   must say `live` either way. A headline that starts varying again is the sheet drifting back
+   toward answering the visibility question twice. */
+console.log('\nTHE HEADLINE SAYS THE SAME TRUE THING IN BOTH STATES');
 {
   const p = await open(true);
   const pub = await p.evaluate(() => window.__s.vis(true));
-  /live/i.test(pub.title || '')
-    ? ok(`public says the challenge is live ("${pub.title}")`)
-    : bad(`public headline reads ${JSON.stringify(pub.title)}`);
-
   const priv = await p.evaluate(() => window.__s.vis(false));
-  priv.title && priv.title !== pub.title && !/\blive\b/i.test(priv.title)
-    ? ok(`private stops claiming it ("${priv.title}")`)
-    : bad(`private headline reads ${JSON.stringify(priv.title)} — the sheet is announcing a `
-        + 'public hide directly above a control that says Private');
-
-  /* Back again, because a one-way switch is the failure that ships: the first render is the
-     one everybody tests, and nobody taps the toggle twice. */
-  const back = await p.evaluate(() => window.__s.vis(true));
-  back.title === pub.title
-    ? ok('and it comes back when the toggle does')
-    : bad(`switching back left the headline at ${JSON.stringify(back.title)}`);
+  /\blive\b/i.test(pub.title || '')
+    ? ok(`it announces the hide exists ("${pub.title}")`)
+    : bad(`the headline reads ${JSON.stringify(pub.title)} — nothing on this sheet says the `
+        + 'hide is actually out there');
+  priv.title === pub.title
+    ? ok('and a private hide gets the same sentence — private is not less live, it is less public')
+    : bad(`private changes the headline to ${JSON.stringify(priv.title)} — that is the audience `
+        + 'question, and the row below already answers it with a switch');
+  /* The row itself still has to follow the toggle. Moving the claim out of the headline is only
+     safe because this is where the audience is stated, and it is the half that must never go
+     quiet: it is the one disclosure in front of the send. */
+  const rowPub = await p.evaluate(() => { window.__s.vis(true); return document.getElementById('ssVisT').textContent; });
+  const rowPriv = await p.evaluate(() => { window.__s.vis(false); return document.getElementById('ssVisT').textContent; });
+  rowPub !== rowPriv && /public/i.test(rowPub) && /private/i.test(rowPriv)
+    ? ok(`the visibility row still carries the answer ("${rowPub}" / "${rowPriv}")`)
+    : bad(`the row reads "${rowPub}" public and "${rowPriv}" private — with the headline no `
+        + 'longer stating it, this is the ONLY place the audience is disclosed before the send');
   await p.close();
 }
 
-console.log('\nA PRIVATE HIDE IS NEVER OFFERED THE FEED');
+/* AND THE PROOF IS OFFERED TO EVERYONE. This was gated on the toggle for one release, on the
+   theory that "See it live" would open a feed a private hide is not in — it does not.
+   chFeed({first}) fetches that hide BY ID and seeds it as slide 0, the same get_hide call that
+   makes private hides render in the My-kamos grid, so the creator sees their own photo playing
+   the real round whatever the toggle says. Gating it hid the proof from the people with the
+   fewest other ways to check: a private hide is one nobody will stumble across. */
+console.log('\nTHE PROOF IS OFFERED WHATEVER THE TOGGLE SAYS');
 {
   const p = await open(true);
   const pub = await p.evaluate(() => window.__s.vis(true));
-  pub.live ? ok('"See it live" is there for a public hide') : bad('#ssSeeLive is hidden for a public hide');
   const priv = await p.evaluate(() => window.__s.vis(false));
-  !priv.live
-    ? ok('and gone for a private one — it would open a feed the hide is not in')
-    : bad('#ssSeeLive offered the feed for a hide that was never published to it');
+  pub.live && priv.live
+    ? ok('"See it live" is on the sheet for a public hide AND a private one')
+    : bad(`#ssSeeLive is public=${pub.live} private=${priv.live} — the button seeds the hide by `
+        + 'id, so there is no state in which it opens something the creator cannot see');
   await p.close();
 }
 
@@ -155,7 +172,9 @@ console.log('\nTHE NOTIFICATION IS PROMISED ONLY WHERE IT CAN BE DELIVERED');
 console.log('\nTAPPING IT OPENS THE FEED ON THAT HIDE');
 {
   const p = await open(true);
-  await p.evaluate(() => { window.__s.vis(true); window.__s.publish(); });
+  /* Driven from the PRIVATE state on purpose: it is the one that could not be tapped at
+     all until now, and the seeding path is identical. */
+  await p.evaluate(() => { window.__s.vis(false); window.__s.publish(); });
   const t = await p.evaluate(() => window.__s.tap());
   t.tracked.includes('sent_feed_tapped')
     ? ok('the tap is counted as sent_feed_tapped, so hide_published → feed_opened has a middle step')
