@@ -849,19 +849,23 @@
   .cfCard{position:relative;overflow:hidden;width:88%;max-width:360px;background:linear-gradient(180deg,#0f2a22,#0a1512 70%,#070d0b);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:24px 20px 18px;text-align:center;animation:pwUp .26s cubic-bezier(.2,.9,.3,1);}
   .cfCard::before{content:"";position:absolute;left:0;right:0;top:0;height:120px;pointer-events:none;background:radial-gradient(70% 90px at 50% -10%,rgba(95,230,164,.2),transparent 70%);animation:pwGlow 3.8s ease-in-out infinite;}
   .cfCard>*{position:relative;z-index:1;}
-  .cfTitle{font-size:20px;font-weight:900;}
-  .cfSub{font-size:14px;opacity:.7;margin:8px 0 18px;line-height:1.4;}
+  /* THE ONE HEADLINE THAT WAS NOT IN THE DISPLAY FACE. Every title in the app — the hero,
+     the paywall, the feed cards — is Space Grotesk; this one fell back to the body font at
+     weight 900 and read as a different, older app (founder's report, 2026-08-15). Same
+     face, same tracking as .kfMid h2 now. text-wrap:balance keeps the subline from
+     stranding one word on its own line. */
+  .cfTitle{font-family:var(--display);font-size:21px;font-weight:700;letter-spacing:-.3px;}
+  .cfSub{font-size:13.5px;opacity:.75;margin:8px 0 18px;line-height:1.45;text-wrap:balance;}
   .cfCard .b{width:100%;margin-bottom:10px;height:52px;}
-  #cfNo{border:1.5px solid var(--mint) !important;background:rgba(95,230,164,.12) !important;color:#fff !important;box-shadow:0 0 0 1px rgba(95,230,164,.2),0 6px 18px rgba(95,230,164,.12);}
-  /* NEUTRAL, NOT TINTED. Discard is dark glass like every other secondary control in the
-     app — deliberately not mint (nothing destructive should wear the brand colour) and no
-     longer red either.
-     ⚠️ That does drop the conventional destructive-red cue, which is a real signal. It is
-     acceptable here because the sheet already carries the warning in words ("Discard this
-     hide?" / "You'll lose this drawing"), the safe option next to it is the one wearing the
-     accent, and the worst case is losing one unfinished round. */
-  .cfDanger{background:rgba(255,255,255,.06) !important;border:1px solid var(--stroke) !important;color:rgba(255,255,255,.82) !important;}
-  .cfDanger:active{background:rgba(255,255,255,.12) !important;}
+  /* The app's own button grammar: the safe action is the filled white primary (the same
+     object as "Send it" and every kfCard CTA), the destructive one is the quiet ghost. */
+  .cfKeep{background:#fff !important;border:none !important;color:#0a0b0e !important;font-family:var(--display);font-weight:700;}
+  .cfQuiet{background:rgba(255,255,255,.05) !important;border:1px solid rgba(255,255,255,.16) !important;color:rgba(255,255,255,.75) !important;font-weight:700;}
+  .cfQuiet:active{background:rgba(255,255,255,.12) !important;}
+  /* The #cfNo mint-glow override and .cfDanger are gone with the restyle above — an id
+     rule with !important would have silently beaten .cfKeep forever. The destructive
+     button stays un-tinted on purpose (nothing destructive wears the brand colour); the
+     warning lives in the words, the safe option is the filled primary. */
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
@@ -2552,9 +2556,12 @@
 <div id="confirmSheet">
   <div class="cfCard">
     <div class="cfTitle">Discard this hide?</div>
-    <div class="cfSub">You'll lose this drawing and go back to the camera.</div>
-    <button id="cfYes" class="b cfDanger">Discard</button>
-    <button id="cfNo" class="b ghost">Keep editing</button>
+    <div class="cfSub">This drawing won't be saved.</div>
+    <!-- Safe action first and filled white — the app's primary everywhere else. The
+         destructive one is the quiet ghost underneath; it should never be the button
+         your thumb finds by default. -->
+    <button id="cfNo" class="b cfKeep">Keep editing</button>
+    <button id="cfYes" class="b cfQuiet">Discard</button>
   </div>
 </div>
 <input type="file" accept="image/*" id="fileInput" style="display:none" />
@@ -5080,9 +5087,29 @@ const PW_HERO_CTX={
   replay:    ()=>"Watch every hunt on your hides.",
   heatmap:   ()=>"See where they all looked.",
 };
+/* THE SPECTATOR HERO. The three big lines sell the painter (finishes, detail, no
+   watermark) — the right pitch for every locked TOOL, and the wrong one for a ✦ on the
+   creator's own results: somebody who tapped "watch their hunt" was reading about brushes
+   (founder's report, 2026-08-15 — the subline was personalised, the headline was not).
+   So replay/heatmap swap the whole headline, not just the context line. Same grammar as
+   the default set — three short lines, the tapped one lit in mint — and the markup copy
+   is snapshotted per line before the first swap, so closing and reopening from a tool
+   lock restores the painter set exactly. */
+const PW_HERO_SPECTATOR=[
+  {k:"replay",  h:"EVERY HUNT."},
+  {k:"heatmap", h:"EVERY MISS."},
+  {k:"",        h:"EVERY HESITATION."},
+];
 function pwHeroApply(src){
   const hero=$("#pwHero"); if(!hero) return;
-  const key=PW_HERO_LINE[src]||"";
+  const spectator=(src==="replay"||src==="heatmap");
+  hero.querySelectorAll(".pwHeroLn").forEach((l,i)=>{
+    if(!l.dataset.defHtml){ l.dataset.defHtml=l.innerHTML; l.dataset.defKey=l.dataset.hero||""; }
+    const spec=PW_HERO_SPECTATOR[i];
+    l.innerHTML = spectator&&spec ? spec.h : l.dataset.defHtml;
+    l.dataset.hero = spectator&&spec ? spec.k : l.dataset.defKey;
+  });
+  const key=(spectator?src:PW_HERO_LINE[src])||"";
   hero.querySelectorAll(".pwHeroLn").forEach(l=>l.classList.toggle("on",!!key&&l.dataset.hero===key));
   const ctx=$("#pwHeroCtx");
   if(ctx) ctx.textContent=pwText(PW_HERO_CTX[src]||(PW_PITCH[src]||{}).s)||pwGenericSub();
@@ -12390,6 +12417,21 @@ function chFeed(){
     mineEl.querySelectorAll("[data-h]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
       if(!isPro){ track("heat_paywall_tapped",{n:(rows[+b.dataset.h]||{}).n_attempts|0,src:"mine"}); openPaywall("heatmap"); return; }
       khHeat(rows[+b.dataset.h],b); }; });
+    /* THE WHOLE CELL IS THE TAP TARGET — same contract as the card rows ("IT DOES WHAT
+       WATCH DOES", khRenderRows): a photo-sized cell looks tappable, and until now a tap
+       on it did nothing at all (founder's report, 2026-08-15). It forwards to Watch —
+       the cell's own story — and deliberately not to Send: a share sheet must never open
+       from a stray tap. A cell with nothing to watch stays inert; its one action is the
+       explicit Send button. Delegated through the button so there is exactly one path. */
+    mineEl.querySelectorAll(".kmCell").forEach(cell=>{
+      const w=cell.querySelector("[data-w]");
+      if(!w) return;
+      cell.addEventListener("click",(ev)=>{
+        if(ev.target.closest("button")) return;
+        ev.stopPropagation();
+        w.click();
+      });
+    });
   }
   function mineHide(){
     mineOpen=false;
