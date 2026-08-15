@@ -9913,10 +9913,24 @@ async function chUpload(){
 function chAttachPush(){
   if(!chId||!pushToken) return;
   try{
+    /* ⚠️ TWO-ARGUMENT .then, AND THE SECOND ARGUMENT IS THE WHOLE POINT.
+       This was `.then(cb).catch(()=>{})`, and a trailing .catch covers the RPC *and the
+       callback*. So if track() ever threw, the failure was swallowed by the same handler that
+       exists to forgive a network error — and the event simply never appeared, with nothing
+       anywhere saying why.
+       That is not hypothetical. Checked 2026-08-15: attach_push_token is the ONLY writer of
+       hides.push_token (no create_hide overload carries it), it is landing — 250 hides today,
+       205 yesterday — and `push_attached` has never been ingested by Amplitude ONCE. Not zero:
+       absent from the taxonomy, while every neighbour in WEB_ONLY reports normally. The
+       wrapper allow-list explanation was already fixed on 2026-08-14 and is live. The only
+       silent surface left in the chain is this catch.
+       onRejected as the second argument forgives the RPC and NOTHING ELSE: a throw inside the
+       success callback now becomes an unhandled rejection, which the boot beacon at the top of
+       this file turns into a `web_error` with a real message. If it is still missing tomorrow,
+       the reason will be readable instead of deduced. */
     chRpc("attach_push_token",{p_id:chId,p_token:pushToken,
                                p_tz_offset:-(new Date().getTimezoneOffset())})
-      .then(()=>track("push_attached",{}))
-      .catch(()=>{});
+      .then(()=>{ track("push_attached",{}); }, ()=>{});
   }catch(e){}
 }
 /* THE ONE THING THIS APP CAN SAY THAT ISN'T GENERIC.
