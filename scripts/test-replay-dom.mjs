@@ -120,6 +120,33 @@ async function open(why) {
   return page;
 }
 
+/* THE NOTIFICATION LANDS ON THE HUNT, NOT ON THE LIST IT IS FILED IN.
+   "somebody found your hide" names one event, and until 2026-08-15 tapping it opened the
+   player card with the results expanded — an improvement on the camera, and still one tap
+   short of the thing the sentence promised. window.KAMO.openFound() now carries the hide id
+   through to the replay.
+   Driven through the real bridge function the wrapper injects, because that is the contract:
+   App.js calls window.KAMO.openFound(hide) and nothing else. */
+console.log('\nA TAPPED NOTIFICATION OPENS THE REPLAY ITSELF');
+{
+  const page = await open('hit');
+  /* The card is closed and nothing is expanded — the state a cold launch arrives in. */
+  await page.evaluate(() => { const el = document.getElementById('kamoHome'); if (el) el.classList.remove('show'); });
+  await page.evaluate(() => window.KAMO.openFound('abc123'));
+  await page.waitForTimeout(1600);
+  const st = await page.evaluate(() => ({
+    home: !!document.querySelector('#kamoHome.show'),
+    replay: !!document.getElementById('khRp'),
+    rows: document.querySelectorAll('#khScore .khRow').length,
+  }));
+  st.home ? ok('the card opens') : bad('#kamoHome did not open');
+  st.rows > 0 ? ok(`with the results expanded (${st.rows} row(s))`) : bad('the list is not expanded');
+  st.replay
+    ? ok('and the replay is on screen — the tap landed on what the notification promised')
+    : bad('no #khRp: the notification still stops at the list, one tap short of the hunt it names');
+  await page.close();
+}
+
 for (const why of ['miss', 'hit']) {
   console.log('\n' + why.toUpperCase());
   const page = await open(why);
