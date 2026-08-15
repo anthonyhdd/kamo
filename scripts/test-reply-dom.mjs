@@ -11,7 +11,7 @@
  *
  *  1. THE ADDRESS IS NOT CAPTURED. The round publishes as an ordinary hide, nobody is
  *     notified, and the app looks exactly as it did before. Asserted on the create_hide
- *     payload — the wire, not the label — because a button that says "Send it back to @tony"
+ *     payload — the wire, not the label — because a button that says "Challenge @tony back"
  *     over a hide with no reply_to is worse than no button at all.
  *
  *  2. THE ADDRESS OUTLIVES ITS ROUND. This is the one with a victim: carry the target into the
@@ -115,7 +115,7 @@ console.log('\nTHE REPLY KNOWS WHO IT IS FOR');
     : bad('reply state after rehide: ' + JSON.stringify(st));
 
   const label = await page.evaluate(() => window.KAMOREPLY.label());
-  label === 'Send it back to @tony'
+  label === 'Challenge @tony back'
     ? ok(`the send button names them ("${label}")`)
     : bad('button reads ' + JSON.stringify(label));
 
@@ -142,7 +142,7 @@ console.log('\nAND IT STILL WORKS WHEN NOBODY SIGNED IT');
   st.to === 'abc123def4567890' && st.name === ''
     ? ok('an unsigned hide is still answerable — the address does not need a name')
     : bad('unsigned reply state: ' + JSON.stringify(st));
-  label === 'Send it back'
+  label === 'Challenge back'
     ? ok(`and the button says so without inventing one ("${label}")`)
     : bad('unsigned button reads ' + JSON.stringify(label));
   await page.close();
