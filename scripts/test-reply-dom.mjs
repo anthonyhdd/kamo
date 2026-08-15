@@ -222,7 +222,7 @@ console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
     head: document.getElementById('chHead').textContent,
     sub: document.getElementById('chSub').textContent,
   }));
-  t.head === 'Wrong body.' && /@tony's, from round 2/.test(t.sub) && /still in there/.test(t.sub)
+  t.head === 'Wrong kamo.' && /@tony's, from round 2/.test(t.sub) && /still in there/.test(t.sub)
     ? ok(`a wrong-one tap is named, not failed ("${t.sub}")`)
     : bad('old-find ending reads ' + JSON.stringify(t));
   await page.close();
