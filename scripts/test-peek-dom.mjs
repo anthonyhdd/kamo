@@ -196,6 +196,7 @@ const seen = await page.evaluate(() => {
        every one of them is a `:not()` somebody could drop without anything else objecting. */
     title: box('#shareSheet .pwTitle'),
     sub: box('#ssSub'),
+    sign: box('#ssSign'),
     vis: box('#ssVis'),
     live: box('#ssSeeLive'),
     tabs: box('#ssMode'),
@@ -238,6 +239,9 @@ shows('title', 'the headline', 'It is the sentence that says the hide is live, a
 shows('sub', 'the notification line', 'It is the only context iOS ever gets before '
   + 'armResultsPing() asks for permission, and iOS asks exactly once. Without it the ask is '
   + 'refused and the app loses its only way to tell a creator somebody played their hide.');
+shows('sign', 'the signature row', 'It shows the name the challenge goes out under. Hidden, a '
+  + 'creator meets their own pseudonym for the first time in the feed, on somebody else\'s '
+  + 'screen — which is exactly how it was reported.');
 shows('vis', 'the visibility row', 'The headline directly above it claims the hide is public. '
   + 'Hiding the control that decides that leaves the claim unanswerable, and publishes a hide '
   + 'for the 23% who would have turned it off.');
@@ -294,7 +298,8 @@ const below = (a, b, what) => {
         + 'flex row rather than being its sibling in the card');
 };
 below('title', 'sub', 'the grey line sits under the headline, as its second half');
-below('sub', 'vis', 'the visibility row comes next — the answer the headline depends on');
+below('sub', 'sign', 'the signature row comes next — whose challenge this is');
+below('sign', 'vis', 'then who can see it — the answer the headline depends on');
 below('vis', 'cta', 'then the send: decide who can see it, then send it');
 below('cta', 'live', '"See it live" follows the send rather than leading it');
 
@@ -387,8 +392,9 @@ seen.more && seen.more.h === 0
    quirk, not the design. What IS checked above is the thing that decides the height: which
    elements are displayed, and which are not. */
 ok(`short-state content: grabber + headline (${Math.round(seen.title.h)}px) + line `
-  + `(${Math.round(seen.sub.h)}px) + visibility (${Math.round(seen.vis.h)}px) + send `
-  + `(${Math.round(seen.cta.h)}px) + See it live (${Math.round(seen.live.h)}px), nothing else`);
+  + `(${Math.round(seen.sub.h)}px) + signature (${Math.round(seen.sign.h)}px) + visibility `
+  + `(${Math.round(seen.vis.h)}px) + send (${Math.round(seen.cta.h)}px) + See it live `
+  + `(${Math.round(seen.live.h)}px), nothing else`);
 
 /* THE HANDLE WALKS DOWN, AND THE FLOOR LEADS BACK UP.
    It used to only ever step UP, so once the sheet was open the handle was an affordance that
