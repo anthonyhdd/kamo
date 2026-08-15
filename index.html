@@ -2568,23 +2568,43 @@
    the device-id read deliberately: it must not depend on anything the module defines.
    Capped at 3 per page load; ships direct to Amplitude EU like chWebTrack does. */
 (function(){
-  var sent=0;
-  function beacon(kind,msg,src,line){
+  /* TWO STREAMS, TWO CAPS. Day one taught the lesson: the capture-phase listener also
+     receives RESOURCE load failures (an <img> that 404s fires `error` with no .message),
+     and 924 of the first day's 953 events were "[object Event]" — noise that would have
+     drowned the one real crash the beacon exists to catch. JS errors and resource
+     failures are separate event names now, resource failures are capped at one per load,
+     and nothing without a real message ever reaches `web_error` again. */
+  var sentJs=0, sentRes=0;
+  function post(type,props){
     try{
-      if(sent>=3) return; sent++;
       var did; try{ did=localStorage.getItem("kamo_did")||"web-error-anon"; }catch(_){ did="web-error-anon"; }
+      props.href=location.href.split("?")[0]; props.wrapper=!!window.ReactNativeWebView; props.emit="web";
       fetch("https://api.eu.amplitude.com/2/httpapi",{method:"POST",keepalive:true,
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({api_key:"c3970f8e3ccf035f1f3a001831dc3414",events:[{
-          device_id:did,event_type:"web_error",time:Date.now(),
-          event_properties:{kind:kind,message:String(msg||"").slice(0,300),
-            source:String(src||"").slice(0,120),line:line||0,
-            href:location.href.split("?")[0],wrapper:!!window.ReactNativeWebView,emit:"web"}
+          device_id:did,event_type:type,time:Date.now(),event_properties:props
         }]})}).catch(function(){});
     }catch(_){}
   }
-  window.addEventListener("error",function(e){ beacon("error",(e&&e.message)||e,(e&&e.filename)||"",(e&&e.lineno)||0); },true);
-  window.addEventListener("unhandledrejection",function(e){ var r=e&&e.reason; beacon("unhandledrejection",(r&&r.message)||r,"",0); });
+  window.addEventListener("error",function(e){
+    var t=e&&e.target;
+    if(t && t!==window && t.tagName){
+      if(sentRes>=1) return; sentRes++;
+      post("resource_error",{tag:String(t.tagName).slice(0,12),
+        source:String(t.currentSrc||t.src||t.href||"").slice(0,140)});
+      return;
+    }
+    if(!e || typeof e.message!=="string" || !e.message) return;
+    if(sentJs>=3) return; sentJs++;
+    post("web_error",{kind:"error",message:e.message.slice(0,300),
+      source:String(e.filename||"").slice(0,120),line:e.lineno||0});
+  },true);
+  window.addEventListener("unhandledrejection",function(e){
+    var r=e&&e.reason, m=(r&&r.message)||(typeof r==="string"?r:"");
+    if(!m) return;
+    if(sentJs>=3) return; sentJs++;
+    post("web_error",{kind:"unhandledrejection",message:String(m).slice(0,300),source:"",line:0});
+  });
 })();
 </script>
 
@@ -6636,7 +6656,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -9339,7 +9359,23 @@ confirmSheet.onclick=e=>{ if(e.target===confirmSheet) closeConfirm(); };
 
 window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1)); if(renderer) resize3(); });
 
-initThree();
+/* THE ONE THROW THAT USED TO KILL EVERYTHING. This call sits at module top level, so on a
+   device that cannot create a WebGL context (17 of them in the beacon's first 12 hours —
+   low-end phones, exactly the TikTok audience) the exception stopped the module HERE:
+   no seeker, no feed, no tracking, a black screen indistinguishable from churn. The toy
+   cannot paint without GL, but hunting is 2D — the seeker and the feed never touch the
+   renderer — so the device is downgraded to hunt-only instead of dead: see the glDead
+   patch at the end of the module, after the hero's own handlers are bound. */
+let glDead=false, glDeadMsg="";
+try{ initThree(); }
+catch(e){
+  glDead=true;
+  /* NOT tracked from here: CH_AMP and CH_SEEK are declared ~50 lines below, so a track()
+     at this point dies on the TDZ inside chWebTrack — silently, inside its own try. The
+     event fires from the hunt-only patch at the end of the module, where everything the
+     pipeline needs has been evaluated. */
+  glDeadMsg=String((e&&e.message)||e).slice(0,140);
+}
 
 /* ASK THE CAMERA, DON'T ASK STORAGE.
    Priming gated the boot on localStorage: "have we raised the sheet before?". On the live
@@ -12560,6 +12596,22 @@ const CH_NOTIF={
    no hides of their own, and CH_SEEK is exactly that case. Delayed a beat so the launch path
    — camera permission, first frame — never waits on this. */
 if(!CH_SEEK) setTimeout(()=>{ try{ chNewsCheck(); }catch(e){} try{ kfProbe(); }catch(e){} },1200);
+
+/* HUNT-ONLY MODE for a device with no WebGL. Applied HERE, after every hero handler above
+   is bound, so this override is the one that survives. Both hero buttons lead to the
+   painter, which cannot exist without GL — so the primary becomes the feed (2D, works),
+   the photo path is hidden rather than left to die downstream, and the subline says the
+   truth instead of promising a camera flow that ends in black. Seeker links (?h=) never
+   ran the branch above and keep working untouched. */
+if(glDead){ try{ track("webgl_dead",{message:glDeadMsg}); }catch(_){} }
+if(glDead && !CH_SEEK){ try{
+  const s=document.getElementById("heroStart"), p=document.getElementById("heroPick");
+  const sub=document.querySelector("#start .heroSub, #start p");
+  if(p) p.style.display="none";
+  if(sub) sub.textContent="This phone can't run the painter — but the hunts still work.";
+  if(s){ s.textContent="Hunt kamos";
+    s.onclick=(e)=>{ e.stopPropagation(); e.preventDefault(); haptic(10); chFeed(); }; }
+}catch(_){} }
 
 if(location.search.includes("debug")){
   /* poseIdx rides along because the pose is otherwise unobservable from outside: the new
