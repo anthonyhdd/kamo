@@ -2,15 +2,29 @@
 /**
  * THE SHORT SHEET, RENDERED IN A REAL BROWSER.
  *
- * check.mjs can only assert that peekShareSheet() *calls* chPrevRender(). It cannot tell you
- * what the user sees, and the bug it missed was exactly that gap: the peek CSS exempted
- * .chPrev from its hide-everything rule, so the card was declared part of the short state —
- * while .chPrev shipped display:none and nothing in that path ever added `.on`. Every static
- * check passed. The card was not on the screen.
+ * MOST SENDS HAPPEN HERE. The sheet presents itself on the reveal in this state, and the swipe
+ * that opens the long one is a gesture almost nobody performs — so anything the peek rule does
+ * not exempt is, for practical purposes, not shipped. check.mjs can assert which selectors are
+ * NAMED in that rule; it cannot tell you whether the element those selectors point at is on
+ * the screen. That gap is the bug this file was written for: `.chPrev` was exempted in CSS
+ * while shipping display:none, with nothing on that path ever adding `.on`. Every static check
+ * passed. The card was not there.
  *
- * So this drives the real state machine in real Chromium and reads computed styles: is the
- * card displayed in the short sheet, is the CTA displayed, and is the card ABOVE it. Three
- * questions a regex cannot answer.
+ * REWRITTEN AGAINST THE SHEET THAT SHIPPED ON 2026-08-15, and the shape of the old suite is
+ * why it was quarantined rather than deleted: it was asserting a preview card, a rehearsal
+ * overlay and an Instagram slab, all three of which are gone, while the questions underneath
+ * them — is it displayed, is it in the right order, is it still short — are the same questions
+ * about the controls that replaced them. What is checked now:
+ *
+ *   · the whole ask survives the peek: headline, the notification line, the visibility row,
+ *     the send, and "See it live"
+ *   · they are in that order, and both buttons are full width
+ *   · the send is the only white slab and the only thing moving
+ *   · the destinations are still behind the swipe
+ *
+ * The confetti assertions did not move here from nowhere — they went the other way, to
+ * test-buzz-dom, which drives the surviving confettiBurst() caller (the real find on the
+ * seeker screen). They were reachable from this file only through the rehearsal overlay.
  *
  *   node scripts/test-peek-dom.mjs
  */
@@ -47,25 +61,14 @@ const html = real.slice(0, at)
   + 'copy(){return{generic:pwGenericSub(),'
   + 'pitch:Object.fromEntries(Object.entries(PW_PITCH).map(([k,v])=>[k,pwText(v.t)+" | "+pwText(v.s)])),'
   + 'hint:Object.fromEntries(Object.entries(PW_LOCK_HINT).map(([k,v])=>[k,pwText(v)])),'
-  /* CH_LIMIT_MIN / CH_LIMIT_MAX ARE GONE, and reading them here is what turned this suite
-     from FAILING into CRASHING — a ReferenceError inside page.evaluate aborts the run, so
-     check.mjs printed "IS BROKEN" with no detail and the real failures underneath were
-     invisible. They were the round-settings bounds; the seeker plays one buzz on no clock
-     now, so there is no clock to bound and no paywall line left that quotes one. CH_TAPS
-     survives only because chStateLine() still narrates pre-buzz hides with it. */
-  + 'facts:{paint:PAINT_SECONDS,sizes:FREE_SIZES.length,shades:FREE_SHADES,taps:CH_TAPS}};},'
-  /* chGeom() needs a hider projected from the 3D scene, and this harness has no camera — so
-     the preview would bail on its first line for a reason that has nothing to do with what is
-     being tested. Stubbed to a hider dead centre. chGeom is a function DECLARATION, so it is
-     assignable from inside the module; nothing in the shipped file is touched. */
-  + 'preview(){chGeom=()=>({cx:.5,cy:.5,r:.15});document.getElementById("chPrev").click();'
-  + 'return !!document.getElementById("chPP");},'
-  + 'win(){const img=document.querySelector("#chPPframe canvas");if(!img)return null;'
-  + 'const r=img.getBoundingClientRect();'
-  + 'img.dispatchEvent(new MouseEvent("click",{clientX:r.left+r.width/2,clientY:r.top+r.height/2,bubbles:true}));'
-  + 'return{found:!!document.querySelector("#chPPframe.found"),confetti:document.querySelectorAll(".kConfetti").length,'
-  + 'sub:(document.querySelector(".chPPsub")||{}).textContent||"",head:(document.getElementById("chPPh")||{}).textContent};},'
-  + 'litter(){return document.querySelectorAll(".kConfetti").length;},'
+  /* ONLY THE CONSTANTS THE ASSERTIONS BELOW ACTUALLY USE, and that is a rule this hook learned
+     the hard way. It used to read CH_LIMIT_MIN / CH_LIMIT_MAX as well, and when the round
+     settings were deleted the ReferenceError inside page.evaluate turned the whole suite from
+     FAILING into CRASHING — check.mjs printed "IS BROKEN" with no detail and every real failure
+     underneath it was invisible. FREE_SIZES and CH_TAPS went the same way for the same reason:
+     nothing here asserts a size count (the size pitch deliberately quotes no figure) and the
+     tap budget left the paywall with the gear. Every name in this expression is a hostage. */
+  + 'facts:{paint:PAINT_SECONDS,shades:FREE_SHADES}};},'
   /* A real tap on the wordmark, dispatched at the document the way a finger arrives — the
      handler is a capture-phase hit test on the mark's rect, not a listener on the element,
      so calling openKamoHome() directly would prove nothing about whether a tap reaches it. */
@@ -110,16 +113,7 @@ const html = real.slice(0, at)
   + 'cls:shareSheetEl.className,h:c.getBoundingClientRect().height,inline:c.style.height,'
   + 'gap:Math.round(innerHeight-c.getBoundingClientRect().bottom),'
   + 'resizing:shareSheetEl.classList.contains("ssResizing"),'
-  + 'pe:getComputedStyle(shareSheetEl).pointerEvents};},'
-  + 'thumb(w,h){board.width=w;board.height=h;'
-  + 'const x=board.getContext("2d");x.fillStyle="#ff00ff";x.fillRect(0,0,w,h);'
-  + 'chPrevRender();'
-  + 'const c=document.querySelector("#chPrevShot canvas");if(!c)return null;'
-  /* clientWidth/Height, not the bounding rect: .chPrevShot carries a 1px rim by design, and a
-     border-box measurement would report the canvas as 2px short of a box it is in fact
-     filling — a permanently-red check that asks for the rim to be removed. */
-  + 'const s=document.getElementById("chPrevShot"),r=c.getBoundingClientRect();'
-  + 'return{iw:c.width,ih:c.height,rw:r.width,rh:r.height,bw:s.clientWidth,bh:s.clientHeight};}};\n'
+  + 'pe:getComputedStyle(shareSheetEl).pointerEvents};}};\n'
   + real.slice(at);
 /* Everything OTHER than the page is served off disk with a real MIME type. The module does
    `import * as THREE from './vendor/three.module.js'`, and a server that answers every path
@@ -194,12 +188,23 @@ const seen = await page.evaluate(() => {
     anims,
     animName: getComputedStyle(cardEl).animationName,
     sheet: box('#shareSheet'),
-    card: box('#chPrev'),
     cta: box('#ssInvite'),
+    /* THE FOUR THINGS THAT REPLACED THE PREVIEW CARD IN THIS STATE. The headline makes a claim
+       ("Your challenge is now live!"), #ssSub is the sentence the notification permission
+       prompt depends on, #ssVis is the control that decides whether the headline is even true,
+       and #ssSeeLive is the proof. Every one of them is exempted by name in the peek rule, and
+       every one of them is a `:not()` somebody could drop without anything else objecting. */
     title: box('#shareSheet .pwTitle'),
+    sub: box('#ssSub'),
+    vis: box('#ssVis'),
+    live: box('#ssSeeLive'),
     tabs: box('#ssMode'),
     instagram: box('#shareSheet .ssBtn.ig'),
     more: box('#shareSheet .ssBtn.ssMore'),
+    liveColor: (() => {
+      const e = document.querySelector('#ssSeeLive');
+      return e ? { bg: getComputedStyle(e).backgroundColor, w: e.getBoundingClientRect().width } : null;
+    })(),
     ctaColor: (() => {
       const s = getComputedStyle(document.querySelector('#ssInvite'));
       const r = getComputedStyle(document.querySelector('#ssInvite'), '::before');
@@ -214,18 +219,31 @@ const seen = await page.evaluate(() => {
   };
 });
 
-console.log('\nTHE SHORT SHEET SHOWS THE CARD');
+console.log('\nTHE SHORT SHEET CARRIES THE WHOLE ASK');
 seen.state === 'peek' ? ok('the sheet is in the short state') : bad(`state is ${seen.state}, not peek`);
 seen.sheet && seen.sheet.display !== 'none' ? ok('the sheet is on screen') : bad('the sheet is not displayed at all');
 
-seen.card && seen.card.display !== 'none' && seen.card.h > 0
-  ? ok(`the challenge card is rendered (${seen.card.display}, ${Math.round(seen.card.h)}px tall, class "${seen.card.cls}")`)
-  : bad(`THE CARD IS NOT VISIBLE IN THE SHORT SHEET — display:${seen.card && seen.card.display}, `
-      + `class "${seen.card && seen.card.cls}". .chPrev needs the "on" class from chPrevRender().`);
-
-seen.cta && seen.cta.display !== 'none' && seen.cta.h > 0
-  ? ok(`"Challenge a friend" is rendered (${Math.round(seen.cta.h)}px tall)`)
-  : bad('the CTA is not visible in the short sheet — updateInviteBtn() did not un-hide it');
+/* Named individually rather than swept, because each one fails for its own reason and the
+   fix is different every time — a missing `:not()` in the peek rule, an element that ships
+   display:none and is never un-hidden, or a row that got nested inside another one and so
+   stopped being a direct child of .ssCard at all. A sweep would say "something is missing". */
+const shows = (key, what, why) => {
+  const b = seen[key];
+  b && b.display !== 'none' && b.h > 0
+    ? ok(`${what} is on the short sheet (${Math.round(b.h)}px tall)`)
+    : bad(`${what} is NOT on the short sheet — display:${b && b.display}. ${why}`);
+};
+shows('title', 'the headline', 'It is the sentence that says the hide is live, and this is the '
+  + 'state most people meet it in.');
+shows('sub', 'the notification line', 'It is the only context iOS ever gets before '
+  + 'armResultsPing() asks for permission, and iOS asks exactly once. Without it the ask is '
+  + 'refused and the app loses its only way to tell a creator somebody played their hide.');
+shows('vis', 'the visibility row', 'The headline directly above it claims the hide is public. '
+  + 'Hiding the control that decides that leaves the claim unanswerable, and publishes a hide '
+  + 'for the 23% who would have turned it off.');
+shows('cta', 'the send', 'updateInviteBtn() did not un-hide it — the sheet has no action left.');
+shows('live', '"See it live"', 'The sheet announces the hide is live and then hides the button '
+  + 'that proves it, which is asking for trust it does not have to ask for.');
 
 console.log('\nIT RISES ONCE');
 seen.anims.length <= 1
@@ -262,34 +280,57 @@ onCollapse.length === 0
   ? ok('long → short restarts nothing — it is a resize, not a re-entry')
   : bad(`${onCollapse.join(', ')} restarted on collapse — the sheet bounces when it gets smaller`);
 
-console.log('\nTHE CARD IS ABOVE THE CTA, AND IT IS FULL WIDTH');
-seen.card && seen.cta && seen.card.bottom <= seen.cta.top + 1
-  ? ok('the card sits above the button — see what goes out, then send it')
-  : bad(`the card is not above the CTA (card bottom ${seen.card && Math.round(seen.card.bottom)}, `
-      + `CTA top ${seen.cta && Math.round(seen.cta.top)}) — if they overlap the button is INSIDE the card's flex row`);
+/* READ TOP TO BOTTOM IT HAS TO BE ONE SENTENCE: this is what happened, this is who can see
+   it, send it, look at it. Get the order wrong and the sheet answers a question before it has
+   been asked — a visibility control UNDER the send is a choice offered after the choice was
+   made, and "See it live" above the send leads with the detour. */
+console.log('\nIT READS TOP TO BOTTOM, AND BOTH BUTTONS ARE FULL WIDTH');
+const below = (a, b, what) => {
+  const x = seen[a], y = seen[b];
+  x && y && y.top >= x.bottom - 1
+    ? ok(what)
+    : bad(`${b} is not under ${a} (${a} bottom ${x && Math.round(x.bottom)}, ${b} top `
+        + `${y && Math.round(y.top)}) — overlapping boxes mean one is nested INSIDE the other's `
+        + 'flex row rather than being its sibling in the card');
+};
+below('title', 'sub', 'the grey line sits under the headline, as its second half');
+below('sub', 'vis', 'the visibility row comes next — the answer the headline depends on');
+below('vis', 'cta', 'then the send: decide who can see it, then send it');
+below('cta', 'live', '"See it live" follows the send rather than leading it');
 
-/* The regression that shipped: the button nested in .chPrev became a cell in a flex row, so
-   it was no taller than the row and far from full width. A 390px viewport with 20px padding
-   either side makes a full-width CTA ~350px. */
-const w = await page.evaluate(() => {
-  const b = document.querySelector('#ssInvite');
-  return b ? b.getBoundingClientRect().width : 0;
-});
-w > 300
-  ? ok(`the CTA is full width (${Math.round(w)}px of a 390px viewport)`)
-  : bad(`the CTA is only ${Math.round(w)}px wide — it is being laid out as a cell, not a button`);
+/* The regression that shipped once: a button nested in another row became a cell in a flex
+   row, so it was no taller than the row and far from full width. A 390px viewport with 20px
+   padding either side makes a full-width button ~350px. Both are checked — the second one is
+   newer, which is exactly why it is the one nobody would notice going wrong. */
+const widths = await page.evaluate(() => ({
+  cta: (document.querySelector('#ssInvite') || { getBoundingClientRect: () => ({ width: 0 }) }).getBoundingClientRect().width,
+  live: (document.querySelector('#ssSeeLive') || { getBoundingClientRect: () => ({ width: 0 }) }).getBoundingClientRect().width,
+}));
+widths.cta > 300 && widths.live > 300
+  ? ok(`both are full width (${Math.round(widths.cta)}px and ${Math.round(widths.live)}px of a 390px viewport)`)
+  : bad(`the send is ${Math.round(widths.cta)}px and "See it live" ${Math.round(widths.live)}px — `
+      + 'anything well under 350px is being laid out as a cell, not a button');
 
-/* THE CTA HAS TO WIN THE CARD. It is white on a green card precisely because the button below
-   it is a full-saturation Instagram gradient; a tinted CTA lost that contest, and the sheet
-   exists to produce challenge sends. Asserted rather than eyeballed because a colour change is
-   one token and nothing else in the file would object to it. */
+/* ONE PRIMARY, AND IT IS THE SEND. The white slab used to be defending itself against a
+   full-saturation Instagram gradient below it; that button is gone, and what sits there now is
+   a second full-width button one row down. Two white slabs stacked is two primaries, which is
+   no primary at all — so the pair is asserted together: the send filled, "See it live" a
+   ghost. A colour change is one token, and nothing else in the file would object to it. */
 console.log('\nTHE PRIMARY LOOKS PRIMARY');
 {
   const bg = (seen.ctaColor.bg || '').replace(/\s/g, '');
   bg === 'rgb(255,255,255)'
     ? ok(`the CTA is a white slab (text ${seen.ctaColor.fg})`)
-    : bad(`the CTA background is ${seen.ctaColor.bg} — it is tinted again, and it sits above a `
-        + 'full-brand Instagram gradient that will out-shout it');
+    : bad(`the CTA background is ${seen.ctaColor.bg} — it is tinted again, and the sheet exists `
+        + 'to produce sends');
+  /* Measured as "not the send's fill" rather than against a literal rgba: the ghost's exact
+     tint is a design decision that can move, and pinning it here would fail the next time
+     somebody warms it by two percent. What must never happen is the two matching. */
+  const liveBg = ((seen.liveColor && seen.liveColor.bg) || '').replace(/\s/g, '');
+  liveBg && liveBg !== 'rgb(255,255,255)'
+    ? ok(`and "See it live" is the ghost underneath it (${seen.liveColor.bg})`)
+    : bad(`"See it live" is filled ${seen.liveColor && seen.liveColor.bg} — two white slabs `
+        + 'stacked is two primaries, and the send stops being the obvious one');
   /* THE RING MUST STILL MOVE. Making the fill opaque did not delete this animation, it hid it:
      the gradient used to show through a 14%-alpha face, and afterwards only a 1px rim was left
      of it. Nothing in the CSS broke, so nothing failed — it was reported by eye. Checked here
@@ -319,17 +360,19 @@ console.log('\nTHE SHORT SHEET IS STILL SHORT');
 seen.tabs === null
   ? ok('the Challenge / Before-After tabs are gone from the sheet entirely')
   : bad(`#ssMode is back in the DOM (display ${seen.tabs && seen.tabs.display}) — the peek state does not have a mode switch`);
-/* Instagram is DELIBERATELY in the short state — 7 taps in 7 days told us the destinations were
-   unreachable, not unwanted. What must stay true is that it is second: below the CTA, never
-   above it. If that order ever flips, the loudest thing on the sheet becomes the share that
-   carries no link and recruits nobody. */
-seen.instagram && seen.instagram.display !== 'none' && seen.instagram.h > 0
-  ? ok(`Instagram is reachable without swiping (${Math.round(seen.instagram.h)}px tall)`)
-  : bad('Instagram is hidden in the short sheet again — it is then only reachable by a swipe '
-      + 'almost nobody performs, which is the state that produced 7 taps in a week');
-seen.instagram && seen.cta && seen.instagram.top >= seen.cta.bottom - 1
-  ? ok('it sits UNDER "Challenge a friend" — recruitment first, reach second')
-  : bad('Instagram is above the CTA — the share that carries no link is leading the sheet');
+/* INSTAGRAM IS DELETED, NOT HIDDEN — same shape as the tabs above, and the same trap: an
+   element that does not exist reads as display:"" to a check written against `display: none`,
+   so the old assertion ("it must be reachable without swiping") would have gone GREEN on a
+   sheet that no longer has the button at all.
+   It was put in the short state on the strength of 7 taps in 7 days, which said the
+   destinations were unreachable rather than unwanted. Once they were reachable the answer came
+   back: over the 7 days to 2026-08-15, invite 2804 (86.6%) against instagram 221 (6.8%). A
+   full-width gradient slab is what you spend on the thing people do. It lives in `more` now,
+   which opens the system sheet — still the only route to a stranger this app has. */
+seen.instagram === null
+  ? ok('Instagram is out of the sheet entirely — 6.8% of taps does not buy a full-width slab')
+  : bad(`the Instagram button is back in the DOM (display ${seen.instagram.display}) — it took a `
+      + 'full-width gradient row for 6.8% of destination taps, directly under the send');
 /* Measured by HEIGHT, not by computed display. More lives inside .ssRow2, and the peek rule
    hides the ROW — the button's own computed display stays `flex` while it occupies nothing.
    Asking for display:none here would fail forever on a sheet that is behaving correctly. */
@@ -341,59 +384,40 @@ seen.more && seen.more.h === 0
    the reveal has to stay visible behind the short sheet — and this harness cannot answer it
    honestly: there is no camera here, so the app frame never gets its real height and the sheet
    lands outside the viewport box entirely. A threshold tuned until it passed would assert the
-   quirk, not the design. What IS checked above is the thing that decides the height: only the
-   grabber, kicker, headline, card and CTA are displayed, and every destination is not. */
-ok(`short-state content: grabber + kicker + headline + card (${Math.round(seen.card.h)}px) `
-  + `+ CTA (${Math.round(seen.cta.h)}px), nothing else`);
+   quirk, not the design. What IS checked above is the thing that decides the height: which
+   elements are displayed, and which are not. */
+ok(`short-state content: grabber + headline (${Math.round(seen.title.h)}px) + line `
+  + `(${Math.round(seen.sub.h)}px) + visibility (${Math.round(seen.vis.h)}px) + send `
+  + `(${Math.round(seen.cta.h)}px) + See it live (${Math.round(seen.live.h)}px), nothing else`);
 
-/* THE THUMBNAIL FILLS ITS BOX. It did not, and it shipped: `board` is the whole screen
-   (~9:19.5) and .chPrevShot is 46x60 (~3:4), so a fit-by-longest-side put a 28px-wide frame in
-   a 46px box, flush left, with the box's near-black background filling the rest. On a phone
-   that does not read as a small preview, it reads as an image that failed to load — which is
-   exactly how it was reported. A real phone aspect is used rather than the 300x150 default
-   canvas, because the default is WIDER than the box and would have passed the broken code. */
-console.log('\nTHE PREVIEW THUMBNAIL FILLS ITS BOX');
-const th = await page.evaluate(() => window.__t.thumb(1080, 2337));
-if (!th) {
-  bad('chPrevRender() drew no canvas into #chPrevShot at all');
-} else {
-  const near = (a, b) => Math.abs(a - b) <= 0.75;
-  near(th.rw, th.bw) && near(th.rh, th.bh)
-    ? ok(`the frame covers the whole ${Math.round(th.bw)}x${Math.round(th.bh)} box`)
-    : bad(`the frame is ${th.rw.toFixed(1)}x${th.rh.toFixed(1)} inside a ${th.bw.toFixed(1)}x${th.bh.toFixed(1)} box `
-        + `— ${Math.round(th.bw - th.rw)}px of dead background shows down the side, which reads as a broken image`);
-  /* The backing store must be the BOX's shape, not the board's. If it still matches 1080:2337
-     the crop never happened and the fill above is only CSS stretching a letterbox — same black
-     band, now smeared. */
-  const boxAR = th.bw / th.bh, imgAR = th.iw / th.ih;
-  Math.abs(imgAR - boxAR) < 0.03
-    ? ok(`it is cropped to the box (canvas ${th.iw}x${th.ih}, ratio ${imgAR.toFixed(2)} vs box ${boxAR.toFixed(2)})`)
-    : bad(`the canvas is ${th.iw}x${th.ih} (ratio ${imgAR.toFixed(2)}) but the box is ${boxAR.toFixed(2)} `
-        + '— the board is being fitted, not cover-cropped');
-  /* And it has to be a retina backing store. 46x60 CSS pixels at 1x is visibly mushy next to
-     everything else on this card, and "soft" is the failure this size of thumbnail dies of. */
-  th.iw >= th.bw * 2
-    ? ok(`drawn at ${(th.iw / th.bw).toFixed(1)}x device pixels, not 1x`)
-    : bad(`the canvas is only ${(th.iw / th.bw).toFixed(1)}x the box in device pixels — it will look soft`);
-}
-
-/* THE HANDLE TOGGLES, AND THE RESIZE IS A TRANSITION.
-   Both halves shipped broken in a way no diff shows: the handle only ever stepped UP, so once
-   the sheet was open it was an affordance that did nothing; and the tap-outside handler had
-   never fired in its life, because #shareSheet is pointer-events:none and a container that
-   cannot be hit cannot report a tap on itself.
+/* THE HANDLE WALKS DOWN, AND THE FLOOR LEADS BACK UP.
+   It used to only ever step UP, so once the sheet was open the handle was an affordance that
+   did nothing and the third detent was reachable by drag alone. The founder's call on
+   2026-08-12 made taps walk DOWN — grand, petit, à peine vu — and wrap from the floor straight
+   back to the full sheet, so every state is one tap from the next and the handle is never a
+   dead end. This suite was still asserting the old toggle, which is most of why it was
+   quarantined: peek → mini read as "a tap left it at mini" and the 25px folded bar was then
+   measured as the LONG state.
    Driven through the real click handlers rather than by calling stepSheet, so the wiring is
    under test and not just the function. */
-console.log('\nTHE SHEET RESIZES, IN BOTH DIRECTIONS');
+console.log('\nTHE HANDLE WALKS DOWN, AND THE FLOOR LEADS BACK UP');
 {
   const settle = () => page.waitForTimeout(520);
   await page.evaluate(() => window.__t.present());
   const short = await page.evaluate(() => window.__t.snap());
 
+  const small = await page.evaluate(() => window.__t.grab());
+  small.state === 'mini'
+    ? ok('a tap on the handle steps DOWN, peek → mini')
+    : bad(`a tap on the peek left it at "${small.state}" — taps walk down, so the next one below `
+        + 'the short sheet is the folded bar');
+  await settle();
+
   const up = await page.evaluate(() => window.__t.grab());
   up.state === 'open'
-    ? ok('a tap on the handle opens it')
-    : bad(`a tap on the handle left it at "${up.state}"`);
+    ? ok('and from the floor the next tap wraps back to the full sheet — no dead end')
+    : bad(`a tap on the folded bar left it at "${up.state}" — the floor is where a walk-down `
+        + 'handle strands people if it does not wrap');
   up.resizing && up.inline
     ? ok(`the growth is animated (playing to ${up.inline})`)
     : bad('the card jumped straight to the long state — no height transition was set up');
@@ -455,7 +479,7 @@ console.log('\nTHE SHEET RESIZES, IN BOTH DIRECTIONS');
      Committing the short state up front animates an empty pocket instead. */
   const down = await page.evaluate(() => window.__t.grab());
   down.state === 'peek'
-    ? ok('a tap on the handle closes it again — the same control, both directions')
+    ? ok('and one more tap closes the cycle, open → peek — three states, three taps')
     : bad(`a tap on the open sheet left it at "${down.state}" — the handle is inert once open`);
   /show/.test(down.cls) && down.resizing
     ? ok('the long content is held in place while the box closes over it')
@@ -468,79 +492,18 @@ console.log('\nTHE SHEET RESIZES, IN BOTH DIRECTIONS');
     ? ok('and it commits to the short state once closed')
     : bad(`after the close the sheet is "${back.cls}" with height ${JSON.stringify(back.inline)}`);
 
-  await page.evaluate(() => window.__t.grab());
+  /* THE BACKDROP ONLY EXISTS ON THE LONG SHEET — #shareSheet is pointer-events:none in every
+     other state, on purpose (the reveal's wipe handle is behind it), so this needs the full
+     sheet under it. Two taps to get there, which is the walk-down cycle doing its job. */
+  await page.evaluate(() => window.__t.grab());        // peek -> mini
+  await settle();
+  await page.evaluate(() => window.__t.grab());        // mini -> open
   await settle();
   const out = await page.evaluate(() => window.__t.backdrop());
   out.state === 'peek'
     ? ok('a tap outside the card puts the long sheet back to short')
     : bad(`a tap outside left it at "${out.state}" — dismissShareSheet is still unreachable`);
   await settle();
-}
-
-/* THE CARD OPENS THE PREVIEW, AND WINNING LOOKS LIKE WINNING.
-   Driven from a click on the ROW, not on the thumbnail — the thumbnail always worked, and the
-   whole point of the change is that the title, the chips and the space between them were dead
-   surface in front of the only way to see the challenge. */
-console.log('\nTHE CARD OPENS THE PREVIEW');
-{
-  await page.evaluate(() => window.__t.present());
-  const opened = await page.evaluate(() => window.__t.preview());
-  opened
-    ? ok('a tap anywhere on the card opens the preview')
-    : bad('tapping the card did nothing — only the 46px thumbnail is live');
-
-  if (opened) {
-    const won = await page.evaluate(() => window.__t.win());
-    won && won.head === 'Found you'
-      ? ok(`finding the hider ends the round ("${won.head}")`)
-      : bad(`the win did not land — headline is ${JSON.stringify(won && won.head)}`);
-    won && won.found
-      ? ok('the frame goes green')
-      : bad('#chPPframe never got the .found class — no green outline on the image');
-    won && won.confetti === 1
-      ? ok('one confetti layer is thrown')
-      : bad(`${won && won.confetti} confetti layers — expected exactly 1`);
-    /* IT ARGUES, IT DOES NOT DESCRIBE. The old line ("That is the screen they get") captioned
-       the screen to someone staring at it. Whatever the line says, it must not be about the
-       screen — that is the failure mode worth failing on, not the exact words. */
-    const sub = won && won.sub;
-    sub && !/screen|this is what|you (are|'re) (looking|seeing)/i.test(sub)
-      ? ok(`the win makes a claim ("${sub}")`)
-      : bad(sub ? `the win is captioning itself again: "${sub}"` : 'the win renders no line at all');
-
-    /* IT HAS TO LEAVE. The canvas sits at z-index 95, above the share sheet and above the
-       preview's own CTA. One left behind is a screen nobody can tap. */
-    await page.waitForTimeout(3000);
-    const left = await page.evaluate(() => window.__t.litter());
-    left === 0
-      ? ok('the confetti canvas removes itself when the last piece dies')
-      : bad(`${left} confetti canvas(es) still in the DOM — at z-index 95 that is an invisible `
-          + 'sheet over every control on the screen');
-  }
-
-  /* REDUCED MOTION IS A REAL PATH, NOT A SWITCH THAT TURNS THE FEATURE OFF. It used to return
-     early and leave those users with a headline and nothing else. Emulated for real here —
-     asserting on the CSS text would prove nothing about what the branch does. */
-  console.log('\n  · and again with Reduce Motion on');
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.reload({ waitUntil: 'load' });
-  await page.waitForFunction(() => !!window.__t);
-  await page.evaluate(() => window.__t.present());
-  const rmOpen = await page.evaluate(() => window.__t.preview());
-  if (!rmOpen) { bad('the preview does not open under Reduce Motion'); }
-  else {
-    const rm = await page.evaluate(() => window.__t.win());
-    rm && rm.found && rm.confetti === 1
-      ? ok('it still celebrates — green ring and a still bloom, no flying particles')
-      : bad(`Reduce Motion gets found=${rm && rm.found}, layers=${rm && rm.confetti} — the `
-          + 'setting asks for less movement, not for no feedback');
-    await page.waitForTimeout(1400);
-    const rmLeft = await page.evaluate(() => window.__t.litter());
-    rmLeft === 0
-      ? ok('and the bloom cleans up too')
-      : bad(`${rmLeft} bloom(s) left at z-index 95 — an invisible sheet over every control`);
-  }
-  await page.emulateMedia({ reducedMotion: null });
 }
 
 /* The name chip and its sign-from-the-sheet dialog were removed 2026-08-11 (founder's call:
@@ -591,11 +554,16 @@ console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
     ? ok('but the handle stays, so there is a way back')
     : bad('the handle is gone in the folded state — the sheet is now unreachable');
 
+  /* AND THE FLOOR IS NOT A TRAP. Taps walk down, so from here the only way the handle can go
+     is back to the top — one tap to the full sheet. Asserting "it returns to the peek" was the
+     old toggle's contract and it is what made this look like a bug: the state it actually
+     lands on is `open`, which is the whole point of wrapping. */
   const back = await page.evaluate(() => window.__t.grab());
   await page.waitForTimeout(420);
-  (await page.evaluate(() => window.__t.snap())).state === 'peek'
-    ? ok('and a tap on the handle brings the peek straight back')
-    : bad(`tapping the handle from mini gave "${back.state}" — the way back has to be one tap`);
+  (await page.evaluate(() => window.__t.snap())).state === 'open'
+    ? ok('and one tap from the floor brings the whole sheet back')
+    : bad(`tapping the handle from mini gave "${back.state}" — the floor has to lead somewhere, `
+        + 'or folding the sheet is how you lose the send');
 }
 
 /* THE CARD FOLLOWS THE FINGER, AND ONE GESTURE CAN CROSS TWO DETENTS.
@@ -607,7 +575,9 @@ console.log('\nIT FOLDS TO THE HANDLE, AND COMES BACK');
 console.log('\nDRAGGING THE HANDLE MOVES THE CARD, NOT JUST ITS STATE');
 {
   await page.evaluate(() => window.__t.present());
-  await page.evaluate(() => window.__t.grab());              // peek -> open
+  await page.evaluate(() => window.__t.grab());              // peek -> mini
+  await page.waitForTimeout(420);
+  await page.evaluate(() => window.__t.grab());              // mini -> open (the wrap)
   await page.waitForTimeout(420);
   const open = await page.evaluate(() => window.__t.snap());
   open.state === 'open'
@@ -692,13 +662,31 @@ const says = (key, needles) => {
     ? bad(`the "${key}" pitch does not state ${miss.join(', ')} — it reads: ${JSON.stringify(line)}`)
     : ok(`"${key}" states ${needles.join(', ')}`);
 };
-/* KAMO+ has no clocks since 2026-08-11, so the generic line and the time pitch sell the
-   ABSENCE of a figure — the only number left is the free clock, quoted as the thing you
-   escape. The generic line must quote nothing at all. */
+/* THE GENERIC LINE MUST QUOTE NOTHING AT ALL. It is the fallback for every source with no
+   pitch of its own, so it cannot promise a figure it has no context to be right about — and
+   since KAMO+ lost its clocks on 2026-08-11 there is no figure left in it to quote. The old
+   version of this also demanded the words "no clock"; the line has since been rewritten as
+   the three-item bundle it sells now, and requiring one particular phrase from a summary is
+   asking the copy never to change. The invariant is the digit. */
 const genericLine = (all.find(([k]) => k === 'generic') || [])[1] || '';
-!/\d/.test(genericLine) && /no clock/.test(genericLine)
-  ? ok('"generic" sells no-clock without quoting a figure')
-  : bad(`the generic pitch reads: ${JSON.stringify(genericLine)}`);
+!/\d/.test(genericLine)
+  ? ok(`"generic" sells the bundle without quoting a figure ("${genericLine}")`)
+  : bad(`the generic pitch quotes a number: ${JSON.stringify(genericLine)}`);
+
+/* IT IS A KAMO, NEVER A BODY — the founder's copy rule, and this is the one place it can be
+   enforced across every paywall line at once. It caught three live strings the day it was
+   written: pwGenericSub said "Every body and every finish" while PW_PITCH.char said "Every
+   kamo and every finish" on the same paywall, the member card wore an "Every body" chip, and
+   the seeker's wrong-figure ending was headlined "Wrong body." Two names for the same object
+   is the product failing to know what it sells, and every one of them read as correct in its
+   own diff. */
+{
+  const wrong = all.filter(([, v]) => /\bbod(y|ies)\b/i.test(v)).map(([k, v]) => `${k}: ${JSON.stringify(v)}`);
+  wrong.length === 0
+    ? ok('no paywall line calls the figurine a "body"')
+    : bad(`${wrong.join(' · ')} — the figurine is a kamo everywhere a user can read it, and the `
+        + 'rest of this paywall already says so');
+}
 says('time', [`${f.paint} seconds`, 'no clock']);
 /* The size pitch is the one that states NO figure, on purpose: "Free paints at 3 fixed sizes"
    was cut because it sells the limitation instead of the range. So it is asserted the other way
@@ -709,9 +697,24 @@ const sizeLine = (all.find(([k]) => k === 'size') || [])[1] || '';
   ? bad(`the "size" pitch quotes a figure again — it reads: ${JSON.stringify(sizeLine)}`)
   : ok('"size" sells the range without quoting a count');
 says('color', [`${f.shades} shades`]);
-says('chset', [`${f.taps} taps`, `${f.lo}-${f.hi}s`]);
+/* THE "chset" PITCH IS GONE, and asserting it was costing two failures for one deletion: no
+   such line, and `${f.lo}-${f.hi}s` interpolating two constants that had already been removed
+   from the hook. It sold the gear that set the seeker's clock and tap budget; the round is one
+   buzz on no clock now, so there is nothing to set. What replaces it is the rule the whole
+   block exists for, stated positively — every pitch that DOES quote a figure is named above,
+   and any new one has to be added here rather than shipping unchecked. */
+{
+  const quoted = all.filter(([k, v]) => /\d/.test(v) && !['generic', 'size'].includes(k)).map(([k]) => k);
+  const covered = new Set(['time', 'color']);
+  const loose = quoted.filter((k) => !covered.has(k));
+  loose.length === 0
+    ? ok(`every pitch that quotes a figure is checked against its constant (${[...covered].join(', ')})`)
+    : bad(`${loose.join(', ')} quote(s) a number that nothing above verifies — a template can `
+        + 'interpolate the wrong constant and still look perfect in the source');
+}
 
 await browser.close();
 server.close();
-console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the short sheet shows the card, above a full-width CTA, without covering the reveal');
+console.log(failed ? `\n✗ ${failed} failure(s)`
+  : '\n✓ the short sheet carries the whole ask, in order, and the handle is never a dead end');
 process.exit(failed ? 1 : 0);
