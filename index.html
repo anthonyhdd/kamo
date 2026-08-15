@@ -2904,7 +2904,7 @@ function blobShadow(){
    one skinned mesh, one skeleton, six clips named for the app's own pose labels. (An
    intermediate merge rebuilt from the raw Mixamo downloads weighed 2.5 MB; the founder's
    light asset carries the same six clips at 1 MB and replaced it.)
-   Gated on the handle "tony" so exactly one player sees it, and LAZY: the 2.5 MB GLB is
+   Gated on canPro() — a real entitlement or the creator pass — and LAZY: the 2.5 MB GLB is
    fetched only when the gate is true, so the fleet never downloads a byte of it. Hides
    the founder SENDS bake the new body into the photo — that is the in-the-wild test.
    A v2 character is ANIMATED, not posed: setPose/setPoseInstant/lerpChar all branch on
@@ -2922,11 +2922,30 @@ const CHAR_KEY="kamo_char";
    PURE — no side effects, called from render paths. The lapse case matters: a stored "v2"
    with no membership falls back to the original body rather than silently keeping a paid
    asset, and the preference stays in storage so resubscribing restores it. */
+/* ⚠️ THE HANDLE IS NO LONGER A KEY, AND IT STOPPED BEING SAFE AS ONE YESTERDAY.
+   This unlocked the new body for anyone whose name was "tony" — the founder test access, and
+   fine while the name field was buried on the player card, two screens from anything. On
+   2026-08-15 the share sheet grew a signature row: the name is now one tap above the send
+   button on EVERY reveal, prefilled and inviting a correction. A Pro unlock keyed on a plain
+   lowercase string match against a field that prominent is a padlock with the combination
+   written on it — type "tony", get the paid body.
+   Reported as the bug: "sans raison ça m'a sélectionné par défaut le perso gros, alors qu'il
+   est censé être lock et que je suis free user". It was not without reason and it was not
+   random — it was this line, doing exactly what it said.
+   THE FOUNDER KEEPS HIS ACCESS, through the mechanism this app already has for it. hasPass
+   feeds computePro(), so the creator pass grants canPro() and with it every paid tool
+   including this body — a 60-bit phrase handed out by hand and rotatable in one push, which
+   is what a test unlock is supposed to be. Nothing is lost; the door moved to the one that
+   locks.
+   NO STORED PREFERENCE NOW MEANS CLASSIC, for everyone. That is also the honest default: the
+   original body is what a free install is entitled to. */
 function wantsV2(){
-  let owner=false;
-  try{ owner=canPro()||(getHandle()||"").toLowerCase()==="tony"; }catch(e){}
-  try{ const v=localStorage.getItem(CHAR_KEY); if(v==="v2") return owner; if(v==="classic") return false; }catch(e){}
-  try{ return (getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; }
+  try{ const v=localStorage.getItem(CHAR_KEY);
+    /* The preference is stored even when it is locked (see pickChar) so a purchase applies
+       what they actually wanted — hence the ownership test HERE rather than at write time. */
+    if(v==="v2") return canPro();
+    if(v==="classic") return false; }catch(e){}
+  return false;
 }
 /* Clip names as they exist in the asset — vendor/kamo-v2.glb is the founder's own
    kamo_light.glb from the Aug 9 weekend (kamo-sprites kit), whose six clips are already
@@ -5907,7 +5926,7 @@ function openKamoHome(){
      card the only unlabelled locked thing on it — you found out by tapping. Note this asks
      "may they have it", not wantsV2() ("do they have it selected"): the chip is locked for a
      free user whether or not they have ever picked it. */
-  const canChar=()=>{ try{ return canPro()||(getHandle()||"").toLowerCase()==="tony"; }catch(e){ return false; } };
+  const canChar=()=>{ try{ return canPro(); }catch(e){ return false; } };
   const paintChar=()=>{ const v=wantsV2();
     $("#khCharA").classList.toggle("on",!v);
     $("#khCharB").classList.toggle("on",v);
