@@ -350,7 +350,8 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
   const t0 = await clock();
   t0 === null ? bad('no round clock on screen — the rest of this block cannot mean anything') : ok(`the round is timing (${t0}s)`);
 
-  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.evaluate(() => { document.getElementById('kfScope').click();
+    document.querySelector('#kfMenu [data-s="profile"]').click(); });
   await page.waitForTimeout(2500);
   const t1 = await clock();
   /* One 100ms tick of slop is the design: the pause is sampled from the clock's own interval
@@ -359,7 +360,8 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
     ? ok(`2.5s with the card open costs the round ${((t1 - t0)).toFixed(1)}s`)
     : bad(`the clock ran under the card: ${t0}s → ${t1}s — those seconds go into submit_attempt`);
 
-  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.evaluate(() => { document.getElementById('kfScope').click();
+    document.querySelector('#kfMenu [data-s="profile"]').click(); });
   await page.waitForTimeout(900);
   const t2 = await clock();
   /* The other half, and the one a naive "just stop the timer" fix breaks: closing the card
@@ -389,7 +391,8 @@ console.log('\nTHE PROFILE BUTTON OPENS THE CARD WHERE IT CAN BE TOUCHED');
   });
   closed ? ok('the card starts closed while the feed plays') : bad('#kamoHome is open before anything was tapped');
 
-  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.evaluate(() => { document.getElementById('kfScope').click();
+    document.querySelector('#kfMenu [data-s="profile"]').click(); });
   await page.waitForTimeout(600);
 
   const st = await page.evaluate(() => {
@@ -417,7 +420,8 @@ console.log('\nTHE PROFILE BUTTON OPENS THE CARD WHERE IT CAN BE TOUCHED');
 
   /* The handler is a toggle, and the second tap is the half that only exists because the
      feed bar stays on screen behind the card. */
-  await page.evaluate(() => document.getElementById('kfMe').click());
+  await page.evaluate(() => { document.getElementById('kfScope').click();
+    document.querySelector('#kfMenu [data-s="profile"]').click(); });
   await page.waitForTimeout(400);
   const reclosed = await page.evaluate(() => !document.getElementById('kamoHome').classList.contains('show'));
   reclosed ? ok('and tapping it again closes it') : bad('the profile button does not toggle back');
