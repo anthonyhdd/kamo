@@ -6331,10 +6331,21 @@ window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
    the ratio expanded/shown, i.e. how many people choose to look. Firing it for an expansion
    the app performed on their behalf would inflate exactly the number it exists to measure.
    The push path is readable instead from notif_opened_found -> home_results_shown. */
+/* AND IT OPENS THE HUNT, NOT A LIST WITH THE HUNT IN IT. Founder, 2026-08-15: "j'ai reçu la
+   notif they spotted you, j'ai cliqué... ça devrait ouvrir sur le watch".
+   The notification names one event — somebody found THIS hide — so the screen it opens should
+   be that event, not the index it is filed under. Landing on the expanded card was already an
+   improvement on landing at the camera, and it is still one tap short: the row is there, the
+   Watch button is on it, and the user has to find it.
+   khWatchNext carries the id through the fetch. khResults() is async — the rows do not exist
+   at this instant — so the intent is parked and consumed by the paint that has them, exactly
+   as khOpenNext is. Both are one-shots for the same reason: an intent that survives its own
+   screen fires again on a later, unrelated open. */
 window.KAMO.openFound=(id)=>{
   try{
-    if(id) chRemember(String(id).replace(/[^a-f0-9]/gi,"").slice(0,16));
-    track("notif_opened_found",{expanded:true,hide:!!id});
+    const clean=String(id||"").replace(/[^a-f0-9]/gi,"").slice(0,16);
+    if(clean){ chRemember(clean); khWatchNext=clean; }
+    track("notif_opened_found",{expanded:true,hide:!!clean,watch:!!clean});
     khOpenNext=true;
     if(typeof openKamoHome==="function") openKamoHome();
   }catch(e){}
@@ -10005,6 +10016,10 @@ let khOpen=false;
    openKamoHome() would be wiped before it was read. One-shot rather than sticky: arriving
    from a push is a reason to open the list once, not a new preference. */
 let khOpenNext=false;
+/* THE HIDE A NOTIFICATION WAS ABOUT. Set by KAMO.openFound(), consumed once by the first
+   khResults() paint that has rows to match it against — see there. Empty on every other path,
+   so nothing else in this file can be dragged onto a replay it did not ask for. */
+let khWatchNext="";
 /* THE SAME OBJECT THE SHARE SHEET SHOWS, because it IS the same object. A row that only said
    "found you on tap 2" made the author guess WHICH of their hides that was — and the one thing
    that identifies a hide to the person who made it is the picture. img_path already comes back
@@ -10490,6 +10505,22 @@ async function khResults(){
     el.dataset.filled="1";
     el.style.display="block";
     track("home_results_shown",{hides:rows.length,tried:tried,found:found});
+    /* THE ONE-SHOT LANDS HERE, where the rows finally exist. Deferred a tick so the card's own
+       open animation is not competing with an overlay mounting on top of it, and so a failure
+       to find the row leaves the user on the expanded list — which is where this path used to
+       stop, and a perfectly good place to be stranded.
+       IT GOES THROUGH THE ROW'S OWN BUTTON, not through khReplay() directly: the paywall
+       branch, the "…" state and the empty-trace hint all live on that handler, and a second
+       path into the replay is how one of them quietly stops applying to half the users. */
+    if(khWatchNext){
+      const want=khWatchNext; khWatchNext="";
+      setTimeout(()=>{ try{
+        const i=rows.findIndex(r=>r&&r.id===want);
+        if(i<0) return;
+        const b=el.querySelector('.khWatch[data-w="'+i+'"]:not(.khHeatBtn)');
+        if(b) b.click();
+      }catch(e){} },260);
+    }
   }catch(e){}
 }
 /* THE DOT, NOT A SENTENCE ACROSS THE VIEWFINDER.
