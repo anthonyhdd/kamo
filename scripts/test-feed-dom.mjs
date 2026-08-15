@@ -426,6 +426,29 @@ console.log('\nTHE PROFILE BUTTON OPENS THE CARD WHERE IT CAN BE TOUCHED');
   const reclosed = await page.evaluate(() => !document.getElementById('kamoHome').classList.contains('show'));
   reclosed ? ok('and tapping it again closes it') : bad('the profile button does not toggle back');
 
+  /* THE PILL SITS IN THE WORDMARK'S BOX, AND THE WORDMARK IS HIT-TESTED BY COORDINATES.
+     Shipped 2026-08-15, reported by the founder within the hour: a REAL tap on
+     "Everyone ▾" opened the handle modal over the menu, because the brand's
+     document-level pointer handler reads clientX/Y in the capture phase and the feed's
+     z-index means nothing to it. Every synthetic .click() in this file carries
+     clientX/Y = 0 and sails past that handler — which is exactly how the bug shipped.
+     So this one goes through page.mouse: real pixels, real pointer events. */
+  {
+    const pt = await page.evaluate(() => {
+      const r = document.getElementById('kfScope').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.click(pt.x, pt.y);
+    await page.waitForTimeout(500);
+    const after = await page.evaluate(() => ({
+      menu: document.getElementById('kfMenu').style.display === 'block',
+      home: document.getElementById('kamoHome').classList.contains('show'),
+    }));
+    after.menu && !after.home
+      ? ok('a real-pixel tap on the pill opens the MENU, not the wordmark modal')
+      : bad('real-pixel pill tap: ' + JSON.stringify(after) + ' — the brand hit-test is eating the pill again');
+  }
+
   await page.close();
 }
 
