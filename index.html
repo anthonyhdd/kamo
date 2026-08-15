@@ -1663,7 +1663,7 @@
      It costs the peek nothing until it is earned: #ssGet ships display:none and only
      chMarkSent() reveals it, so the sheet still ARRIVES short — the card's height is
      content-driven, so it simply grows by one row at the moment there is something to say. */
-  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssSub):not(.ssInvite):not(.ssSeeLive):not(.ssVis):not(.ssGet){display:none!important;}
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssSub):not(.ssSign):not(.ssSignIn):not(.ssInvite):not(.ssSeeLive):not(.ssVis):not(.ssGet){display:none!important;}
   /* RESIZING BETWEEN THE TWO STATES IS A TRANSITION, NOT A CUT. Short and long differ by a few
      hundred pixels and the card used to jump between them in one frame, which on a bottom sheet
      reads as a glitch rather than as a change of size.
@@ -1858,6 +1858,33 @@
      play it in the KAMO feed" is the one line that makes public-by-default defensible, and
      the whole argument in the .ssVis note above is that it has to be legible before the tap.
      Quieter, never absent. */
+  /* SAME SHELL AS .ssVis, deliberately: they are the two rows that describe the hide rather
+     than act on it, and a creator should read them as one block of facts above the buttons.
+     Quiet for the same reason — a disclosure, not an alert. */
+  .ssSign{display:flex;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:10px 11px;
+    border-radius:15px;border:1px solid var(--stroke);background:rgba(255,255,255,.05);color:#fff;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:left;
+    transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
+  .ssSign:active{transform:scale(.98);}
+  .ssSignIco{flex:0 0 auto;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;
+    justify-content:center;background:rgba(255,255,255,.07);}
+  .ssSignIco svg{width:19px;height:19px;fill:none;stroke:rgba(255,255,255,.62);stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .ssSignTxt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .ssSignTxt b{font-family:var(--display);font-size:13.5px;font-weight:600;letter-spacing:-.1px;
+    color:rgba(255,255,255,.9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ssSignTxt i{font-style:normal;font-size:11px;line-height:1.3;opacity:.45;}
+  /* The word, not a pencil: at 11px a glyph is a guess, and this row has the width for it. */
+  .ssSignGo{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--mint);opacity:.9;}
+  /* THE FIELD REPLACES THE ROW IN PLACE. Same box, same height, so the sheet does not resize
+     under a thumb that is already reaching — the one thing setSheetSize() exists to prevent. */
+  .ssSignIn{display:none;width:100%;margin:-2px 0 9px;padding:0 12px;height:56px;box-sizing:border-box;
+    border-radius:15px;border:1px solid rgba(95,230,164,.45);background:rgba(95,230,164,.07);
+    color:#fff;font-family:var(--display);font-size:15px;font-weight:600;outline:none;
+    -webkit-user-select:text;user-select:text;}
+  .ssSignIn::placeholder{color:rgba(255,255,255,.38);font-weight:600;}
+  #shareSheet.ssEditName .ssSign{display:none;}
+  #shareSheet.ssEditName .ssSignIn{display:block;}
   .ssVis{display:flex;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:10px 11px;border-radius:15px;
     border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.045);cursor:pointer;text-align:left;
     color:rgba(255,255,255,.92);-webkit-tap-highlight-color:transparent;}
@@ -2350,6 +2377,35 @@
          destinations below it are reach; this is recruitment, so it leads.
          Kept hidden until updateInviteBtn() runs, so a JS failure cannot leave a button
          that no handler is listening to. -->
+    <!-- WHOSE NAME IS ON IT, SHOWN RATHER THAN ASKED FOR.
+         Measured 2026-08-15: 254 people published a hide, 154 were handed an invented name,
+         and hide_signed was ZERO. That is not "people refuse to sign" — it is that nobody has
+         ever been shown the field. The name was assigned silently at the first hide and
+         offered for editing on the player card, two screens from anything that uses it, so
+         creators met their own pseudonym for the first time in the feed, on somebody else's
+         screen ("@usernamerandom a publié ça et il comprend pas").
+         SO IT IS NOT A QUESTION. A blank field asks you to invent something; this shows the
+         exact name that is about to go out and makes changing it one tap. Correcting beats
+         authoring, and nobody is gated: skipping it is the default and costs nothing.
+         IN THE SHEET, NOT IN A MODAL, and not at first launch — the note above setHandle()
+         argues that case and it still holds: a form in front of a stranger at the highest-
+         abandon moment in the app. Here the name is one row above the button that sends it,
+         which is the only moment it means anything.
+         The input is a SIBLING, not a child: .ssCard is a column and the peek rule governs
+         direct children only, so a field nested in the row would vanish from the short sheet
+         — the state most sends happen in. -->
+    <button class="ssSign" id="ssSign">
+      <span class="ssSignIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.6"/>
+        <path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0"/></svg></span>
+      <!-- The defaults are what a JS failure leaves on screen, so neither may be a claim:
+           "@…" is visibly a placeholder where "@you" reads as a name somebody was given, and
+           the affordance asks rather than announces until ssRenderSign() knows which it is. -->
+      <span class="ssSignTxt"><b id="ssSignName">@…</b><i>They see this on your challenge</i></span>
+      <span class="ssSignGo" id="ssSignGo">This is you?</span>
+    </button>
+    <input class="ssSignIn" id="ssSignIn" type="text" inputmode="text" autocomplete="off"
+      autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="16"
+      placeholder="your name" aria-label="Your name">
     <!-- A DIRECT CHILD OF .ssCard, ALWAYS. .ssCard is a column and the peek rule below only
          reveals direct children — a control nested inside another row becomes a squeezed cell
          AND disappears from the short sheet, which is where most sends actually happen.
@@ -3791,7 +3847,7 @@ function capture(){
   tlReset();   // the timelapse belongs to THIS hide — see tlCapture()
   tlCaptureOpen();   // ...and it opens on the untouched shot, which is where the round starts — see tlCaptureOpen()
   chResetRound();   // ...and so does the published hide — see chResetRound()
-  currentScore=0;
+  currentScore=0; ssNamePreview="";   // a discarded hide leaves no name behind
   covCrossed=false; blockedTracked=false; updateCoverageHud();   // ...and the floor's chip opens the round at 0%, saying what it will take
   scenePat=null; autoCamo=false;   // Auto camo is retired — every round starts on a colour the player picks
   roundStartedAt=Date.now(); roundMs=0;
@@ -5698,9 +5754,23 @@ function mintHandle(){
    anything, at whatever moment a screen happened to paint. That is the first-launch modal
    again, minus the dialog. So minting lives here, and here is called from the publish path
    and nowhere else: the name comes into existence with the first hide that carries it. */
+/* THE NAME THE SHEET SHOWED, HELD IN MEMORY AND NOT ON DISK.
+   The rule under mintHandle() is that only the publish path may invent a name, so a device
+   that never sends anything is never stamped — and the share sheet presents itself on EVERY
+   finished reveal, without a tap, so rendering it must not write. This is the reconciliation:
+   the row displays a candidate, the candidate lives in a variable, and ensureHandle() commits
+   THAT candidate at publish. What was shown is what goes out; nothing is stored until a hide
+   actually exists. Reset with the round, so a discarded hide does not leave its name behind. */
+let ssNamePreview="";
+function ssNameShown(){
+  const h=getHandle(); if(h) return h;
+  if(!ssNamePreview) ssNamePreview=mintHandle();
+  return ssNamePreview;
+}
 function ensureHandle(){
   const h=getHandle(); if(h) return h;
-  const m=setHandle(mintHandle());
+  /* The preview first, so the name on the sheet and the name on the hide can never differ. */
+  const m=setHandle(ssNamePreview||mintHandle());
   /* Empty only if localStorage refused the write; the caller then publishes unsigned exactly
      as it does today rather than shipping a name the device cannot remember it chose. */
   if(m) track("handle_assigned",{});
@@ -7099,7 +7169,7 @@ function openShareSheet(via){
      from the same function that paints the toggle — on every open, because the answer is
      remembered across rounds and the sheet must never arrive claiming the opposite of what
      the row underneath it says. */
-  kfRenderVis();
+  kfRenderVis(); ssRenderSign();
   /* Moved here from peekShareSheet. #ssInvite ships display:none so a JS failure cannot leave
      a button nothing is listening to, and only updateInviteBtn() un-hides it — so it has to
      run on EVERY path into the open sheet, not just the one that used to go through the peek
@@ -7110,7 +7180,7 @@ function openShareSheet(via){
      and setSheetSize() plays the current height into the target one by measuring both. */
   setSheetSize("open"); haptic(10);
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","ssMini"); ssState="hidden"; }
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","ssMini","ssEditName"); ssState="hidden"; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -7252,7 +7322,7 @@ function peekShareSheet(){
      state deliberately does not go through it. Costs nothing — it reads one localStorage key
      and writes three strings; no network, no upload, so the short state still publishes
      nothing. */
-  kfRenderVis();
+  kfRenderVis(); ssRenderSign();
   shareSheetEl.classList.add("peek");
   haptic(8);
   /* THE SHEET THAT COMES TO THEM WAS INVISIBLE TO THE FUNNEL. `share_opened` fires only from
@@ -9596,6 +9666,63 @@ function kfApplyVisibility(id,pub){
    the plate the globe already sits in. */
 const VIS_ICO_PUBLIC='<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>';
 const VIS_ICO_PRIVATE='<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/>';
+/* WHOSE NAME IS ON IT. Painted from the same two doors as the visibility row below it
+   (openShareSheet + peekShareSheet), because they are the same kind of statement: a fact about
+   the hide, stated before the send rather than discovered after it. */
+function ssRenderSign(){
+  const b=$("#ssSign"); if(!b) return;
+  const n=$("#ssSignName"), go=$("#ssSignGo"), mine=getHandle();
+  /* textContent, never innerHTML: this string is typed by a user and is about to be read by
+     another one. Same boundary the seeker headline crosses. */
+  if(n) n.textContent="@"+ssNameShown();
+  /* "Change" once it is theirs, "This is you?" while it is still the app's guess — the second
+     is the whole point of showing it at all, and it asks without blocking. */
+  if(go) go.textContent=mine?"Change":"This is you?";
+}
+{
+  const row=$("#ssSign"), inp=$("#ssSignIn");
+  const stop=()=>{ try{ shareSheetEl.classList.remove("ssEditName"); }catch(e){} };
+  if(row&&inp){
+    row.onclick=(e)=>{
+      e.stopPropagation(); haptic(10);
+      track("sign_row_tapped",{had_name:!!getHandle()});
+      shareSheetEl.classList.add("ssEditName");
+      /* Prefilled with what the row was showing, so this is a correction and not a blank page.
+         Selected rather than caret-at-end: the first keystroke of somebody who wants their own
+         name should replace the guess, not append to it. */
+      inp.value=ssNameShown();
+      try{ inp.focus(); inp.setSelectionRange(0,inp.value.length); }catch(_){}
+    };
+    /* Sanitised as it is typed, exactly like the player card's field — the value is
+       interpolated into a message a stranger reads. */
+    inp.addEventListener("input",()=>{ const c=cleanHandle(inp.value); if(c!==inp.value) inp.value=c; });
+    inp.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); inp.blur(); commit(); } });
+    /* TWO EVENTS, ONE COMMIT, and it is not belt-and-braces. `blur` is the natural end of this
+       interaction and it is also the one that does not fire if the field never took focus —
+       which iOS can refuse, and which a headless run reproduced on the first try: the sheet sat
+       in the editing state with the send behind a field nobody could close. `change` fires on
+       the keyboard's own Done. Idempotent, so whichever arrives first wins and the second is a
+       no-op. */
+    inp.addEventListener("change",()=>commit());
+    inp.addEventListener("blur",()=>commit());
+    function commit(){
+      if(!shareSheetEl.classList.contains("ssEditName")) return;   // already committed
+      const before=getHandle(), v=cleanHandle(inp.value);
+      /* EMPTY IS NOT A CHOICE TO BE ANONYMOUS. Clearing the field and walking away leaves the
+         name that was already on the row — the hide is going out signed either way, and an
+         empty box is far more likely to be a mis-tap than a decision. */
+      if(v&&v!==before){
+        setHandle(v); ssNamePreview="";
+        track("hide_signed",{had_name:!!before,named:true,src:"sheet"});
+        /* The hide may already be published — the sheet publishes on first touch — so the row
+           behind the link has to be re-stamped or the friend opens a challenge signed with the
+           name that was there a second ago. chRepublish() bails when nothing is published. */
+        try{ chRepublish(); }catch(_){}
+      }
+      stop(); ssRenderSign();
+    }
+  }
+}
 /* THE ROW, THE HEADLINE ABOVE IT AND THE BUTTON BELOW IT ARE ONE ANSWER, PAINTED ONCE.
    The headline used to be static ("Can they find you?") and could not be wrong. It makes a
    claim now — "Your challenge is now live!" — and that claim is false for the 23% who turn

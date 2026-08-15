@@ -296,7 +296,8 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       const peekRule = html.match(/^\s*#shareSheet\.peek \.ssCard > \*[^\n]*$/m);
       if (!peekRule) bad('the peek hide-everything rule is gone — the short sheet is no longer short');
       else {
-        const named = ['.ssGrab', '.pwTitle', '.ssSub', '.ssInvite', '.ssSeeLive', '.ssVis', '.ssGet'];
+        const named = ['.ssGrab', '.pwTitle', '.ssSub', '.ssSign', '.ssSignIn', '.ssInvite',
+          '.ssSeeLive', '.ssVis', '.ssGet'];
         const missing = named.filter((c) => !peekRule[0].includes(`:not(${c})`));
         missing.length === 0
           ? ok('the short sheet keeps the headline, its notification line, the toggle and both buttons')

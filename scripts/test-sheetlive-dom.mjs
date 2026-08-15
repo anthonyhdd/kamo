@@ -62,6 +62,17 @@ const html = real.slice(0, at)
      them read, so setting it is how the fixture picks which of the two failures to be. */
   + 'unpublished(score){ chId=""; currentScore=score; chRpc=async()=>null; },'
   + 'hint(){ const h=document.getElementById("hint"); return h?h.textContent:""; },'
+  /* The signature row, driven the way a thumb does it: tap the row, type, blur. Reading
+     localStorage directly would prove the key round-trips, which was never in doubt. */
+  + 'paintSign(){ ssRenderSign(); return this.sign(); },'
+  + 'sign(){ return{shown:(document.getElementById("ssSignName")||{}).textContent||"",'
+  + 'cta:(document.getElementById("ssSignGo")||{}).textContent||"",'
+  + 'stored:getHandle(),editing:shareSheetEl.classList.contains("ssEditName")}; },'
+  + 'rename(v){ document.getElementById("ssSign").click();'
+  + 'const i=document.getElementById("ssSignIn"); i.focus(); i.value=v;'
+  + 'i.dispatchEvent(new Event("input",{bubbles:true}));'
+  + 'i.dispatchEvent(new Event("change",{bubbles:true})); i.blur(); return this.sign(); },'
+  + 'willSign(){ return ensureHandle(); },'
   /* The sheet has to be genuinely OPEN for "it stays put" to mean anything — a class
      that was never added cannot be observed surviving. */
   + 'openSheet(){ ssState="open"; shareSheetEl.classList.add("show"); return shareSheetEl.classList.contains("show"); },'
@@ -163,6 +174,71 @@ console.log('\nTHE PROOF IS OFFERED WHATEVER THE TOGGLE SAYS');
     ? ok('"See it live" is on the sheet for a public hide AND a private one')
     : bad(`#ssSeeLive is public=${pub.live} private=${priv.live} — the button seeds the hide by `
         + 'id, so there is no state in which it opens something the creator cannot see');
+  await p.close();
+}
+
+/* THE NAME IS SHOWN, NOT ASKED FOR — and the name shown is the name that goes out.
+   254 published, 154 handed an invented name, hide_signed ZERO (2026-08-15). Nobody refused to
+   sign; nobody was ever shown the field. The row states the pseudonym the challenge is about to
+   carry and makes changing it one tap.
+   THE PROPERTY THAT MATTERS IS THE AGREEMENT. A row that previewed one name while the publish
+   path minted another would be worse than no row at all: the creator would have READ a name,
+   approved it, and still met a different one in the feed. */
+console.log('\nTHE SHEET SHOWS THE NAME THE CHALLENGE WILL CARRY');
+{
+  const p = await open(true);
+  const fresh = await p.evaluate(() => window.__s.paintSign());
+  /^@\w+/.test(fresh.shown) && !fresh.stored
+    ? ok(`a creator who has never signed sees the name they will get ("${fresh.shown}")`)
+    : bad(`the row reads ${JSON.stringify(fresh.shown)} with stored=${JSON.stringify(fresh.stored)}`);
+  /this is you/i.test(fresh.cta)
+    ? ok(`and is asked, not told ("${fresh.cta}")`)
+    : bad(`the affordance reads ${JSON.stringify(fresh.cta)} — while the name is still the app's `
+        + 'guess, the row has to invite a correction rather than announce a fact');
+
+  /* NOTHING IS WRITTEN BY LOOKING. The sheet presents itself on every finished reveal without
+     a tap, and the rule under mintHandle() is that only the publish path may stamp a device. */
+  fresh.stored === ''
+    ? ok('and rendering it stored nothing — a device that never sends is never stamped')
+    : bad(`rendering the row wrote ${JSON.stringify(fresh.stored)} to disk`);
+
+  /* THE AGREEMENT. ensureHandle() is what the publish path calls; it must commit the very name
+     the row displayed. */
+  const willBe = await p.evaluate(() => window.__s.willSign());
+  '@' + willBe === fresh.shown
+    ? ok(`and publishing commits that exact name (@${willBe})`)
+    : bad(`the row showed ${fresh.shown} but publishing would sign @${willBe} — the creator `
+        + 'approved one name and the feed would show another');
+  await p.close();
+}
+
+console.log('\nAND CHANGING IT IS ONE TAP, IN PLACE');
+{
+  const p = await open(true);
+  await p.evaluate(() => window.__s.paintSign());
+  const after = await p.evaluate(() => window.__s.rename('tony'));
+  after.stored === 'tony' && after.shown === '@tony'
+    ? ok('typing a name stores it and the row says so')
+    : bad(`after typing: ${JSON.stringify(after)}`);
+  !after.editing
+    ? ok('and the field stands down, so the sheet is a sheet again')
+    : bad('the sheet is stuck in the editing state — the send is behind a field nobody closed');
+  /change/i.test(after.cta)
+    ? ok(`and the row stops asking once the name is theirs ("${after.cta}")`)
+    : bad(`the affordance still reads ${JSON.stringify(after.cta)}`);
+
+  /* SANITISED ON THE WAY IN, because this goes into a message a stranger reads. */
+  const dirty = await p.evaluate(() => window.__s.rename('@bad name<script>'));
+  !/[@<>\s]/.test(dirty.stored) && dirty.stored
+    ? ok(`"@bad name<script>" is narrowed to ${JSON.stringify(dirty.stored)}`)
+    : bad(`markup or spaces survived: ${JSON.stringify(dirty.stored)}`);
+
+  /* AN EMPTY BOX IS A MIS-TAP, NOT A CHOICE TO BE ANONYMOUS. The hide goes out signed either
+     way, so clearing the field must keep the name that was already on the row. */
+  const cleared = await p.evaluate(() => window.__s.rename(''));
+  cleared.stored === dirty.stored
+    ? ok('and clearing it keeps the name rather than un-signing the hide')
+    : bad(`clearing the field left ${JSON.stringify(cleared.stored)}`);
   await p.close();
 }
 
