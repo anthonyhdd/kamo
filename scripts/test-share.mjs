@@ -41,7 +41,7 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  */
 async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40, slotId = 'dddddddddddddddd' }) {
   const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0, sheetClosed: 0, hints: [] };
-  const btn = { innerHTML: 'Challenge a friend', onclick: null };
+  const btn = { innerHTML: 'Send to a friend', onclick: null };
 
   const env = {
     haptic: () => {},
@@ -74,7 +74,6 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
     chAwaitId: async () => { calls.waited++; return chId; },
     inviteUrl: () => 'https://anthonyhdd.github.io/kamo/?i=1',
     chCopy: async (t) => { calls.clipboard++; calls.text = t; return clipboardOk; },
-    invitePreview: () => {},
     /* Stamps the hide as actually sent. Counted rather than stubbed silently: it runs on the
        send path, so a version of it that threw would take the share down with it. */
     chMarkSent: () => { calls.markedSent++; },
