@@ -1029,6 +1029,19 @@ try {
   bad('THE REPLAY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
+   initThree() runs at module top level; before this guard existed, that throw killed
+   everything after it — seeker, feed, tracking — and looked exactly like churn (17 devices
+   in the beacon's first 12 hours). The test drives the real failure: getContext() null. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-webgl-dead.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-webgl-dead.mjs', 'WEBGL-DEAD TEST', out)
+    : ok('a GL-less phone gets hunt-only mode, not a black screen (node scripts/test-webgl-dead.mjs)');
+} catch (e) {
+  bad('HUNT-ONLY MODE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* The handle crosses a trust boundary: one user types it, another user's phone renders it.
    It is narrowed in the page and again in create_hide, and this is the assertion that the
    third layer never becomes markup. A single innerHTML here would undo both. */
