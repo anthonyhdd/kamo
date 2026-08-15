@@ -71,6 +71,8 @@ async function open(why) {
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG }));
   await page.addInitScript((why) => {
     localStorage.setItem('kamo_hides', JSON.stringify(['abc123']));
+    // Watch is KAMO+ since 2026-08-15 — this suite tests the replay MACHINERY, so it runs as a member.
+    localStorage.setItem('kamo_pro', '1');
     localStorage.setItem('kamo_handle', 'tony');
     window.__rpc = (fn) => {
       if (fn === 'get_hide') return Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 2, n_found: why === 'hit' ? 1 : 0, name: 'tony' });
