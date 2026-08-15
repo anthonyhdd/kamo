@@ -11244,9 +11244,25 @@ function chSeek(hideId,opts){
        AND ON chUserId, which is the RevenueCat app user id: it is the wallet's key and the
        id the webhook credits. Without it the button would open a wallet that no purchase can
        ever reach, so it simply does not appear. */
+    /* ⚠️ THE THIRD GATE, AND IT EXISTS BECAUSE THE OTHER TWO OPEN TOO EARLY.
+       nativeCaps.hints turns true the moment a build carrying it reaches a phone — but the
+       PRODUCT is a separate approval on Apple's side, and Apple will not take a first
+       consumable on its own: "votre premier achat intégré consommable doit être soumis avec
+       une nouvelle version de l'app" (ASC, 2026-08-16), which the API confirms by refusing an
+       inAppPurchaseV2 relationship on reviewSubmissionItems. So the binary and the product go
+       up together and come back at different times: TestFlight has the button within the hour,
+       the App Store has the pack whenever review finishes. In that window every tap on Hint
+       would open a purchase sheet for a product that does not exist yet.
+       THIS FLAG IS THE WINDOW. It lives in the page rather than in a JSON because the page IS
+       the live config for anything the web renders: GitHub Pages redeploys on merge and every
+       launch refetches, so flipping this to true and merging turns the feature on for the whole
+       fleet in about two minutes, with no build and no review.
+       FLIP IT WHEN com.blisscoach.kamo.hints5 READS `APPROVED` in App Store Connect, and not
+       before. Founder's call, 2026-08-16. */
+    const HINTS_LIVE=false;
     const HINT_PACK_ID="com.blisscoach.kamo.hints5";
     let hintZone=null, hintBusy=false, hintPending=false;
-    const hintsOn=()=>{ try{ return !!(nativeCaps&&nativeCaps.hints&&chUserId&&HID&&!REPLAY); }catch(_){ return false; } };
+    const hintsOn=()=>{ try{ return !!(HINTS_LIVE&&nativeCaps&&nativeCaps.hints&&chUserId&&HID&&!REPLAY); }catch(_){ return false; } };
     const hintBtn=document.createElement("button");
     hintBtn.className="chHint"; hintBtn.id="chHint"; hintBtn.textContent="Hint";
 
