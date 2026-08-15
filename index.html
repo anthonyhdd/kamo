@@ -7665,7 +7665,9 @@ function ssOfferApp(){
     /* Closes the sheet ONLY once there is something to open: the feed is a full-screen overlay
        and leaving the sheet under it is how you end up with two dismissals to get back. */
     closeShareSheet();
-    try{ chFeed({first:id}); }catch(e){} }; }
+    /* fromReveal: this is the one door into the feed that opens from a finished hide, so it is
+       the one whose ✕ has somewhere better to go than back. */
+    try{ chFeed({first:id,fromReveal:true}); }catch(e){} }; }
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
   if(typeof ssShowAgain==="function") ssShowAgain();
   track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
@@ -11983,6 +11985,14 @@ let kfState=null;
 function chFeed(opts){
   if(kfState) return;
   const FIRST=(opts&&opts.first)||"";
+  /* WHERE CLOSING THIS PUTS YOU. The feed is an overlay, so ✕ has always just uncovered
+     whatever was underneath — which is right when it was opened from the camera, and wrong
+     when it was opened from the reveal by "See it live". That path leaves you on a hide you
+     have already finished, already published and already sent: the round is over, and the
+     screen behind the feed is its receipt. Founder's report, 2026-08-15: "ça renvoie vers le
+     paint qui nous a fait ouvrir le feed au lieu de diriger vers le screen capture".
+     So the caller says where it came from, and closing honours it. */
+  const FROM_REVEAL=!!(opts&&opts.fromReveal);
   if(!document.getElementById("kfCSS")){
     const st=document.createElement("style"); st.id="kfCSS"; st.textContent=KF_CSS; document.head.appendChild(st);
   }
@@ -12063,7 +12073,17 @@ function chFeed(opts){
     try{ if(S.round) S.round.destroy(); }catch(_){}
     try{ io.disconnect(); }catch(_){}
     try{ root.remove(); }catch(_){}
-    if(!silent) track("feed_closed",{played:S.played,slides:S.slides.length});
+    if(!silent) track("feed_closed",{played:S.played,slides:S.slides.length,from:FROM_REVEAL?"reveal":"camera"});
+    /* THE SAME PAIR RETAKE USES (#cfYes): exitFinished() takes the reveal down, backToCompose()
+       puts the camera back and — the part that matters beyond the navigation — releases the
+       round's full-retina canvases, ~100MB of them. Reaching the camera by any other route
+       would leave those alive behind a session that has moved on.
+       `silent` is the exclusion, and it is not a detail: close(true) is the reply path
+       ("Hide one in this photo"), which is already on its way into compose carrying somebody
+       else's photo. Sending it to the camera would throw that photo away between the tap and
+       the screen. Every other exit — the ✕, the empty-state CTA — is somebody done with this
+       screen, and they all belong on the camera. */
+    if(FROM_REVEAL&&!silent){ try{ if(finished) exitFinished(); backToCompose(); }catch(e){} }
   }
 
   /* ONE ROUND ALIVE AT A TIME. The previous slide's round is destroyed on the way past
