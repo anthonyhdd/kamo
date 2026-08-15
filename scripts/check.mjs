@@ -563,6 +563,16 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       'capture() does not call chResetRound() — chId survives into the next round, so the '
       + 'second hide of a session shares the FIRST hide\'s link and the friend opens a '
       + 'different photo'],
+    /* THE ROW'S ANSWER IS WHAT PUBLISHES, and since 2026-08-15 it is the ONLY thing that does:
+       the consent modal that used to gate this line is gone, so kfWantPublic() — the value the
+       share sheet's .ssVis row writes and displays — is the whole of the decision. A call site
+       that started passing a literal, or read some other flag, would publish somebody's room to
+       a public feed against a switch that says Private, and nothing on screen would disagree.
+       test-peek-dom asserts the row is visible in the short sheet; this asserts it is obeyed. */
+    ['the visibility row is what publishes', 'async function chUpload(', 'kfApplyVisibility(mine,kfWantPublic())',
+      'chUpload() no longer publishes through kfApplyVisibility(mine,kfWantPublic()) — with the '
+      + 'consent modal gone that row is the only disclosure AND the only decision, so a call site '
+      + 'that hardcodes the flag publishes against a switch the user set'],
     ['the reveal starts the upload without publishing', 'function enterFinished(', 'chPrepare()',
       'enterFinished() no longer calls chPrepare() — the image upload goes back to starting '
       + 'on the same gesture as the tap, which is the eight-second wait this split removed'],
