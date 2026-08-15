@@ -1116,6 +1116,22 @@ try {
   bad('THE REFERRAL LINK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* The other silent measurement failure, and the reason it needs a wire-level test rather than
+   a reading of the file: `app_variant` has to reach Amplitude as a USER property, because that
+   is what `gp:app_variant` means and what every per-variant dashboard segments on. Written into
+   event_properties alone it renders fine, resolves fine, and reports the native population as
+   though it were the whole app — 97% of KAMO is a plain browser, and it sat outside the segment
+   from the day the web path shipped until 2026-08-15. Both emitters are covered: chWebTrack and
+   the boot-crash beacon, which duplicates the key and the device id and so must duplicate this. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-variantprop-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-variantprop-dom.mjs', 'VARIANT-PROPERTY TEST', out)
+    : ok('the web names its variant to Amplitude as a user property (node scripts/test-variantprop-dom.mjs)');
+} catch (e) {
+  bad('THE WEB IS INVISIBLE IN THE VARIANT DASHBOARDS:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* The regression this change exists to prevent, asserted on the source as well as at runtime:
    a bare `location.href=appLink` in the seeker handler is one keystroke away, and it would put
    every referred install back into the organic bucket with nothing on screen to show for it. */
