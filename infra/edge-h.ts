@@ -117,7 +117,11 @@ Deno.serve(async (req: Request) => {
   const generic = {
     title: "Someone hid a kamo in here",
     desc: "One tap to find it.",
-    image: "https://anthonyhdd.github.io/kamo/icon.png",
+    // The branded 1200x630 card from the landing, not the app icon. This card is what
+    // every link older than 30 days (the storage retention window), every blocked hide
+    // and every bogus id renders as — a share of ALL links ever sent that only grows.
+    // The icon stretched into a summary_large_image frame read as a broken advert.
+    image: "https://playkamo.com/img/og.jpg",
     to: SITE,
   };
 
