@@ -463,12 +463,18 @@ for (const [label, attempts] of [['nobody has played it', 0], ['five people have
       dim: b ? b.classList.contains('dim') : null,
       lock: b ? b.classList.contains('lock') : null,
       disabled: b ? b.disabled : null,
-      /* Infinite animations anywhere in the grid, pseudo-elements included — the shimmer lived
-         on the element itself, but "nothing in here loops" is the invariant, not one selector. */
+      /* Infinite animations anywhere in the grid, pseudo-elements included — the shimmer lives
+         on the element itself, but "what loops in here" is the invariant, not one selector. */
       spin: (document.getAnimations ? document.getAnimations() : [])
         .filter((a) => a.effect && a.effect.target && a.effect.target.closest
           && a.effect.target.closest('#kfMine') && a.effect.getTiming().iterations === Infinity)
         .map((a) => a.animationName || 'anim'),
+      /* Specifically: is the DIM one moving. That is the failure worth naming — a shimmer is a
+         door, and a door on a hide nobody has played opens onto nothing. */
+      dimSpin: (document.getAnimations ? document.getAnimations() : [])
+        .filter((a) => a.effect && a.effect.target && a.effect.target.classList
+          && a.effect.target.classList.contains('dim') && a.effect.getTiming().iterations === Infinity)
+        .length,
     };
   });
   card.count === 1
@@ -479,10 +485,21 @@ for (const [label, attempts] of [['nobody has played it', 0], ['five people have
     ? ok(attempts < 1 ? 'and it is dim, because there is nothing behind it yet'
                       : 'and it is live, because there are taps to show')
     : bad(`dim=${card.dim} on a hide with ${attempts} plays`);
-  card.spin.length === 0
-    ? ok('nothing in the grid animates on a loop')
-    : bad(`${card.spin.join(', ')} is looping in the grid — four cells means four mint edges `
-        + 'travelling out of phase behind photographs, for a control nobody has tapped');
+  /* THE SHIMMER BELONGS TO THE LOCKED STATE AND TO NOTHING ELSE, and this assertion has been
+     both ways in two days — cut on 2026-08-15 (four locked cells, four mint edges travelling out
+     of phase behind photographs) and restored the same day. The founder's argument won: this is
+     the only paid surface on the screen, the grid is the one place a creator's own results make
+     the upsell make sense, and a static edge is a badge where a moving one is a door.
+     So the invariant is not "nothing moves", it is WHICH thing moves — and the one that must
+     never is the dim button, because a door on a hide nobody has played opens onto nothing.
+     A member's grid stays still too: for them these are tools, not doors. */
+  const wantSpin = attempts > 0;   // free user, played hide → locked → shimmering
+  (card.spin.length > 0) === wantSpin && card.dimSpin === 0
+    ? ok(wantSpin ? `the locked button shimmers, and only it (${card.spin.join(', ')})`
+                  : 'nothing moves on a card with no plays')
+    : bad(`loops in the grid: ${card.spin.join(', ') || 'none'} (dim: ${card.dimSpin}) — expected `
+        + `${wantSpin ? 'the locked button to shimmer' : 'nothing to move'}, and the dim button `
+        + 'must never move whatever else does');
 
   /* THE DEAD ONE SELLS NOTHING. A paywall over a map of a hide nobody has played is charging
      for an empty room, and it is the fastest way to make KAMO+ look like it sells nothing.
