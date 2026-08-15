@@ -350,25 +350,27 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
   const t0 = await clock();
   t0 === null ? bad('no round clock on screen — the rest of this block cannot mean anything') : ok(`the round is timing (${t0}s)`);
 
+  /* The overlay is the My-kamos grid now (data-blocks-timer) — profile moved onto it, but
+     the invariant is the same: anything covering a live round must stop its clock. */
   await page.evaluate(() => { document.getElementById('kfScope').click();
-    document.querySelector('#kfMenu [data-s="profile"]').click(); });
+    document.querySelector('#kfMenu [data-s="mine"]').click(); });
   await page.waitForTimeout(2500);
   const t1 = await clock();
   /* One 100ms tick of slop is the design: the pause is sampled from the clock's own interval
      rather than from a second observer over the same overlays. */
   t1 !== null && t0 !== null && (t1 - t0) < 0.5
-    ? ok(`2.5s with the card open costs the round ${((t1 - t0)).toFixed(1)}s`)
-    : bad(`the clock ran under the card: ${t0}s → ${t1}s — those seconds go into submit_attempt`);
+    ? ok(`2.5s with the grid open costs the round ${((t1 - t0)).toFixed(1)}s`)
+    : bad(`the clock ran under the grid: ${t0}s → ${t1}s — those seconds go into submit_attempt`);
 
   await page.evaluate(() => { document.getElementById('kfScope').click();
-    document.querySelector('#kfMenu [data-s="profile"]').click(); });
+    document.querySelector('#kfMenu [data-s="all"]').click(); });
   await page.waitForTimeout(900);
   const t2 = await clock();
-  /* The other half, and the one a naive "just stop the timer" fix breaks: closing the card
-     must resume, not leave the round frozen for good. */
+  /* The other half, and the one a naive "just stop the timer" fix breaks: coming back to
+     Everyone must resume, not leave the round frozen for good. */
   t2 !== null && (t2 - t1) > 0.4
-    ? ok(`and closing it resumes the round (${t1}s → ${t2}s)`)
-    : bad(`the clock did not restart after the card closed: ${t1}s → ${t2}s`);
+    ? ok(`and coming back resumes the round (${t1}s → ${t2}s)`)
+    : bad(`the clock did not restart after the grid closed: ${t1}s → ${t2}s`);
 
   await page.close();
 }
@@ -391,8 +393,16 @@ console.log('\nTHE PROFILE BUTTON OPENS THE CARD WHERE IT CAN BE TOUCHED');
   });
   closed ? ok('the card starts closed while the feed plays') : bad('#kamoHome is open before anything was tapped');
 
+  /* Profile lives on the My-kamos grid now (top-right, founder's call 2026-08-15): the
+     door is #kfMe, visible only once the grid is open — assert that gating too. */
+  const meHiddenOnFeed = await page.evaluate(() => document.getElementById('kfMe').style.display === 'none');
+  meHiddenOnFeed ? ok('the profile door is absent while the public feed plays') : bad('#kfMe visible over the feed — that corner belongs to the clock chip');
   await page.evaluate(() => { document.getElementById('kfScope').click();
-    document.querySelector('#kfMenu [data-s="profile"]').click(); });
+    document.querySelector('#kfMenu [data-s="mine"]').click(); });
+  await page.waitForTimeout(1200);
+  const meShownOnMine = await page.evaluate(() => document.getElementById('kfMe').style.display !== 'none');
+  meShownOnMine ? ok('and appears top-right on My kamos') : bad('#kfMe still hidden on the grid');
+  await page.evaluate(() => document.getElementById('kfMe').click());
   await page.waitForTimeout(600);
 
   const st = await page.evaluate(() => {
@@ -420,8 +430,7 @@ console.log('\nTHE PROFILE BUTTON OPENS THE CARD WHERE IT CAN BE TOUCHED');
 
   /* The handler is a toggle, and the second tap is the half that only exists because the
      feed bar stays on screen behind the card. */
-  await page.evaluate(() => { document.getElementById('kfScope').click();
-    document.querySelector('#kfMenu [data-s="profile"]').click(); });
+  await page.evaluate(() => document.getElementById('kfMe').click());
   await page.waitForTimeout(400);
   const reclosed = await page.evaluate(() => !document.getElementById('kamoHome').classList.contains('show'));
   reclosed ? ok('and tapping it again closes it') : bad('the profile button does not toggle back');
