@@ -927,6 +927,21 @@ try {
   bad('THE HERO-PLAN ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
+/* ---- 11e. The hint on the seek screen --------------------------------------------------- */
+/* Two guarantees, both of which fail silently if nobody looks: a released binary must see no
+   hint button at all (the capability gate is what keeps a web deploy that lands before the
+   build from changing anything for live users), and the revealed zone must be an ELLIPSE
+   scaled per axis - the server's region is one, and a circle would show a shape the answer is
+   not guaranteed to sit inside. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-hint-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-hint-dom.mjs', 'HINT TEST', out)
+    : ok('the hint is gated on the native capability and drawn where the server put it (node scripts/test-hint-dom.mjs)');
+} catch (e) {
+  bad('THE HINT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+}
+
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
 try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-seek-dom.mjs')], { stdio: 'pipe' }).toString();
