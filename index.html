@@ -12250,7 +12250,7 @@ const KF_CSS=
      glass rather than fog (the colours behind stay colours instead of going grey).
      Narrower too, and centred content: two short labels did not need 190px of card, and a
      left rail of text under a centred title looked like a list that had slipped. */
-  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:0;width:max-content;border-radius:20px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.13);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);box-shadow:0 8px 30px rgba(0,0,0,.34);overflow:hidden;display:none;}"
+  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:0;width:max-content;border-radius:20px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.085);-webkit-backdrop-filter:blur(26px) saturate(190%);backdrop-filter:blur(26px) saturate(190%);box-shadow:0 8px 30px rgba(0,0,0,.28);overflow:hidden;display:none;}"
   /* The icon and the label travel together and the PAIR is centred, so the two rows line up
      on the same left edge as each other while the block sits under the middle of the title.
      Centring the text alone would have staggered them — "Everyone" and "My kamos" are not the
@@ -12278,7 +12278,11 @@ const KF_CSS=
   +".kmStat.send{background:#fff;border-color:#fff;color:#0a0b0e;}"
   +".kmStat.send b{color:#0a0b0e;}"
   +".kmGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
-  +".kmCell{border-radius:16px;overflow:hidden;background:#0a0e14;border:1px solid rgba(255,255,255,.1);}"
+  /* align-self:start — WITHOUT IT A CELL WITH NO ACTION ROW STRETCHES to the height of the
+     one beside it that has Watch and Taps, and pays for it with a strip of empty card under
+     its photo. The founder read that gap as a missing control, which is exactly what it looks
+     like. Each cell is now as tall as its own contents. */
+  +".kmCell{align-self:start;border-radius:16px;overflow:hidden;background:#0a0e14;border:1px solid rgba(255,255,255,.1);}"
   +".kmCell.kmUnsent{border-color:rgba(255,255,255,.32);}"
   +".kmShot{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:#0d1117;}"
   +".kmPic{display:block;position:relative;}"
@@ -12286,18 +12290,26 @@ const KF_CSS=
      picture and a solid pill would look bolted on. The gradient only exists where they are. */
   +".kmPic::after{content:\"\";position:absolute;left:0;right:0;bottom:0;height:56px;pointer-events:none;"
   +  "background:linear-gradient(180deg,rgba(4,6,10,0),rgba(4,6,10,.72));}"
-  +".kmMeta{position:absolute;left:8px;bottom:7px;z-index:2;display:flex;gap:9px;align-items:center;"
-  +  "font-size:12px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);font-variant-numeric:tabular-nums;}"
-  +".kmM{display:inline-flex;align-items:center;gap:3px;}"
-  +".kmM i{font-style:normal;font-size:11px;opacity:.85;}"
+  /* var(--display) — the numerals were inheriting the system stack and landing on a photo in
+     a face that appears nowhere else in the app. */
+  +".kmMeta{position:absolute;left:9px;bottom:8px;z-index:2;display:flex;gap:11px;align-items:center;"
+  +  "font-family:var(--display);font-size:13px;font-weight:800;letter-spacing:-.2px;color:#fff;"
+  +  "text-shadow:0 1px 4px rgba(0,0,0,.55);font-variant-numeric:tabular-nums;}"
+  +".kmM{display:inline-flex;align-items:center;gap:4px;}"
+  +".kmM svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.95;}"
+  /* The play triangle is the one solid glyph — an outlined triangle at 13px reads as noise. */
+  +".kmM svg path[d^=\"M7 4.5\"]{fill:currentColor;stroke:none;}"
   /* Top right, away from the numbers, and big enough to be a thumb target on a half-width
      cell. White when the hide has never been sent — that is the one state this grid exists
      to clear, and it is the only white thing on the card. */
-  +".kmShare{position:absolute;top:7px;right:7px;z-index:3;width:34px;height:34px;border-radius:11px;"
-  +  "display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;"
-  +  "border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.5);color:#fff;"
-  +  "-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
-  +".kmShare.now{background:#fff;border-color:#fff;color:#0a0b0e;}"
+  +".kmShare{position:absolute;top:5px;right:5px;z-index:3;width:34px;height:34px;"
+  +  "display:flex;align-items:center;justify-content:center;padding:0;"
+  +  "border:none;background:none;color:#fff;}"
+  +".kmShare svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;"
+  +  "filter:drop-shadow(0 1px 4px rgba(0,0,0,.6));}"
+  /* Mint, not white-on-white: the only thing that has to stand out is a hide nobody has been
+     sent yet, and a white plate on a bright photo disappeared into it. */
+  +".kmShare.now{color:var(--mint);}"
   +".kmShare:active{transform:scale(.94);}"
   +".kmActs{display:flex;gap:6px;padding:9px 8px 10px;}"
   +".kmBtn{flex:1;min-width:0;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:12px;white-space:nowrap;padding:0 4px;}"
@@ -12697,15 +12709,28 @@ function chFeed(opts){
     const unsent=!!(h&&h.sent===false);
     const plays=(h&&h.n_attempts)|0, found=(h&&h.n_found)|0;
     const pct=plays>0?Math.round(100*found/plays):null;
-    const stat='<span class="kmMeta"><span class="kmM"><i>▶</i>'+plays+'</span>'
-      +(pct===null?'':'<span class="kmM"><i>🏆</i>'+pct+'%</span>')+'</span>';
+    /* SVG, NOT EMOJI, and the app's own display face on the numerals. 🏆 rendered in Apple's
+       colour emoji font and ▶ in whatever fell out of the system stack, so two glyphs that are
+       meant to be quiet UI arrived as a coloured sticker and a mismatched arrow sitting on a
+       photograph. Every other glyph in this file is a stroke path (the bar's ✕ and ⚑, the
+       visibility globe, the scope menu) — these join them. */
+    const ICO_PLAY='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>';
+    const ICO_CUP='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z"/>'
+      +'<path d="M7 5.5H4.6a3 3 0 0 0 3 3M17 5.5h2.4a3 3 0 0 1-3 3"/><path d="M12 14v3M9 20h6"/></svg>';
+    const stat='<span class="kmMeta"><span class="kmM">'+ICO_PLAY+plays+'</span>'
+      +(pct===null?'':'<span class="kmM">'+ICO_CUP+pct+'%</span>')+'</span>';
     /* Sending moved onto the photo, top right. It was a full-width button competing with
        Watch and Heat for one row, which is how two controls that report and one control that
        ACTS ended up looking like three of the same thing. On the image it reads as what it
        is — do something with this picture — and the row below is left to the two that only
        ever explain. Keeps data-i, so the existing handler is untouched. */
-    const send='<button class="kmShare'+(unsent?' now':'')+'" data-i="'+i+'" '
-      +'title="'+(unsent?'Send it':'Send again')+'" aria-label="'+(unsent?'Send it':'Send again')+'">✉</button>';
+    /* AN ICON, NOT AN ICON IN A BOX. A 34px plate with an emoji envelope inside it read as two
+       controls stacked; the glyph alone, in the same stroke vocabulary as the rest, is the
+       control. It keeps its hit area — the button is still 34px, only its skin is gone. */
+    const lbl=unsent?'Send it':'Send again';
+    const send='<button class="kmShare'+(unsent?' now':'')+'" data-i="'+i+'" title="'+lbl+'" aria-label="'+lbl+'">'
+      +'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 5.5h16.8v13H3.6z"/>'
+      +'<path d="M3.6 6.4 12 12.6l8.4-6.2"/></svg></button>';
     /* WORDS, NOT BARE ICONS. ▶ and ◈ side by side did not distinguish a film of ONE hunt from
        a map of EVERYONE'S taps — the founder could not tell them apart, and he wrote them.
        Two half-width buttons can carry one word each. */
