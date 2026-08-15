@@ -10031,15 +10031,42 @@ function chRemember(id,drop){
    database disagreed all along and why every funnel drawn on them was wrong. This fires at
    the exact moment sent_at is written, on the same user as hide_published, so the pair is
    finally comparable without waiting for a build. */
-function chMarkSent(){
-  if(!chId) return;
-  try{ chRpc("mark_hide_sent",{p_id:chId}).catch(()=>{}); }catch(e){}
-  try{ track("hide_sent",{}); }catch(e){}
+/* ⚠️ IT GUARDED ON chId AND THE SEND DOES NOT. That one mismatch is why four hides in five
+   look like they never left the phone.
+   The button sends on chSlotLink() — the id minted CLIENT-SIDE by chSlot(), available with no
+   round trip, and the same id create_hide is called with (p_id on the widest overload). So a
+   tap two seconds after the reveal produces a real link, a real share and a real challenge.
+   chId, meanwhile, is only assigned when create_hide RESOLVES. Everything in this function was
+   behind `if(!chId) return`, so for every one of those taps the stamp never happened: no
+   `hide_sent`, and no mark_hide_sent, which is the RPC that writes hides.sent_at.
+   MEASURED 2026-08-15: 255 people tapped Send and 164 fired hide_sent — a 91-user gap on a
+   path where chMarkSent() is called ONE LINE EARLIER than share_target_tapped, on the same
+   tap, unconditionally. No user behaviour can fit between those two statements. Only 17 of the
+   255 were bare, so the publish floor is not it either. It was this guard, and it was costing
+   both numbers at once: `sent_at` is the column behind "283 of 1475 hides were ever sent", and
+   `hide_sent` is the Amplitude half. The send rate has never been as bad as it reads.
+   SO THE STAMP WAITS AND THE BEATS DO NOT. chAwaitId() is bounded, it kicks chUpload() rather
+   than only polling, and awaiting here is free: the share has already gone out — postNative
+   returned, or navigator.share resolved — so there is no user activation left to spend and
+   nothing on screen is waiting. The offers below still fire on the tap, because they are about
+   the person in front of you rather than about the row in the database. */
+async function chMarkSent(){
+  let id=chId;
+  chMarkSent._had=!!id;
+  if(!id){ try{ id=await chAwaitId(4000); }catch(e){} }
+  if(id){
+    try{ chRpc("mark_hide_sent",{p_id:id}).catch(()=>{}); }catch(e){}
+    /* `waited` separates the taps that were already published from the ones this fix
+       recovered, so the size of the old blind spot is readable rather than argued about. */
+    try{ track("hide_sent",{waited:!chMarkSent._had}); }catch(e){}
+  }
   /* ③ BEAT THREE — AND THE ONLY ONE THAT IS SAFE TO SELL AGAINST WITHOUT ARGUING. The share
-     has ALREADY GONE OUT when this runs (chMarkSent is called on the send path, at the
-     moment sent_at is written), so the offer cannot cost a single link. This is the one beat
-     that sits after the loop instead of near it, which is why the delay is short: nothing
-     downstream of here is waiting on the user. */
+     has ALREADY GONE OUT when this runs, so the offer cannot cost a single link. This is the
+     one beat that sits after the loop instead of near it, which is why the delay is short:
+     nothing downstream of here is waiting on the user.
+     ⚠️ THESE RUN WHETHER OR NOT THE STAMP LANDED. They are about the person holding the
+     phone — an offer, a nudge, an install pitch — and hanging them behind a database round
+     trip would mean a slow network silently costs the beat as well as the row. */
   try{ setTimeout(()=>pwFirstOffer("sent"),1200); }catch(e){}
   /* Same key, so this REPLACES the "you never sent that one" nudge armed at publish. */
   try{ armResultsPing(true); }catch(e){}
