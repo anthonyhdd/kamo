@@ -71,6 +71,12 @@ const html = real.slice(0, at)
   + 'return e?getComputedStyle(e).display!=="none":null;};'
   + 'const txt=(id)=>{const e=document.getElementById(id);return e?e.textContent.trim():null;};'
   + 'return{live:v("ssSeeLive"),get:v("ssGet"),title:txt("ssTitle"),sub:txt("ssSub")};},'
+  /* The reveal has to be genuinely UP for "closing the feed leaves it" to mean anything —
+     `finished` is what exitFinished()/backToCompose() branch on. */
+  + 'reveal(){ finished=true; stage.classList.add("done"); return finished; },'
+  + 'closeFeed(){ const x=document.getElementById("kfClose"); if(x) x.click();'
+  + 'return{feed:!!document.getElementById("kfeed"),finished:finished,mode:mode,'
+  + 'shutter:getComputedStyle(document.getElementById("shutterWrap")).display}; },'
   + 'tap(){ window.__tracked=[]; const t=track;'
   + 'track=(n,p)=>{window.__tracked.push(n);return t(n,p);};'
   + 'try{ document.getElementById("ssSeeLive").click(); }finally{ track=t; }'
@@ -212,6 +218,36 @@ console.log('\nTAPPING IT OPENS THE FEED ON THAT HIDE');
    Both no-id paths are asserted, because they fail identically from the outside and need
    different sentences: one is "this will never publish, here is what would fix it", the other
    is "it has not landed yet, that tap cost you nothing". */
+/* AND CLOSING THE FEED GOES FORWARD, NOT BACK.
+   The feed is an overlay, so ✕ has always just uncovered what was underneath — right when it
+   was opened from the camera, wrong from here. "See it live" is reached from the reveal of a
+   hide that is finished, published and sent; the screen behind the feed is that hide's receipt,
+   and dropping somebody back onto it is dropping them onto a round that is over. Reported as
+   "ça renvoie vers le paint qui nous a fait ouvrir le feed au lieu de diriger vers le screen
+   capture".
+   Asserted through the real ✕, and on `mode` rather than on a class, because the thing that
+   went wrong was the destination and not the styling. */
+console.log('\nCLOSING THE FEED FROM THE REVEAL LANDS ON THE CAMERA');
+{
+  const p = await open(true);
+  await p.evaluate(() => { window.__s.vis(true); window.__s.reveal(); window.__s.publish(); });
+  await p.evaluate(() => window.__s.tap());
+  await p.waitForTimeout(900);
+  (await p.evaluate(() => !!document.getElementById('kfeed')))
+    ? ok('the feed opened from the reveal')
+    : bad('the feed did not open, so the close cannot be tested');
+  const out = await p.evaluate(() => window.__s.closeFeed());
+  !out.feed ? ok('and ✕ closes it') : bad('the feed is still up after ✕');
+  out.mode === 'compose' && !out.finished
+    ? ok(`and lands on the capture screen (mode ${out.mode})`)
+    : bad(`✕ left mode=${out.mode} finished=${out.finished} — back on the hide that was already `
+        + 'finished, published and sent');
+  out.shutter !== 'none'
+    ? ok('with the shutter back, so the next hide is one tap away')
+    : bad(`the shutter is ${out.shutter} — the camera screen is not actually usable`);
+  await p.close();
+}
+
 console.log('\nWITH NO HIDE TO SHOW, IT SAYS SO AND STAYS PUT');
 for (const [label, score, needle] of [
   ['a paint under the publish floor', 5, /paint more/i],
