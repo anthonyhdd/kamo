@@ -2513,6 +2513,24 @@
     <button class="ssBtn ssGet" id="ssGet" style="display:none">
       <span class="ssGetTxt"><b>Know when they find you</b><i>KAMO can notify you. A browser tab can't.</i></span>
     </button>
+    <!-- WHAT COMES AFTER THE SEND, INSIDE THE APP. The mirror of #ssGet above: that one
+         sells the app to a browser, this one fills the beat for somebody already holding it.
+         Until now there was nothing here at all — #ssGet returns early in the wrapper and
+         #ssAgain was deleted from the markup — so the highest-intent moment in the session
+         ended on a sheet that just sat there. 2266 users published a hide in the 14 days to
+         2026-08-15 and 538 sent one; the ones who got this far are the 24% who finished the
+         loop, and they were shown no next step.
+         THE HEADLINE IS THE POINT, NOT THE TAP. At this instant nobody is wondering what
+         other people hid — they are wondering whether their friend will find THEIRS. So the
+         first line answers that (and arms the notification armResultsPing already schedules),
+         and the feed is offered underneath as the thing to do while waiting. Leading with the
+         feed would answer a question nobody asked and spend the anticipation that brings them
+         back tomorrow.
+         Revealed from chMarkSent() like #ssGet, so it cannot appear on a sheet nobody has
+         used, and mutually exclusive with it: two slabs would be two asks. -->
+    <button class="ssBtn ssGet ssLive" id="ssLive" style="display:none">
+      <span class="ssGetTxt"><b>Your challenge is live</b><i>We'll tell you when they tap. Find someone else's while you wait &rarr;</i></span>
+    </button>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
     <!-- SNAPCHAT AND TIKTOK ARE GONE AS BUTTONS, not as destinations. This sheet had nine
          tappable things in it; a share sheet that asks nine questions gets answered by the
@@ -6766,6 +6784,11 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    measurable on the day it ships instead of after the next App Store review.
    They land on the WEB Amplitude user, same as hide_published and hide_sent, so
    feed_opened → feed_slide → hide_published joins at user level without a build. */
+/* Routed direct for the same reason as the rest of this family, and it MUST be: the whole
+   point of the event is hide_sent -> sent_feed_tapped -> feed_opened, and those two
+   neighbours are WEB_ONLY. Through the bridge it would land on the native Amplitude user
+   while they land on the web one, and the funnel would read zero. */
+"sent_feed_tapped",
 "feed_opened","feed_closed","feed_slide","feed_empty","feed_empty_cta",
 "feed_load_failed","hide_visibility_set",
 /* THE ONE THAT SAYS HOW LONG IT TOOK, and it has to travel with the rest of the family.
@@ -7709,6 +7732,20 @@ function ssOfferApp(){
   try{ if(window.ReactNativeWebView) return;
        const g=$("#ssGet"); if(g) g.style.display="flex"; }catch(e){}
 }
+/* THE IN-APP HALF. Same trigger, opposite audience: ssOfferApp() sells the app to a browser,
+   this fills the same beat for a wrapper that already has one. Gated on
+   window.ReactNativeWebView rather than nativeCaps for the reason spelled out above — the
+   question is "is there an app around this page", which is true in every wrapper ever
+   shipped, including the ones that never call setNativeCaps. */
+function ssOfferFeed(){
+  try{ if(!window.ReactNativeWebView) return;
+       const l=$("#ssLive"); if(l) l.style.display="flex"; }catch(e){}
+}
+{ const l=$("#ssLive");
+  /* Closes the sheet first: the feed is a full-screen overlay and leaving the sheet under it
+     is how you end up with two dismissals to get back to the camera. */
+  if(l) l.onclick=()=>{ haptic(10); track("sent_feed_tapped",{}); closeShareSheet();
+    try{ chFeed(); }catch(e){} }; }
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
   if(typeof ssShowAgain==="function") ssShowAgain();
   track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
@@ -10266,6 +10303,7 @@ function chMarkSent(){
      and no way to schedule it — so the browser is offered the thing that could, at the exact
      moment it is worth having. Same promise, same moment, told honestly. */
   try{ ssOfferApp(); }catch(e){}
+  try{ ssOfferFeed(); }catch(e){}
 }
 
 /* WHAT HAPPENED WHILE THEY WERE AWAY.
