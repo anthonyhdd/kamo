@@ -2529,7 +2529,7 @@
          Revealed from chMarkSent() like #ssGet, so it cannot appear on a sheet nobody has
          used, and mutually exclusive with it: two slabs would be two asks. -->
     <button class="ssBtn ssGet ssLive" id="ssLive" style="display:none">
-      <span class="ssGetTxt"><b>Your challenge is live</b><i>We'll tell you when they tap. Go hunt a kamo &rarr;</i></span>
+      <span class="ssGetTxt"><b>Your challenge is live</b><i>We'll tell you when they tap. See it in the feed &rarr;</i></span>
     </button>
     <button class="ssBtn ig" data-target="instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>Instagram</button>
     <!-- SNAPCHAT AND TIKTOK ARE GONE AS BUTTONS, not as destinations. This sheet had nine
@@ -7739,13 +7739,18 @@ function ssOfferApp(){
    shipped, including the ones that never call setNativeCaps. */
 function ssOfferFeed(){
   try{ if(!window.ReactNativeWebView) return;
+       /* NOT OFFERED FOR A PRIVATE HIDE. 23% of publishers turn the visibility row off, and
+          "See it in the feed" to somebody who chose private is a straight lie — their hide is
+          reachable only by the link they just sent. kfWantPublic() is the same value the app
+          used when it published, so the two can never disagree. */
+       if(!kfWantPublic()) return;
        const l=$("#ssLive"); if(l) l.style.display="flex"; }catch(e){}
 }
 { const l=$("#ssLive");
   /* Closes the sheet first: the feed is a full-screen overlay and leaving the sheet under it
      is how you end up with two dismissals to get back to the camera. */
-  if(l) l.onclick=()=>{ haptic(10); track("sent_feed_tapped",{}); closeShareSheet();
-    try{ chFeed(); }catch(e){} }; }
+  if(l) l.onclick=()=>{ haptic(10); track("sent_feed_tapped",{own:!!chId}); closeShareSheet();
+    try{ chFeed({first:chId||""}); }catch(e){} }; }
 document.querySelectorAll("#shareSheet .ssBtn[data-target]").forEach(b=>b.onclick=()=>{
   if(typeof ssShowAgain==="function") ssShowAgain();
   track("share_target_tapped",{target:b.dataset.target,mode:shareMode,score:Math.round(currentScore||0)});
@@ -12237,11 +12242,24 @@ const KF_CSS=
   /* Same object as the pill that opens it: same translucent tint, same border weight, same
      display face at the same size — the menu is the pill unrolled, not a different
      component (founder's call, 2026-08-15). */
-  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:190px;border-radius:18px;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.62);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.5);overflow:hidden;display:none;}"
-  +".kfMenu button{display:block;width:100%;padding:13px 17px;background:none;border:none;color:#fff;font-family:var(--display);font-weight:700;font-size:13.5px;letter-spacing:-.2px;text-align:left;}"
+  /* LIQUID GLASS, NOT A DARK SLAB (founder's call, 2026-08-15, against the iOS reference).
+     It was a near-opaque black card at 62% with a heavy 12px blur: on a photo feed that reads
+     as a hole punched in the picture. The system sheets it is standing next to do the
+     opposite — they let the image through and only frost it. So: a LIGHT tint at low alpha,
+     half the blur, and saturate() on top, which is the part that actually makes it look like
+     glass rather than fog (the colours behind stay colours instead of going grey).
+     Narrower too, and centred content: two short labels did not need 190px of card, and a
+     left rail of text under a centred title looked like a list that had slipped. */
+  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:0;width:max-content;border-radius:20px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.13);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);box-shadow:0 8px 30px rgba(0,0,0,.34);overflow:hidden;display:none;}"
+  /* The icon and the label travel together and the PAIR is centred, so the two rows line up
+     on the same left edge as each other while the block sits under the middle of the title.
+     Centring the text alone would have staggered them — "Everyone" and "My kamos" are not the
+     same width. */
+  +".kfMenu button{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:12px 20px;background:none;border:none;color:#fff;font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:-.2px;white-space:nowrap;}"
+  +".kfMenu button svg{flex:0 0 auto;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.92;}"
   +".kfMenu button.on{color:var(--mint);}"
-  +".kfMenu button:active{background:rgba(255,255,255,.07);}"
-  +".kfMenu button+button{border-top:1px solid rgba(255,255,255,.08);}"
+  +".kfMenu button:active{background:rgba(255,255,255,.14);}"
+  +".kfMenu button+button{border-top:1px solid rgba(255,255,255,.14);}"
 
   /* MY KAMOS — the creator's grid, painted OVER the slides (z 26: above rounds, below the
      bar at 30) so the active round survives a round trip through it untouched. Cells reuse
@@ -12263,16 +12281,30 @@ const KF_CSS=
   +".kmCell{border-radius:16px;overflow:hidden;background:#0a0e14;border:1px solid rgba(255,255,255,.1);}"
   +".kmCell.kmUnsent{border-color:rgba(255,255,255,.32);}"
   +".kmShot{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:#0d1117;}"
-  +".kmState{display:block;font-size:11.5px;font-weight:700;line-height:1.35;padding:9px 10px 0;}"
-  +".kmState .khWin{color:var(--mint);}"
-  +".kmState .khHit{color:rgba(255,255,255,.92);}"
-  +".kmState .khNone{color:rgba(255,255,255,.55);font-weight:600;}"
+  +".kmPic{display:block;position:relative;}"
+  /* Bottom left, over the photo, on a scrim rather than a plate: the numbers belong to the
+     picture and a solid pill would look bolted on. The gradient only exists where they are. */
+  +".kmPic::after{content:\"\";position:absolute;left:0;right:0;bottom:0;height:56px;pointer-events:none;"
+  +  "background:linear-gradient(180deg,rgba(4,6,10,0),rgba(4,6,10,.72));}"
+  +".kmMeta{position:absolute;left:8px;bottom:7px;z-index:2;display:flex;gap:9px;align-items:center;"
+  +  "font-size:12px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);font-variant-numeric:tabular-nums;}"
+  +".kmM{display:inline-flex;align-items:center;gap:3px;}"
+  +".kmM i{font-style:normal;font-size:11px;opacity:.85;}"
+  /* Top right, away from the numbers, and big enough to be a thumb target on a half-width
+     cell. White when the hide has never been sent — that is the one state this grid exists
+     to clear, and it is the only white thing on the card. */
+  +".kmShare{position:absolute;top:7px;right:7px;z-index:3;width:34px;height:34px;border-radius:11px;"
+  +  "display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;"
+  +  "border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.5);color:#fff;"
+  +  "-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
+  +".kmShare.now{background:#fff;border-color:#fff;color:#0a0b0e;}"
+  +".kmShare:active{transform:scale(.94);}"
   +".kmActs{display:flex;gap:6px;padding:9px 8px 10px;}"
   +".kmBtn{flex:1;min-width:0;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:12px;white-space:nowrap;padding:0 4px;}"
   /* Watch and Heat are icon squares in the grid — a half-width cell cannot afford three
      words, and the photo above them is all the context the icons need. Send keeps the word:
      it is the action this surface exists for. */
-  +".kmIco{flex:0 0 38px;font-size:13px;}"
+  +".kmIco{flex:1 1 0;font-size:12px;letter-spacing:-.1px;}"
   +".kmBtn:active{transform:scale(.96);}"
   +".kmBtn.lock{color:rgba(255,255,255,.55);}"
   +".kmBtn.lock::after{content:\" ✦\";font-size:9px;opacity:.9;}"
@@ -12303,8 +12335,12 @@ const KF_CSS=
   +"@keyframes kfSpin{to{transform:rotate(360deg)}}";
 
 let kfState=null;
-function chFeed(){
+/* opts.first = a hide id to put in front of the public page, used by the post-send offer
+   so somebody who has just published sees THEIR OWN photo in the feed's own frame —
+   proof, in the place strangers will meet it, rather than a thumbnail in a grid. */
+function chFeed(opts){
   if(kfState) return;
+  const FIRST=(opts&&opts.first)||"";
   if(!document.getElementById("kfCSS")){
     const st=document.createElement("style"); st.id="kfCSS"; st.textContent=KF_CSS; document.head.appendChild(st);
   }
@@ -12339,8 +12375,14 @@ function chFeed(){
        is why it is in the bar at all). */
     +'<button class="kfScope" id="kfScope">Everyone <i>▾</i></button>'
     +'<div class="kfMenu" id="kfMenu">'
-    +  '<button data-s="all" class="on">Everyone</button>'
-    +  '<button data-s="mine">My kamos</button>'
+    /* Two people for the public feed, one for your own — the same distinction the labels
+       make, said before the label is read. Stroke icons, matching every other glyph in this
+       file (the bar's ✕ and ⚑, the visibility row's globe). */
+    +  '<button data-s="all" class="on"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/>'
+    +     '<path d="M3.5 19c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8"/><circle cx="17" cy="9" r="2.4"/>'
+    +     '<path d="M15.6 14.6c2.6-.5 4.9 1.1 4.9 4.4"/></svg>Everyone</button>'
+    +  '<button data-s="mine"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/>'
+    +     '<path d="M5 20c0-3.5 3.1-5.6 7-5.6s7 2.1 7 5.6"/></svg>My kamos</button>'
     +'</div>'
     /* data-blocks-timer: while the grid covers a live round, the round's clock must not
        run — same principle (and same machinery) as the profile card, timerBlocked() reads
@@ -12637,18 +12679,43 @@ function chFeed(){
      data (chTally -> get_hide), same three actions. The round under this panel stays
      mounted: the panel covers it (z 26 vs the slides) and uncovers it untouched, so
      Everyone -> My kamos -> Everyone costs zero refetches and zero replays lost. */
+  /* THE SENTENCE IS GONE, AND TWO NUMBERS TOOK ITS PLACE (founder's call, 2026-08-15).
+     "still on your phone" / "not played yet" / "found you on the first tap" were three ways of
+     saying something the card can now show: how many people played it, and how many won. A
+     line of prose per cell in a two-column grid also pushed the controls below the fold on a
+     small phone.
+     PLAYS, NOT VIEWS, and that is a limit rather than a choice: nothing stores per-hide opens
+     server-side — seek_opened is a client event and never lands on the row — so the only
+     honest counters here are n_attempts and n_found. "plays" is also the word the chips above
+     this grid already use, so the two agree.
+     The trophy only appears once somebody has actually played: 0 plays has no success rate,
+     and "0%" would read as a verdict on the hide rather than an absence of data. */
   function kmCellHtml(h,i){
     const shot = h&&h.img_path
       ? '<img class="kmShot" loading="lazy" alt="" src="'+CH_URL+'/storage/v1/object/public/hides/'+encodeURIComponent(h.img_path)+'">'
       : '<span class="kmShot"></span>';
     const unsent=!!(h&&h.sent===false);
-    const watch=(h&&h.n_attempts>0)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-w="'+i+'" title="Watch their hunt" aria-label="Watch their hunt">▶</button>':'';
-    const heat =(h&&h.n_attempts>1)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-h="'+i+'" title="Where they looked" aria-label="Where they looked">◈</button>':'';
-    return '<div class="kmCell'+(unsent?' kmUnsent':'')+'">'+shot
-      +'<span class="kmState">'+chStateLine(h)+'</span>'
-      +'<span class="kmActs">'+watch+heat
-      +'<button class="kmBtn'+(unsent?' kmSendNow':'')+'" data-i="'+i+'">'+(unsent?'Send it':'Send')+'</button>'
-      +'</span></div>';
+    const plays=(h&&h.n_attempts)|0, found=(h&&h.n_found)|0;
+    const pct=plays>0?Math.round(100*found/plays):null;
+    const stat='<span class="kmMeta"><span class="kmM"><i>▶</i>'+plays+'</span>'
+      +(pct===null?'':'<span class="kmM"><i>🏆</i>'+pct+'%</span>')+'</span>';
+    /* Sending moved onto the photo, top right. It was a full-width button competing with
+       Watch and Heat for one row, which is how two controls that report and one control that
+       ACTS ended up looking like three of the same thing. On the image it reads as what it
+       is — do something with this picture — and the row below is left to the two that only
+       ever explain. Keeps data-i, so the existing handler is untouched. */
+    const send='<button class="kmShare'+(unsent?' now':'')+'" data-i="'+i+'" '
+      +'title="'+(unsent?'Send it':'Send again')+'" aria-label="'+(unsent?'Send it':'Send again')+'">✉</button>';
+    /* WORDS, NOT BARE ICONS. ▶ and ◈ side by side did not distinguish a film of ONE hunt from
+       a map of EVERYONE'S taps — the founder could not tell them apart, and he wrote them.
+       Two half-width buttons can carry one word each. */
+    const watch=(plays>0)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-w="'+i+'" title="Watch one hunt, as it happened" aria-label="Watch one hunt">▶ Watch</button>':'';
+    const heat =(plays>1)?'<button class="kmBtn kmIco'+(isPro?'':' lock')+'" data-h="'+i+'" title="Where everyone tapped" aria-label="Where everyone tapped">◈ Taps</button>':'';
+    /* No row at all when there is nothing to report — an empty strip of padding under a photo
+       reads as a control that failed to load. */
+    const acts=(watch||heat)?'<span class="kmActs">'+watch+heat+'</span>':'';
+    return '<div class="kmCell'+(unsent?' kmUnsent':'')+'">'
+      +'<span class="kmPic">'+shot+stat+send+'</span>'+acts+'</div>';
   }
   async function mineShow(){
     mineOpen=true;
@@ -12763,12 +12830,35 @@ function chFeed(){
     }
     midOff();
     if(!S.hinted&&!root.querySelector("#kfHint")){
-      const h=document.createElement("div"); h.className="kfHint"; h.id="kfHint"; h.textContent="Swipe up for the next hide ↑";
+      const h=document.createElement("div"); h.className="kfHint"; h.id="kfHint";
+      /* THE HINT IS ALSO THE LABEL when the first slide is the player's own hide. Without it
+         they meet a round they cannot play — the replay flag stops the tap counting, which is
+         correct and looks broken — and they have no reason to swipe. One sentence does both
+         jobs: names whose photo it is, and says what comes next. */
+      h.textContent=FIRST ? "That's yours — scroll to see other players' challenges ↑"
+                          : "Swipe up for the next hide ↑";
       root.appendChild(h);
     }
     activate(0);
   }
-  load().then(paint);
+  /* SEEDED BEFORE THE PAGE LOADS, AND WITH replay:true.
+     replay is not decoration: feed_page deliberately skips chMine() because playing your own
+     hide is never a round — you know the answer — and a tap that reached submit_attempt would
+     inflate your own hide's attempt count with a guess from somebody who already knew. The
+     flag routes the buzz through reveal_hide instead, which is the same path the second lap
+     already uses. The hint button also excludes itself here (hintsOn() tests !REPLAY), so
+     nobody is ever sold a hint for a photo they painted.
+     Failure is silent and costs nothing: no row, no slide, and the feed opens normally. */
+  (async()=>{
+    if(FIRST){
+      try{
+        const h=await chRpc("get_hide",{p_id:FIRST});
+        if(h&&h.img_path) addSlide({id:FIRST,img_path:h.img_path,name:h.name,
+          n_attempts:h.n_attempts|0,n_found:h.n_found|0},true);
+      }catch(e){}
+    }
+    load().then(paint);
+  })();
 }
 /* TEST HOOK, and deliberately not on window.KAMO. That object is the wrapper's bridge
    contract — everything on it is something App.js calls — and a test affordance has no
