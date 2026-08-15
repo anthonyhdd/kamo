@@ -12702,6 +12702,14 @@ function chFeed(opts){
   const scopeBtn=root.querySelector("#kfScope"), menuEl=root.querySelector("#kfMenu"), mineEl=root.querySelector("#kfMine");
   let mineOpen=false;
   const menuShow=(on)=>{ if(menuEl) menuEl.style.display=on?"block":"none"; };
+  /* THE MENU'S TICK BELONGS TO THE PANEL, NOT TO THE BUTTON THAT WAS PRESSED. It used to be
+     set inside the menu's own click handler, which is correct for exactly one of the three
+     ways the scope changes and wrong for the other two: opening straight onto the grid
+     (chFeed({mine:true})) and leaving it by tapping a card both moved the panel without ever
+     touching the menu, so the pill said Everyone while the dropdown still had My kamos
+     ticked. Owned by mineShow()/mineHide() now, which are the two functions that actually
+     know which scope is on screen. */
+  const scopeMark=(s)=>{ try{ menuEl.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.s===s)); }catch(_){} };
   scopeBtn.onclick=()=>{ haptic(8); menuShow(menuEl.style.display!=="block"); };
   /* A scroll is an answer: whatever the menu offered, the user chose the feed. */
   scroll.addEventListener("scroll",()=>menuShow(false),{passive:true});
@@ -12764,6 +12772,7 @@ function chFeed(opts){
   async function mineShow(){
     mineOpen=true;
     scopeBtn.innerHTML='My kamos <i>▾</i>';
+    scopeMark("mine");
     mineEl.style.display="block";
     /* The flag reports the SLIDE, and the slide is under this panel — a report control over
        somebody's own grid would report a photo they cannot see. Back with the feed.
@@ -12800,25 +12809,50 @@ function chFeed(opts){
     mineEl.querySelectorAll("[data-h]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
       if(!isPro){ track("heat_paywall_tapped",{n:(rows[+b.dataset.h]||{}).n_attempts|0,src:"mine"}); openPaywall("heatmap"); return; }
       khHeat(rows[+b.dataset.h],b); }; });
-    /* THE WHOLE CELL IS THE TAP TARGET — same contract as the card rows ("IT DOES WHAT
-       WATCH DOES", khRenderRows): a photo-sized cell looks tappable, and until now a tap
-       on it did nothing at all (founder's report, 2026-08-15). It forwards to Watch —
-       the cell's own story — and deliberately not to Send: a share sheet must never open
-       from a stray tap. A cell with nothing to watch stays inert; its one action is the
-       explicit Send button. Delegated through the button so there is exactly one path. */
-    mineEl.querySelectorAll(".kmCell").forEach(cell=>{
-      const w=cell.querySelector("[data-w]");
-      if(!w) return;
+    /* THE WHOLE CELL IS THE TAP TARGET, AND IT OPENS THE HIDE IN THE FEED.
+       It forwarded to Watch, which was the nearest thing that existed when the cell first
+       became tappable — but Watch is a replay of one stranger's hunt, it is behind KAMO+, and
+       on a cell nobody has played yet it does not exist at all, so most of this grid was
+       inert. What a photo-sized cell promises is the photo: tapping it puts the hide on the
+       screen the rest of the app plays it on, full-bleed, with the sender's name over it.
+       That works on every cell, paid or not, played or not.
+       replay:true IS THE WHOLE CORRECTNESS ARGUMENT, not a detail. Without it the buzz
+       reaches submit_attempt and files a tap from the one person on earth who painted the
+       thing as an attempt — inflating your own hide's play count with a guess that was never
+       a guess. The flag routes it through reveal_hide instead, the same path the seeded
+       first slide and the second lap already take.
+       Send still wins on its own button (the `closest("button")` guard): a share sheet must
+       never open from a stray tap. */
+    function kmOpenInFeed(row){
+      if(!row||!row.id||!row.img_path) return;
+      haptic(10);
+      track("mine_cell_tapped",{plays:(row.n_attempts)|0,to:"feed"});
+      mineHide();
+      /* The feed may be sitting on "Nothing here yet" — an empty PUBLIC feed says nothing
+         about whether this creator has hides, and leaving that card up behind their own
+         photo is how a screen ends up reading as broken. */
+      midOff();
+      let i=S.slides.findIndex(s=>s.row.id===row.id);
+      if(i<0){
+        addSlide({id:row.id,img_path:row.img_path,name:row.name,
+                  n_attempts:row.n_attempts|0,n_found:row.n_found|0},true);
+        i=S.slides.length-1;
+      }
+      try{ S.slides[i].el.scrollIntoView({block:"start"}); }catch(_){}
+      activate(i);
+    }
+    mineEl.querySelectorAll(".kmCell").forEach((cell,i)=>{
       cell.addEventListener("click",(ev)=>{
         if(ev.target.closest("button")) return;
         ev.stopPropagation();
-        w.click();
+        kmOpenInFeed(rows[i]);
       });
     });
   }
   function mineHide(){
     mineOpen=false;
     scopeBtn.innerHTML='Everyone <i>▾</i>';
+    scopeMark("all");
     mineEl.style.display="none"; mineEl.innerHTML="";
     { const f=root.querySelector("#kfFlag"); if(f) f.style.display="";
       const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
