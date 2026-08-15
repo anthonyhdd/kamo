@@ -12242,11 +12242,24 @@ const KF_CSS=
   /* Same object as the pill that opens it: same translucent tint, same border weight, same
      display face at the same size — the menu is the pill unrolled, not a different
      component (founder's call, 2026-08-15). */
-  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:190px;border-radius:18px;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.62);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.5);overflow:hidden;display:none;}"
-  +".kfMenu button{display:block;width:100%;padding:13px 17px;background:none;border:none;color:#fff;font-family:var(--display);font-weight:700;font-size:13.5px;letter-spacing:-.2px;text-align:left;}"
+  /* LIQUID GLASS, NOT A DARK SLAB (founder's call, 2026-08-15, against the iOS reference).
+     It was a near-opaque black card at 62% with a heavy 12px blur: on a photo feed that reads
+     as a hole punched in the picture. The system sheets it is standing next to do the
+     opposite — they let the image through and only frost it. So: a LIGHT tint at low alpha,
+     half the blur, and saturate() on top, which is the part that actually makes it look like
+     glass rather than fog (the colours behind stay colours instead of going grey).
+     Narrower too, and centred content: two short labels did not need 190px of card, and a
+     left rail of text under a centred title looked like a list that had slipped. */
+  +".kfMenu{position:absolute;left:50%;transform:translateX(-50%);top:calc(54px + var(--safe-t));z-index:41;min-width:0;width:max-content;border-radius:20px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.13);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);box-shadow:0 8px 30px rgba(0,0,0,.34);overflow:hidden;display:none;}"
+  /* The icon and the label travel together and the PAIR is centred, so the two rows line up
+     on the same left edge as each other while the block sits under the middle of the title.
+     Centring the text alone would have staggered them — "Everyone" and "My kamos" are not the
+     same width. */
+  +".kfMenu button{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:12px 20px;background:none;border:none;color:#fff;font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:-.2px;white-space:nowrap;}"
+  +".kfMenu button svg{flex:0 0 auto;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.92;}"
   +".kfMenu button.on{color:var(--mint);}"
-  +".kfMenu button:active{background:rgba(255,255,255,.07);}"
-  +".kfMenu button+button{border-top:1px solid rgba(255,255,255,.08);}"
+  +".kfMenu button:active{background:rgba(255,255,255,.14);}"
+  +".kfMenu button+button{border-top:1px solid rgba(255,255,255,.14);}"
 
   /* MY KAMOS — the creator's grid, painted OVER the slides (z 26: above rounds, below the
      bar at 30) so the active round survives a round trip through it untouched. Cells reuse
@@ -12362,8 +12375,14 @@ function chFeed(opts){
        is why it is in the bar at all). */
     +'<button class="kfScope" id="kfScope">Everyone <i>▾</i></button>'
     +'<div class="kfMenu" id="kfMenu">'
-    +  '<button data-s="all" class="on">Everyone</button>'
-    +  '<button data-s="mine">My kamos</button>'
+    /* Two people for the public feed, one for your own — the same distinction the labels
+       make, said before the label is read. Stroke icons, matching every other glyph in this
+       file (the bar's ✕ and ⚑, the visibility row's globe). */
+    +  '<button data-s="all" class="on"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/>'
+    +     '<path d="M3.5 19c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8"/><circle cx="17" cy="9" r="2.4"/>'
+    +     '<path d="M15.6 14.6c2.6-.5 4.9 1.1 4.9 4.4"/></svg>Everyone</button>'
+    +  '<button data-s="mine"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/>'
+    +     '<path d="M5 20c0-3.5 3.1-5.6 7-5.6s7 2.1 7 5.6"/></svg>My kamos</button>'
     +'</div>'
     /* data-blocks-timer: while the grid covers a live round, the round's clock must not
        run — same principle (and same machinery) as the profile card, timerBlocked() reads
