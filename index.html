@@ -5142,6 +5142,13 @@ function openPaywall(source,force){
        const ui=(!sh)&&!!(kfState||chLive||document.querySelector(".chS")||(startEl&&startEl.style.display!=="none"));
        paywallEl.classList.toggle("pwOverUI",ui); }catch(e){}
   if(pwArm==="full"){ stage.classList.add("pwCover"); document.body.classList.add("pwCover"); }
+  /* THE SHEET MUST OUTRANK WHATEVER ASKED FOR IT. #paywall's stylesheet z-index (60) predates
+     every fullscreen surface above it — the feed is 9400 — so a paywall opened from the feed
+     (the My-kamos ✦ buttons, and the first-offer's `feed` beat at slide 3) rendered UNDER it:
+     the tap "did nothing" (founder's report, 2026-08-15) while paywall_viewed counted a view
+     nobody could see. Recomputed on every open, not set once: the same sheet still opens from
+     the paint screen, where 60 keeps it under the share sheet family exactly as before. */
+  paywallEl.style.zIndex = document.getElementById("kfeed") ? "9550" : "";
   paywallEl.classList.add("show"); haptic(12);
   track("paywall_viewed",{
     source:src,
@@ -11887,7 +11894,17 @@ const KF_CSS=
      the card's facts (chStateLine) and actions (Send / ✦Watch / ✦Heat); the photo is the
      identifier, exactly as on the card rows. */
   +".kfMine{position:absolute;inset:0;z-index:26;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#04060a;padding:calc(62px + var(--safe-t)) 12px calc(26px + var(--safe-b));}"
-  +".kmHead{font-size:12.5px;font-weight:700;opacity:.75;padding:2px 4px 12px;}"
+  /* STAT CHIPS, NOT A SENTENCE. "1 kamo · 5 played · 2 found you · 1 still on your phone"
+     read as a run-on line nobody could scan (founder's call, 2026-08-15). Three facts, three
+     chips: plays, found-you in the accent, to-send filled white because it is the one that
+     is also an instruction. The kamo count is gone — the grid IS the count. */
+  +".kmStats{display:flex;gap:8px;flex-wrap:wrap;padding:2px 2px 14px;}"
+  +".kmStat{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);font-size:12.5px;font-weight:700;color:rgba(255,255,255,.8);white-space:nowrap;}"
+  +".kmStat b{font-size:14.5px;color:#fff;font-family:var(--display);}"
+  +".kmStat.mint{border-color:rgba(61,220,151,.4);color:var(--mint);}"
+  +".kmStat.mint b{color:var(--mint);}"
+  +".kmStat.send{background:#fff;border-color:#fff;color:#0a0b0e;}"
+  +".kmStat.send b{color:#0a0b0e;}"
   +".kmGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
   +".kmCell{border-radius:16px;overflow:hidden;background:#0a0e14;border:1px solid rgba(255,255,255,.1);}"
   +".kmCell.kmUnsent{border-color:rgba(255,255,255,.32);}"
@@ -12281,11 +12298,10 @@ function chFeed(){
       return;
     }
     const rows=t.rows, waiting=rows.filter(r=>r&&r.sent===false).length;
-    const head = '<b>'+t.hides+'</b> kamo'+(t.hides===1?'':'s')
-      + (t.tried?' · <b>'+t.tried+'</b> played':'')
-      + (t.found?' · <b>'+t.found+'</b> found you':'')
-      + (waiting?' · <b>'+waiting+'</b> still on your phone':'');
-    mineEl.innerHTML='<div class="kmHead">'+head+'</div><div class="kmGrid">'+rows.map(kmCellHtml).join("")+'</div>';
+    const chips = '<span class="kmStat"><b>'+t.tried+'</b> '+(t.tried===1?'play':'plays')+'</span>'
+      + (t.found?'<span class="kmStat mint"><b>'+t.found+'</b> found you</span>':'')
+      + (waiting?'<span class="kmStat send"><b>'+waiting+'</b> to send</span>':'');
+    mineEl.innerHTML='<div class="kmStats">'+chips+'</div><div class="kmGrid">'+rows.map(kmCellHtml).join("")+'</div>';
     track("mine_grid_shown",{hides:rows.length,tried:t.tried,found:t.found,unsent:waiting});
     mineEl.querySelectorAll("[data-i]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); }; });
     mineEl.querySelectorAll("[data-w]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
