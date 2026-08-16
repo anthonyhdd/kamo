@@ -25,13 +25,41 @@
  * front of every play, and the game is a static file that has never needed one. This does one
  * job: answer scrapers correctly, then get humans to the real page at once.
  *
- * The bounce uses BOTH a meta refresh and a script, and no User-Agent sniffing. A scraper
- * reads the head and stops; a browser runs one of the two and is gone in a frame. UA lists
- * rot, and every new messaging app would silently start getting the wrong response.
+ * The bounce is a script and nothing else, and no User-Agent sniffing. A browser runs it and
+ * is gone in a frame; anything that does not run JS reads the head, then the body, and stops.
+ * UA lists rot, and every new messaging app would silently start getting the wrong response.
+ *
+ * WHAT SEARCH ENGINES USED TO BE TOLD HERE, and why it was wrong. This page is the ONLY thing
+ * on playkamo.com that the outside world ever links to, and it used to spend that entirely:
+ *
+ *   - `<link rel="canonical">` pointed at kamo.bliss-coach.com — a different origin, and one
+ *     whose index.html carries `<meta name="robots" content="noindex,nofollow">`. Naming a
+ *     forbidden page as the canonical version of a playkamo.com URL consolidates the domain's
+ *     only inbound signal onto a dead end.
+ *   - `<meta http-equiv="refresh" content="0;…">` made every /h/ URL a redirect off-domain, so
+ *     anything crawled here was forwarded away before the body was read.
+ *   - `og:url` also named kamo.bliss-coach.com, so the unfurled card claimed a domain the
+ *     shared link does not point at.
+ *
+ * Now: `noindex,follow` and no canonical at all. The pages are deliberately kept OUT of the
+ * index — a hide's photo is deleted after the 30-day storage retention, so an indexed hide
+ * becomes a soft-404 by design, and thousands of those is a liability, not a long tail. What
+ * they must do instead is FOLLOW: the body carries a real crawlable link to playkamo.com, so
+ * the share surface feeds the pages that are actually trying to rank rather than a noindex
+ * origin on another domain. `noindex` and `canonical` are contradictory instructions — pick
+ * one, and for a page that outlives its own content it is noindex.
+ *
+ * The body is not dead weight for humans either: without JS the old page was a black screen,
+ * and it is now the photo plus a link that works.
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const SITE = "https://kamo.bliss-coach.com/";
+/* The origin this function is REACHED at, which is not the one it sends people to. The
+ * Cloudflare Worker on playkamo.com/h/* forwards here (infra/playkamo-worker.js), so every
+ * link in every thread is a playkamo.com link and every self-referential tag has to say so. */
+const PUBLIC = "https://playkamo.com";
+const APP_STORE = "https://apps.apple.com/app/id6789639784";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 
@@ -62,24 +90,34 @@ async function getHide(id: string) {
  * hand-copied rewrite — and the whole point of this function is that the picture reaches
  * the thread. Clients that read the twitter:* set (X, and several link unfurlers that
  * prefer it when present) would have fallen back to no image at all. */
-function page(o: { title: string; desc: string; image: string; to: string }) {
+function page(o: { title: string; desc: string; image: string; to: string; self: string }) {
   const to = esc(o.to);
-  return `<!doctype html><html><head><meta charset="utf-8">
+  const self = esc(o.self);
+  const title = esc(o.title);
+  const desc = esc(o.desc);
+  const image = esc(o.image);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(o.title)}</title>
+<title>${title}</title>
+<meta name="robots" content="noindex,follow">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="KAMO">
-<meta property="og:title" content="${esc(o.title)}">
-<meta property="og:description" content="${esc(o.desc)}">
-<meta property="og:image" content="${esc(o.image)}">
-<meta property="og:url" content="${to}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}">
+<meta property="og:image" content="${image}">
+<meta property="og:url" content="${self}">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${esc(o.title)}">
-<meta name="twitter:description" content="${esc(o.desc)}">
-<meta name="twitter:image" content="${esc(o.image)}">
-<meta http-equiv="refresh" content="0;url=${to}">
-<link rel="canonical" href="${to}">
-</head><body style="background:#000">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${image}">
+</head><body style="background:#05060a;color:#f4f4f8;margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif">
+<main style="max-width:620px;margin:0 auto">
+<h1 style="font-size:21px;line-height:1.3;margin:0 0 6px">${title}</h1>
+<p style="margin:0 0 16px;opacity:.75">${desc}</p>
+<img src="${image}" alt="${title}" style="width:100%;height:auto;border-radius:12px;display:block">
+<p style="margin:20px 0 0"><a href="${to}" style="color:#5fe6a4;font-weight:600;text-decoration:none">Find the kamo</a></p>
+<p style="margin:12px 0 0;font-size:14px;opacity:.7"><a href="${PUBLIC}/" style="color:#5fe6a4">What is KAMO?</a> &middot; <a href="${APP_STORE}" style="color:#5fe6a4">Get it on the App Store</a></p>
+</main>
 <script>location.replace(${JSON.stringify(o.to)})</script>
 </body></html>`;
 }
@@ -125,12 +163,18 @@ Deno.serve(async (req: Request) => {
     to: SITE,
   };
 
-  if (!id) return html(page(generic));
+  /* This page's OWN address, for og:url. `id` is already down to [a-f0-9]{0,16}, so it goes
+     into a URL without further escaping. A bogus or expired id still has a real /h/ URL —
+     that is the link sitting in someone's thread — so only the no-id case falls back to the
+     landing page. */
+  const self = id ? `${PUBLIC}/h/${id}` : `${PUBLIC}/`;
+
+  if (!id) return html(page({ ...generic, self }));
 
   const hide = await getHide(id);
   // Expired, blocked or bogus: send them to the app rather than to a dead game, and keep the
   // generic card so the message never renders as a broken link.
-  if (!hide) return html(page(generic));
+  if (!hide) return html(page({ ...generic, self }));
 
   const who = String(hide.name || "").trim().replace(/^@+/, "").slice(0, 24);
   const image = `${SUPABASE_URL}/storage/v1/object/public/hides/${encodeURIComponent(hide.img_path)}`;
@@ -144,6 +188,7 @@ Deno.serve(async (req: Request) => {
     desc: generic.desc,
     image,
     to: `${SITE}?h=${encodeURIComponent(id)}`,
+    self,
   }));
 });
 
