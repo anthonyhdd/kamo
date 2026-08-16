@@ -1795,6 +1795,10 @@
   .ssBtn.ssSeeLive{height:48px;font-size:15px;font-weight:700;
     background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.22);color:rgba(255,255,255,.88);}
   .ssBtn.ssSeeLive:active{transform:scale(.985);}
+  /* The wait state of "See it live" — the same ring the feed and the buy button spin, in
+     white because it sits on this button's dark glass. A "…" label used to stand in here
+     and read as a truncated caption, not as work happening (founder, 2026-08-16). */
+  .ssSpin{width:20px;height:20px;border-radius:50%;border:2.6px solid rgba(255,255,255,.22);border-top-color:#fff;animation:spin .7s linear infinite;}
   .ssRow2{display:flex;gap:9px;}
   /* EQUAL HEIGHT, ONE LINE EACH. These are siblings in a flex row, so a label that wraps
      makes its button taller than the others and the whole row loses its baseline — which
@@ -7980,9 +7984,11 @@ function ssOfferPub(){
         showHint("Paint more of it first — under "+CH_MIN_COVERAGE+"% there's no challenge to look at",3600);
         return;
       }
-      /* The same "…" the spectator buttons wear while they fetch. Without it the button is
-         inert for up to 2.5 seconds and reads as the dead control it is being fixed for. */
-      const o=l.textContent; l.textContent="…"; l.disabled=true;
+      /* The white ring, not a "…". Without a wait state the button is inert for up to
+         2.5 seconds and reads as the dead control it is being fixed for — and the three
+         dots it wore first read as a cut-off label rather than as work happening. Restoring
+         via textContent is what removes the spinner again: it replaces the span wholesale. */
+      const o=l.textContent; l.innerHTML='<span class="ssSpin"></span>'; l.disabled=true;
       try{ id=await chAwaitId(2500); }catch(e){}
       l.textContent=o; l.disabled=false;
     }
