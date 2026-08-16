@@ -1231,6 +1231,21 @@ try {
   bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 13a. What the board does with the photo it was given -------------------------------
+   The letterbox is for the camera, whose sensor is wider than the board — a picked photo has no
+   cropped-away field of view to buy back, and the bars only spend a third of the screen on a
+   blurred, dimmed copy of the picture the user just chose. Every portrait shot off the camera
+   roll took them, and they are pixels INSIDE the published image: the seeker opens the hide and
+   sees them too. Nothing throws, nothing is logged, and the paint looks deliberate. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-fit-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-fit-dom.mjs', 'FRAMING TEST', out)
+    : ok('a picked photo fills the board, the camera keeps its bars (node scripts/test-fit-dom.mjs)');
+} catch (e) {
+  bad('THE FRAMING IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 13b. The clock the session clip runs on --------------------------------------------
    The Instagram share is the round played back at its real length, and every way of getting
    that wrong still produces a video: marks offset from frames, a stroke held for zero
