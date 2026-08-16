@@ -6991,6 +6991,10 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
 "sent_public_offer_shown","sent_public_accepted",
 "sign_nudge_shown","sign_nudge_tapped",
 "reaction_pending","feed_best_seeded",
+/* `reply_photo_failed` is the one that matters on 2026-08-16: it is the black-hide factory,
+   and until today it failed silently into a #223 board that got published. `feed_black_dropped`
+   counts the ones already out there, so the cleanup has a size. */
+"reply_photo_failed","feed_black_dropped",
 /* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
    names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
    so a coverage event travelling by the bridge would answer for a different user and no ratio
@@ -11629,7 +11633,9 @@ function chSeek(hideId,opts){
      user swipes past it, so a hide nobody answered would otherwise leave the flag stuck true
      for the rest of the launch — and a stuck flag means the dwell backstop never fires for
      exactly the population it exists for. */
-  ctl.destroy=()=>{ killed=true; chLive=false; try{ clearInterval(ctl._clock); }catch(_){} try{ w.remove(); }catch(_){} };
+  /* _pwT is the round's deferred first-offer (see ending()). A round that is torn down has no
+     business opening a paywall a second later, on whatever screen replaced it. */
+  ctl.destroy=()=>{ killed=true; chLive=false; try{ clearInterval(ctl._clock); }catch(_){} try{ clearTimeout(ctl._pwT); }catch(_){} try{ w.remove(); }catch(_){} };
   /* TWO CHANNELS, ONE CALL. navigator.vibrate is a no-op on every iPhone (WKWebView never
      implemented it), so the strongest moments in this game — the find, the snap — have been
      haptically SILENT for the entire iOS fleet since the day they shipped. The bridge is the
@@ -12329,12 +12335,61 @@ function chSeek(hideId,opts){
          round on the page now, so removing it would leave the next hide in the feed
          rendering unstyled markup. */
       try{ ctl.destroy(); }catch(_){}
+      /* THE OFFER ARMED BY THE ROUND WE JUST LEFT. ending() schedules pwFirstOffer("seek_end")
+         1500ms out, and this button is reachable long before that — so the paywall landed on
+         the COMPOSE screen of the answer, a second and a half after the player started making
+         it. On the sheet arm that is merely rude; on the FULL arm openPaywall() adds .pwCover
+         to #stage, and that rule hides #paintUI, #sizeBar, #shutterWrap and the whole tool row
+         by visibility. The round that armed the offer no longer exists; neither should it. */
+      try{ clearTimeout(ctl._pwT); }catch(_){}
       if(OPT.onClose) OPT.onClose();
-      photo.crossOrigin="anonymous";
-      photo.onload=()=>syncPreviewFit();
-      photo.src=src;
-      photo.style.display="block"; cam.style.display="none"; bgKind="photo";
-      enterCompose();
+      /* ══ THE PHOTO HAS TO ARRIVE, AND crossOrigin ALONE DOES NOT MAKE IT ═════════════════
+         This read `photo.crossOrigin="anonymous"; photo.src=src` — correct in isolation, and
+         broken by the screen it is launched from. The feed has ALREADY fetched this exact URL
+         without CORS (the slide's .kfPrev, and the round's own <img>), so WebKit holds a
+         no-cors entry for it; the CORS request is served that entry, rejected, and the image
+         never decodes. naturalWidth stays 0.
+         WHAT THAT LOOKS LIKE IS BOTH REPORTED BUGS AT ONCE. coverInto() falls through to its
+         `fillStyle="#223"` slab, so the player composes and paints on a near-black rectangle —
+         and extractPalette() reads its four colours OUT OF THAT SCENE, so the swatch row fills
+         with four indistinguishable dark chips ("les couleurs et le picker ne s'affichent
+         plus", founder, 2026-08-16). Then they publish it, and a black photograph nobody can
+         play walks into the feed.
+         THE FIX IS TO STOP ASKING THE IMAGE CACHE. fetch() the bytes and hand `photo` a blob:
+         URL — same-origin by definition, so the board can never taint, the palette always
+         reads, and no cache entry can be the wrong kind. It also buys the thing the old path
+         never had: a failure we can SEE. Nobody is dropped onto a black board any more.
+         The object URL is revoked once decoded — `photo` holds the bitmap from there on. */
+      (async()=>{
+        let url="";
+        try{
+          const r=await fetch(src,{mode:"cors",credentials:"omit"});
+          if(!r.ok) throw new Error("http "+r.status);
+          const b=await r.blob();
+          if(!b||!b.size) throw new Error("empty");
+          url=URL.createObjectURL(b);
+        }catch(e){
+          track("reply_photo_failed",{reason:String((e&&e.message)||e).slice(0,80)});
+          showHint("Couldn't load that photo — try again in a second",3200);
+          /* No compose, no black board, no black hide. The reply address goes with it: a hide
+             made later off the camera must not be stamped as an answer to this one. */
+          try{ chClearReply(); }catch(_){}
+          return;
+        }
+        photo.removeAttribute("crossorigin");
+        photo.onload=()=>{ syncPreviewFit(); try{ URL.revokeObjectURL(url); }catch(_){} };
+        /* A blob that decodes to nothing is the same dead end as a failed fetch, and it is the
+           last place this can still go wrong. */
+        photo.onerror=()=>{
+          track("reply_photo_failed",{reason:"decode"});
+          showHint("Couldn't load that photo — try again in a second",3200);
+          try{ chClearReply(); }catch(_){}
+          try{ URL.revokeObjectURL(url); }catch(_){}
+        };
+        photo.src=url;
+        photo.style.display="block"; cam.style.display="none"; bgKind="photo";
+        enterCompose();
+      })();
     }
 
     /* One ending, three ways in — found, missed, given up — because the reveal is the
@@ -12472,7 +12527,11 @@ function chSeek(hideId,opts){
          DELAYED, and the delay is the whole difference between an offer and an ambush: the
          head, the sub and the two buttons paint first, the reveal is read, and then the
          sheet arrives over a screen the user has already seen. */
-      if(eopts&&eopts.rehide) setTimeout(()=>pwFirstOffer("seek_end"),1500);
+      /* KEPT ON THE ROUND, so it can be cancelled by anything that ends the round early —
+         "Challenge back" is one tap away from here and reaches compose in well under 1500ms,
+         which is how a paywall ended up over the paint screen (and, on the full arm, over a
+         paint screen with its tools hidden). destroy() clears it; see chRehide. */
+      if(eopts&&eopts.rehide) ctl._pwT=setTimeout(()=>pwFirstOffer("seek_end"),1500);
       /* THE REACTION RAIL IS NOT BUILT HERE ANY MORE — see chRxMount(), which runs at the
          start of the round. It is already on screen, and already carries whatever this player
          tapped while they were still looking. Rebuilding it here would wipe those taps with
@@ -12622,6 +12681,56 @@ async function kfRpc(fn,body){
    has no round left in it — serving it again is serving a photo whose answer you know.
    Capped: this is a skip list, not a history, and an unbounded array in localStorage is a
    slow leak that eventually costs more than it saves. */
+/* ══ A BLACK RECTANGLE IS NOT A ROUND ═══════════════════════════════════════════════════════
+   Founder's report, 2026-08-16: the feed serves photos that are entirely black. They are real
+   rows — coverage 100%, so the feed's paint floor waves them through — and they are unplayable:
+   there is nothing to look at and the one tap is a coin toss.
+   WHERE THEY COME FROM is fixed at the source in chRehide (the reply photo failed to load, the
+   scene fell through to coverInto's #223 slab, and that slab got painted and published). This
+   is the other half: the ones already in the database.
+   READ OFF THE LQIP, so it costs nothing. The placeholder is a ~20px JPEG carried IN the feed
+   row — decoding it is local, synchronous-ish and needs no network, and it is the same pixels
+   the photo is made of. A canvas holding a data: URL is never tainted, so this can actually
+   read them, which is precisely what a CORS <img> of the real photo could not do.
+   MEAN **AND** SPREAD, because either alone is wrong: a legitimately dark photo of a night
+   room is dark everywhere but not FLAT, and a flat mid-grey wall is flat but not dark. What is
+   unplayable is both at once — near-black with almost no variation. The thresholds are
+   deliberately mean: this drops a rectangle, and a real photograph must never be dropped.
+   Hides published before the lqip column simply have no placeholder and are left alone —
+   there is nothing to read, and guessing would be worse than serving them. */
+const KF_DARK_MEAN=18, KF_DARK_SPREAD=10;
+function kfLooksBlack(lqip){
+  return new Promise((res)=>{
+    try{
+      if(!lqip||typeof lqip!=="string"||!/^data:image\/jpeg;base64,/.test(lqip)) return res(false);
+      const im=new Image();
+      im.onerror=()=>res(false);
+      im.onload=()=>{
+        try{
+          const w=Math.max(1,Math.min(24,im.naturalWidth||20)), h=Math.max(1,Math.min(24,im.naturalHeight||20));
+          /* ONE PIXEL IS NOT EVIDENCE. A degenerate placeholder — a 1x1, a 2x2 — has a spread
+             of zero by construction, so every dark one would read as a flat black rectangle
+             and take a real hide down with it. The shipped lqip is 20px wide; anything this
+             small is a placeholder we cannot judge, and an unjudgeable hide is served. */
+          if(w<4||h<4) return res(false);
+          const c=document.createElement("canvas"); c.width=w; c.height=h;
+          const g=c.getContext("2d",{willReadFrequently:true}); if(!g) return res(false);
+          g.drawImage(im,0,0,w,h);
+          const d=g.getImageData(0,0,w,h).data;
+          let sum=0, min=255, max=0;
+          for(let i=0;i<d.length;i+=4){
+            /* Rec. 601 luma, integer-cheap. Alpha is ignored: a JPEG has none. */
+            const y=(d[i]*299+d[i+1]*587+d[i+2]*114)/1000;
+            sum+=y; if(y<min) min=y; if(y>max) max=y;
+          }
+          const mean=sum/(d.length/4);
+          res(mean<KF_DARK_MEAN && (max-min)<KF_DARK_SPREAD);
+        }catch(e){ res(false); }   /* unreadable placeholder: serve the hide, never guess */
+      };
+      im.src=lqip;
+    }catch(e){ res(false); }
+  });
+}
 const KF_SEEN_KEY="kamo_feed_seen";
 function kfSeen(){ try{ const a=JSON.parse(localStorage.getItem(KF_SEEN_KEY)||"[]"); return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }catch(e){ return []; } }
 function kfMarkSeen(id){
@@ -13374,8 +13483,21 @@ function chFeed(opts){
            flag on the slide, which stops the buzz reaching submit_attempt and inflating
            somebody's attempt count with a tap from a player who already knew. */
         const skip=new Set(S.lap?chMine():kfSeen().concat(chMine()));
-        rows.filter(r=>r&&r.id&&r.img_path&&!skip.has(r.id))
-            .forEach(r=>addSlide(r,S.lap));
+        const keep=rows.filter(r=>r&&r.id&&r.img_path&&!skip.has(r.id));
+        keep.forEach(r=>addSlide(r,S.lap));
+        /* AND THE BLACK ONES LEAVE AFTER THEY ARRIVE, not before. Reading a placeholder means
+           decoding an image, which is async, and making the page wait on N decodes before the
+           first photograph paints would trade a real bug for a slow feed — the one thing this
+           screen has been tuned hardest against (see feed_first_paint). So the slides mount at
+           today's speed and any rectangle among them is pulled a frame later, through drop(),
+           which is the same path a report already uses and knows how to renumber.
+           Fire-and-forget, and silent on every failure: an unreadable placeholder keeps its
+           hide. */
+        keep.forEach(r=>{ kfLooksBlack(r.lqip).then(black=>{
+          if(!black||kfState!==S) return;
+          track("feed_black_dropped",{});
+          try{ drop(r.id); }catch(_){}
+        }).catch(()=>{}); });
       }
     }catch(e){
       track("feed_load_failed",{reason:String((e&&e.message)||e).slice(0,120)});
