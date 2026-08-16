@@ -561,17 +561,23 @@ for (const [label, attempts] of [['nobody has played it', 0], ['five people have
      separate defences and only one of them is visible in the markup. */
   await page.evaluate(() => { const b = document.querySelector('#kfMine .kmActs .kmBtn'); if (b) b.click(); });
   await page.waitForTimeout(600);
+  /* THE OFFER, NOT THE SHEET. Since 2026-08-16 a browser gets no paywall at all — a locked
+     control answers with the pill, which names where the tool lives and goes to the store
+     (pwWebRefused). This page is a browser, so the pill IS the ask here and the sheet is what
+     the same tap produces inside the wrapper. Either counts; NEITHER is the regression this
+     assertion was written for, which is a ✦ that promises a door and opens nothing. */
   const after = await page.evaluate(() => ({
     paywall: !!document.querySelector('#paywall.show'),
+    pill: /in the app/i.test((document.getElementById('hint') || {}).textContent || ''),
     heat: !!document.getElementById('khHeat'),
   }));
   if (attempts < 1) {
-    !after.paywall && !after.heat
+    !after.paywall && !after.pill && !after.heat
       ? ok('and tapping it does nothing at all — no paywall for a map of an empty hide')
-      : bad(`tapping the dim button opened paywall=${after.paywall} heat=${after.heat}`);
+      : bad(`tapping the dim button opened paywall=${after.paywall} pill=${after.pill} heat=${after.heat}`);
   } else {
-    after.paywall
-      ? ok('and a free user tapping a played one meets the paywall')
+    after.paywall || after.pill
+      ? ok(`and a free user tapping a played one meets the offer (${after.paywall ? 'sheet' : 'pill'})`)
       : bad('the locked button opened nothing — the ✦ is promising a door that is not there');
   }
 

@@ -37,7 +37,14 @@ const at = real.lastIndexOf('</script>');
 const html = real.slice(0, at)
   + '\nwindow.__f={'
   + 'arm(){return{cls:paywallEl.classList.contains("pwFull"),arm:pwArm};},'
-  + 'open(src){openPaywall(src,true);'
+  /* THE WRAPPER IS FAKED FOR THE LENGTH OF THE OPEN, and only here. Since 2026-08-16 a page
+     with no bridge and no prices refuses every paywall (pwWebRefused) — which is the rule this
+     suite has no opinion about: what it asserts is how the sheet RENDERS once open. Seeding
+     prices instead would open it just as well and would break the block below, which asserts
+     that the plan line stays hidden until a price arrives. Same borrow-and-restore pattern as
+     tapLine() further down. */
+  + 'open(src){const rn=window.ReactNativeWebView;window.ReactNativeWebView={postMessage(){}};'
+  + 'try{openPaywall(src,true);}finally{if(rn)window.ReactNativeWebView=rn;else delete window.ReactNativeWebView;}'
   + 'const lit=[...document.querySelectorAll("#pwHero .pwHeroLn")].filter(l=>l.classList.contains("on")).map(l=>l.dataset.hero);'
   + 'return{lit:lit,ctx:(document.getElementById("pwHeroCtx")||{}).textContent||"",'
   + 'hero:getComputedStyle(document.getElementById("pwHero")).display,'
