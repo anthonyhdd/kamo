@@ -6922,7 +6922,7 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    in any form — see kfNoteSkip(). It lands on the same Amplitude user as feed_opened and
    feed_slide, which is the only way the rate is readable: skips over slides, one denominator,
    one user. Through the bridge it would land on the native user and be unjoinable. */
-"feed_skipped","board_shown","run_broken",
+"feed_skipped","run_broken",
 "feed_load_failed","hide_visibility_set",
 /* THE ONE THAT SAYS HOW LONG IT TOOK, and it has to travel with the rest of the family.
    `feed_first_paint` carries the milliseconds from the tap to the first photograph being
@@ -11782,7 +11782,8 @@ function chSeek(hideId,opts){
      THE viewBox IS THE GLYPH'S OWN BOX, not 0 0 24 24: the figure occupies only the left half
      of the traced square, and the empty half would open a gap between the mark and its count.
      A compile-time constant, so innerHTML carries no data — the number is still a text node,
-     which is this file's rule. kbRow wears the same markup; change one, change both. */
+     which is this file's rule. (It had a twin in the board's kbRow until 2026-08-16; the
+     board is gone and this is now the only place the mark is drawn.) */
   const RUN_MARK='<svg viewBox="1.92 1.3 12.51 21.4" aria-hidden="true"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>';
   /* THE BREAK CHANGES THE POSE, NOT JUST THE COLOUR. Red alone asks the player to read a hue
      on the one frame that matters; the figure steps out from behind its wall and stands in the
@@ -12984,17 +12985,8 @@ const KF_CSS=
      mine grid's furniture holding something that is not a photo. */
   +".kbHead{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.3px;padding:2px 2px 2px;}"
   +".kbSub{font-size:12.5px;opacity:.62;padding:4px 2px 14px;font-variant-numeric:tabular-nums;}"
-  +".kbRow{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:14px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);margin-bottom:7px;}"
-  /* The reader's own line is the only one that gets colour: a board where every row competes
-     for attention has no anchor, and the one question somebody opens it with is "where am I". */
-  +".kbRow.kbMe{background:rgba(95,230,164,.11);border-color:rgba(95,230,164,.42);}"
-  +".kbRank{font-family:var(--display);font-weight:700;font-size:14px;opacity:.55;min-width:26px;font-variant-numeric:tabular-nums;}"
-  +".kbRow.kbMe .kbRank{opacity:.9;color:var(--mint);}"
-  +".kbWho{flex:1 1 auto;font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
-  +".kbRun{font-family:var(--display);font-weight:700;font-size:15px;color:#ffd48a;font-variant-numeric:tabular-nums;}"
-  +".kbRun svg{width:8.2px;height:14px;margin-right:5px;vertical-align:-1.5px;fill:currentColor;opacity:.92;}"
-  +".kbIn{font-size:11.5px;opacity:.5;font-variant-numeric:tabular-nums;min-width:62px;text-align:right;}"
-  +".kbFoot{margin-top:16px;padding:13px;border-radius:14px;border:1px dashed rgba(255,255,255,.16);font-size:13px;line-height:1.45;opacity:.85;}"
+  /* .kbHead/.kbSub outlived Today's runs: the Challenges panel wears the same title pair.
+     Every row class below it went with the board. */
   /* align-self:start — kept, though every cell now carries the same one-button row and so the
      heights already match. It is what stops a cell stretching to its neighbour's height and
      paying for it with a strip of empty card under its photo, which the founder read as a
@@ -13163,14 +13155,16 @@ function chFeed(opts){
     +  '<button data-s="all" class="on"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/>'
     +     '<path d="M3.5 19c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8"/><circle cx="17" cy="9" r="2.4"/>'
     +     '<path d="M15.6 14.6c2.6-.5 4.9 1.1 4.9 4.4"/></svg>Everyone</button>'
-    /* THE THIRD LINE, AND THE MENU IS WHERE IT BELONGS. The ceiling of two controls set on
-       2026-08-15 is on the BAR — it is why Profile came out of the bar in the first place —
-       and the menu is the destination list that move created. A board reached from a bar
-       button would spend the allowance the report flag needs.
-       Trophy in stroke, matching every other glyph in this file. */
-    +  '<button data-s="board"><svg viewBox="0 0 24 24"><path d="M7.5 4.5h9v4a4.5 4.5 0 0 1-9 0z"/>'
-    +     '<path d="M7.5 6h-2a2 2 0 0 0 2 2M16.5 6h2a2 2 0 0 1-2 2"/>'
-    +     '<path d="M12 13v3.5M9 19.5h6"/></svg>Today\'s runs</button>'
+    /* TODAY'S RUNS IS GONE (founder's call, 2026-08-16), and the numbers are the argument.
+       8 board opens against 2046 feed opens and 331 My-kamos opens — 0.4% of the sessions
+       that reached this exact menu — while run_broken fired 316 times over the same window.
+       The mechanic works; the DESTINATION was the part nobody wanted. A leaderboard is a bet
+       that other people's numbers are worth a trip, and in a room this size they are not: the
+       rank a player cares about is their own, and that belongs next to the run that just died
+       rather than three taps away behind a pill.
+       THE RUN ITSELF IS UNTOUCHED — chStreak, the seeker pill, the `k` key on seek_traces and
+       the server's streak_board() all stay. Putting a rank back in front of a broken run is a
+       UI change from here, not a rebuild. */
     +  '<button data-s="mine"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/>'
     +     '<path d="M5 20c0-3.5 3.1-5.6 7-5.6s7 2.1 7 5.6"/></svg>My kamos</button>'
     /* THE FOURTH LINE: the hides that ANSWERED yours. They have always been delivered — the
@@ -13194,10 +13188,7 @@ function chFeed(opts){
        run — same principle (and same machinery) as the profile card, timerBlocked() reads
        the attribute on anything visible. */
     +'<div class="kfMine" id="kfMine" data-blocks-timer></div>'
-    /* data-blocks-timer for the same reason kfMine carries it: while this covers a live
-       round, the round's clock must not run. Same class, so the two panels are one shell. */
-    +'<div class="kfMine" id="kfBoard" data-blocks-timer></div>'
-    /* Challenges: same shell again — one surface, four contents. */
+    /* Challenges: same shell again — one surface, three contents. */
     +'<div class="kfMine" id="kfChal" data-blocks-timer></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
@@ -13588,8 +13579,8 @@ function chFeed(opts){
      the profile card. The pill names the CURRENT scope, the menu switches it — Instagram's
      home grammar, chosen over side-by-side tabs (founder's call, 2026-08-15). */
   const scopeBtn=root.querySelector("#kfScope"), menuEl=root.querySelector("#kfMenu"), mineEl=root.querySelector("#kfMine");
-  const boardEl=root.querySelector("#kfBoard"), chalEl=root.querySelector("#kfChal");
-  let mineOpen=false, boardOpen=false, chalOpen=false;
+  const chalEl=root.querySelector("#kfChal");
+  let mineOpen=false, chalOpen=false;
   /* THE DOT RESOLVES HERE. chReplyCheck() lit the wordmark at launch when something answered;
      this puts the same mint point on the menu row that actually opens the answers, so the
      trail does not go cold between the brand and a four-line menu. Injected rather than baked
@@ -13834,131 +13825,6 @@ function chFeed(opts){
     { const f=root.querySelector("#kfFlag"); if(f) f.style.display="";
       const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
   }
-  /* ══ TODAY'S RUNS ════════════════════════════════════════════════════════════════════════
-     WHAT IT RANKS AND WHY THAT SHAPE. Longest run of consecutive finds, over one UTC day,
-     tie-broken by the FEWEST rounds spent reaching it. The tie-break is the whole fairness
-     argument: longest-run is monotonic in rounds played, so on a bare max() the person who
-     played 219 rounds on 2026-08-15 (against a median of 14) wins every day forever and the
-     board becomes furniture. Ranking ties by rounds spent means 7-in-9 beats 7-in-40 — no
-     artificial cap to explain, nobody's rounds silently not counting, and the sentence says
-     itself.
-     BUILT FROM TRACES THAT WERE ALREADY BEING WRITTEN. No new table, no new write on the hot
-     path: seek_traces has carried the verdict of every hunt since it shipped. The page adds
-     one key to that payload (`k`) so the server can group on something that is not a handle.
-     THE ENTRY TICKET IS ONE KAMO, and it is a consequence rather than a rule. `k` is minted
-     on the first publish and nowhere else, so somebody who has only ever hunted has no key
-     and cannot be grouped — which is exactly the population the empty state is written for.
-     The feed carried 890 of one day's won rounds and produced 62 taps on "make one" (7%); a
-     board with names on it and a line saying how to join is a second way to ask. */
-  const kbToday=()=>{ try{ return new Date().toISOString().slice(0,10); }catch(_){ return ""; } };
-  /* The countdown is the return trigger, so it has to be the real one: the board resets at
-     UTC midnight because that is the boundary streak_board() slices on, and a countdown that
-     disagreed with the query would be a lie the user could catch by waiting. */
-  const kbLeft=()=>{ try{
-      const n=new Date();
-      const ms=Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate()+1)-n.getTime();
-      const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000);
-      return h>0 ? (h+"h "+m+"m") : (m+"m");
-    }catch(_){ return ""; } };
-  /* DOM NODES, NOT A TEMPLATE STRING. Every handle here came off somebody else's device and
-     lands in front of a stranger; the file's rule is that it reaches the page as text and
-     never as markup, and building the row this way makes that structural instead of a
-     discipline somebody has to remember. */
-  const kbRow=(r)=>{
-    const d=document.createElement("div");
-    d.className="kbRow"+(r&&r.me?" kbMe":"");
-    const rk=document.createElement("span"); rk.className="kbRank"; rk.textContent="#"+(r.rank|0);
-    const wh=document.createElement("span"); wh.className="kbWho";
-    wh.textContent=r.who?("@"+r.who):"Someone";
-    /* The same figure the seeker pill counts with, and for the same reason — the board and the
-       pill measure one thing, so they wear one mark. Kept literal rather than hoisted to a
-       shared constant: chRunShow's RUN_MARK lives inside the seek closure, and reaching across
-       for it would tie the feed's board to whether a round happens to be mounted. The svg is a
-       constant either way, so innerHTML carries no data and the count stays a text node. */
-    const rn=document.createElement("span"); rn.className="kbRun";
-    rn.innerHTML='<svg viewBox="1.92 1.3 12.51 21.4" aria-hidden="true"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>';
-    rn.appendChild(document.createTextNode(String(r.streak|0)));
-    const inn=document.createElement("span"); inn.className="kbIn";
-    inn.textContent="in "+(r.rounds|0)+(((r.rounds|0)===1)?" round":" rounds");
-    d.appendChild(rk); d.appendChild(wh); d.appendChild(rn); d.appendChild(inn);
-    return d;
-  };
-  async function boardShow(){
-    boardOpen=true;
-    scopeBtn.innerHTML='Today\'s runs <i>▾</i>';
-    scopeMark("board");
-    boardEl.style.display="block";
-    /* Same chrome as the other panel: the flag reports the SLIDE, which is underneath here.
-       The profile door stays shut — it belongs to the grid, where the subject is you. */
-    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="none";
-      const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
-    killHint();
-    boardEl.innerHTML='<div class="kmMid"><div class="kfSpin"></div></div>';
-    const meKey=kfAuthorKeyRO();
-    let rows=null;
-    try{ rows=await chRpcRows("streak_board",{p_day:kbToday(),p_me:meKey||null,p_limit:50}); }catch(e){}
-    if(!boardOpen||kfState!==S) return;   // switched away or the feed closed while fetching
-    const s=chStreak();
-    track("board_shown",{rows:(rows&&rows.length)|0,joined:!!meKey,best:s.best|0});
-    boardEl.innerHTML="";
-    const head=document.createElement("div"); head.className="kbHead"; head.textContent="Today's runs";
-    const sub=document.createElement("div"); sub.className="kbSub";
-    /* OFFLINE AND EMPTY ARE DIFFERENT SENTENCES — the same honesty rule khResults() and
-       mineShow() already follow. A failed fetch that renders as "nobody yet" tells the user
-       something false about other people. */
-    /* THREE STATES, NOT TWO. A board that came back EMPTY is not a board that failed to load
-       and not a board with people on it — early in a UTC day nobody has a run yet, and the
-       honest sentence there says so rather than printing a rule above nothing. */
-    sub.textContent = rows===null ? "Couldn't load the board."
-                    : rows.length ? ("Longest run of finds · resets in "+kbLeft())
-                                  : ("Nobody has a run going yet today · resets in "+kbLeft());
-    boardEl.appendChild(head); boardEl.appendChild(sub);
-    if(rows&&rows.length) rows.forEach(r=>boardEl.appendChild(kbRow(r)));
-    const foot=document.createElement("div"); foot.className="kbFoot";
-    if(!meKey){
-      /* The one population that cannot be on this board, told the one thing that puts them
-         on it — and it is the same act the whole product is short of. */
-      foot.textContent="Hide a kamo to get on the board. Then every find in a row counts.";
-    }else if(rows&&!rows.some(r=>r.me)){
-      /* "ONE FIND", NOT "TWO IN A ROW". streak_board() ranks everything above zero (`where
-         streak > 0`), so a single find does put somebody here — and the first person to land
-         on this screen after one lucky round would otherwise read a rule the board itself had
-         just broken. The copy follows the query, never the other way round. */
-      foot.textContent = s.best>0
-        ? ("Not on today's board yet. Your best run is "+s.best+".")
-        : "Not on today's board yet. One find puts you on it.";
-    }else if(s.best>0){
-      foot.textContent="Your best run ever: "+s.best+".";
-    }else{
-      foot.textContent="One find puts you on the board. Two in a row starts a run.";
-    }
-    boardEl.appendChild(foot);
-    /* ══ THE RESET IS THE ONLY DEADLINE THIS PRODUCT HAS, and nothing ever used it. Somebody
-       who opened the board cared about the board; this arms ONE local one-shot for the
-       morning after the reset they just read the countdown to (next UTC midnight + 10h),
-       keyed so re-opening the board re-arms the same slot instead of stacking. Same
-       machinery as armResultsPing: gated on the capability, never requests permission,
-       silently a no-op everywhere the wrapper cannot keep the promise. The wrapper clamps
-       the delay (5min .. 14 days) and reports back through __kamoNotifResult, so
-       web_notif_armed{key:"board"} is the measure of whether this ever arms at all. */
-    if(nativeCaps&&nativeCaps.notifSchedule){
-      try{
-        const n2=new Date();
-        const msLeft=Date.UTC(n2.getUTCFullYear(),n2.getUTCMonth(),n2.getUTCDate()+1)-n2.getTime();
-        const mins=Math.round(msLeft/60000)+600;
-        postNative({type:"notif-schedule",notif:{key:"board",delayMinutes:mins,
-          subtitle:"Today's runs reset",
-          body:"New board, empty rows. One find puts you on it."}});
-      }catch(e){}
-    }
-  }
-  function boardHide(){
-    boardOpen=false;
-    scopeBtn.innerHTML='Everyone <i>▾</i>';
-    scopeMark("all");
-    boardEl.style.display="none"; boardEl.innerHTML="";
-    { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
-  }
   /* ══ CHALLENGES ══════════════════════════════════════════════════════════════════════════
      THE GRID OF WHAT CAME BACK. my_replies() has been answering since 2026-08-13 and until
      today exactly one pixel consumed it: the wordmark dot. The rows were delivered, the
@@ -13968,8 +13834,8 @@ function chFeed(opts){
      THE CELL IS THE PHOTO, same doctrine as the mine grid — and the name on it is the whole
      pitch: a photograph plus "@tony" already says "hidden back for you".
      BUILT AS DOM NODES, never as a template string: the handle came off a stranger's device,
-     and this file's rule is that such a string reaches the page as text or not at all — the
-     board's kbRow states the same rule, and building the cell this way makes it structural.
+     and this file's rule is that such a string reaches the page as text or not at all —
+     building the cell out of nodes makes that structural rather than a discipline.
      TAP = PLAY, in the feed's own frame: full bleed, the sender's name over it, the buzz
      filing normally, because this player has genuinely never seen the answer. Unless they
      have — a reply already played routes through the replay flag, the same correctness rule
@@ -14078,23 +13944,22 @@ function chFeed(opts){
     chalEl.style.display="none"; chalEl.innerHTML="";
     { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
   }
-  /* FOUR SCOPES, ONE PANEL AT A TIME. Written as "close whatever is open, then open the one
+  /* THREE SCOPES, ONE PANEL AT A TIME. Written as "close whatever is open, then open the one
      that was asked for" rather than as a set of toggles: with two panels a toggle was the
-     whole logic, with three or more it is the bug — mine -> board would leave the grid
-     mounted under the board, and the chrome each one restores would fight. */
+     whole logic, with three or more it is the bug — mine -> chal would leave the grid mounted
+     under the challenges, and the chrome each one restores would fight. Kept in this shape
+     with the board gone: it is what makes the NEXT panel a one-line addition. */
   menuEl.querySelectorAll("button").forEach(b=>{ b.onclick=()=>{ haptic(8); menuShow(false);
     const s=b.dataset.s;
-    if((s==="mine"&&mineOpen)||(s==="board"&&boardOpen)||(s==="chal"&&chalOpen)
-      ||(s==="all"&&!mineOpen&&!boardOpen&&!chalOpen)) return;
+    if((s==="mine"&&mineOpen)||(s==="chal"&&chalOpen)
+      ||(s==="all"&&!mineOpen&&!chalOpen)) return;
     /* THE TICK IS NOT SET HERE. It belongs to the panel that ends up on screen — the note on
        scopeMark() above says why, and setting it from the button as well would give one piece
        of state two owners that disagree the moment a hide() runs after a show(). */
     if(mineOpen) mineHide();
-    if(boardOpen) boardHide();
     if(chalOpen) chalHide();
     track("feed_scope_changed",{to:s});
     if(s==="mine") mineShow();
-    else if(s==="board") boardShow();
     else if(s==="chal") chalShow();
     /* "all" needs nothing more: the hides above already put the feed back, and each of
        them resets the pill and the tick to Everyone. */
