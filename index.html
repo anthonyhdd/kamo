@@ -3856,15 +3856,34 @@ let roundStartedAt=0, roundMs=0, captureWasAuto=false, aimStartedAt=0, aimGiven=
       are most of the screen: the figure spawns around 0.28-0.58 of board height and would
       stand half in blur, which is a worse game than a crop is. 0.60 clears every framing
       the phone can actually hand back in portrait (16:9 -> 0.82, full-sensor 4:3 -> 0.62)
-      and rejects the landscape ones (16:9 -> 0.26, 4:3 -> 0.35). */
+      and rejects the landscape ones (16:9 -> 0.26, 4:3 -> 0.35).
+   THE THIRD SOURCE — A PICKED PHOTO — NEVER TAKES THE BARS AT ALL, and that is not the same
+   rule with a different threshold, it is the absence of the reason. Everything above is an
+   argument about the CAMERA: the sensor is wider than the board, a cover-crop throws that
+   width away, and the bars buy back a field of view the user can see is missing because the
+   stock Camera app shows it. A photo out of the library has no field of view to restore.
+   Nothing was cropped on the way in, there is no wider version of it to compare against, and
+   the bars buy nothing — they only spend ~36% of the screen on a blurred, 45%-dimmed copy of
+   the picture the user just chose. "Portrait picked photos are unchanged" above was the
+   mistake, and it was only ever true of photos as elongated as the phone: against a 9:19.5
+   board (dr 0.46) EVERY portrait shape between 9:16 and 3:4 clears MIN_FIT_H and takes the
+   bars — 1080x1920 at dr/sr 0.82 (~9% each), 3024x4032 at 0.62 (~18% each). That is the
+   camera roll, which is the most obvious thing to hide a figure in.
+   So: camera keeps the fit frame, picked photos always fill the board. The crop is the same
+   one every full-bleed photo surface takes, and it is what "full screen" means here.
+   This changes NEW hides only — the bars on a published paint are pixels inside its stored
+   image, and nothing re-renders them. */
 const MIN_FIT_H=0.60;
 const fitPad=document.createElement("canvas");   // reused scratch for the letterbox fill — allocated per frame this would be 60 canvases/second
 let sceneBand={y:0,h:1};   // where the real frame sits inside the board, as fractions — read by extractPalette()
-/* dr/sr IS the fitted height as a fraction of the board: (cw/ch)*(sh/sw). One rule, two
-   readers — coverInto() below and syncPreviewFit(), which keeps the <video>/<img> preview
-   framed exactly like the canvas that replaces it at the shutter. */
-function usesFitFrame(sw,sh){ if(!(sw>0&&sh>0)) return false;
-  const dr=stage.clientWidth/Math.max(1,stage.clientHeight), sr=sw/sh;
+/* dr/sr IS the fitted height as a fraction of the board: (cw/ch)*(sh/sw). One rule, three
+   readers — coverInto() below (which passes its own target ratio, since it renders into the
+   board canvas and not the stage), and syncPreviewFit(), which keeps the <video>/<img>
+   preview framed exactly like the canvas that replaces it at the shutter. */
+function usesFitFrame(sw,sh,dr){ if(bgKind==="photo") return false;   // picked photo → always cover, see FRAMING above
+  if(!(sw>0&&sh>0)) return false;
+  if(!(dr>0)) dr=stage.clientWidth/Math.max(1,stage.clientHeight);
+  const sr=sw/sh;
   return sr>dr && dr/sr>=MIN_FIT_H; }
 function syncPreviewFit(){
   try{
@@ -3874,7 +3893,7 @@ function syncPreviewFit(){
 }
 function coverInto(g,cw,ch){ let src,sw,sh; if(bgKind==="cam"&&cam.videoWidth){src=cam;sw=cam.videoWidth;sh=cam.videoHeight;} else if(bgKind==="photo"&&photo.naturalWidth){src=photo;sw=photo.naturalWidth;sh=photo.naturalHeight;} else { g.fillStyle="#223"; g.fillRect(0,0,cw,ch); return; }
   const sr=sw/sh,dr=cw/ch;
-  if(sr<=dr||dr/sr<MIN_FIT_H){ sceneBand={y:0,h:1};
+  if(!usesFitFrame(sw,sh,dr)){ sceneBand={y:0,h:1};
     let rw,rh,rx,ry; if(sr>dr){rh=sh;rw=sh*dr;rx=(sw-rw)/2;ry=0;}else{rw=sw;rh=sw/dr;rx=0;ry=(sh-rh)/2;}
     g.drawImage(src,rx,ry,rw,rh,0,0,cw,ch); return; }
   const h=Math.max(1,Math.round(cw*sh/sw)), y=Math.round((ch-h)/2);
