@@ -1029,6 +1029,22 @@ try {
   bad('THE HINT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
 }
 
+/* ---- 11e2. The card on your own photo ----------------------------------------------------
+   The one screen where every control pointed backwards: "See it live" seeds the feed with the
+   hide you just published, and the round's ending card offered to challenge you back and to
+   block you. Both are gone there; "Send to a friend" takes the primary slot and "Hide another
+   one" reaches the camera. Asserted rather than read, because it is a branch on chMine() that
+   fires down exactly one path — a regression is invisible to everybody except the person who
+   just made a hide, which is everybody this app is trying to keep. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-ownpost-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-ownpost-dom.mjs', 'OWN-POST TEST', out)
+    : ok('your own hide gets its own card, and its exit reaches the camera (node scripts/test-ownpost-dom.mjs)');
+} catch (e) {
+  bad('THE OWN-HIDE CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 11f. What the sheet claims, and to whom --------------------------------------------- */
 /* The headline announces that the hide is live, and the toggle 40px below it can make that
    false. Same shape for the two offers underneath: "See it live" must not point at a feed a
