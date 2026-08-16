@@ -1312,6 +1312,15 @@
      can wrap, and a corner badge on a pill that moves is a badge that lands on its neighbour. */
   .khWatch.lock{color:rgba(255,255,255,.55);}
   .khWatch.lock::after{content:" ✦";font-size:10px;opacity:.9;}
+  /* THE ANSWERING STATE — see khLockAnswer(). Mint, briefly, on the pill that was touched,
+     because the card behind it must stay put: the paywall this replaced deleted the results
+     list on its way to the price. flex:none on .khWatch means the pill sizes to its label, so
+     the row reflows around it — which is fine here (the controls sit on their own line, see
+     the note at .khRow) and is why the swapped label is kept to two short words. */
+  @keyframes khAskPulse{0%{box-shadow:0 0 0 0 rgba(95,230,164,.5)}100%{box-shadow:0 0 0 10px rgba(95,230,164,0)}}
+  .khWatch.asking{color:#eafff4;background:rgba(95,230,164,.22);border-color:rgba(95,230,164,.62);
+    animation:khAskPulse .6s ease-out;}
+  @media (prefers-reduced-motion:reduce){.khWatch.asking{animation:none}}
   /* REACTIONS. The feed gave a player exactly two things to do with somebody else's photo —
      find it, or leave — and nothing to say back. Four emoji, no keyboard, no thread: the
      cheapest possible signal, on the one screen where the round is already over. */
@@ -1939,6 +1948,21 @@
   .ssBtn.ssPlus{background:rgba(95,230,164,.13);border-color:rgba(95,230,164,.34);
     color:#c9ffe4;font-size:14.5px;gap:7px;}
   .ssBtn.ssPlus .ic{width:auto;font-size:13px;color:var(--mint);}
+  /* THE ANSWER LANDS ON THE BUTTON, NOT OVER THE SHARE SHEET. See #ssPlus's handler: the
+     first tap no longer throws a full screen across the one surface the viral loop runs on,
+     it lights this cell and says what the row costs. Box-shadow and colour only — the row is
+     a two-cell flex:1 1 0 grid, so nothing here can move a neighbour, and the label swap
+     cannot change the cell width however long it gets.
+     FINITE, DELIBERATELY: test-peek-dom asserts that nothing inside #shareSheet .ssBtn
+     animates forever, because an always-moving control competes with the destinations. */
+  /* 12.5px, AND MEASURED RATHER THAN EYEBALLED. .ssBtn is white-space:nowrap, so a label one
+     word too long does not wrap — it clips, which is the truncated-sentence failure the
+     PW_LOCK_HINT note already paid for once ("Fine brush is KAMO+ — tap to unl…"). The cell
+     is 134px of usable width on a 320px screen; the asked label has to live inside that. */
+  @keyframes ssPlusAsk{0%{box-shadow:0 0 0 0 rgba(95,230,164,.5)}100%{box-shadow:0 0 0 13px rgba(95,230,164,0)}}
+  .ssBtn.ssPlus.asking{animation:ssPlusAsk .6s ease-out;background:rgba(95,230,164,.24);
+    border-color:rgba(95,230,164,.62);color:#eafff4;font-size:12.5px;gap:5px;}
+  @media (prefers-reduced-motion:reduce){.ssBtn.ssPlus.asking{animation:none}}
 </style>
 </head>
 <body><div id="app">
@@ -4836,7 +4860,40 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    on the creator's OWN results IS the request. `heatmap` was missing — after the shared
    budget was spent, a tap on the locked Heat button got a lock hint instead of the sheet it
    was explicitly asking for. `replay` is the Watch button, KAMO+ since 2026-08-15. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand","size_star","size","char","heatmap","replay"]);
+/* ---- THE ZERO-TAP CUT (2026-08-16) ------------------------------------------------------
+   paywall_viewed -> purchase_initiated, split by `source`, over 2026-08-13 → 08-15:
+
+     plus        747 views ->  70 taps = 9.37%
+     color       787      ->  58      = 7.37%
+     first      1456      ->  38      = 2.61%
+     size        870      ->  20      = 2.30%
+     heatmap      82      ->   2      = 2.44%
+     char        103      ->   2      = 1.94%
+     size_star   187      ->   0      = 0%
+     mark         83      ->   0      = 0%
+     replay       46      ->   0      = 0%
+     time         67      ->   0      = 0%   (throttled to near-nothing on 08-12, left alone)
+     TOTAL      4501      -> 207      = 4.60%
+
+   WHY THREE DAYS AND NOT THIRTY. The gating config changed on 08-12 — PW_GLOBAL_CAP went
+   3 -> 1, PW_RESERVED appeared, `size` moved into this set. Anything before that measures a
+   different product, so a longer window would be a bigger number describing something that
+   no longer exists. Three days is the whole life of the current arrangement.
+
+   `mark` and `replay` LOSE THE FULL SCREEN AND KEEP A DOOR — see their call sites. They stay
+   in this set on purpose: the escalated second tap opens with force, and a source removed
+   from here would have that open charged against the budget reserved for paywalls the user
+   did NOT ask for, which is the accounting bug the three notes above describe.
+
+   ⚠️ `size_star` IS NOT A DEAD TRIGGER, IT IS A DEAD LABEL, and the difference is the whole
+   point. The ✦ glyph left the paint screen on 2026-08-09 (df27bbe, renderSizeBar hides it
+   unconditionally), so the only thing still reporting `size_star` was the mint-region press
+   — which was renamed to `size` on 08-14 (83b8852). The 187 views above are the FIRST HALF
+   of the window for the gesture whose second half reads 870 -> 20 = 2.30%. Combined it is
+   1057 -> 20 = 1.89%, in line with `first`. Cutting on the 0% would have cut the mint region,
+   which is one of the four things on this screen that still sells. Nothing to gate here: the
+   name is gone from the set and its orphaned listener is gone with it. */
+const PW_USER_INITIATED=new Set(["plus","mark","brand","size","char","heatmap","replay"]);
 
 /* 3 -> 1. The note above asked for `nth_interruption` to settle whether 3 was too low; the
    revenue settled it from the other side first. ~11000 views over 14 days bought 4 active
@@ -7694,7 +7751,55 @@ if(window.ReactNativeWebView){
 }
 /* Closes the sheet rather than stacking the paywall on top of it — two sheets deep is how
    you lose both. Not counted as a dismissal: they didn't walk away, they went to buy. */
-$("#ssPlus").onclick=()=>{ closeShareSheet(); haptic(10); track("plan_selected",{plan:"watermark_pitch"}); openPaywall("mark"); };
+/* AND IT NO LONGER CLOSES ANYTHING ON THE FIRST TAP (2026-08-16). paywall_viewed ->
+   purchase_initiated by source, 2026-08-13 → 08-15:  `mark` 83 views -> 0 taps. Not a weak
+   rate, a zero, on a trigger that has been live since 2026-08-03 — long enough that this is
+   the trigger's own number and not a warm-up. Every other source in that window bought
+   something: `plus` 9.37%, `color` 7.37%, `first` 2.61%, `size` 2.30%. Full table on
+   PW_USER_INITIATED, including why the window is three days and not thirty (the gating
+   config changed on 08-12, so older data describes a different product).
+   WHY THIS ONE COSTS MORE THAN IT LOOKS. 83 views is small — the reason to cut is not the
+   volume, it is WHERE it lands: the share sheet is open because the user is one tap from
+   sending a kamo, and "Send one back" is the entire viral loop. A full screen thrown across
+   that moment is charged against the loop and, on this evidence, buys nothing back.
+   ⚠️ WHAT IT IS NOT: the button does not go away, and the door does not either. 83 taps a
+   week is 83 people telling us the watermark bothers them — that is the pitch working, and
+   deleting the row would delete the signal along with the interruption. The first tap answers
+   IN PLACE, on the cell they touched; a second tap inside the window is a repeat of the same
+   question and gets the sheet, forced so no budget can refuse someone asking twice. `mark`
+   therefore still reaches paywall_viewed and purchase_initiated with its own `source`, which
+   is what makes this judgeable: re-measure the same table on 2026-08-30 and `mark` should be
+   a much smaller number of views at a rate that is no longer zero. If it is still zero AND
+   still non-trivial in volume, the second tap is the next thing to go.
+   `plan_selected{plan:"watermark_pitch"}` stays on the FIRST tap, unchanged, so the count of
+   people who want the mark gone is continuous across this change — it is the denominator the
+   sentence above needs and it rides an already-allow-listed event name. */
+{ const ssPlus=$("#ssPlus");
+  if(ssPlus){
+    const def=ssPlus.innerHTML;
+    let askedUntil=0, askT=null;
+    /* Restores the label as well as the state, so a sheet reopened later never shows the
+       half-asked version of a button that has forgotten it was asked. */
+    const rest=()=>{ askedUntil=0; clearTimeout(askT); ssPlus.innerHTML=def; ssPlus.classList.remove("asking"); };
+    const MARK_ASK_MS=4200;
+    ssPlus.onclick=()=>{
+      haptic(10);
+      /* A TIMESTAMP, NOT A FLAG. The restore timer covers the common case, but the share
+         sheet can close and reopen inside four seconds; reading the clock means a stale
+         "armed" state can never turn the next sheet's first tap into a full screen. */
+      if(Date.now()<askedUntil){ rest(); closeShareSheet(); openPaywall("mark",true); return; }
+      askedUntil=Date.now()+MARK_ASK_MS;
+      track("plan_selected",{plan:"watermark_pitch"});
+      /* NAMES THE PRODUCT, NOT THE GESTURE. "Tap again" would drop the only word that says
+         this costs money — the ✦ cannot carry it here, because the DEFAULT label already
+         wears one. "Get KAMO+" is an ordinary CTA that happens to be the second half of a
+         two-tap ask, and it is short enough to fit: measured 99px against 134px of cell on a
+         320px screen, where "KAMO+ · tap again" needed 141 and clipped. */
+      ssPlus.innerHTML='<span class="ic">✦</span>Get KAMO+';
+      ssPlus.classList.remove("asking"); void ssPlus.offsetWidth; ssPlus.classList.add("asking");
+      clearTimeout(askT); askT=setTimeout(rest,MARK_ASK_MS);
+    };
+  } }
 $("#ssClose").onclick=()=>dismissShareSheet("cancel");
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdrop"); };
 /* [data-target] only — the invite button below is not an image share and must not
@@ -9056,10 +9161,15 @@ sizeBar.addEventListener("pointerup",endSizing); sizeBar.addEventListener("point
    every star tap counted as an interruption and ate the per-launch budget meant for the
    paywalls the user did NOT ask for. force=true already bypassed the caps; this makes the
    accounting agree with the intent. */
-sizeStar.addEventListener("pointerdown",e=>{
-  if(canPro()) return;
-  e.preventDefault(); e.stopPropagation(); haptic(10); openPaywall("size_star",true);
-});
+/* AND THE LISTENER IT DESCRIBES IS GONE (2026-08-16), because the button is. #sizeStar has
+   been display:none since 2026-08-09 — renderSizeBar() hides it unconditionally, on every
+   render, for members and free users alike — so this handler has been bound to a box nobody
+   can touch for a week. It was scheduled for removal as a zero-converting paywall trigger
+   (187 views -> 0 taps, 2026-08-13 → 08-15) and that is NOT why it goes: those 187 views
+   came from the mint region, which reported under this name until 08-14 and now reports as
+   `size` at 2.30%. See the note on PW_USER_INITIATED — the name was the dead thing, not the
+   gesture. Deleted rather than left inert so that un-hiding the ✦ some day cannot silently
+   resurrect a forced, uncapped paywall nobody reasoned about. */
 
 /* ===== Done / Edit finished view + before/after reveal ===== */
 let finished=false, revealX=0.5, lastRoundAuto=false;
@@ -10338,6 +10448,28 @@ function khRowHtml(h,i){
     +   '</span>'
     + '</span></div>';
 }
+/* ---- THE LOCK ANSWERS ON THE BUTTON ------------------------------------------------------
+ * The paint screen already had this idea and it is the one thing on that screen that never
+ * had to be argued back out: flashSizeLock() lights the control under the thumb and says
+ * nothing. This is the same move for the ✦ buttons on the results card, and it exists for a
+ * reason the size bar never had — a paywall opened from here ran closeKamoHome() first, so
+ * the answer to "what is this button" was the disappearance of everything around it.
+ * A PILL WOULD NOT WORK HERE and that is not a style preference: showLockHint() writes into
+ * #hint, which is z-index 12, and #kamoHome is 9450. The hint would render underneath the
+ * card that is still on screen — a notice nobody can see is worse than no notice, because it
+ * counts as feedback in the code and as nothing at all on the phone.
+ * `txt` null restores; the row's own re-render restores it too, so a stale label cannot
+ * outlive the list it is written on. */
+const KH_LOCK_ASK_MS=4200;
+function khLockAnswer(b,txt){
+  if(!b) return;
+  if(b._pwDef==null) b._pwDef=b.textContent;
+  clearTimeout(b._pwT);
+  if(txt==null){ b.textContent=b._pwDef; b.classList.remove("asking"); return; }
+  b.textContent=txt;
+  b.classList.remove("asking"); void b.offsetWidth; b.classList.add("asking");
+  b._pwT=setTimeout(()=>{ b._pwAsk=0; khLockAnswer(b,null); },KH_LOCK_ASK_MS);
+}
 function khRenderRows(el,rows,head){
   el.innerHTML = (head?'<div class="khHead">'+head+'<span class="khMore">Hide these</span></div>':'')
     + '<div class="khRows">'+rows.map(khRowHtml).join("")+'</div>';
@@ -10377,8 +10509,36 @@ function khRenderRows(el,rows,head){
     b.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
       /* Same shape as Heat directly below: lock known on-device, nothing fetched, one tap
          one destination. `replay` is user-initiated so no budget can refuse it. */
-      if(!isPro){ track("replay_paywall_tapped",{n:(rows[+b.dataset.w]||{}).n_attempts|0,src:"row"});
-                  closeKamoHome(); openPaywall("replay"); return; }
+      /* THE FIRST TAP STOPS TAKING THE CARD AWAY (2026-08-16). paywall_viewed ->
+         purchase_initiated by source, 2026-08-13 → 08-15: `replay` 46 views -> 0 taps,
+         against `plus` 9.37% / `color` 7.37% / `first` 2.61% / `size` 2.30% in the same
+         window. Full table on PW_USER_INITIATED, and the reason the window is three days
+         rather than thirty: the gating config changed on 08-12, so anything older is a
+         measurement of a different product.
+         ⚠️ READ THE 46 HONESTLY — it is the weakest number in that table. Watch only became
+         KAMO+ on 2026-08-15 (8f6f567), so this is ONE day of a trigger, and at the 2.3% the
+         paint screen runs at, 46 views buy about one tap: seeing zero is the ordinary outcome
+         roughly a third of the time. This is not "replay does not sell". It is not evidence
+         either way yet, which is exactly why the door below stays open and only the full
+         screen goes.
+         WHAT IS WRONG WITH IT REGARDLESS OF CONVERSION, and the real reason for this change:
+         closeKamoHome(). The user is reading their own results — the list of who hunted them,
+         the one screen that exists to make them send again — and a tap on a row's button
+         DELETED it and replaced it with a price. Even a converting paywall should not close
+         the surface it was opened from. Now the card stays, the button answers on itself, and
+         a second tap inside the window is a repeat of the same question: it gets the sheet,
+         forced, so no budget can refuse someone who asked twice.
+         `replay_paywall_tapped` still fires on the first tap with the same name and `src`, so
+         the series is continuous across this change and `source:"replay"` still reaches
+         paywall_viewed / purchase_initiated on the escalation. Re-measure on 2026-08-30: by
+         then `replay` will have a real fortnight behind it. */
+      if(!isPro){
+        const row=rows[+b.dataset.w]||{};
+        if(Date.now()<(b._pwAsk||0)){ b._pwAsk=0; khLockAnswer(b,null);
+          closeKamoHome(); openPaywall("replay",true); return; }
+        track("replay_paywall_tapped",{n:row.n_attempts|0,src:"row"});
+        b._pwAsk=Date.now()+KH_LOCK_ASK_MS; khLockAnswer(b,"Get KAMO+");
+        return; }
       khReplay(rows[+b.dataset.w],b); };
   });
   el.querySelectorAll(".khHeatBtn").forEach((b)=>{
