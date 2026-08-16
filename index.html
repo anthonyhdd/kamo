@@ -5960,7 +5960,16 @@ function pwPurchase(planOverride){
        ways: the post threw, the post went out on an old build, the post went out on a new one,
        or it landed and the native side is where the silence is. One of those is fixable from
        this file tonight; the rest need a build, and guessing which costs a review cycle. */
-    const sent=postNative({type:"purchase",product:prod});
+    /* THE TRIGGER TRAVELS WITH THE PURCHASE. `source` is known only here — the native side's
+       own comment says so ("the web already fires purchase_initiated ... with more context
+       than this side has") — and until now it stopped at the bridge. The outcome events are
+       all native, so `trial_started.source` was empty on 14 of the 15 trials in the 48h to
+       2026-08-16 and "which door sells" could only be answered by joining two events in a
+       funnel, i.e. by crediting a user to every door they walked past.
+       Extra keys on this message are inert on a build that does not read them, so this line
+       is safe on the 1.0.2 fleet — it simply does nothing there until the matching build
+       ships. That is the whole reason it goes out on this side first. */
+    const sent=postNative({type:"purchase",product:prod,source:pwLastSource,nth:pwOpens,trial:trialOn()});
     track("purchase_bridged",{...buyProps,sent:!!sent,build:saveWrapperTag()}); }
   else { window.KAMO.setPro(true); showHint("KAMO+ unlocked ✓"); } }
 /* Bound through a wrapper, not passed directly: onclick hands the handler a MouseEvent, and
@@ -12528,7 +12537,11 @@ function chSeek(hideId,opts){
        instead of opening a dead sheet. */
     function offerHintPack(){
       track("hint_purchase_initiated",TP({}));
-      if(!postNative({type:"purchase",product:HINT_PACK_ID})){
+      /* `source:"hint"` for the same reason the paywall now sends one, plus a second: this
+         is the only purchase that never touches the paywall, so without it the hint pack's
+         `purchase_completed` would land in the same unattributed bucket as a subscription
+         and quietly inflate whichever door was last opened. */
+      if(!postNative({type:"purchase",product:HINT_PACK_ID,source:"hint"})){
         retireHint("Get the app");
         return;
       }
