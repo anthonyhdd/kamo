@@ -166,8 +166,49 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
       ? ok('and it lives inside #chFrame, so it rides the zoom instead of sliding off the photo')
       : bad('the zone is not a child of #chFrame — it will not follow a pinch');
   }
+  /* THAT SPEND EMPTIED THE WALLET (balance 0), SO THE BUTTON BECOMES THE OFFER.
+     It used to read "Hint used" and go dead, and this assertion used to demand exactly that.
+     The consequence was that the only route to the pack ran through ANOTHER hide: leave this
+     one, open the next, tap into an empty wallet, and meet the sheet on the round trip — a
+     purchase nobody navigates toward because nobody has been shown it. App Review least of
+     all, since hint_spend spends the free daily first: one tap reveals the zone for nothing
+     and the sheet is never reached at all. PR #295. */
   const b2 = await btn(p);
-  b2 && b2.disabled ? ok('the button locks after the zone is shown') : bad(`button after use: ${JSON.stringify(b2)}`);
+  b2 && b2.text === 'Get 5 more' && !b2.disabled
+    ? ok('the spent button becomes the pack offer, still tappable')
+    : bad(`button after use: ${JSON.stringify(b2)}`);
+  /* AND IT QUOTES NO PRICE. setPrices() carries `weekly` and `lifetime` and nothing else, so
+     a figure here could only be hardcoded — right in the US and wrong everywhere else, which
+     is the misstatement #pwPerDay stays hidden to avoid. Apple's sheet states the real one. */
+  /[$€£¥₹]|\d+[.,]\d{2}/.test((b2 && b2.text) || '')
+    ? bad(`the offer label quotes a price (${b2.text}) — the pack's price does not exist on this side`)
+    : ok('and quotes no price, because the page has none to quote');
+
+  await p.click('#chHint');
+  await p.waitForTimeout(400);
+  const bought = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  bought.length === 1 && bought[0].product === 'com.blisscoach.kamo.hints5'
+    ? ok('and one tap on it opens StoreKit for the pack, by its exact product id')
+    : bad(`tapping the offer posted ${JSON.stringify(bought)}`);
+  await p.close();
+}
+
+/* The other half of that branch, and the reason it is a branch at all: somebody who still
+   holds hints is not a buyer, so the button must lock exactly as it always did rather than
+   sell them what they already have. */
+{
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1',
+                         spend: { used: 'paid', region: REG, balance: 3, free_available: false } });
+  await p.click('#chHint');
+  await p.waitForTimeout(400);
+  const b = await btn(p);
+  b && b.text === '3 left' && b.disabled
+    ? ok('a spend off a stocked wallet locks the button and states the balance')
+    : bad(`button after a stocked spend: ${JSON.stringify(b)}`);
+  const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 0
+    ? ok('and nothing is sold to somebody who already has hints')
+    : bad(`offered a purchase anyway: ${JSON.stringify(posted)}`);
   await p.close();
 }
 
