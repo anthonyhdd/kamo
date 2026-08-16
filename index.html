@@ -1430,6 +1430,24 @@ function hidesDone(){ try{ return +localStorage.getItem("kamo_hides")||0; }catch
 function teachHint(t,ms){ if(hidesDone()>1) return; showHint(t,ms); }
 function showHint(t,ms=2600){ hintEl.textContent=t; hintEl.style.opacity=t?1:0; clearTimeout(showHint._t); if(t&&ms) showHint._t=setTimeout(()=>hintEl.style.opacity=0,ms); }
 function haptic(ms=8){ if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify({type:"haptic",style:"impact"})); }catch(e){} } if(navigator.vibrate) navigator.vibrate(ms); }
+/* A MISS IS NOT A TAP THAT LANDED. One impact under the shake feels identical to the tick
+   every other control in the app gives for a successful press — so the one moment the
+   player needs to feel rejected felt like confirmation. A burst timed to the shake reads
+   as the animation does: something pushing back.
+   Two paths because the bridge has no notion of duration or pattern — it only knows
+   "impact" — so native gets the repeats scheduled here, while web takes the whole pattern
+   in one call ([on,off,on,off,…]) and is therefore exact. n*gap stays under the .3s
+   animation it rides, so there is nothing to cancel if the screen goes away mid-burst.
+   NOTE for the seeker screen: iOS Safari implements neither navigator.vibrate nor any
+   substitute, so a stranger on an iPhone still feels nothing — this reaches Android
+   browsers and anyone holding the link inside the app. */
+function hapticBurst(n=3,gap=80){
+  if(window.ReactNativeWebView){
+    for(let i=0;i<n;i++) setTimeout(()=>{ try{ window.ReactNativeWebView.postMessage(JSON.stringify({type:"haptic",style:"impact"})); }catch(e){} }, i*gap);
+    return;
+  }
+  if(navigator.vibrate){ const p=[]; for(let i=0;i<n;i++){ if(i) p.push(Math.max(1,gap-26)); p.push(26); } try{ navigator.vibrate(p); }catch(e){} }
+}
 /* throttled tactile tick while painting (native = expo-haptics selection; web = vibrate) */
 let _lastPaintHap=0;
 function paintHaptic(){ const t=performance.now(); if(t-_lastPaintHap<70) return; _lastPaintHap=t; if(window.ReactNativeWebView){ try{ window.ReactNativeWebView.postMessage(JSON.stringify({type:"haptic"})); }catch(e){} } else if(navigator.vibrate){ navigator.vibrate(5); } }
@@ -4085,7 +4103,9 @@ function chPrevPlay(){
       const x=(ev.clientX-r.left)/r.width, y=(ev.clientY-r.top)/r.height;
       const d=Math.hypot(x-g.cx,y-g.cy);
       if(d<=g.r){ haptic(18); end("Found you","That is the screen they get."); return; }
-      tries++; pips(); haptic(8);
+      /* Same burst as the real seeker screen. This card is titled "What they see", so a
+         miss that feels different here is the preview lying about the thing it previews. */
+      tries++; pips(); hapticBurst();
       img.classList.remove("chPPshake"); void img.offsetWidth; img.classList.add("chPPshake");
       if(tries>=e.taps) end("Out of taps","They never found you.");
     };
@@ -5157,7 +5177,10 @@ function chSeek(){
           "Send one back");
         return;
       }
+      /* The shake was silent — the only screen in KAMO where a failure had no tactile
+         answer at all, on the one screen built to make someone feel how hard this is. */
       img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
+      hapticBurst();
       track("seek_miss",{tries:tries});
       if(tries>=TAPS) timeUp("taps");
     };
