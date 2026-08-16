@@ -174,7 +174,11 @@ console.log('\nNO CHALLENGES, NO DOOR');
      an edge case. */
   const page = await open({});
   const rows = await page.evaluate(() => [...document.querySelectorAll('#kfMenu [data-s]')].map(b => b.dataset.s));
-  !rows.includes('chal') && rows.length === 3
+  /* Spelled out rather than counted: the count was 3 until Today's runs was removed on
+     2026-08-16, and a bare length is a test that fails for the wrong reason every time the
+     menu is edited. These two are the PERMANENT scopes — every device has a feed and a grid
+     of its own hides — and chal is the conditional one this block is about. */
+  !rows.includes('chal') && rows.join(',') === 'all,mine'
     ? ok(`a device that has never been answered is not offered the row (${rows.join(' / ')})`)
     : bad(`the empty Challenges row is still in the menu: ${rows.join(', ')}`);
   /* And nothing downstream trips over its absence — the menu still works. */
