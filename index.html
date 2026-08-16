@@ -12296,9 +12296,27 @@ function chSeek(hideId,opts){
        the live config for anything the web renders: GitHub Pages redeploys on merge and every
        launch refetches, so flipping this to true and merging turns the feature on for the whole
        fleet in about two minutes, with no build and no review.
-       FLIP IT WHEN com.blisscoach.kamo.hints5 READS `APPROVED` in App Store Connect, and not
-       before. Founder's call, 2026-08-16. */
-    const HINTS_LIVE=false;
+       IT WAS "FLIP IT WHEN hints5 READS `APPROVED`", AND THAT RULE DEADLOCKS. The reviewer is
+       the person who decides `APPROVED`, and they decide it by finding the pack in the binary
+       and buying it. Left false, the build now in review shows them a seek screen with no Hint
+       button anywhere, so the consumable they were handed cannot be located and comes back
+       rejected — which is the one outcome this flag was protecting against, arrived at the
+       long way round. Waiting for approval to show the thing that earns approval is a loop
+       with no exit.
+       SO IT IS TRUE, AND THE SECOND GATE IS WHAT KEEPS THAT SAFE. `nativeCaps.hints` is only
+       advertised by 1.1.4 — the binary in review. Every user on the App Store today is on
+       1.1.3 or older, reports the cap false, and sees exactly what they saw yesterday: no
+       button, no sheet, nothing. The audience this opens to is precisely App Review plus
+       TestFlight, which is the audience that has to see it. The window the note above worried
+       about — a live user tapping Hint at a product that does not exist — cannot be entered
+       from a binary that does not advertise the cap.
+       Products submitted alongside a build are purchasable in the reviewer's sandbox, so the
+       sheet they open is a real one. The pack is in RevenueCat's current `default` offering
+       (`$rc_custom_hints5` → com.blisscoach.kamo.hints5), so pickPackage resolves it rather
+       than falling to the "not available yet" error.
+       ROLLBACK IS THIS LINE. Set it back to false, push, and the button is gone fleet-wide in
+       about two minutes — no build, no review. Founder's call, 2026-08-16. */
+    const HINTS_LIVE=true;
     const HINT_PACK_ID="com.blisscoach.kamo.hints5";
     let hintZone=null, hintBusy=false, hintPending=false;
     const hintsOn=()=>{ try{ return !!(HINTS_LIVE&&nativeCaps&&nativeCaps.hints&&chUserId&&HID&&!REPLAY); }catch(_){ return false; } };
