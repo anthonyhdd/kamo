@@ -176,6 +176,75 @@ console.log('\nA BLACK RECTANGLE IS NOT A ROUND');
   await page.close();
 }
 
+/* ══ AND THE FILTER CAN NEVER BE THE THING THAT EMPTIES THE SCREEN ═════════════════════════
+   Founder's report on the live build, 2026-08-16: "le feed est noir, le scroll marche pas."
+   Both halves were one defect. The drop path removes slides that are already mounted, and
+   nothing anywhere put a card up when it removed the last one — so #kfeed sat there painted
+   #04060a over an empty .kfScroll, with the "Swipe up for the next hide ↑" pill still
+   floating over it pointing at nothing. It is the only path on this screen that could end in
+   a blank, and the black-rectangle filter drives it on every page it loads.
+   Two rules hold it shut, and both are asserted here because either alone leaves a hole. */
+/* The same rectangle the section above uses, shared by both rules below. */
+const LQ_RECT = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAAbABQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJ+AAAAAAAD/2Q==";
+console.log('\nTHE FILTER NEVER BLANKS THE FEED');
+{
+  /* RULE ONE — A WHOLE PAGE IS NOT EIGHT RECTANGLES, IT IS A MISREAD CORPUS. KAMO photographs
+     are dim rooms by construction, and a 20px placeholder loses most of its variation to the
+     downscale, so a legitimately dark page can drift under "near-black and flat" all at once.
+     When the detector wants everything it was shown, the page is KEPT and the reach is
+     counted instead. This is the assertion that reproduces the founder's screen: without it
+     the run below ends at 0 slides and a scroller with nothing in it. */
+  const allBlack = Array.from({ length: 8 }, (_, i) => ({
+    id: 'b' + i, img_path: 'p' + i + '.jpg', name: null, n_attempts: i, n_found: 0,
+    created_at: '2026-08-16T0' + i + ':00:00Z', lqip: LQ_RECT,
+  }));
+  const page = await open({ rows: allBlack, best: [] });
+  await page.waitForTimeout(1200);
+  const r = await page.evaluate(() => {
+    const sc = document.querySelector('.kfScroll');
+    return {
+      n: document.querySelectorAll('.kfSlide').length,
+      scrollable: !!sc && sc.scrollHeight > sc.clientHeight + 1,
+      dropped: (window.__tr || []).filter(t => t[0] === 'feed_black_dropped').length,
+      alarm: (window.__tr || []).filter(t => t[0] === 'feed_black_all').length,
+    };
+  });
+  r.n === 8 && r.dropped === 0
+    ? ok('a page the detector wants ENTIRELY is kept — the filter defers to the corpus')
+    : bad(`the filter emptied the feed: slides=${r.n} drops=${r.dropped}`);
+  r.scrollable
+    ? ok('and the scroller still has somewhere to go — "le scroll marche pas" is this line')
+    : bad('the feed has nothing to scroll: scrollHeight === clientHeight');
+  r.alarm === 1
+    ? ok('and it says so, so bad thresholds are visible as tuning and not as an outage')
+    : bad(`feed_black_all did not fire (${r.alarm})`);
+  await page.close();
+}
+{
+  /* RULE TWO — AND WHEN A DROP *IS* RIGHT AND STILL EMPTIES THE SCREEN, THE SCREEN SAYS SO.
+     One row, and it really is a rectangle: the whole-page rule deliberately does not apply to
+     a page of one, so the drop lands and the feed runs dry. That is legitimate, and it must
+     end on a card with a way out — the same recovery report and block already reach — rather
+     than on the blank. Covers every caller of drop(), not only this filter. */
+  const one = [{ id: 'only', img_path: 'p0.jpg', name: null, n_attempts: 1, n_found: 0,
+                 created_at: '2026-08-16T09:00:00Z', lqip: LQ_RECT }];
+  const page = await open({ rows: one, best: [] });
+  await page.waitForTimeout(1500);
+  const r = await page.evaluate(() => ({
+    n: document.querySelectorAll('.kfSlide').length,
+    card: getComputedStyle(document.querySelector('.kfMid')).display !== 'none',
+    cta: !!document.querySelector('#kfCta'),
+    hint: !!document.querySelector('#kfHint'),
+  }));
+  r.n === 0 && r.card && r.cta
+    ? ok('a feed emptied by a drop lands on a card with a way out, never on a black screen')
+    : bad(`ran dry into nothing: slides=${r.n} card=${r.card} cta=${r.cta}`);
+  !r.hint
+    ? ok('and the swipe hint leaves with the slides — it cannot instruct an empty scroller')
+    : bad('"Swipe up for the next hide" survived over an empty feed');
+  await page.close();
+}
+
 await browser.close();
 server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed quality pass behaves');

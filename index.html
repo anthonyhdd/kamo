@@ -6997,6 +6997,16 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    features looked like they were producing no behaviour at all. Direct, for the same reason
    the share tap above is: this page deploys on its own and the binary does not. */
 "reply_started","reply_pending","prev_blocked_tapped","feed_available",
+/* AND `reply_sent`, WHICH THIS LIST FORGOT — the outcome half of the one funnel the two
+   names above exist to measure. Shipped 2026-08-15, tracked at the publish, never named
+   here: so it took the bridge, hit a compiled allow-list no released binary has ever heard
+   of, and was dropped for every app user. Ten events landed in 36 hours, all of them from
+   plain browsers, and read against 461 taps they said the reply loop converted at 2%.
+   The database said 133 replies the same day. The loop was never broken; the COUNTER was —
+   the exact failure `hide_published`-reads-as-6 is written up for a few lines below, and the
+   third time this file has paid for it. An intent routed direct and its outcome routed by
+   the bridge cannot divide: they do not even land on the same Amplitude user. */
+"reply_sent",
 /* The Challenges panel: the grid of hides that answered yours. `replies_grid_shown` carries
    how many were waiting, `reply_opened` whether the tap replays a spent one — together they
    say whether a delivered answer actually gets played, which the reply loop has never been
@@ -7012,8 +7022,13 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
 "reaction_pending","feed_best_seeded",
 /* `reply_photo_failed` is the one that matters on 2026-08-16: it is the black-hide factory,
    and until today it failed silently into a #223 board that got published. `feed_black_dropped`
-   counts the ones already out there, so the cleanup has a size. */
-"reply_photo_failed","feed_black_dropped",
+   counts the ones already out there, so the cleanup has a size.
+   `feed_black_all` is the FILTER'S OWN ALARM, and it is the more important of the two: it
+   fires when the detector wanted an entire page, which is the shape of a misread corpus
+   rather than of eight rectangles. The page is kept when it fires, so this is a tuning
+   signal and not an outage — but at volume it means KF_DARK_MEAN / KF_DARK_SPREAD are
+   eating real photographs and have to come down. */
+"reply_photo_failed","feed_black_dropped","feed_black_all",
 /* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
    names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
    so a coverage event travelling by the bridge would answer for a different user and no ratio
@@ -13389,8 +13404,35 @@ function chFeed(opts){
     const wasActive=(i===S.active);
     try{ S.slides[i].el.remove(); }catch(_){}
     S.slides.splice(i,1);
+    /* AND IF THAT WAS THE LAST ONE, THE SCREEN IS NOW A BLACK RECTANGLE WITH NOTHING IN IT.
+       Founder's report, 2026-08-16, on the live build: "le feed est noir, le scroll marche
+       pas". Both halves of that sentence are this line's absence. #kfeed paints #04060a and
+       .kfScroll had no children left, so there was nothing to see and nothing to scroll — and
+       because paint() is the only thing on this screen that ever shows a card, no card was
+       shown either. Every other empty path ends somewhere honest: paint() has the cold start,
+       blockDrop() has "That's everything for now", load() has Retry. drop() had nothing, and
+       it is the path the new black-rectangle filter drives on EVERY page it loads. */
+    if(!S.slides.length){ dry(); return; }
     if(wasActive){ S.active=-1; setTimeout(()=>activate(Math.min(i,S.slides.length-1)),350); }
     else if(i<S.active) S.active--;
+  }
+
+  /* THE FEED RAN DRY UNDER THE THUMB — not on a load that came back empty, which paint()
+     already owns, but on slides that were mounted and then taken away again.
+     Recovery in order of honesty: EXTEND first, because a page that filtered down to nothing
+     is a dark stretch of the timeline rather than the end of it, and the rows below it are
+     still there. Only once the server is genuinely out of rows does this hand over to paint(),
+     which reopens the seen list for one lap and then says the cold start plainly. */
+  function dry(){
+    S.active=-1;
+    if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
+    /* THE HINT GOES WITH THEM. "Swipe up for the next hide ↑" floating over an empty scroller
+       is an instruction that cannot be obeyed, and it is most of what made this screen read as
+       broken rather than as empty. Removed rather than latched through killHint(): S.hinted
+       stays false, so paint() puts it back the moment there is something to swipe to. */
+    try{ const h=root.querySelector("#kfHint"); if(h) h.remove(); }catch(_){}
+    if(!S.done){ load().then(paint); return; }
+    paint();
   }
 
   /* A BLOCK TAKES THE TAIL WITH IT, NOT JUST THE SLIDE UNDER THE THUMB.
@@ -13576,11 +13618,29 @@ function chFeed(opts){
            which is the same path a report already uses and knows how to renumber.
            Fire-and-forget, and silent on every failure: an unreadable placeholder keeps its
            hide. */
-        keep.forEach(r=>{ kfLooksBlack(r.lqip).then(black=>{
-          if(!black||kfState!==S) return;
-          track("feed_black_dropped",{});
-          try{ drop(r.id); }catch(_){}
-        }).catch(()=>{}); });
+        /* AND IT IS DECIDED AS A PAGE, NOT ROW BY ROW. A filter that wants to remove EVERY
+           row it was shown is not finding eight rectangles; it is describing a corpus it has
+           misread, and there is no version of that where blanking the feed is the right
+           answer. KAMO photographs are dim rooms by construction — the game is hiding a
+           painted figure — and a 20px placeholder loses most of its variation to the
+           downscale, so "near-black and flat" is a threshold a legitimately dark page can
+           drift under all at once. The whole-page case therefore keeps the page and says so,
+           which is a number worth watching (`feed_black_all`): if it fires at volume the
+           thresholds are wrong, and that is a tuning problem rather than an outage.
+           Waiting for all N decodes costs the first paint nothing — the slides are already
+           mounted and playable by the time any of this resolves. */
+        Promise.all(keep.map(r=>kfLooksBlack(r.lqip).then(b=>!!b).catch(()=>false)))
+          .then(flags=>{
+            if(kfState!==S) return;
+            const n=flags.filter(Boolean).length;
+            if(!n) return;
+            if(n===keep.length&&keep.length>1){ track("feed_black_all",{n:n}); return; }
+            flags.forEach((black,j)=>{
+              if(!black) return;
+              track("feed_black_dropped",{});
+              try{ drop(keep[j].id); }catch(_){}
+            });
+          }).catch(()=>{});
       }
     }catch(e){
       track("feed_load_failed",{reason:String((e&&e.message)||e).slice(0,120)});
