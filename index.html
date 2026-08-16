@@ -12196,8 +12196,11 @@ function chSeek(hideId,opts){
              number is the only part of a loss that is theirs.
              "Lost", not "Loose" — the founder's note said Loose, which is a different English
              word (slack, untied). The reveal line moves down to the subtitle, where it still
-             does its job: saying how close they were. */
-          ending("Lost in "+(ms/1000).toFixed(1)+"s","They were right there.",
+             does its job: saying how close they were.
+             "The kamo", not "They" (founder, 2026-08-16): singular they is correct English
+             for the one hidden person, but it scans as a plural — and the thing that was
+             right there has a name in every other line of copy. One kamo, one sentence. */
+          ending("Lost in "+(ms/1000).toFixed(1)+"s","The kamo was right there.",
                  {rehide:true,camoSrc:camoSrc});
         }
         frames.then(f=>{ if(f) armFlipUI(); });
@@ -12213,8 +12216,9 @@ function chSeek(hideId,opts){
       track("seek_failed",TP({reason:"giveup",ms:ms}));
       sendTrace("giveup");
       const frames=snapReveal(true);
-      /* Giving up is still a loss with a clock on it — the seconds were spent looking. */
-      ending("Lost in "+(ms/1000).toFixed(1)+"s","They were right there.",
+      /* Giving up is still a loss with a clock on it — the seconds were spent looking.
+         Same line as the miss, same singular: see the note there on "The kamo". */
+      ending("Lost in "+(ms/1000).toFixed(1)+"s","The kamo was right there.",
              {rehide:true,camoSrc:camoSrc});
       frames.then(f=>{ if(f) armFlipUI(); });
     };
