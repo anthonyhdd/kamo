@@ -157,8 +157,11 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
      That spelling passed only because this test device has no blocks and so never reached the
      block-tags rung, and it broke the moment pagination moved to p_offset — a listing argument
      failing a test about not leaking the answer. What matters is the SHAPE of what may be sent:
-     a window (p_before, p_offset, p_limit) and a block list, and nothing else ever. */
-  const LISTING_ARGS = new Set(['p_before', 'p_limit', 'p_offset', 'p_block_tags']);
+     how much (p_limit), which slice (p_before / p_offset / p_seen) and who is filtered out
+     (p_block_tags) — and nothing else, ever.
+     `p_seen` is this device telling the server what it has already been given, which travels the
+     same way round as everything else here: OUT. Nothing on this list can carry an answer back. */
+  const LISTING_ARGS = new Set(['p_before', 'p_limit', 'p_offset', 'p_block_tags', 'p_seen']);
   const args = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').map(c => Object.keys(c[1]).sort()));
   const leaked = args.flat().filter(k => !LISTING_ARGS.has(k));
   args.length && !leaked.length

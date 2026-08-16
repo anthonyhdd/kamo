@@ -7294,11 +7294,11 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    `seeded` and are permanent. `served` is a row feed_page handed back after already handing it
    over — the broken-cursor signature, and the only half that must read zero. */
 "feed_dupe_blocked",
-/* `feed_page_offset_unavailable` should never fire: the offset overload is applied, and the
+/* `feed_page_seen_unavailable` should never fire: the exclusion overload is applied, and the
    climb-down beneath it exists only so a page cached before the migration still has a feed. If
-   it appears at volume the RPC is gone or renamed and every device is back on the broken
-   cursor — a duplicate-and-skip regression that would otherwise be completely silent. */
-"feed_page_offset_unavailable",
+   it appears at volume the RPC is gone or renamed and every device is back on positional
+   paging — a duplicate-and-skip regression that would otherwise be completely silent. */
+"feed_page_seen_unavailable",
 /* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
    names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
    so a coverage event travelling by the bridge would answer for a different user and no ratio
@@ -13160,6 +13160,12 @@ function chSeek(hideId,opts){
  * told, in words, on the share sheet, that it would play here.
  */
 const KF_PAGE=8;
+/* HOW MUCH OF `served` TRAVELS. The exclusion list is the paging state, so it has to be long
+   enough to cover a whole session — 300 is past any real one, and past the server's own cap on
+   the same array. Beyond it the oldest ids fall off and the server may re-offer a hide from the
+   very start of a long session; the on-screen guard in load() still refuses to mount it twice,
+   so the worst case is a wasted row in a page rather than a duplicate on screen. */
+const KF_SEEN_SEND=300;
 /* PostgREST returns a SET-returning function as a JSON ARRAY, and chRpc unwraps arrays to
    their first element — correct for every RPC that existed before this one, and silently
    wrong here: the feed would have loaded exactly one hide per page and looked like an empty
@@ -13336,11 +13342,10 @@ function kfTakeFirstPage(){
   if(!c||!c.rows.length) return null;
   if(kfBlocked().length) return null;
   if(Date.now()-c.at>KF_CACHE_MS) return null;
-  /* THE EPOCH TRAVELS WITH THE PAGE. This page was fetched by the probe against `p_before:null`,
-     and the feed continues it by OFFSET — so the window the offset counts into has to be the
-     window this page came out of, or "offset 8" means page 2 of something else. `epoch` is the
-     moment the probe's response landed, which every row here is older than by construction. */
-  return {rows:c.rows,epoch:c.epoch||null};
+  /* No window travels with it any more: the feed continues this page by EXCLUSION, and load()
+     folds these ids into S.served before it asks for anything else. Which query produced them
+     stops mattering, which is most of the point of the exclusion rung. */
+  return c.rows;
 }
 function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b.style.display=(on&&kfHasContent)?"flex":"none"; }catch(e){} }
 /* Asked once per launch, and only where a feed could be opened at all. Silent on failure: an
@@ -13366,7 +13371,7 @@ async function kfProbe(){
     if(rows&&rows.length){
       /* Stamped AFTER the response, so every row in this page is older than the epoch by
          construction — the feed adopts it as p_before and counts offsets into that window. */
-      kfFirstPage={rows:rows,at:Date.now(),epoch:new Date().toISOString()};
+      kfFirstPage={rows:rows,at:Date.now()};
       kfHasContent=true;
       try{ localStorage.setItem("kamo_feed_has","1"); }catch(e){}
       track("feed_available",{});
@@ -13672,11 +13677,12 @@ function chFeed(opts){
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
-  /* `epoch` is the moment this feed opened, and it never moves: it is what p_before means now
-     that p_offset is the cursor — a fixed ceiling so hides published while somebody scrolls
-     cannot shift the window under them. `offset` counts RAW rows the server has served, not the
-     slides that survived filtering. See the widest rung in load(). */
-  const S={cursor:null,epoch:new Date().toISOString(),offset:0,
+  /* `served` is every RAW row this session has been handed, and it is the whole of the paging
+     state now: the server is asked for the best rows it has NOT already given, never for the
+     rows at position N. A positional window cannot be stable over this ranking — the leading
+     key is least(n_attempts,3) and the untouched band is about one page deep, so one person
+     playing one hide re-numbers everything under it. See the rung in load(). */
+  const S={cursor:null,served:new Set(),
            loading:false,done:false,slides:[],active:-1,round:null,played:0,hinted:false,lap:0};
   kfState=S;
   /* THE CLOCK STARTS HERE, and it exists because the last change to this screen could not be
@@ -13998,38 +14004,36 @@ function chFeed(opts){
          refuses on a blocked device or a stale cache, so every other path below is untouched
          and still the call this feed has always made. */
       const tPage=kfNow();
-      const cached=(S.cursor===null&&!S.lap)?kfTakeFirstPage():null;
-      /* Adopting the probe's epoch is what makes the cached page and the offsets after it parts
-         of ONE window. Without it the feed opens on page 0 of the probe's query and asks for
-         offset 8 of a different one. */
-      if(cached&&cached.epoch) S.epoch=cached.epoch;
-      let rows=cached?cached.rows:null;
+      let rows=(S.cursor===null&&!S.lap)?kfTakeFirstPage():null;
       const fromCache=!!rows;
       if(!rows){
         const tags=kfBlocked();
-        /* THE WIDEST RUNG — OFFSET, BECAUSE THE CURSOR NEVER MATCHED THE SORT.
-           feed_page orders by least(n_attempts,3), score desc, created_at desc and used to
-           paginate on `created_at < p_before` with the created_at of the page's LAST ROW. Under
-           a non-chronological sort that row is not the oldest one, so the next page re-served
-           rows already shown AND permanently skipped everything newer than that arbitrary
-           pivot. Migration `feed_page_offset_pagination`, 2026-08-16: verified on the live
-           database at 3345 of 3345 eligible rows reachable and zero overlap across three pages.
-           p_before is now an EPOCH, not a cursor: the moment the feed opened, sent unchanged on
-           every page, so hides published mid-scroll cannot shift the window under the reader and
-           put back the duplicates this removes. p_offset is the cursor, and it counts RAW rows
-           served — never the ones the client kept, because the filtering is this end's business
-           and the window is the server's. */
+        /* THE WIDEST RUNG — ASK BY EXCLUSION, NOT BY POSITION.
+           Every positional scheme this feed has had was broken by the same thing: the ranking
+           moves while you read it. `created_at < p_before` did not even match the ORDER BY, so
+           it re-served rows and skipped others outright. OFFSET matched the sort but not the
+           clock — the leading key is least(n_attempts,3) and the untouched band is ~9 rows, one
+           page, so a single person playing a single hide re-numbers everything below and
+           "position 8" is no longer where it was a second ago.
+           Rows coming back twice was the visible half; rows sliding PAST the window and never
+           being served to anyone was the half that mattered, because untouched-hides-first is
+           the property the whole ordering exists for.
+           So the window goes away. `p_seen` carries what this session has already been handed
+           and the server returns the best rows that are not in it — immune to reordering by
+           construction, and re-ranked live between pages, which is what a quality feed wants.
+           Migration `feed_page_exclude_seen`, 2026-08-16: 24 rows over three pages, 24 distinct,
+           page 1 still entirely n_attempts=0. */
         try{
           rows=await kfRpc("feed_page",
-            {p_before:S.epoch,p_limit:KF_PAGE,p_block_tags:tags,p_offset:S.offset|0});
+            {p_limit:KF_PAGE,p_block_tags:tags,p_seen:[...S.served].slice(-KF_SEEN_SEND)});
         }catch(e){
           /* THE CLIMB DOWN, and the block list is what makes it safe. A device that has blocked
              somebody keeps the 3-argument form, which still filters them out — falling all the
              way to the 2-argument call would answer "don't show me this person" with their
              photograph. A device with no blocks lands on the call this feed has always made.
-             Both are the pre-migration behaviour, duplicates included: a stale page beats no
+             Both are the old positional behaviour, duplicates included: a stale page beats no
              feed, and this only runs if the new overload is somehow unreachable. */
-          track("feed_page_offset_unavailable",{});
+          track("feed_page_seen_unavailable",{});
           rows=await kfRpc("feed_page", tags.length
             ? {p_before:S.cursor,p_limit:KF_PAGE,p_block_tags:tags}
             : {p_before:S.cursor,p_limit:KF_PAGE});
@@ -14049,11 +14053,11 @@ function chFeed(opts){
            rows instead would re-request the same window forever the moment a whole page was
            filtered out — which is the normal case for anyone who has played a while. */
         S.cursor=rows[rows.length-1].created_at;
-        /* And the offset advances on the RAW page for the same reason, which is the whole
-           correctness property of the new rung: the server's window must be counted in the
-           server's units. Kept-row arithmetic here would silently re-request the rows this
-           client filtered out and hand the duplicates straight back. */
-        S.offset=(S.offset|0)+rows.length;
+        /* AND EVERY RAW ROW IS REMEMBERED, not merely the ones that survived filtering. A row
+           this client drops (already played, own hide, black rectangle) is still a row the
+           server handed over, and leaving it out of `p_seen` would have it returned again on
+           every single page for the rest of the session. */
+        rows.forEach(r=>{ if(r&&r.id) S.served.add(r.id); });
         if(rows.length<KF_PAGE) S.done=true;
         /* SECOND LAP: THE SKIP LIST IS DROPPED, NOT THE FEED.
            A hide has one buzz in it, so a played hide is a spoiled hide and skipping it is
@@ -14615,7 +14619,10 @@ function chFeed(opts){
         /* The offset goes back to the top with the cursor — the lap is a fresh pass over the
            same window, and leaving it where the first pass ended would reopen the room at the
            far end of it and call that "everything you've seen, again". */
-        S.lap=1; S.done=false; S.cursor=null; S.offset=0;
+        /* THE SERVED LIST GOES BACK TO EMPTY WITH THE CURSOR — it IS the cursor now. Keeping it
+           would exclude, server-side, exactly the hides the lap exists to bring back, and the
+           reopened room would come back empty every time. */
+        S.lap=1; S.done=false; S.cursor=null; S.served.clear();
         track("feed_second_lap",{seen:kfSeen().length});
         load().then(paint);
         return;

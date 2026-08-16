@@ -107,3 +107,29 @@ grant execute on function public.feed_page(timestamptz, int, text[], int) to ano
 -- later page returning it is the server behaving correctly. Those are counted as `seeded` and
 -- are permanent. `served` is a row feed_page handed back after already handing it over — the
 -- broken-cursor signature — and that is the half that must read zero and stay there.
+
+-- ══ FOLLOW-UP, SAME DAY: OFFSET WAS NOT ENOUGH EITHER ═══════════════════════════════════════
+-- `feed_page_offset_pagination` killed the systematic bug (a cursor that did not match the sort,
+-- re-serving rows AND making others permanently unreachable) but feed_dupe_blocked.served stayed
+-- non-zero in production, at 6 rows out of an 8-row page.
+--
+-- The reason is that OFFSET is only stable if the ORDER BY is. Measured here:
+--
+--     n_attempts = 0 ....    9 rows      <- the whole leading band is ONE page
+--     n_attempts = 1 ...    15
+--     n_attempts = 2 ...    22
+--     n_attempts >= 3 .. 3440
+--
+-- least(n_attempts,3) is the first sort key, so one person playing one untouched hide moves it
+-- out of a 9-row band and re-numbers everything below it. "The 8 rows at position 8" is not
+-- where it was a second ago. Rows come back (visible, and the client already refused them) and
+-- rows slide PAST the window and are served to nobody — which is the half that matters, because
+-- untouched-hides-first is the property the ordering exists for in the first place.
+--
+-- So `feed_page_exclude_seen` drops the window entirely: the client sends what it has already
+-- been handed and the server returns the best rows that are not in it. Immune to reordering by
+-- construction, and it re-ranks live between pages rather than freezing a stale window.
+-- Verified: 24 rows over three pages, 24 distinct, page 1 still entirely n_attempts=0.
+--
+-- feed_page(timestamptz,int,text[],int) — the offset overload — is left in place and unused.
+-- Nothing calls it; removing it is a separate change with no urgency behind it.
