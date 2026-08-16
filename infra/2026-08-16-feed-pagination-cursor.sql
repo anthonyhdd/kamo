@@ -97,5 +97,13 @@ grant execute on function public.feed_page(timestamptz, int, text[], int) to ano
 --        p2 as (select * from feed_page(now(), 8, '{}', 8))
 --   select (select count(*) from p2 where id in (select id from p1)) as must_be_zero;
 --
--- and `feed_dupe_blocked` in Amplitude must fall to zero and stay there once the client is
--- sending p_offset.
+-- APPLIED 2026-08-16 as migration `feed_page_offset_pagination`. Verified on the live database:
+-- three pages returned 24 rows / 24 distinct / zero overlap, and walking the offset to the end
+-- reached 3345 of 3345 eligible rows. The client half shipped with it.
+--
+-- WATCH `feed_dupe_blocked.served`, NOT `feed_dupe_blocked.n`. The bare count cannot reach zero
+-- and it was wrong to promise it would: the banger slot seeds a proven hide out of feed_best,
+-- that hide is also in feed_page's corpus (it sits in the least(n_attempts,3)=3 band), and a
+-- later page returning it is the server behaving correctly. Those are counted as `seeded` and
+-- are permanent. `served` is a row feed_page handed back after already handing it over — the
+-- broken-cursor signature — and that is the half that must read zero and stay there.

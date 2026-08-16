@@ -7278,7 +7278,12 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
 /* `feed_dupe_blocked` is a MEASURE OF A SERVER BUG, not of a client one: feed_page paginates
    on created_at while ordering by score, so it re-serves rows the page above already showed.
    The client now refuses them, and this counts what it refused — `n` of `of`. It should fall
-   to zero when the cursor is fixed, and it is the proof that it was. */
+   to zero when the cursor is fixed, and it is the proof that it was.
+   READ `served`, NEVER `n`. The bare count can never reach zero and it was a mistake to say it
+   would: the banger slot seeds a proven hide out of feed_best, that hide is also in feed_page's
+   corpus, and a later page returning it is the server behaving correctly. Those land in
+   `seeded` and are permanent. `served` is a row feed_page handed back after already handing it
+   over — the broken-cursor signature, and the only half that must read zero. */
 "feed_dupe_blocked",
 /* `feed_page_offset_unavailable` should never fire: the offset overload is applied, and the
    climb-down beneath it exists only so a page cached before the migration still has a feed. If
@@ -13979,20 +13984,30 @@ function chFeed(opts){
            on a page nobody has to wait for. The server half is the real bug — a cursor that
            does not match its own ORDER BY also SKIPS rows, and no amount of de-duplication here
            can hand back a hide the query never returned. See the note in infra/. */
-        const onScreen=new Set(S.slides.map(s=>s&&s.row&&s.row.id));
-        const keep=[]; let dupes=0;
+        const onScreen=new Map(S.slides.map(s=>[s&&s.row&&s.row.id,s]));
+        const keep=[]; let seeded=0, served=0;
         rows.forEach(r=>{
           if(!r||!r.id||!r.img_path) return;
           if(skip.has(r.id)) return;
-          if(onScreen.has(r.id)){ dupes++; return; }
-          onScreen.add(r.id);            // also collapses a repeat inside this same page
+          if(onScreen.has(r.id)){
+            /* WHICH KIND OF DUPLICATE THIS IS, because they are not the same event and only one
+               of them is a bug. The banger slot seeds a PROVEN hide at slide 4 out of feed_best,
+               and a proven hide is by definition also in feed_page's corpus — it sits in the
+               least(n_attempts,3)=3 band and a later page will return it perfectly correctly.
+               That collision is permanent and expected, and it is why this counter can never
+               read zero however good the pagination gets. `served` is the one that must: it is a
+               row feed_page handed back after already handing it over, which after the offset
+               migration should not happen at all. */
+            const twin=onScreen.get(r.id);
+            if(twin&&twin.best) seeded++; else served++;
+            return;
+          }
+          onScreen.set(r.id,null);       // also collapses a repeat inside this same page
           keep.push(r);
         });
-        /* COUNTED, BECAUSE THE SERVER BUG IS STILL THERE. This is the only number that says how
-           much of each page the broken cursor is re-serving, and it is the one to watch after
-           the pagination is fixed: it should fall to zero and stay there. `of` carries the page
-           size so the ratio is readable without a second query. */
-        if(dupes) track("feed_dupe_blocked",{n:dupes,of:rows.length});
+        /* SPLIT, so the number is readable instead of merely alarming. `of` carries the page
+           size so the ratio needs no second query. */
+        if(seeded||served) track("feed_dupe_blocked",{n:seeded+served,of:rows.length,seeded:seeded,served:served});
         keep.forEach(r=>addSlide(r,S.lap));
         /* AND THE BLACK ONES LEAVE AFTER THEY ARRIVE, not before. Reading a placeholder means
            decoding an image, which is async, and making the page wait on N decodes before the
