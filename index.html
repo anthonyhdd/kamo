@@ -11501,6 +11501,24 @@ function chSeek(hideId,opts){
        moving in: the headline is the thing that has to be readable, and the corner is the
        thing that has to be findable in the same place on every slide. */
     +".chS.chIn .chTop{padding-top:calc(56px + var(--safe-t));}"
+    /* AND THE RUN PILL CLEARS THEM TOO — the same collision as the headline above, missed
+       because the pill only exists once a player has a live streak, so an empty-run device
+       (every test, every first session) renders a feed that looks correct. Founder's report,
+       2026-08-16, with a screenshot: the gold pill sitting on top of BOTH the ✕ and the ⚑.
+       It is pointer-events:none, so the taps were still landing — this was never a dead
+       button, it was two controls nobody could read, one of which is the report flag that
+       Apple guideline 1.2 requires be reachable.
+       WHY THE RIGHT AND NOT LOWER-LEFT. The two halves of this bar are now one rule instead
+       of four positions: the LEFT column is the controls (✕, ⚑) and the RIGHT column is the
+       status chips (clock, run) — same shell, same size, same pointer-events:none, stacked
+       6px apart so they read as one instrument. Top-centre stays forbidden for the reason
+       written on .chRun itself (the wordmark's coordinate hit-test).
+       The headline cannot reach them: .chHead is max-width:20ch and centred, which caps it
+       around 226px on a 390pt screen — the pill starts at x≈320.
+       FEED ONLY. A link round has no bar and no ✕, so its top-left is free and .chRun keeps
+       the corner it was designed for; this override is scoped to .chIn like every other
+       difference between the two surfaces. */
+    +".chS.chIn .chRun{top:calc(52px + var(--safe-t));left:auto;right:12px;}"
     +".chS.chIn .chBrand{display:none;}"
     /* THE ONE GESTURE THAT HAD TO BE GIVEN BACK. The stage owns every touch on the link
        screen (touch-action:none) because there is nothing to scroll. In the feed there is,
