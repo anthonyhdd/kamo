@@ -7029,6 +7029,11 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    signal and not an outage — but at volume it means KF_DARK_MEAN / KF_DARK_SPREAD are
    eating real photographs and have to come down. */
 "reply_photo_failed","feed_black_dropped","feed_black_all",
+/* `feed_dupe_blocked` is a MEASURE OF A SERVER BUG, not of a client one: feed_page paginates
+   on created_at while ordering by score, so it re-serves rows the page above already showed.
+   The client now refuses them, and this counts what it refused — `n` of `of`. It should fall
+   to zero when the cursor is fixed, and it is the proof that it was. */
+"feed_dupe_blocked",
 /* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
    names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
    so a coverage event travelling by the bridge would answer for a different user and no ratio
@@ -13632,7 +13637,35 @@ function chFeed(opts){
            flag on the slide, which stops the buzz reaching submit_attempt and inflating
            somebody's attempt count with a tap from a player who already knew. */
         const skip=new Set(S.lap?chMine():kfSeen().concat(chMine()));
-        const keep=rows.filter(r=>r&&r.id&&r.img_path&&!skip.has(r.id));
+        /* AND NOTHING THAT IS ALREADY ON THIS SCREEN. Founder, 2026-08-16: "je tombe souvent
+           sur des doublons à la suite" — and it is the server, not a rendering slip. feed_page
+           orders by `least(n_attempts,3), score desc, created_at desc` but paginates on
+           `created_at < p_before`, and the client sends the created_at of the page's LAST ROW.
+           Under a non-chronological sort that row is not the oldest one, so every row of the
+           page older than it satisfies the next page's filter and comes straight back. Measured
+           against the live database while this was written: page 2 returned 8 rows of which 2
+           were already in page 1.
+           kfSeen() could never catch them — it is written by activate(), so it only knows the
+           slides that have actually been LOOKED at, and the duplicate arrives while the twin is
+           still sitting unviewed three slides down. Which is exactly why they land "à la suite".
+           This is the client half and it is the honest half: it makes the screen correct now,
+           on a page nobody has to wait for. The server half is the real bug — a cursor that
+           does not match its own ORDER BY also SKIPS rows, and no amount of de-duplication here
+           can hand back a hide the query never returned. See the note in infra/. */
+        const onScreen=new Set(S.slides.map(s=>s&&s.row&&s.row.id));
+        const keep=[]; let dupes=0;
+        rows.forEach(r=>{
+          if(!r||!r.id||!r.img_path) return;
+          if(skip.has(r.id)) return;
+          if(onScreen.has(r.id)){ dupes++; return; }
+          onScreen.add(r.id);            // also collapses a repeat inside this same page
+          keep.push(r);
+        });
+        /* COUNTED, BECAUSE THE SERVER BUG IS STILL THERE. This is the only number that says how
+           much of each page the broken cursor is re-serving, and it is the one to watch after
+           the pagination is fixed: it should fall to zero and stay there. `of` carries the page
+           size so the ratio is readable without a second query. */
+        if(dupes) track("feed_dupe_blocked",{n:dupes,of:rows.length});
         keep.forEach(r=>addSlide(r,S.lap));
         /* AND THE BLACK ONES LEAVE AFTER THEY ARRIVE, not before. Reading a placeholder means
            decoding an image, which is async, and making the page wait on N decodes before the

@@ -245,6 +245,46 @@ console.log('\nTHE FILTER NEVER BLANKS THE FEED');
   await page.close();
 }
 
+/* ══ THE SAME HIDE NEVER APPEARS TWICE ═══════════════════════════════════════════════════════
+   Founder, 2026-08-16: "je tombe souvent sur des doublons à la suite." It is a SERVER bug —
+   feed_page orders by `least(n_attempts,3), score desc, created_at desc` but paginates on
+   `created_at < p_before`, and the client sends the created_at of the page's last row. Under a
+   non-chronological sort that row is not the oldest, so rows the page above already showed come
+   straight back. Verified against the live database: page 2 returned 8 rows, 2 of them already
+   in page 1.
+   kfSeen() cannot catch those: it is written by activate(), so it only knows the slides that
+   were LOOKED at — and the duplicate arrives while its twin is still sitting unviewed a few
+   slides down, which is exactly why they land next to each other.
+   The seed here returns the same page for every call, which is that bug in its purest form. */
+console.log('\nA HIDE ALREADY ON SCREEN IS NEVER MOUNTED TWICE');
+{
+  const rows = Array.from({ length: 8 }, (_, i) => ({
+    id: 'dup' + i, img_path: 'p' + i + '.jpg', name: null, n_attempts: i, n_found: 0,
+    created_at: '2026-08-16T0' + i + ':00:00Z', lqip: null,
+  }));
+  const page = await open({ rows, best: [] });
+  /* Down to slide 6 — past the `i >= slides.length - 3` trigger, so load() runs again and the
+     page comes back identical, which is what the broken cursor does on a real device. */
+  await page.evaluate(() => { const s = document.querySelector('.kfScroll'); s.scrollTop = s.clientHeight * 6; });
+  await page.waitForTimeout(1200);
+  const r = await page.evaluate(() => {
+    const ids = [...document.querySelectorAll('.kfSlide .kfPrev')].map(i => i.src.split('/').pop());
+    return {
+      n: document.querySelectorAll('.kfSlide').length,
+      uniq: new Set(ids).size,
+      ids,
+      blocked: (window.__tr || []).filter(t => t[0] === 'feed_dupe_blocked'),
+    };
+  });
+  r.n === r.uniq
+    ? ok(`every slide on screen is a different hide (${r.n} slides, ${r.uniq} distinct)`)
+    : bad(`the feed mounted the same hide twice: ${r.ids.join(',')}`);
+  r.blocked.length >= 1
+    ? ok(`and the re-served rows are counted, not silently absorbed (${JSON.stringify(r.blocked[0][1])})`)
+    : bad('feed_dupe_blocked never fired — the duplicate page was not even detected');
+  await page.close();
+}
+
 await browser.close();
 server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed quality pass behaves');
