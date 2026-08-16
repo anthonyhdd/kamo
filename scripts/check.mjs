@@ -1246,6 +1246,20 @@ try {
   bad('THE FRAMING IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 13a-bis. The crop the user drags ----------------------------------------------------
+   Filling the board with a picked photo spends a third of its width, and which third is now the
+   user's choice — dragged on the live <img> under a CSS transform, painted by coverInto()
+   sampling a source rect. Two machines, one state, nothing forcing them to agree; when they
+   stop agreeing the picture jumps at the shutter and photoFrame reads correct in both. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-reframe-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-reframe-dom.mjs', 'REFRAME TEST', out)
+    : ok('the crop the user drags is the crop that gets painted (node scripts/test-reframe-dom.mjs)');
+} catch (e) {
+  bad('THE PHOTO CROP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 13b. The clock the session clip runs on --------------------------------------------
    The Instagram share is the round played back at its real length, and every way of getting
    that wrong still produces a video: marks offset from frames, a stroke held for zero
