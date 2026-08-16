@@ -151,13 +151,19 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
   });
   second ? ok('the new round mounts in the slide that was scrolled to') : bad('the round did not follow the scroll');
 
-  /* THE ANSWER IS NEVER ASKED FOR. feed_page is a listing call and must carry nothing but a
-     cursor — a page that asked the server for cx/cy would put the solution in the response
-     of every slide before a single tap. */
-  const args = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').map(c => Object.keys(c[1]).sort().join(',')));
-  args.length && args.every(a => a === 'p_before,p_limit')
-    ? ok('feed_page is called with a cursor and nothing else')
-    : bad('feed_page called with ' + JSON.stringify(args));
+  /* THE ANSWER IS NEVER ASKED FOR. feed_page is a listing call: a page that asked the server
+     for cx/cy would put the solution in the response of every slide before a single tap.
+     ASSERTED AS AN ALLOWLIST rather than as one exact key set, which is what it used to be.
+     That spelling passed only because this test device has no blocks and so never reached the
+     block-tags rung, and it broke the moment pagination moved to p_offset — a listing argument
+     failing a test about not leaking the answer. What matters is the SHAPE of what may be sent:
+     a window (p_before, p_offset, p_limit) and a block list, and nothing else ever. */
+  const LISTING_ARGS = new Set(['p_before', 'p_limit', 'p_offset', 'p_block_tags']);
+  const args = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').map(c => Object.keys(c[1]).sort()));
+  const leaked = args.flat().filter(k => !LISTING_ARGS.has(k));
+  args.length && !leaked.length
+    ? ok('feed_page asks for a window and a block list — never for the answer')
+    : bad('feed_page carried a non-listing argument: ' + JSON.stringify([...new Set(leaked)]));
 
   await page.close();
 }
