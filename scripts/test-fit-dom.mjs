@@ -54,7 +54,11 @@ const html = real.slice(0, at)
   + 'const g=c.getContext("2d");g.fillStyle="#ff0000";g.fillRect(0,0,w,h);'
   + 'const u=c.toDataURL("image/png");'
   + 'await new Promise((res,rej)=>{photo.onload=res;photo.onerror=rej;photo.src=u;});'
-  + 'bgKind="photo";syncPreviewFit();return photo.style.objectFit;},'
+  /* COMPUTED, not the inline property. The un-dragged photo deliberately carries NO inline
+     framing — applyPhotoFrame() clears it so the stylesheet's own object-fit:cover is what
+     renders, exactly as it did before any of this existed — so reading .style.objectFit asks
+     "who wrote it last" when the question is "what does the user see". */
+  + 'bgKind="photo";syncPreviewFit();return getComputedStyle(photo).objectFit;},'
   /* The board canvas, at the aspect the phone actually hands coverInto — NOT the stage's, which
      is what usesFitFrame() falls back to. Passing it through is the whole reason the predicate
      takes a ratio. */
