@@ -12830,8 +12830,16 @@ function kfLooksBlack(lqip){
             const y=(d[i]*299+d[i+1]*587+d[i+2]*114)/1000;
             sum+=y; if(y<min) min=y; if(y>max) max=y;
           }
-          const mean=sum/(d.length/4);
-          res(mean<KF_DARK_MEAN && (max-min)<KF_DARK_SPREAD);
+          const mean=sum/(d.length/4), spread=max-min;
+          /* THE VERDICT CARRIES ITS EVIDENCE. Resolving a bare boolean made this filter
+             unauditable: `feed_black_dropped` fired 1160 times on the day it shipped with no
+             property on it, so nothing anywhere could answer the only question that matters —
+             whether those were rectangles or somebody's photograph. An object is still falsy-
+             free at the call sites (they test the value, not its shape), and it costs one
+             allocation per placeholder. */
+          res(mean<KF_DARK_MEAN && spread<KF_DARK_SPREAD
+              ? {mean:Math.round(mean),spread:Math.round(spread)}
+              : false);
         }catch(e){ res(false); }   /* unreadable placeholder: serve the hide, never guess */
       };
       im.src=lqip;
@@ -13645,15 +13653,27 @@ function chFeed(opts){
            thresholds are wrong, and that is a tuning problem rather than an outage.
            Waiting for all N decodes costs the first paint nothing — the slides are already
            mounted and playable by the time any of this resolves. */
-        Promise.all(keep.map(r=>kfLooksBlack(r.lqip).then(b=>!!b).catch(()=>false)))
+        Promise.all(keep.map(r=>kfLooksBlack(r.lqip).catch(()=>false)))
           .then(flags=>{
             if(kfState!==S) return;
-            const n=flags.filter(Boolean).length;
-            if(!n) return;
-            if(n===keep.length&&keep.length>1){ track("feed_black_all",{n:n}); return; }
+            const hits=flags.filter(Boolean);
+            if(!hits.length) return;
+            /* The whole-page alarm carries the darkest and the lightest verdict it was about
+               to act on: a page of true rectangles reads mean~0 spread~0 across the board,
+               and a page of real night photographs sits up against the thresholds. That
+               difference is the whole tuning question, and it is unanswerable from a count. */
+            if(hits.length===keep.length&&keep.length>1){
+              track("feed_black_all",{n:hits.length,
+                mean_max:Math.max(...hits.map(h=>h.mean)),
+                spread_max:Math.max(...hits.map(h=>h.spread))});
+              return;
+            }
             flags.forEach((black,j)=>{
               if(!black) return;
-              track("feed_black_dropped",{});
+              /* EVERY DROP SAYS HOW BLACK IT WAS. mean 0-2 / spread 0-1 is the #223 slab the
+                 reply bug published; anything creeping toward 17/9 is a photograph this
+                 filter should not have touched, and is the number that lowers the constants. */
+              track("feed_black_dropped",{mean:black.mean,spread:black.spread});
               try{ drop(keep[j].id); }catch(_){}
             });
           }).catch(()=>{});
