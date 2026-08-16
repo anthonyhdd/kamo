@@ -7207,6 +7207,15 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    `feed_send_tapped` is the intent, `feed_sent` the outcome, and the outcome carries `how`
    so the native sheet, the web sheet and the clipboard stay separable. */
 "feed_send_tapped","feed_sent","feed_profile_tapped",
+/* THE OWN-HIDE CARD'S SECOND MOVE, and it travels with this family because the only question
+   it can answer is a ratio against its neighbours: of the people who land on their own photo
+   from `See it live`, how many send it and how many go make another. `feed_send_tapped` is
+   the other half of that denominator and it is here, so both have to land on the same
+   Amplitude user or the split is unreadable. New name, so no shipped binary's allow-list
+   knows it — through the bridge it would be dropped in silence.
+   NOTE FOR THE NEXT EDITOR: backticks above, never double quotes — check.mjs reads these
+   names by regex over the whole literal and a name quoted in prose is parsed as an ENTRY. */
+"feed_own_new_tapped",
 /* THE NAME THIS DEVICE WAS GIVEN RATHER THAN CHOSE. Fires once per device, from the first
    publish, and it is the denominator for the question the assignment exists to answer: of the
    people handed a pseudonym, how many go and change it — `hide_signed` already reports the
@@ -11655,6 +11664,19 @@ function chSeek(hideId,opts){
      with a tap from a person who was not guessing. Judged locally against reveal_hide, which
      the round already fetches a second later to draw the reveal, so nothing new is exposed. */
   const REPLAY=!!opts.replay;
+  /* THE PHOTO IS THIS DEVICE'S OWN, and the ending card is a different card when it is.
+     NOT `REPLAY`, which is the near-miss that would have been wrong: replay is also every
+     second-lap slide (S.lap re-serves hides this device already spent), and those are
+     STRANGERS' hides — offering to challenge one back is exactly right there. chMine() is
+     the list of ids this device published, so it answers the question actually being asked.
+     REACHABLE ON ONE PATH ONLY, which is why a ten-id cap is enough: feed_page and the
+     second lap both skip chMine(), so the sole way your own photo appears under your thumb
+     is the seed behind "See it live" (see FIRST in chFeed) — a hide published seconds ago
+     and therefore at the head of that list.
+     FEED-SCOPED DELIBERATELY. A ?h= link round on your own hide is the same absurdity, but
+     it is also the measured web funnel that sells the app ("Get KAMO"), and nothing about
+     this change has been tested against it. */
+  const MINE=FEED&&chMine().indexOf(HID)>=0;
   /* ALIASED, because ending() takes a parameter called `opts` too and shadows this one.
      Reaching for the caller's callbacks in there under the name `opts` would silently read
      the ending's own {rehide, camoSrc} bag and do nothing. */
@@ -12907,8 +12929,19 @@ function chSeek(hideId,opts){
            knew who it was answering the whole time and declined to say so.
            The handle itself is attached below via textContent, never interpolated here — same
            rule as the seeker headline, and check.mjs asserts it. */
-        +(eopts.rehide?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
-        +(FEED?'<button class="chCta2" id="chSend">Send to a friend</button>':'')
+        /* NOT ON YOUR OWN PHOTO. "Challenge @tony back" printed the viewer's own handle and
+           offered to answer themselves; the reply it would file (chReplyTo=HID) names a hide
+           this device made, so the notification, the receipt and the "someone answered you"
+           line would all point home. There is no counterparty on this card. */
+        +((eopts.rehide&&!MINE)?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
+        /* AND IT TAKES THE PRIMARY SLOT THERE, because on your own hide it is the only control
+           left that does anything for the hide. A photo nobody was sent is a photo nobody
+           plays: this is the whole reason the screen exists after "See it live". */
+        +(FEED?'<button class="'+(MINE?'chCta':'chCta2')+'" id="chSend">Send to a friend</button>':'')
+        /* THE SECOND MOVE ON YOUR OWN HIDE — a new one, from the camera. Not chRehide(): that
+           path carries THIS photo into compose as a reply, and re-hiding in the picture you
+           just painted is the same self-referential loop by another name. */
+        +(MINE?'<button class="chCta2" id="chNew">Hide another one</button>':'')
         /* "NEXT HIDE ↑" IS GONE — founder's call, 2026-08-14. It was a button that named the
            gesture the screen is already built on: the feed is scroll-snap with
            scroll-snap-stop:always, so a swipe is the exit and always was. The button was a
@@ -12944,7 +12977,11 @@ function chSeek(hideId,opts){
         /* No underline here (founder, 2026-08-16): .chR's underline makes "Report this photo"
            read as the link it is on link rounds, but in the feed this sits alone under the
            card and the underline made it shout. Same class, quieter dress. */
-        +(FEED?'<button class="chR" id="chBlk" style="text-decoration:none">Don\'t show me this person</button>':'')
+        /* AND NEVER ON YOUR OWN: block_author() would tag the key this device publishes with
+           and store it in kfAddBlock(), so "you won't see their hides again" would be true and
+           would mean YOU — every later feed_page filtered against your own author key. A
+           destructive button, correctly wired, pointed at the person pressing it. */
+        +((FEED&&!MINE)?'<button class="chR" id="chBlk" style="text-decoration:none">Don\'t show me this person</button>':'')
         +'</div>';
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
@@ -13024,7 +13061,25 @@ function chSeek(hideId,opts){
         b.innerHTML=ok?"Copied — send it to a friend":"Couldn't copy";
         setTimeout(()=>{ if(b) b.innerHTML=original; },1800);
       };
-      if(eopts.rehide){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc);
+      /* OUT OF THE FEED AND ONTO THE CAMERA, which is a different exit from every other one
+         on this card. onClose is close(true) — the SILENT close, whose whole job is to leave
+         the camera alone because chRehide is already on its way into compose carrying a
+         photo. This button has no photo to protect: it wants the capture screen, which is
+         what the non-silent close() reaches (exitFinished + backToCompose, the pair that also
+         frees the round's retina canvases). Hence a second callback rather than a flag.
+         THE ARMED OFFER DIES WITH THE ROUND, same rule as chRehide: ending() schedules
+         pwFirstOffer("seek_end") 1500ms out and the camera is well inside that, so without
+         this the paywall lands over the compose screen of the next hide. */
+      if($$("chNew")) $$("chNew").onclick=()=>{
+        track("feed_own_new_tapped",TP({}));
+        try{ clearTimeout(ctl._pwT); }catch(_){}
+        try{ ctl.destroy(); }catch(_){}
+        if(OPT.onExit) OPT.onExit();
+      };
+      /* GUARDED NOW, because the button is not minted on your own hide (see the card above)
+         and $$() is a querySelector: an unguarded .onclick here would throw on null and take
+         every handler below it — the send, the report, the block — down with it. */
+      if(eopts.rehide&&$$("chReh")){ $$("chReh").onclick=()=>chRehide(eopts.camoSrc);
         /* AND THE PERSON IT ANSWERS, when this hide is signed. textContent, not innerHTML:
            the handle is typed by a stranger and this is the same rule the seeker headline
            follows — check.mjs asserts that one, and a second place doing it by hand is how
@@ -13751,6 +13806,10 @@ function chFeed(opts){
          somebody scrolling past. This is the one callback that fires for all of them. */
       onEnded:()=>{ S.answered=true; },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
+      /* "Hide another one", on your own hide only. The non-silent close is the point: it is
+         the exit that actually puts the camera back (see close()), which is what the button
+         promises. Nothing is in flight here, so there is no photo for the silence to protect. */
+      onExit:()=>close(),
       onReported:(id)=>drop(id),
       onBlocked:(id,stored)=>blockDrop(id,stored),
     });
