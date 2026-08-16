@@ -12388,7 +12388,10 @@ function chSeek(hideId,opts){
            feed serves, and there is no feed behind a hide somebody was personally sent — a
            block there would be a button that reads as if it did something and does not.
            Reporting stays on both, because that one is about the photo. */
-        +(FEED?'<button class="chR" id="chBlk">Don\'t show me this person</button>':'')
+        /* No underline here (founder, 2026-08-16): .chR's underline makes "Report this photo"
+           read as the link it is on link rounds, but in the feed this sits alone under the
+           card and the underline made it shout. Same class, quieter dress. */
+        +(FEED?'<button class="chR" id="chBlk" style="text-decoration:none">Don\'t show me this person</button>':'')
         +'</div>';
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
