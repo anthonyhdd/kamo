@@ -168,7 +168,11 @@ await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
 
 console.log('\nTHE STAGE GOES QUIET UNDERNEATH, AND WAKES ON CLOSE');
 {
-  await page.evaluate(() => window.__f.open('time'));
+  /* `char`, NOT `time`. This page has no prices, so it is a browser as far as the paywall is
+     concerned, and since 2026-08-16 an unasked-for source is refused there — `time` would
+     have left the sheet closed and this block would have gone on passing off the paywall the
+     previous one left open. `char` is a tap on a locked control, which still opens. */
+  await page.evaluate(() => window.__f.open('char'));
   const c = await page.evaluate(() => window.__f.chrome());
   Object.values(c).every((v) => v === 'hidden')
     ? ok('wordmark, Retake, Done, the hint and the share sheet are all hidden under the paywall')

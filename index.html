@@ -5313,6 +5313,14 @@ function pwRefused(src,force){
    offer and PW_FIRST_BEATS should lose "seek_end" first — it is one string. The number that
    justifies it is the other direction: paywall_viewed per new user, 6.8% -> ~100%, split by
    `first_beat`. */
+/* ⚠️ AND IN A BROWSER IT NO LONGER RUNS AT ALL — 2026-08-16, founder's report: "ça ouvre la
+   caméra et ça affiche le pwall alors que ça ne devrait même pas l'afficher en web vu que les
+   paiements ils ne passent jamais en web". He is describing this beat, on the exact screen it
+   costs the most: `seek_end` fires 1500ms after the ending card, "Challenge back" is one tap
+   away from there, and the reply's compose screen inherits whatever the dwell backstop was
+   still holding. The refusal lives in openPaywall() (see pwWebRefused) rather than in
+   PW_FIRST_BEATS, because the beats are not the problem — the surface is. Inside the wrapper
+   every word above still stands. */
 const PW_FIRST_KEY="kamo_pw_first";
 /* Whichever comes first. `dwell` is last on purpose — it is the only one that interrupts
    nothing, because it only ever runs when the user reached none of the other three. */
@@ -5343,6 +5351,12 @@ function pwFirstBlocked(){
        600ms. It was never the thing at risk of being covered. */
     if(mode==="paint" && !finished) return true;                    // painting a hide
     if(chLive) return true;                                         // hunting one
+    /* NOTHING TO OFFER ON THIS SURFACE. openPaywall() refuses in a browser, and the dwell
+       backstop is a TIMER: without this it would retry every PW_FIRST_RETRY_MS for the life
+       of the tab, against a wall, for 97% of KAMO. BLOCKED rather than refused, deliberately —
+       if a web checkout ever sets prices, pwWebOffer() goes false and the guarantee resumes on
+       the next tick with nothing to change here. */
+    if(pwWebOffer()) return true;
     if(shareSheetEl && (shareSheetEl.classList.contains("show")||shareSheetEl.classList.contains("peek")||shareSheetEl.classList.contains("ssMini"))) return true;
     if(confirmSheet && confirmSheet.classList.contains("show")) return true;
   }catch(e){}
@@ -5396,6 +5410,23 @@ const PW_LOCK_HINT={
      because a hint that quotes a stale clock is a promise the round will not keep. */
   time:  "No paint clock at all — tap for KAMO+",
 };
+/* AND THE SAME LOCKS, SAID TO SOMEBODY WHO CANNOT BUY. In a browser the sheet is refused
+   outright (see pwWebRefused), so this pill is the ONLY answer a locked control ever gets
+   there — and "tap to unlock" would be a promise the page cannot keep: there is no StoreKit
+   behind it, and there never has been. It names where the tool lives instead, and the tap
+   goes to the store.
+   `size` HAS A LINE HERE AND NOT ABOVE, and that is the same reasoning inverted: the bar
+   answers on itself when a sheet is coming, because the sheet is what explains it. Nothing
+   is coming here, so a pulse alone would be a control that flashes and never says why. */
+const PW_WEB_HINT={
+  plus:    "KAMO+ lives in the app — tap to get KAMO, free",
+  color:   "Every colour is in the app — tap to get KAMO, free",
+  size:    "The fine brush is in the app — tap to get KAMO, free",
+  time:    "The paint clock is off in the app — tap to get KAMO, free",
+  char:    "Every kamo is in the app — tap to get KAMO, free",
+  mark:    "The clean export is in the app — tap to get KAMO, free",
+};
+const PW_WEB_HINT_DEFAULT="That one is in the app — tap to get KAMO, free";
 /* THE LOCK ANSWERS ON THE CONTROL, NOT IN A SENTENCE. Past its cap, touching the size bar
    pulses the bar and its ✦ mint for 600ms and says nothing. The user gets an unmistakable
    "this is the locked one" on the thing under their thumb, with no text to truncate, no
@@ -5411,11 +5442,20 @@ function flashSizeLock(){
   flashSizeLock._t=setTimeout(()=>b.classList.remove("lockPulse"),700);
 }
 function showLockHint(src){
-  showHint(pwText(PW_LOCK_HINT[src])||"KAMO+ — tap to unlock",3600);
+  /* WHICH SENTENCE, AND WHERE THE TAP GOES, ARE ONE DECISION. Read once, here, because both
+     halves have to agree: a pill that says "tap to get KAMO" and then opens a sheet is a lie,
+     and a pill that says "tap to unlock" over a page with no store is a worse one.
+     THE TAP MUST NOT RE-ENTER openPaywall IN A BROWSER. It would bounce off the same refusal
+     that produced this pill and print it again — a button whose only effect is to redraw
+     itself, forever. pwWebInstall() is where that tap was always going to end up; this just
+     removes the screen in the middle that 99.4% of them abandoned. */
+  const web=pwWebOffer();
+  showHint(web ? (pwText(PW_WEB_HINT[src])||PW_WEB_HINT_DEFAULT)
+               : (pwText(PW_LOCK_HINT[src])||"KAMO+ — tap to unlock"),3600);
   hintEl.classList.add("tap");
   const clear=()=>{ hintEl.classList.remove("tap"); hintEl.onclick=null; };
   // force=true: they just asked for it, so the cap that produced this hint must not eat it.
-  hintEl.onclick=()=>{ clear(); showHint(""); openPaywall(src,true); };
+  hintEl.onclick=()=>{ clear(); showHint(""); if(web) pwWebInstall(); else openPaywall(src,true); };
   clearTimeout(showLockHint._t); showLockHint._t=setTimeout(clear,3600);
 }
 /* EVERY NUMBER HERE IS READ FROM THE THING IT DESCRIBES.
@@ -5532,8 +5572,56 @@ const pwText=(v)=>(typeof v==="function"?v():v);/* Snapshot the markup copy ONCE
    (pwGenericSub), so remembering what the markup said would just be a second, staler copy of
    a number that already has one home. */
 { const t=$("#pwTitle"); if(t) t.dataset.def=t.textContent; }
+/* ④ A BROWSER CANNOT SELL KAMO+, SO IT STOPS TRYING TO (2026-08-16, founder's call).
+   THE ARITHMETIC, 15-16 AUGUST. 6162 paywalls opened in a browser and produced 40 taps on
+   "Get KAMO — free": 0.6%. Over the same two days the seek card's own "Get KAMO" — a button,
+   on a screen, with nothing over it — produced 316, and "Challenge back" 1573. The sheet was
+   never the install surface it was built to be; it was standing on top of the two controls
+   that are.
+   THE RULE IS ABOUT WHO ASKED, not about which beat. `first` — 2755 of those 6162 — arrives
+   1500ms after a round ends and again off the dwell backstop, which is how it landed on the
+   compose screen of a reply the user was already making. On the full arm that screen also
+   loses its tools to .pwCover, so the answer to "Challenge back" was a photo, a sales sheet
+   and no brush. That one is refused outright and says nothing: the ending card underneath it
+   is already selling the app, better.
+   A FINGER ON A LOCKED CONTROL STILL GETS AN ANSWER, because a refusal that shows nothing is
+   a dead button — the failure this file already learned once, when the web CTA sat on
+   "Currently unavailable" forever. PW_USER_INITIATED is the line: those are requests, and a
+   request is answered with the sheet exactly as before (it is also the only door to the
+   creator pass — see bindPassHold on #pwRestore — which a blanket refusal would wall off in
+   the browser the founder actually tests in). Everything else gets the pill, which names
+   where the tool lives and goes to the store.
+   pwWebOffer() IS THE TEST AND IT ALREADY EXISTED: no bridge, so no StoreKit, AND no prices,
+   so the one web surface that could ever price — a future web checkout — takes all of this
+   back by setting them. Inside the wrapper nothing here changes. */
+/* PW_USER_INITIATED PLUS THE ONE TAP IT LEAVES OUT. That set governs BUDGETS — who is exempt
+   from the caps — and `home` (the upgrade row on the member card) is force:true, so it never
+   needed the exemption and is deliberately still counted as an interruption. It is a finger on
+   an upgrade button all the same, and this question is a different one: not "should this skip a
+   cap" but "did somebody ask". Kept as its own set so widening one can never quietly widen the
+   other. */
+const PW_WEB_ASKED=new Set([...PW_USER_INITIATED,"home"]);
+function pwWebRefused(src,force){
+  if(PW_WEB_ASKED.has(src)) return false;
+  /* NOTHING AT ALL FOR THE UNINVITED OFFER — no sheet, no pill, no event. It is the only
+     source with no control behind it, so there is nothing to explain and nobody waiting for
+     an answer, and its removal is already measured exactly by `paywall_viewed source=first`
+     going to zero in the browser. A second event counting the same 2755 impressions a day
+     would only pay for them again. */
+  if(src==="first") return true;
+  /* THE PILL DOES GET ONE, because this is a new offer rather than a deletion: it is the whole
+     web ask now, and `paywall_install_tapped` on the other side of it means nothing without a
+     denominator. Safe as a new NAME for the same reason pwWebInstall's is — this branch cannot
+     run inside the wrapper, so the WEB_EVENTS allow-list never sees it. */
+  showLockHint(src);
+  track("paywall_web_hinted",{source:src,forced:!!force});
+  return true;
+}
 function openPaywall(source,force){
   const src=source||"generic", cap=PW_CAP[src], used=pwSourceOpens[src]||0;
+  /* FIRST, ahead of every budget — including PW_HARD_CAP. Those constants argue about how
+     often to ask someone who can say yes; this one is about a page where yes does not exist. */
+  if(pwWebOffer() && pwWebRefused(src,force)) return;
   /* ② THE ONE CEILING `force` CANNOT CROSS, and it is placed first for that reason. Every
      budget below this line exempts user-initiated opens, which is precisely how a launch
      reaches eleven paywalls: the caps were never the thing letting the tail through. The
