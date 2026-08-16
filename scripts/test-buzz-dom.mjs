@@ -141,7 +141,7 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
     : bad('no snap, src=' + src);
   /* The loss names its clock now, like the win does. The reveal line moved to the subtitle. */
   /^Lost in \d+\.\d+s$/.test(await txt(page, 'chHead')) ? ok('one miss ends the round, on the clock') : bad('head after miss: ' + await txt(page, 'chHead'));
-  (await txt(page, 'chSub')) === 'They were right there.' ? ok('and the reveal line carries under it') : bad('sub after miss: ' + await txt(page, 'chSub'));
+  (await txt(page, 'chSub')) === 'The kamo was right there.' ? ok('and the reveal line carries under it') : bad('sub after miss: ' + await txt(page, 'chSub'));
   const reh = await page.evaluate(() => { const e = document.getElementById('chReh'); return e ? e.textContent : null; });
   /* NAMES THE SENDER WHEN THE HIDE IS SIGNED, bare when it is not — and the assertion has to
      allow both or it pins whichever fixture this file happens to load. The "to @x" half is the
