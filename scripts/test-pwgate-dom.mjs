@@ -197,37 +197,57 @@ console.log('\n③ IN A BROWSER NOTHING ARRIVES ON ITS OWN');
   try { await page.close(); } catch {}
 }
 {
-  /* ✦ IS THE ONE DOOR THAT STAYS OPEN, and it is not sentiment: it is the only way into the
-     creator pass (bindPassHold on #pwRestore), which is how the founder unlocks KAMO+ on the
-     surface he actually tests on. Somebody who taps it asked for the offer by name, so it
-     still opens — and everything that made it safe on the web is asserted here unchanged. */
+  /* ✦ IS NOT AN EXCEPTION EITHER (founder, 2026-08-16). It was, for one version of this file:
+     a tap on a KAMO+ control opened the sheet on the argument that a request deserves the
+     screen it asked for. `plus` ran 937 impressions over 15-16 August inside a population that
+     produced 40 install taps in total, so what it deserves is an answer, not a sales screen
+     with nothing behind it. */
   const { page, sent } = await boot();
   await page.route('**/onelink.me/**', r => r.abort());
   await page.route('**/apps.apple.com/**', r => r.abort());
   await page.waitForTimeout(DWELL_MS + 900);
   await page.evaluate(() => window.__pw('plus'));
   await page.waitForTimeout(200);
-  const opened = await page.evaluate(() => document.getElementById('paywall').classList.contains('show'));
-  opened
-    ? ok('a tap on ✦ still opens the sheet in a browser')
-    : bad('✦ no longer opens the paywall in a browser — the creator pass is unreachable on the web');
-  const cta = await page.evaluate(() => {
-    const b = document.getElementById('pwBuy');
-    return { label: (b.textContent || '').trim(), disabled: !!b.disabled };
+  const asked = await page.evaluate(() => ({
+    shown: document.getElementById('paywall').classList.contains('show'),
+    pill: (document.getElementById('hint').textContent || '').trim(),
+  }));
+  !asked.shown && /in the app/i.test(asked.pill)
+    ? ok(`✦ answers without a sheet ("${asked.pill}")`)
+    : bad(`✦ produced shown:${asked.shown} pill:${JSON.stringify(asked.pill)} — the browser still gets a paywall it cannot buy from`);
+  /* THE PASS DOOR MOVED WITH THE SHEET. Its only entrance was a 1.2s hold on the paywall's
+     Restore, which a browser can no longer open — so a creator handed a code would have had no
+     way to enter it outside the app. The phrase itself is not typed here (that is
+     test-pass-dom's job, and it needs the live one): what must never regress is that the hold
+     still RAISES the field, on a control the web can actually see.
+     BEFORE THE BUY TAP BELOW, deliberately — that one hands the document to a navigation this
+     test aborts, and anything reading the DOM after it is reading a page on its way out.
+     EVENTS DISPATCHED ON THE ELEMENT rather than driven by page.mouse: the ✦ lives on the
+     COMPOSE screen and this page is still on the hero, where it is display:none and a real
+     cursor would land on whatever is underneath. bindPassHold listens on the button itself, so
+     this is its own contract — and the alternative, walking a headless browser into compose
+     through a camera it does not have, would test the harness. */
+  await page.evaluate(() => {
+    const b = document.getElementById('btnPlus');
+    b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 30, clientY: 60 }));
   });
-  !cta.disabled && /get kamo/i.test(cta.label)
-    ? ok(`the web CTA is live and offers the app ("${cta.label}")`)
-    : bad(`the web CTA reads ${JSON.stringify(cta.label)}${cta.disabled ? ' and is disabled' : ''} — a browser paywall that cannot be acted on`);
-  /* THE TAP AND THE VERDICT IN ONE EVALUATE, and that is not a shortcut. Both branches of
-     the handler are synchronous — pwWebInstall assigns location.href, pwPurchase would call
-     setPro(true) — so the ✦ is already hidden by the time this returns if the membership was
-     given away. Reading it in a SECOND evaluate raced the navigation the tap just started
-     and died on a destroyed context about half the time. */
-  /* SPIED ON window.KAMO.setPro RATHER THAN ON THE ✦, because the ✦ is hidden on the hero
-     screen for reasons that have nothing to do with membership — that version of this
-     assertion failed at random depending on which screen the offer opened over. pwPurchase's
-     browser branch reaches the grant through `window.KAMO`, so the wrapper below is on the
-     exact path it would take. */
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => {
+    document.getElementById('btnPlus').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  });
+  await page.waitForTimeout(250);
+  await page.evaluate(() => !!document.getElementById('ffIn'))
+    ? ok('and holding ✦ still raises the creator-pass field, which is now its only door on the web')
+    : bad('holding ✦ raises nothing — the creator pass is unreachable outside the app');
+  await page.evaluate(() => { const c = document.getElementById('ffNo'); if (c) c.click(); });
+  /* THE MEMBERSHIP IS STILL UNSELLABLE, and this outlives the refusal above: the sheet is
+     still reachable in a browser through the creator pass, and pwPurchase's non-wrapper branch
+     is `window.KAMO.setPro(true)` — a grant for nothing. #pwBuy is clicked directly rather
+     than through the sheet for that reason; the handler is what is under test.
+     SPIED ON window.KAMO.setPro rather than on the ✦: pwPurchase's browser branch reaches the
+     grant through `window.KAMO`, so this wrapper sits on the exact path it would take. Both
+     branches are synchronous, so one evaluate is enough — and reading it in a second one
+     raced the navigation the tap starts and died on a destroyed context. */
   const gaveItAway = await page.evaluate(() => {
     let granted = false;
     const real = window.KAMO.setPro;
@@ -239,9 +259,6 @@ console.log('\n③ IN A BROWSER NOTHING ARRIVES ON ITS OWN');
     ? bad('the tap granted KAMO+ to a web visitor — window.KAMO.setPro(true) is reachable again')
     : ok('the membership is still unsold');
   await page.waitForTimeout(500);
-  count(sent, 'paywall_install_tapped') === 1
-    ? ok('tapping it is measured as an install tap')
-    : bad(`the install tap produced ${count(sent, 'paywall_install_tapped')} events — the biggest install surface in the app is unattributed`);
   count(sent, 'purchase_initiated') === 0
     ? ok('and it never reaches the purchase path')
     : bad('the web CTA fell through to pwPurchase() — that branch grants KAMO+ for nothing');
@@ -250,7 +267,10 @@ console.log('\n③ IN A BROWSER NOTHING ARRIVES ON ITS OWN');
 
 console.log('\n② THE TAIL STOPS, AND IT STOPS USER-INITIATED OPENS TOO');
 {
-  const { page, sent } = await boot();
+  /* PRICED, like ①: the cap governs a screen that opens, and in a browser none of these taps
+     produces one at all now (③). Asserting it there would read as "the cap is holding" on a
+     page where nothing was ever asked. */
+  const { page, sent } = await boot(null, true);
   /* Twelve real taps on ✦. It passes no force flag but is user-initiated, so it skips every
      budget already in the file — which is how a launch reached eleven paywalls. */
   for (let i = 0; i < 12; i++) {
