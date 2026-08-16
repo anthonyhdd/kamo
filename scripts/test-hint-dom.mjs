@@ -167,7 +167,16 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
       : bad('the zone is not a child of #chFrame — it will not follow a pinch');
   }
   const b2 = await btn(p);
-  b2 && b2.disabled ? ok('the button locks after the zone is shown') : bad(`button after use: ${JSON.stringify(b2)}`);
+  /* THE INVARIANT IS "NO SECOND HINT ON THIS HIDE", not "the control is disabled" — which is
+     how it was spelled, and it broke the moment the spent button was given a job (PR #295).
+     With balance left it still reads "N left" and still locks. At zero it becomes "Get 5 more",
+     enabled, wired to the purchase door: the only previous route to the pack was to leave the
+     hide, open another and learn there that the wallet was empty, which App Review would never
+     find. Neither state can draw a second zone here, and that is what this has always guarded. */
+  const spent = b2 && (b2.disabled || /Get \d+ more/.test(b2.text || ''));
+  spent
+    ? ok(`the zone cannot be bought twice on this hide (${JSON.stringify(b2.text)})`)
+    : bad(`button after use: ${JSON.stringify(b2)}`);
   await p.close();
 }
 
