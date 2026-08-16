@@ -39,8 +39,8 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
  * Run the handler in one simulated environment.
  * `share` describes what navigator.share does: 'ok' | 'abort' | 'throw' | null (absent).
  */
-async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40, slotId = 'dddddddddddddddd', replyTo = '', replyName = '' }) {
-  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0, sheetClosed: 0, hints: [] };
+async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', settings = {}, handle = '', score = 40, slotId = 'dddddddddddddddd', replyTo = '', replyName = '', replyFromFeed = false }) {
+  const calls = { native: 0, webShare: 0, clipboard: 0, events: [], text: null, markedSent: 0, waited: 0, sheetClosed: 0, hints: [], feedOpened: 0, feedOpts: null, timers: [] };
   /* classList and textContent are real here because the reply path is the one send whose ONLY
      visible result is on this button — no sheet opens and no screen moves, so the label and
      the state classes are the whole of the feedback. */
@@ -58,6 +58,14 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
        its own case at the bottom rather than a flag threaded through these. */
     chReplyTo: replyTo,
     chReplyName: replyName,
+    /* Where the reply was born. A parameter rather than a closure constant because the
+       handler ASSIGNS to it (it clears the flag when it schedules the return), same rule as
+       chInviteNudged below. */
+    chReplyFromFeed: replyFromFeed,
+    /* The return-to-feed pair. kfState null = the feed is not already open, which is the
+       only state a reply send can be in — chRehide closed it on the way into compose. */
+    kfState: null,
+    chFeed: (o) => { calls.feedOpened++; calls.feedOpts = o || null; },
     /* The handler reads chId directly now (the reply branch stamps without waiting when the
        publish already landed), so the sandbox has to carry it the way the module does. */
     chId,
@@ -97,7 +105,10 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
     getHandle: () => handle,
     showHint: (t) => { calls.hints.push(t); },
     $: (sel) => (sel === '#ssInvite' ? btn : null),
-    setTimeout: () => 0,
+    /* Recorded, never fired: the cases above depend on the nudge-restore timer staying
+       inert, and the reply-return cases below flush the queue by hand — which is also what
+       lets them assert the ORDER (receipt first, feed after the beat). */
+    setTimeout: (fn, ms) => { calls.timers.push({ fn, ms }); return 0; },
     navigator: {
       share: share
         ? async (payload) => {
@@ -447,6 +458,33 @@ console.log('\nTHE WEB SHARE STOPS LOSING THE RACE TO create_hide');
     ? ok(`and the button says who it went to ("${r.btn.textContent}")`)
     : bad(`the button reads ${JSON.stringify(r.btn.textContent)} — a silent send on a screen `
         + 'that does not move reads as a button that did nothing');
+}
+
+/* THE DETOUR ENDS WHERE IT STARTED. A reply born on a FEED round brings the feed back by
+   itself after the receipt (founder, 2026-08-16: "quand on clique challenge back après avoir
+   fait son dessin ça devrait ramener vers le feed") — and a LINK-born reply must not: that
+   sender is a stranger in a browser with no browsing session behind them. Both halves
+   asserted, because either alone would pass a handler that always returns or never does. */
+{
+  const r = await run({ nativeInvite: true, share: 'ok', replyTo: 'hide-42', replyName: 'tony', replyFromFeed: true });
+  r.calls.feedOpened === 0
+    ? ok('the feed does not interrupt the receipt — the return rides a timer, not the tap')
+    : bad('chFeed() ran synchronously on the send tap, over the receipt the user is reading');
+  for (const t of r.calls.timers) { try { await t.fn(); } catch { /* a timer must not throw */ } }
+  r.calls.feedOpened === 1 && r.calls.sheetClosed >= 1
+    ? ok('a feed-born reply closes the sheet and reopens the feed once the receipt has landed')
+    : bad(`after the beat: feedOpened=${r.calls.feedOpened} sheetClosed=${r.calls.sheetClosed}`);
+  r.calls.feedOpts && r.calls.feedOpts.fromReveal
+    ? ok('and it opens fromReveal, so the feed\'s ✕ tears the spent reveal down')
+    : bad(`chFeed opts were ${JSON.stringify(r.calls.feedOpts)} — without fromReveal the ✕ `
+        + 'uncovers a finished reveal instead of the camera');
+}
+{
+  const r = await run({ nativeInvite: true, share: 'ok', replyTo: 'hide-42', replyName: 'tony' });
+  for (const t of r.calls.timers) { try { await t.fn(); } catch { /* a timer must not throw */ } }
+  r.calls.feedOpened === 0
+    ? ok('a link-born reply stays on its receipt — no feed is pushed at a browser visitor')
+    : bad('a reply with chReplyFromFeed=false still opened the feed');
 }
 
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ share paths behave');
