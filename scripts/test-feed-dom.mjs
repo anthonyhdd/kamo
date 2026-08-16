@@ -65,6 +65,14 @@ html = stub(html, 'async function chRpcRows(fn,body){');
    first slide activates before anything appended to the module could run. */
 html = html.replace('function track(event,props){',
   'function track(event,props){window.__tr=window.__tr||[];window.__tr.push([event,props]);');
+/* THE ONE ENTRY POINT THAT HAS NO BUTTON. The page is a <script type="module">, so nothing
+   declared in it lands on window — and chFeed({first}) is reached in the app only from the
+   post-send offer, at the far end of a capture, a paint, an upload and a share sheet. Driving
+   all of that to assert one pill is a test about the wrong thing. The alias is written BEFORE
+   the declaration on purpose: function declarations hoist, so this runs at module evaluation
+   rather than on the first call, which is exactly when the alias is needed. */
+html = html.replace('function chFeed(opts){',
+  'window.__chFeed=(o)=>chFeed(o);\nfunction chFeed(opts){');
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.css': 'text/css' };
 const server = createServer((rq, rs) => {
@@ -321,6 +329,43 @@ console.log('\nTHE ROUND ENDS ON TWO CONTROLS, AND THE SWIPE IS THE WAY OUT');
   afterScroll.hint === false ? ok('and it dies on the scroll — the moment it stops being true') : bad('the hint outlived the swipe it describes');
   afterScroll.rounds === 1 ? ok('and the swipe still advances the feed (1 round alive)') : bad(`after the swipe there are ${afterScroll.rounds} rounds`);
 
+  /* AND IT IS SPENT FOR GOOD, NOT MERELY FOR THIS SESSION. Founder, 2026-08-16: "pas besoin
+     de le montrer à chaque session non ? une fois ça suffit pour comprendre". The scroll is
+     the only event that proves the sentence was understood, so it is the only one that
+     writes the flag — see KF_SWIPED_KEY. */
+  const learned = await page.evaluate(() => localStorage.getItem('kamo_feed_swiped'));
+  learned === '1'
+    ? ok('and the scroll is remembered, so the gesture is taught once and not every session')
+    : bad(`the scroll did not latch the hint: kamo_feed_swiped=${JSON.stringify(learned)}`);
+
+  await page.close();
+}
+
+console.log('\nAND A PLAYER WHO HAS SWIPED IS NOT TAUGHT THE SWIPE AGAIN');
+{
+  const seed = p => p.addInitScript(() => localStorage.setItem('kamo_feed_swiped', '1'));
+  const page = await open(ROWS(3), null, seed);
+  const again = await page.evaluate(() => !!document.getElementById('kfHint'));
+  !again
+    ? ok('the feed opens on the photograph, with no instruction floating over it')
+    : bad('the hint came back for a device that has already scrolled the feed');
+
+  /* THE ONE VARIANT THAT SURVIVES IT. "That's yours" is not a lesson about swiping — it is
+     the only thing on screen explaining why the round under the thumb cannot be played, and
+     that is news every time it happens however many hides this player has swiped past. */
+  /* Closed through its own ✕ rather than by ripping #kfeed out of the DOM: kfState survives a
+     bare remove(), and the next chFeed() would bail as "already open". */
+  await page.evaluate(() => document.getElementById('kfClose').click());
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__chFeed({ first: 'hide0' }));
+  await page.waitForTimeout(1200);
+  const label = await page.evaluate(() => {
+    const h = document.getElementById('kfHint');
+    return h ? h.textContent : null;
+  });
+  label && /That's yours/.test(label)
+    ? ok('but the own-hide label still shows — it is a label, not the instruction')
+    : bad(`the "That's yours" label was suppressed with the hint: ${JSON.stringify(label)}`);
   await page.close();
 }
 
