@@ -19,6 +19,14 @@
  *     to do with them. Asserted by taking a new photo after a reply and checking the state is
  *     empty again.
  *
+ *  3. THE ANSWER SCREEN IS SOLD TO INSTEAD OF PAINTED ON. Reported by the founder on
+ *     2026-08-16, from the browser his own share link lands in: "Challenge back" reaches
+ *     compose in well under the 1500ms the seek ending card schedules pwFirstOffer at, so the
+ *     paywall arrived on top of the reply he had just started making — on a page where a
+ *     purchase has never once been possible. Asserted on the real path, past the dwell
+ *     backstop, because the round's own timer was already cleared by chRehide and the bug came
+ *     back through the other one.
+ *
  * The unsigned case is not an edge case — 117 of 3191 hides carry a name, so the anonymous
  * label is what most people will actually see, and it gets its own assertion.
  *
@@ -48,7 +56,11 @@ const anchor = 'async function chRpc(fn,body){';
 if (!real.includes(anchor)) throw new Error('anchor missing: ' + anchor);
 const html = real.replace(anchor, anchor +
   'window.__rpc=window.__rpc||[];window.__rpc.push([fn,body]);' +
-  'if(window.__seed&&Object.prototype.hasOwnProperty.call(window.__seed,fn)) return window.__seed[fn];');
+  'if(window.__seed&&Object.prototype.hasOwnProperty.call(window.__seed,fn)) return window.__seed[fn];')
+  /* 45 seconds is the right number for a user and an absurd one for a suite. Shortened rather
+     than stubbed: what block 3 asserts is that the REAL backstop, on its real path, no longer
+     lands on the answer screen. */
+  .replace('const PW_FIRST_DWELL_MS=45000;', 'const PW_FIRST_DWELL_MS=800;');
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.css': 'text/css' };
 const server = createServer((rq, rs) => {
@@ -73,8 +85,14 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
 /* Open a challenge, give up, take the "Send one back" exit. Giving up rather than buzzing:
    both endings mount the same card and a miss needs a real pointer gesture on a real image,
    which is the seeker's own test's job, not this one's. */
+const SHOT = readFileSync(join(ROOT, 'shot.jpg'));
 async function openHide(name, extra) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  /* THE HIDE'S PHOTO, ANSWERED THE WAY STORAGE ANSWERS IT — 200, image/jpeg, ACAO:*. Without
+     this the container's blocked egress is what decides whether chRehide reaches compose at
+     all, and block 3 needs the screen it is asserting about to exist. */
+  await page.route('**/storage/v1/object/public/hides/**', r =>
+    r.fulfill({ status: 200, contentType: 'image/jpeg', body: SHOT, headers: { 'access-control-allow-origin': '*' } }));
   await page.addInitScript((a) => {
     const [n, x] = a;
     window.__seed = {
@@ -266,6 +284,39 @@ console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
     ? ok('a miss that hit nothing still reads as a miss')
     : bad('plain miss reads ' + JSON.stringify(head));
   await plain.close();
+}
+
+console.log('\nAND NOBODY IS SOLD TO WHILE THEY ARE MAKING IT');
+{
+  /* THE FOUNDER'S 2026-08-16 REPORT, ON HIS OWN PATH. A challenge link in a browser is 63% of
+     this product's traffic and 0% of its purchasable surface: no bridge, no StoreKit, no price
+     — every paywall a web visitor ever saw was a sales screen with nothing behind it.
+     THREE SCREENS, IN THE ORDER HE MET THEM. The ending card (where `seek_end` fires 1500ms
+     out), then the compose screen of the reply, then the same screen past the dwell backstop —
+     which is the one that came back after chRehide cleared the round's own timer.
+     THE TOOLS ARE PART OF THE ASSERTION, not decoration: on the full arm openPaywall() stamps
+     .pwCover, and that rule hides #shutterWrap and the whole tool row by visibility. The bug
+     was not "a sheet appeared", it was "the answer to Challenge back was a photo you could not
+     paint". */
+  const page = await replyFrom('tony');
+  const early = await page.evaluate(() => document.getElementById('paywall').classList.contains('show'));
+  await page.waitForTimeout(2600);   // past the shortened dwell and its first retry
+  const st = await page.evaluate(() => ({
+    paywall: document.getElementById('paywall').classList.contains('show'),
+    cover: document.getElementById('stage').classList.contains('pwCover'),
+    shutter: getComputedStyle(document.getElementById('shutterWrap')).visibility,
+    /* The reply is composed on the answered photo — the camera is never opened here, and a
+       regression that reached for it would ask a browser for permission it was never given. */
+    camera: getComputedStyle(document.getElementById('cam')).display,
+    loaded: document.getElementById('photo').naturalWidth > 0,
+  }));
+  !early && !st.paywall && !st.cover
+    ? ok('the answer screen is left alone — no paywall on a page that cannot sell')
+    : bad(`a paywall reached the reply screen (on arrival: ${early}, after the dwell: ${st.paywall}, cover: ${st.cover})`);
+  st.shutter !== 'hidden' && st.loaded && st.camera === 'none'
+    ? ok('and it is the answered photo with its tools, not the camera')
+    : bad(`the reply screen reads shutter:${st.shutter} photo-loaded:${st.loaded} camera:${st.camera}`);
+  await page.close();
 }
 
 await browser.close(); server.close();
