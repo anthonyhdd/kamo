@@ -12819,6 +12819,22 @@ function kfLooksBlack(lqip){
     }catch(e){ res(false); }
   });
 }
+/* ══ THE SWIPE IS LEARNED ONCE, NOT ONCE PER SESSION ═════════════════════════════════════════
+   "Swipe up for the next hide ↑" is an instruction, and an instruction that keeps arriving
+   after it has been obeyed stops being help and becomes decoration — it re-teaches a gesture
+   the player demonstrated they already own, on the one screen where the photograph is supposed
+   to be the only thing in the frame. Founder, 2026-08-16: "pas besoin de le montrer à chaque
+   session non ? une fois ça suffit pour comprendre".
+   LATCHED ON THE SCROLL AND ON NOTHING ELSE, which is the same discipline killHint() already
+   follows within a session: the scroll is the only event that PROVES the sentence was
+   understood. Opening the feed does not count, and neither does opening the My-kamos or
+   Challenges panel — both call killHint() to get the pill out from under a sheet, which says
+   nothing about whether the gesture landed.
+   The "That's yours" variant is exempt where it is built: that one is a LABEL explaining why
+   the round under the thumb cannot be played, not a lesson about swiping. */
+const KF_SWIPED_KEY="kamo_feed_swiped";
+function kfSwiped(){ try{ return localStorage.getItem(KF_SWIPED_KEY)==="1"; }catch(e){ return false; } }
+function kfMarkSwiped(){ try{ localStorage.setItem(KF_SWIPED_KEY,"1"); }catch(e){} }
 const KF_SEEN_KEY="kamo_feed_seen";
 function kfSeen(){ try{ const a=JSON.parse(localStorage.getItem(KF_SEEN_KEY)||"[]"); return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }catch(e){ return []; } }
 function kfMarkSeen(id){
@@ -13658,6 +13674,9 @@ function chFeed(opts){
   S.killHint=killHint;
   scroll.addEventListener("scroll",()=>{
     if(S.hinted) return;
+    /* THE ONE EVENT THAT PROVES THE SENTENCE WAS UNDERSTOOD — so it is the only one that
+       spends the hint permanently. See KF_SWIPED_KEY. */
+    kfMarkSwiped();
     killHint();
   },{passive:true});
 
@@ -14096,12 +14115,16 @@ function chFeed(opts){
       return;
     }
     midOff();
-    if(!S.hinted&&!root.querySelector("#kfHint")){
+    /* THE HINT IS ALSO THE LABEL when the first slide is the player's own hide. Without it
+       they meet a round they cannot play — the replay flag stops the tap counting, which is
+       correct and looks broken — and they have no reason to swipe. One sentence does both
+       jobs: names whose photo it is, and says what comes next.
+       WHICH IS WHY `FIRST` OUTRANKS kfSwiped(). The bare instruction is spent the first time
+       somebody scrolls and never returns (see KF_SWIPED_KEY) — but this variant is not the
+       instruction, it is the only thing on screen saying why THIS round is unplayable, and
+       that is news every time it happens no matter how many hides you have swiped. */
+    if(!S.hinted&&!root.querySelector("#kfHint")&&(FIRST||!kfSwiped())){
       const h=document.createElement("div"); h.className="kfHint"; h.id="kfHint";
-      /* THE HINT IS ALSO THE LABEL when the first slide is the player's own hide. Without it
-         they meet a round they cannot play — the replay flag stops the tap counting, which is
-         correct and looks broken — and they have no reason to swipe. One sentence does both
-         jobs: names whose photo it is, and says what comes next. */
       h.textContent=FIRST ? "That's yours — scroll to see other players' challenges ↑"
                           : "Swipe up for the next hide ↑";
       root.appendChild(h);
