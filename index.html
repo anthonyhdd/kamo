@@ -12356,9 +12356,17 @@ function chSeek(hideId,opts){
       if(!r){ hintBtn.disabled=false; return; }            // network blip: let them try again
       if(r.region){
         drawHintZone(r.region);
-        hintBtn.textContent = r.balance>0 ? (r.balance+" left") : "Hint used";
-        hintBtn.disabled=true;
         track("hint_used",TP({via:r.used,balance:r.balance|0}));
+        /* SPENT THE LAST ONE — SO THE BUTTON BECOMES THE OFFER, RIGHT HERE.
+           It used to read "Hint used" and go dead, which meant the only route to the pack was
+           to leave this hide, open ANOTHER one, tap Hint, and discover on the round trip that
+           the wallet was empty. Nobody navigates toward a purchase they have not been shown,
+           and App Review least of all: the free daily is spent first, so a reviewer who taps
+           Hint once sees the zone appear for nothing and never meets the sheet at all.
+           This is also the only moment the pack is worth anything to a real player — the hint
+           they just spent has proved on this very screen what it buys. */
+        if(r.balance>0){ hintBtn.textContent=r.balance+" left"; hintBtn.disabled=true; }
+        else offerPackAfterUse();
         return;
       }
       /* No region and nothing spent. Two of these are permanent for this hide and one is a
@@ -12369,6 +12377,28 @@ function chSeek(hideId,opts){
         return;
       }
       offerHintPack();
+    }
+
+    /* WHAT THE BUTTON GOES BACK TO WHEN A PURCHASE IS ABANDONED. On a hide whose hint is
+       already spent, "Hint" is a lie: the zone is on screen and another tap could only redraw
+       it. Both cancel paths read this instead of assuming. */
+    let hintIdleLabel="Hint";
+
+    /* NO PRICE ON THIS LABEL, AND THAT IS DELIBERATE. The page can only state a price that
+       came from StoreKit — setPrices() carries `weekly` and `lifetime` and nothing else, so
+       the pack's localized price does not exist on this side at all. Printing "$2.99" here
+       would be a hardcoded guess that is wrong in every storefront that is not the US, which
+       is the same pricing misstatement the paywall's per-day line is hidden to avoid. Apple's
+       own sheet is one tap away and states the real price, in the user's currency, always.
+       Sending the pack price through setPrices() needs App.js, i.e. a build and a review; when
+       that ships, this label is where it goes. */
+    function offerPackAfterUse(){
+      hintIdleLabel="Get 5 more";
+      hintBtn.textContent=hintIdleLabel;
+      hintBtn.disabled=false;
+      /* Rewired, not re-entrant: takeHint() would bail on `hintZone` anyway, and what this
+         button means has genuinely changed. */
+      hintBtn.onclick=()=>{ haptic(8); offerHintPack(); };
     }
 
     /* The only paid door. postNative returns false in a browser, where StoreKit does not
@@ -12383,7 +12413,12 @@ function chSeek(hideId,opts){
       hintPending=true; hintBtn.disabled=true; hintBtn.textContent="…";
       /* Apple's sheet can be cancelled, and nothing tells us so on this path. Hand the button
          back after a while rather than leaving a permanent "…". */
-      setTimeout(()=>{ if(hintPending&&!hintZone){ hintPending=false; hintBtn.disabled=false; hintBtn.textContent="Hint"; } },45000);
+      /* GUARDED ON hintPending ALONE. It used to also require `!hintZone`, which was true
+         back when this door could only be reached with nothing revealed — but the offer above
+         opens it on a hide whose zone is already drawn, and that spelling would have left the
+         button stuck on "…" forever for anyone who cancelled Apple's sheet there. hintPending
+         is the real condition anyway: the success path clears it before it draws. */
+      setTimeout(()=>{ if(hintPending){ hintPending=false; hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel; } },45000);
     }
 
     /* CALLED BY NATIVE AFTER A SUCCESSFUL PACK PURCHASE, and it polls rather than trusting
@@ -12401,14 +12436,19 @@ function chSeek(hideId,opts){
           drawHintZone(r.region);
           hintBtn.textContent=r.balance>0?(r.balance+" left"):"Hint used";
           hintBtn.disabled=true;
-          track("hint_used",TP({via:"purchased",balance:r.balance|0}));
+          /* NOT COUNTED WHEN THE SERVER SAYS `already`. Bought from the post-use offer, this
+             hide's hint was spent a moment ago and hint_spend returns the same zone without
+             touching the wallet — so the pack lands intact, and a second hint_used here would
+             be the same reveal counted twice, inflating exactly the number the free-vs-paid
+             split exists to keep honest. */
+          if(r.used!=="already") track("hint_used",TP({via:"purchased",balance:r.balance|0}));
           return;
         }
         await new Promise(res=>setTimeout(res,1500));
       }
       /* Paid and still not credited. The hints are NOT lost — they are in the wallet the
          moment the webhook lands — so say the true thing rather than "failed". */
-      hintPending=false; hintBtn.disabled=false; hintBtn.textContent="Hint";
+      hintPending=false; hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel;
       track("hint_credit_slow",TP({}));
       showHint("Your hints are on the way — try again in a moment",3200);
     };
