@@ -1674,7 +1674,13 @@ function sizeCamView(){
 }
 function camTick(){
   camRaf=requestAnimationFrame(camTick);
-  if(bgKind!=="cam"||!cam.videoWidth) return;   // no frame yet → the <video> stays visible
+  /* readyState, not just videoWidth — which is what "no frame yet" always meant. A stream
+     handed to the element reports its dimensions at HAVE_METADATA, one step BEFORE the first
+     decoded frame exists, and coverInto()'s letterbox path lays down its blur pad and a 45%
+     black wash before it draws. Blitting in that window used to be harmless (there was
+     nothing underneath but the <video> itself); now it would briefly darken the frozen frame
+     freezePreview() is holding over the re-acquire. 2 = HAVE_CURRENT_DATA = there is a frame. */
+  if(bgKind!=="cam"||!cam.videoWidth||cam.readyState<2) return;   // no frame yet → whatever is already showing stays
   syncPreviewFit();   // the track's dimensions only exist once frames do — and Flip can change them
   try{
     sizeCamView();
@@ -1690,28 +1696,83 @@ function stopCamView(){
   camView.style.display="none"; cam.classList.remove("headless");
   camView.width=1; camView.height=1;             // release the backing store
 }
-/* The camera keeps STREAMING for the whole painting session. capture() hides the <video>
-   element but never touches the tracks, so on a long hide WebKit goes on decoding and
-   delivering frames nobody will ever look at — the scene was frozen into sceneCanvas at
-   the shutter and the live feed is not read again until Retake. That is continuous work in
-   the same content process that is already holding the paint canvases.
-   Disabling the tracks stops frame delivery; it does NOT tear the capture session down, so
-   there is nothing to re-acquire and no way for this to fail — resuming is a flag flip.
-   (Fully stopping the tracks would also release the native session and save more power,
-   but re-acquiring getUserMedia on iOS is exactly the flaky path gumSafe() exists to
-   defend against — it cost an App Review rejection once — so that is not worth trading a
-   guaranteed-reversible pause for without a device to test on.) */
-function suspendCamera(){
+/* NOTHING DARK EVER SHOWS IN THE PREVIEW. Releasing the capture session at the shutter (see
+   releaseCamera) means Retake has to wait for a new stream, and for those few hundred ms the
+   <video> has nothing to paint — a black flash in the middle of the one screen that is
+   supposed to be a live camera. The last frame of the hide is the perfect filler: it is the
+   exact scene the user is about to re-aim at, it is already in memory as sceneCanvas, and it
+   is framed by the same coverInto() the preview uses, so the swap to live frames is
+   invisible.
+   This is the inverse of the handover in camTick(): that one refuses to hide the <video>
+   until a canvas frame has landed, this one refuses to show it back until the next one has.
+   Between them the raw element is only ever visible when it has something real on it.
+   Called with a LOCAL reference held across backToCompose()'s teardown, not with the global:
+   the ~11 MB camView backing store must be allocated AFTER the hide's canvases are dropped,
+   never alongside them — this content process is jetsammed at exactly that peak. */
+function freezePreview(lastScene){
+  if(bgKind!=="cam"||!lastScene) return false;
+  try{
+    sizeCamView();
+    const g=camView.getContext("2d");
+    if(!g) return false;
+    g.drawImage(lastScene,0,0,camView.width,camView.height);
+    camView.style.display="block"; cam.classList.add("headless");
+    return true;
+  }catch(_){ return false; }                      // same rule as camTick: never hand over on a blit that didn't land
+}
+/* THE CAPTURE SESSION DIES AT THE SHUTTER. It used to only be PAUSED here — tracks flipped
+   to enabled=false, which stops frame delivery but leaves the native session standing. That
+   was the cheap, guaranteed-reversible trade, and it was the wrong one for a reason the old
+   comment could not have known: on iOS an open capture session puts the process into an
+   AVAudioSession recording mode that is NOT set to mix with others, so the whole time it is
+   held, every other app's audio is interrupted. Video-only capture and `audio:false` change
+   nothing — the session alone is what does it. So a hide, which reads the live feed exactly
+   never (the scene is frozen into sceneCanvas at the shutter and not read again until
+   Retake), was silently killing the user's music or YouTube for its entire duration. It also
+   went on costing power in the same content process that is holding the paint canvases.
+   Stopping the tracks is the only thing that hands the session back.
+   The price is the one the old comment was right to fear: Retake now has to re-acquire, and
+   getUserMedia on iOS is the flaky path gumSafe() exists to defend against. Three things
+   make that acceptable HERE and would not have elsewhere — Retake is an explicit user
+   action behind a confirmation, so a few hundred ms is invisible; gumSafe already bounds the
+   wait at GUM_MS_DECIDED; and a failure has somewhere to land (see the `resume` branch in
+   startCamera, plus the shutter guard in captureShot that stops a frameless capture).
+   The gap itself is not left to chance — freezePreview() paints the last frame over it, so
+   nothing dark is ever on screen. NOTE cam.srcObject is deliberately left in place, exactly
+   as usePhoto() leaves it: stopping the tracks is what releases the session, and clearing the
+   object buys nothing beyond it. */
+let camGen=0;   // bumped by everything that claims the background — see the guard in startCamera
+function releaseCamera(){
   if(bgKind!=="cam"||!stream) return;
   stopCamView();
-  try{ stream.getVideoTracks().forEach(t=>t.enabled=false); }catch(_){}
+  try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){}
+  stream=null;
   try{ cam.pause(); }catch(_){}
 }
+/* "The last acquisition SETTLED without a stream", which is not the same question as "is
+   there a stream". Between them sits the few hundred ms where one is in flight, and the two
+   states want opposite things from the shutter: silence while it lands, an explanation once
+   it will not. Latched here rather than counting in-flight calls because a Flip fired during
+   a Retake re-acquire produces two overlapping attempts, and only the settling of the LAST
+   one is the answer — startCamera clears it on entry and sets it on every failure exit, so
+   whichever attempt settles last is the one that speaks. */
+let camLost=false;
 function resumeCamera(){
-  if(bgKind!=="cam"||!stream) return;
-  try{ stream.getVideoTracks().forEach(t=>t.enabled=true); }catch(_){}
-  try{ const q=cam.play(); if(q&&q.catch) q.catch(()=>{}); }catch(_){}
-  startCamView();
+  if(bgKind!=="cam") return;
+  /* Still holding a stream means nothing tore it down, so this is the old flag flip and it
+     has to be the COMPLETE inverse of one — re-enabling the tracks included. Unreachable
+     while releaseCamera() stops them (it leaves no stream to find), and kept exactly for
+     that reason: it is the whole cost of going back. If the re-acquire ever proves too slow
+     or too flaky on device, releaseCamera() reverts to `getVideoTracks().forEach(t =>
+     t.enabled=false)` and this branch catches every Retake again, unchanged. A version of
+     this that only called play() would have left the tracks disabled forever — a preview
+     frozen on its last frame, with nothing in the code saying why. */
+  if(stream){
+    try{ stream.getVideoTracks().forEach(t=>t.enabled=true); }catch(_){}
+    try{ const q=cam.play(); if(q&&q.catch) q.catch(()=>{}); }catch(_){}
+    startCamView(); return;
+  }
+  startCamera(false,true).catch(()=>{ camLost=true; });   // an async function only ever rejects on a bug in itself — still, never leave the shutter silently dead
 }
 /* 3.5s is the right bound for a HANG. It is the wrong bound for a QUESTION.
    getUserMedia does not settle until the OS permission sheet is answered, so on the very
@@ -1796,9 +1857,18 @@ function camSize(){
    camera on launch or prime first — see the call site at the bottom of this file. */
 const CAM_ASKED_KEY="kamo_cam_asked";
 function camEverAsked(){ try{ return localStorage.getItem(CAM_ASKED_KEY)==="1"; }catch(_){ return false; } }
-async function startCamera(auto){
-  if(!window.isSecureContext){ if(auto) revealHero("insecure_context"); else camFail("Open KAMO in Safari to use the camera, or use a photo."); return; }
-  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ if(auto) revealHero("no_getusermedia"); else camFail("This browser can’t open the camera. Try Safari, or use a photo."); return; }
+/* `resume` = re-acquiring after releaseCamera(), i.e. Retake. The screen already exists —
+   backToCompose() built it — so this must NOT run enterCompose(), which would clear the
+   character and respawn a fresh hider on top of the one the user is repositioning. It also
+   keeps out of camera_granted / camera_denied: those two are the boot funnel, and folding a
+   per-retake event into them would make the make-or-break metric unreadable. */
+async function startCamera(auto, resume){
+  /* Both of these are unreachable on the `resume` path — a stream existed a minute ago, so
+     the context was secure and mediaDevices was there — but they are still exits that leave
+     no stream behind, and the shutter guard reads camLost to decide whether to explain
+     itself. An exit that forgets to latch it is a shutter that goes quiet forever. */
+  if(!window.isSecureContext){ camLost=true; if(auto) revealHero("insecure_context"); else camFail("Open KAMO in Safari to use the camera, or use a photo."); return; }
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ camLost=true; if(auto) revealHero("no_getusermedia"); else camFail("This browser can’t open the camera. Try Safari, or use a photo."); return; }
   /* Set BEFORE the attempt, not after a success: what this records is "the sheet has been
      put in front of this user", and that is true whether they allowed or denied. Recording
      it only on success would prime the same person on every launch forever. */
@@ -1807,10 +1877,28 @@ async function startCamera(auto){
      navigator.permissions.query({name:'camera'}), so there is nothing better to ask. */
   const gumMs = camEverAsked() ? GUM_MS_DECIDED : GUM_MS_PROMPT;
   try{ localStorage.setItem(CAM_ASKED_KEY,"1"); }catch(_){}
+  const gen=++camGen;   // claims the background for THIS attempt — see the guard after the await
+  camLost=false;        // an attempt is in flight again; every failure exit below sets it back
   const tries=[{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); return; }
+    try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+      /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip).
+         NOT on a resume: there the frozen last frame is holding the preview, and wiping it
+         here is precisely the black flash freezePreview() exists to prevent. camRaf is
+         already 0 either way — capture()'s stopCamView() cancelled it. */
+      if(!resume) stopCamView();
+      const s=await gumSafe(c,gumMs);
+      /* Somebody else claimed the background while we were awaiting — a second Flip, a
+         Retake, or usePhoto(). Committing now would paint over the background they chose
+         AND strand this stream with nobody holding it, and an orphan holding a live capture
+         session is precisely what makes every later getUserMedia hang forever on iOS
+         (gumSafe's own timeout path stops its orphan for exactly this reason). */
+      if(gen!==camGen){ try{ s.getTracks().forEach(t=>t.stop()); }catch(_){} return; }
+      stream=s; cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; startCamView(); torchOn=false; /* new track starts with the torch off */
+      if(resume){ syncPreviewFit(); updateLightBtn(); track("camera_reacquired",camSize()); }   // backToCompose() ran both of these before the stream existed — they need the real dimensions
+      else { track("camera_granted",{auto:!!auto,...camSize()}); enterCompose(); }
+      return; }
     catch(e){ lastErr=e;
       // Permission-level refusals (and the iOS hang) won't be fixed by loosening
       // constraints — retrying just costs another timeout before we can say anything.
@@ -1818,6 +1906,15 @@ async function startCamera(auto){
     }
   }
   const n0=lastErr&&lastErr.name;
+  /* The Retake re-acquire failed. Nothing below applies: the hero is long gone, the
+     permission was granted minutes ago so this is not a refusal to explain, and every
+     control camFail() reaches for lives on a screen we are not on. We stay in compose with
+     bgKind==="cam" and no stream — captureShot() reads exactly that pair to refuse a
+     frameless capture, Photo is already on screen, and Flip retries the camera. This is the
+     one failure mode releaseCamera() introduced, so it gets its own event rather than
+     hiding inside camera_denied. */
+  camLost=true;
+  if(resume){ track("camera_reacquire_failed",{reason:n0||"unknown"}); showHint("Couldn’t reopen the camera — use a photo.",4200); return; }
   // Camera refusal is THE make-or-break step for an AR toy — if this spikes, the
   // whole funnel dies here and nothing downstream will explain why.
   track("camera_denied",{auto:!!auto,reason:n0||"unknown"});
@@ -1839,7 +1936,7 @@ async function startCamera(auto){
   else if(n==="NotFoundError"||n==="OverconstrainedError") camFail("No camera on this device — use a photo instead.");
   else camFail("Couldn’t reach the camera — use a photo instead.");
 }
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
+function usePhoto(file){ camGen++; /* claims the background: an in-flight startCamera() must not paint over the photo when it lands */ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
@@ -1858,7 +1955,8 @@ function enterCompose(){
    hide is being thrown away by explicit user confirmation, so drop its buffers now
    instead of holding ~100 MB of full-retina canvases through the entire compose/camera
    session that follows. capture() rebuilds every one of them. */
-function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
+function backToCompose(){ const lastScene=sceneCanvas;   /* the clean camera frame this hide was built on — handed to freezePreview() at the bottom, once everything below has been released. A local, so the global can be dropped on the very next line and this one canvas outlives the teardown by a few statements instead of the preview store being allocated inside it. */
+  figLayer=null; figctx=null; shadeSrc=null;
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
@@ -1869,7 +1967,8 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   $("#poseBar").style.display="none"; updatePoseBar();
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
-  resumeCamera();   // paused for the whole hide by capture()
+  freezePreview(lastScene);   // hold the last frame over the gap BEFORE asking for a new stream — see freezePreview()
+  resumeCamera();   // released for the whole hide by capture() — this re-acquires, and it can be a few hundred ms behind the rest of the screen
   startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   teachHint("Reposition, then recapture");
 }
@@ -2041,7 +2140,7 @@ function capture(){
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null;
   paintLayer=null; pctx=null; figLayer=null; figctx=null; shadeSrc=null;
-  stopCamView();   // the preview canvas is another full-size backing store — drop it BEFORE the six below, not after (suspendCamera() further down would be too late to matter)
+  stopCamView();   // the preview canvas is another full-size backing store — drop it BEFORE the six below, not after (releaseCamera() further down would be too late to matter)
   /* Cap the paint resolution at the width everything is EXPORTED at.
      Every share path renders 1080 wide — composeShare(1080), composeBeforeAfter(1080) and
      the reveal-video frames. So at dpr 3 the board was 1290x2796 and every pixel above 1080 was
@@ -2065,7 +2164,7 @@ function capture(){
      this row is reachable without discovering that it scrolls. */
   try{ buildSwatches(extractPalette(sceneCanvas,3,sceneBand)); }catch(e){}
   try{ bumpHides(); }catch(e){}   // hide counter only — feeds the teaching hints + aim clock
-  suspendCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake
+  releaseCamera();   // scene is frozen into sceneCanvas above — the live feed is dead weight until Retake, and holding the session mutes every other app for the whole hide
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
   compositeBoard();
@@ -4493,7 +4592,16 @@ $("#btnLight").onclick=e=>{ e.stopPropagation(); haptic(10); setTorch(!torchOn);
 $("#flip").onclick=()=>{ facing=facing==="environment"?"user":"environment"; startCamera(); };
 let capturing=false;
 function captureShot(){
-  if(mode!=="compose"||capturing) return; capturing=true;
+  if(mode!=="compose"||capturing) return;
+  /* bgKind is "cam" with no stream: the Retake re-acquire is either still in flight or it
+     failed. coverInto() has no frame to read in that state and falls back to a flat #223
+     fill, so letting this through would freeze an empty board into the round — the clock
+     starts, the figure is in it, and there is nothing to hide against. Silent while it is
+     coming back, because that is a few hundred ms and a toast would be noise; explicit once
+     it is not, because a shutter that does nothing twice is the "button leads nowhere"
+     report all over again. */
+  if(bgKind==="cam" && !stream){ if(camLost) showHint("Couldn’t reopen the camera — use a photo."); return; }
+  capturing=true;
   // no pop / shockwave ring around the figure on tap — keep only the poof on the captured screen
   haptic(26);
   $("#shutter").classList.add("snap");
