@@ -959,17 +959,6 @@
     -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1);}
   .chPrevGear:active{transform:scale(.9);}
   .chPrevGear svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;}
-  .ivPrev{display:flex;align-items:center;gap:11px;width:100%;margin:-2px 0 9px;padding:9px 11px;
-    border-radius:14px;border:1px solid rgba(95,230,164,.28);background:rgba(95,230,164,.08);
-    animation:ivIn .28s cubic-bezier(.2,1.2,.4,1);}
-  .ivPrev.out{opacity:0;transform:translateY(-4px);transition:opacity .3s,transform .3s;}
-  .ivPrev .ivShot{flex:0 0 auto;width:44px;height:58px;border-radius:9px;overflow:hidden;
-    border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;background:#000;}
-  .ivPrev .ivShot canvas{max-width:100%;max-height:100%;display:block;}
-  .ivPrev .ivTxt{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left;}
-  .ivPrev .ivTxt b{font-size:14px;font-weight:800;color:#fff;}
-  .ivPrev .ivTxt span{font-size:11.5px;color:rgba(255,255,255,.62);}
-  @keyframes ivIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
   .ssBtn.ssInvite{position:relative;z-index:0;background:rgba(72,214,139,.14);border-color:transparent;background-clip:padding-box;}
   .ssBtn.ssInvite::before{content:"";position:absolute;inset:-1px;border-radius:17px;z-index:-1;pointer-events:none;
     padding:1px;background:var(--ring);background-size:260% 100%;
@@ -3840,6 +3829,11 @@ function openShareSheet(){
   { const k=$("#ssKick"); if(k){ const sec=roundSeconds();
       if(sec>0){ k.textContent="Vanished in "+sec+"s"; k.style.display=""; }
       else k.style.display="none"; } }
+  /* THE PREVIEW CARD BELONGS TO ONE INVITE, so it starts every open closed. It is rendered
+     from the board only after a link has actually been copied — leave it on and the second
+     round opens its sheet already showing the FIRST round's hide, above a button that has
+     not been tapped yet. The flag hid this: nobody reopens the sheet twice at ?new=1. */
+  { const cp=$("#chPrev"); if(cp) cp.classList.remove("on"); }
   track("share_opened",{score:Math.round(currentScore||0)}); }
 function closeShareSheet(){ shareSheetEl.classList.remove("show"); }
 /* An EXPLICIT walk-away: Cancel or a backdrop tap. Deliberately not folded into
@@ -3993,14 +3987,12 @@ function chCopy(text){
 /* ===== chPreview =========================================================================
  * The card under "Challenge a friend" that shows the recipient's side of the deal.
  *
- * BEHIND ?new=1 UNTIL IT IS APPROVED. Pushing this repo IS deploying it — Pages serves the
- * file to every live user within minutes and the WebView refetches on every launch — so a
- * new component cannot be tried on a few people the way a native build can. The flag is the
- * substitute for a staging environment: the code ships dormant, it is opened by hand at
- * ?new=1, and turning it on for everyone later is deleting one condition, not deploying
- * anything new. Without the flag the old 4.2s toast still runs, unchanged.
+ * LIVE FOR EVERYONE. This shipped dormant behind ?new=1 — the substitute for a staging
+ * environment on a repo where pushing IS deploying — and the flag is now gone along with
+ * the 4.2s toast it stood in front of. The card is the only surface in the app that tells
+ * the sender their link is a playable game rather than a store listing, which is the whole
+ * argument of the challenge loop; a strip that deletes itself could not carry it.
  */
-const NEWUI=/[?&]new=1/.test(location.search);
 
 /* The hider's chosen clock and tap budget. null on both = derive them, which is what every
  * hide did before this existed and what the server still stores for them. Kept in
@@ -4139,24 +4131,12 @@ function chPrevSettings(){
   }catch(e){}
 }
 
-function invitePreview(){
-  if(NEWUI){ chPrevRender(); return; }   // permanent card replaces the toast
-  try{
-    const host=document.getElementById("ssInvite"); if(!host||!host.parentNode) return;
-    document.getElementById("ivPrev")?.remove();
-    const secs=roundSeconds(), LIMIT=Math.max(20,Math.min(45,(secs||10)*2));
-    const c=document.createElement("canvas");
-    const S=Math.min(1,168/Math.max(board.width,board.height));
-    c.width=Math.round(board.width*S); c.height=Math.round(board.height*S);
-    c.getContext("2d").drawImage(board,0,0,c.width,c.height);
-    const w=document.createElement("div"); w.id="ivPrev"; w.className="ivPrev";
-    w.innerHTML='<div class="ivShot"></div>'
-      +'<div class="ivTxt"><b>They get this</b><span>'+LIMIT+'s on the clock · 5 taps · no app needed</span></div>';
-    w.querySelector(".ivShot").appendChild(c);
-    host.parentNode.insertBefore(w, host.nextSibling);
-    setTimeout(()=>{ w.classList.add("out"); setTimeout(()=>w.remove(),320); },4200);
-  }catch(e){}
-}
+/* THE CARD'S TWO GESTURES. Both handlers existed while the card was behind the flag and
+   neither was ever bound to anything — the flag was hiding two dead buttons, not one
+   dormant card. The gear stops propagation so a thumb that lands on it opens the settings
+   without also launching the preview behind it. */
+$("#chPrevShot").onclick=(ev)=>{ ev.stopPropagation(); haptic(8); chPrevPlay(); };
+$("#chPrevGear").onclick=(ev)=>{ ev.stopPropagation(); haptic(8); chPrevSettings(); };
 $("#ssInvite").onclick=async()=>{
   haptic(10);
   const sc=Math.round(currentScore||0), secs=roundSeconds();
@@ -4194,7 +4174,7 @@ $("#ssInvite").onclick=async()=>{
        an App Store page. A thing you cannot picture is a thing you do not send twice.
        AFTER the copy, never before: an preview screen between intent and action is how share
        flows die, and this button just went from 0 to 25 taps a day by being more direct. */
-    if(ok) invitePreview();
+    if(ok) chPrevRender();
     if(!ok){
       /* Last rung, and it needs its own gesture: navigator.share must be called from a
          fresh user activation, so it cannot be chained onto the tap that already failed. */
