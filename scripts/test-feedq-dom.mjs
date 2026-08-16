@@ -274,6 +274,11 @@ console.log('\nA HIDE ALREADY ON SCREEN IS NEVER MOUNTED TWICE');
       uniq: new Set(ids).size,
       ids,
       blocked: (window.__tr || []).filter(t => t[0] === 'feed_dupe_blocked'),
+      /* kfProbe's launch call is excluded on purpose: it asks "is there a feed at all", not
+         "give me page N", and it legitimately sends the plain 2-argument form. What must never
+         appear again is a PAGINATING call built on the created_at cursor. */
+      calls: (window.__rpc || []).filter(c => c[0] === 'feed_page' && c[1] && 'p_offset' in c[1]).map(c => c[1]),
+      paging: (window.__rpc || []).filter(c => c[0] === 'feed_page').length,
     };
   });
   r.n === r.uniq
@@ -282,6 +287,23 @@ console.log('\nA HIDE ALREADY ON SCREEN IS NEVER MOUNTED TWICE');
   r.blocked.length >= 1
     ? ok(`and the re-served rows are counted, not silently absorbed (${JSON.stringify(r.blocked[0][1])})`)
     : bad('feed_dupe_blocked never fired — the duplicate page was not even detected');
+
+  /* AND THE WIRE CARRIES THE FIX, not just the screen. The migration
+     `feed_page_offset_pagination` is worth nothing if the client keeps sending the cursor that
+     never matched the sort, and a de-duplicated screen would hide exactly that. So: every page
+     asks by OFFSET, the offset advances by the RAW page size, and p_before is an epoch that
+     never moves. */
+  const offsets = r.calls.map(c => c && c.p_offset);
+  const epochs = [...new Set(r.calls.map(c => c && c.p_before))];
+  r.calls.length >= 2 && offsets.every(o => typeof o === 'number')
+    ? ok(`every feed_page call paginates by offset (${JSON.stringify(offsets)})`)
+    : bad(`a call still used the broken cursor: ${JSON.stringify(r.calls)}`);
+  offsets[0] === 0 && offsets[1] === 8
+    ? ok('and the offset advances by the RAW page size, not by the rows the client kept')
+    : bad(`offsets did not advance in server units: ${JSON.stringify(offsets)}`);
+  epochs.length === 1 && epochs[0]
+    ? ok('and p_before is one fixed epoch — the window cannot shift under the reader')
+    : bad(`p_before moved between pages: ${JSON.stringify(epochs)}`);
   await page.close();
 }
 
