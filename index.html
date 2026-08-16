@@ -6978,6 +6978,16 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    features looked like they were producing no behaviour at all. Direct, for the same reason
    the share tap above is: this page deploys on its own and the binary does not. */
 "reply_started","reply_pending","prev_blocked_tapped","feed_available",
+/* AND `reply_sent`, WHICH THIS LIST FORGOT — the outcome half of the one funnel the two
+   names above exist to measure. Shipped 2026-08-15, tracked at the publish, never named
+   here: so it took the bridge, hit a compiled allow-list no released binary has ever heard
+   of, and was dropped for every app user. Ten events landed in 36 hours, all of them from
+   plain browsers, and read against 461 taps they said the reply loop converted at 2%.
+   The database said 133 replies the same day. The loop was never broken; the COUNTER was —
+   the exact failure `hide_published`-reads-as-6 is written up for a few lines below, and the
+   third time this file has paid for it. An intent routed direct and its outcome routed by
+   the bridge cannot divide: they do not even land on the same Amplitude user. */
+"reply_sent",
 /* The Challenges panel: the grid of hides that answered yours. `replies_grid_shown` carries
    how many were waiting, `reply_opened` whether the tap replays a spent one — together they
    say whether a delivered answer actually gets played, which the reply loop has never been
