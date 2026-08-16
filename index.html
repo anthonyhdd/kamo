@@ -6233,7 +6233,39 @@ window.KAMO.setPushToken=function(t){
        the fix is to simply try again. Only on a token we did not have a moment ago: a repeat
        sync of the same value must not re-post on every wrapper refresh. */
     if(pushToken&&pushToken!==was&&chId) chAttachPush();
+    /* AND THE BELL HAS NOTHING LEFT TO OFFER. A token exists only on the far side of a
+       grant, so its arrival is the one unambiguous signal that this device is now
+       reachable — including when the grant happened on the other door (a challenge sent
+       from another screen) while a feed slide sits underneath. Cheaper and more honest
+       than asking the wrapper for a permission status the page would then have to cache. */
+    if(pushToken) try{ document.querySelectorAll(".kfBell").forEach(b=>b.remove()); }catch(_){}
   }catch(e){ pushToken=""; }
+};
+/* THE ANSWER TO A TAPPED BELL, injected by the wrapper (see notif-ask in App.js).
+ *
+ * The outcome is the wrapper's own vocabulary — the same strings daily_reminder_optin_outcome
+ * has always carried — so there is one set of names for one thing. Everything that is not a
+ * grant leaves the control where it was: a button that says "done" on a denial is a lie the
+ * user finds out about the first time nobody tells them anything.
+ *
+ * NOT tracked here. The wrapper already files the outcome against reason='feed_bell', and a
+ * second web-side event would double-count the same decision on a different Amplitude user. */
+let kfAskBtn=null;
+window.KAMO.notifAskResult=function(outcome){
+  const b=kfAskBtn; kfAskBtn=null;
+  if(!b||!b.isConnected) return;
+  const o=String(outcome||"");
+  if(o==="system_granted"){
+    b.classList.add("on"); b.disabled=true; b.textContent="I'll tell you ✓";
+    setTimeout(()=>{ try{ b.remove(); }catch(_){} },2000);
+    return;
+  }
+  b.disabled=false;
+  if(b.dataset.label) b.innerHTML=b.dataset.label;
+  /* iOS renders nothing after a denial, so the wrapper offered Settings instead. It said so
+     in its own dialog; this only explains why the button is still sitting there. */
+  if(/^(denied_recovery|already_denied)/.test(o)) showHint("iOS only asks once — Settings has the switch",3000);
+  else if(o==="") showHint("Couldn't ask just now — try again",2400);
 };
 window.KAMO.setStoredHandle=function(h){
   try{
@@ -13611,7 +13643,18 @@ const KF_CSS=
   /* The menu's answer to the wordmark dot: same mint, same glow, sitting on the row that
      resolves it. An <i> because the row is a flex line and a span would inherit nothing
      useful either way; font-style is moot on an empty element. */
-  +".kfChalDot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 6px var(--mint);flex:0 0 auto;}";
+  +".kfChalDot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 6px var(--mint);flex:0 0 auto;}"
+
+  /* ══ THE BELL ═══════════════════════════════════════════════════════════════════════════
+     On your own hide, and nowhere else. Bottom-centre because every other corner of this
+     screen is taken — ✕ and ⚑ top-left, the round's clock chip top-right — and because the
+     hint that shares this band is gone after six seconds while this is not urgent enough to
+     compete with it. Above the seeker's furniture (z 26) and hidden outright once the round
+     ends, so it can never sit under the reveal card. */
+  +".kfBell{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(30px + var(--safe-b));z-index:26;display:inline-flex;align-items:center;gap:8px;max-width:88vw;height:44px;padding:0 18px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(4,6,10,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;}"
+  +".kfBell svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}"
+  +".kfBell.on{border-color:rgba(95,230,164,.55);color:var(--mint);}"
+  +".kfBell[disabled]{opacity:.6;}";
 
 let kfState=null;
 /* opts.first = a hide id to put in front of the public page, used by the post-send offer
@@ -13798,6 +13841,48 @@ function chFeed(opts){
     }catch(_){}
   }
 
+  /* ── THE BELL, ON YOUR OWN HIDE ────────────────────────────────────────────────────────
+     The opt-in had exactly one door until now: a text+link challenge that had actually gone
+     out. 1676 people published a hide in the first half of August and 1015 sent one, and the
+     ones who shared their photo to TikTok instead of tapping "Challenge a friend" were never
+     asked at all. Meanwhile the thing worth being told about — somebody played the hide you
+     just made — belongs to every publisher, sender or not, and it happens on a stranger's
+     phone hours later where no local timer can guess it.
+     A REPLAY SLIDE IS YOUR OWN HIDE (the feed skips them for everybody else), and after "See
+     it live" it is slide 0. That is the moment the question "will anyone find it?" is alive,
+     which is the only argument this permission has.
+     A TAP IS THE OPT-IN — the wrapper goes straight to iOS with no dialog of ours in front of
+     it (see `direct` in notifications.js). That is also why this must never be shown to
+     somebody who already has notifications: bellWanted() gates on the push token, which
+     exists only after a grant. */
+  let bellSeen=false;
+  function bellWanted(){
+    try{ return !!(window.ReactNativeWebView && nativeCaps && nativeCaps.notifAsk && !pushToken); }
+    catch(_){ return false; }
+  }
+  function kfBell(s){
+    if(!s||!s.replay||s.bell||!bellWanted()) return;
+    const b=document.createElement("button");
+    b.className="kfBell"; b.type="button";
+    b.dataset.label='<svg viewBox="0 0 24 24" aria-hidden="true">'
+      +'<path d="M18 8.8a6 6 0 1 0-12 0c0 5.1-2 6.5-2 6.5h16s-2-1.4-2-6.5"/>'
+      +'<path d="M13.8 19a2 2 0 0 1-3.6 0"/></svg>Tell me when someone plays it';
+    b.innerHTML=b.dataset.label;
+    b.onclick=(e)=>{
+      e.stopPropagation();
+      if(b.disabled) return;
+      haptic(10);
+      track("notif_bell_tapped",{});
+      b.disabled=true;
+      kfAskBtn=b;
+      /* No wrapper, or a wrapper too old to know the message: the button cannot work, so it
+         says so once and goes away rather than pretending to have armed something. */
+      if(!postNative({type:"notif-ask"})){ kfAskBtn=null; b.remove(); }
+    };
+    s.el.appendChild(b); s.bell=b;
+    if(!bellSeen){ bellSeen=true; track("notif_bell_shown",{}); }
+  }
+
   function activate(i){
     if(i<0||i>=S.slides.length||i===S.active) return;
     /* BEFORE the previous round is torn down, while S.answered still describes it. */
@@ -13836,6 +13921,10 @@ function chFeed(opts){
        reaches no ending and no locked control. Three slides in, because one is a glance and
        the offer should not be the second thing that happens on this screen. */
     if(S.played===3) setTimeout(()=>pwFirstOffer("feed"),800);
+    /* Mounted per slide, on the slide, so it rides the scroll with the photo it is about —
+       and re-shown when the creator comes back to a round they had already ended. */
+    kfBell(s);
+    if(s.bell) s.bell.style.display="";
     S.round=chSeek(s.row.id,{
       host:s.host, feed:true, replay:!!s.replay, firstInFeed:(S.played===1),
       /* onEnded no longer kills the hint — see killHint. It still exists as the feed's signal
@@ -13843,7 +13932,10 @@ function chFeed(opts){
       /* AND IT NOW ANSWERS THE SKIP QUESTION TOO. A round that reaches its card was resolved
          — found, missed, given up, or a hide that was already gone — and none of those is
          somebody scrolling past. This is the one callback that fires for all of them. */
-      onEnded:()=>{ S.answered=true; },
+      /* AND THE BELL GOES WITH IT. A finished round draws its card over this slide, and a
+         chip floating on top of somebody's ending is furniture in the way of the one screen
+         that matters. Hidden rather than removed: the round can be replayed from here. */
+      onEnded:()=>{ S.answered=true; if(s.bell) s.bell.style.display="none"; },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       /* "Hide another one", on your own hide only. The non-silent close is the point: it is
          the exit that actually puts the camera back (see close()), which is what the button
