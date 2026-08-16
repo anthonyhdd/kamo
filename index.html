@@ -206,7 +206,38 @@
   #flip{right:14px;width:44px;}
   #flip svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .45s cubic-bezier(.4,1.3,.5,1);}
   #flip:active svg{transform:rotate(180deg);}
+  /* THE SAME SLOT AS FLIP, AND THAT IS THE DESIGN. Flip is meaningless once the background is a
+     picked photo and is hidden then; reframing is meaningless while it is a live camera. The two
+     never coexist, so the top-right button is simply "the thing this source can be adjusted by"
+     and the bar does not grow a fourth control for a mode that only half the sources have. */
+  #btnFrame{right:14px;width:44px;}
+  #btnFrame svg{width:21px;height:21px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  #btnFrame.on{background:#fff;border-color:#fff;}
+  #btnFrame.on svg{stroke:#111;}
   .topbtn:active{transform:scale(.9);}
+
+  /* ---------- REFRAME ---------- */
+  /* The shutter is REPLACED, not merely covered: a drag that ends on a live shutter is a hide
+     published by accident, and on a phone the thumb finishes near the bottom of the screen every
+     time. Done is the only way out, so there is no way to shoot mid-drag.
+     data-blocks-timer is the other half of that. The aim clock auto-captures on expiry (see
+     enterCompose), and a non-Pro user reframing a photo would be shot out from under. The
+     attribute is the codebase's existing declaration of "while this is up, the clock waits". */
+  #frameBar{position:absolute;left:50%;bottom:calc(28px + var(--safe-b));transform:translateX(-50%);z-index:16;
+    display:none;flex-direction:column;align-items:center;gap:12px;}
+  #frameHint{font-size:13px;font-weight:600;color:#fff;opacity:.92;white-space:nowrap;text-shadow:0 2px 10px rgba(0,0,0,.8);}
+  #frameBtns{display:flex;align-items:center;gap:10px;}
+  #frameBar button{height:44px;border-radius:22px;padding:0 22px;font:inherit;font-size:15px;font-weight:700;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s;}
+  #frameBar button:active{transform:scale(.94);}
+  #frameDone{border:none;background:#fff;color:#111;}
+  #frameReset{border:1px solid var(--stroke);background:var(--panel);backdrop-filter:blur(12px);color:#fff;}
+  /* The figure keeps rendering — you are framing AROUND it, and a photo reframed with the hider
+     invisible is framed against the wrong picture — it just stops taking the gestures, so the
+     drag reaches #photo underneath instead of moving the character. */
+  #stage.framing #gl{pointer-events:none;}
+  #stage.framing #shutterWrap,#stage.framing #btnPhoto,#stage.framing #btnPlus,
+  #stage.framing #btnFeed,#stage.framing #btnLight{display:none!important;}
 
   /* BELOW THE COUNTDOWN PILL, not on top of it. #timerTag used to be a bare 10.5px label;
      turning it into a padded pill grew it to ~26px tall, so at 40px it now runs to ~66px
@@ -976,7 +1007,7 @@
   #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
-  #stage.pwCover #flip{visibility:hidden!important;}
+  #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar{visibility:hidden!important;}
   /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
      #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
      descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
@@ -2055,6 +2086,8 @@
     <div class="brand">KA<b>MO</b><span class="brandPlus" id="brandPlus">+</span></div>
     <div id="timerBar"></div><div id="timerTag"></div><div id="timerNum"></div>
     <button id="flip" class="topbtn" title="Flip camera"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
+    <!-- Crop marks, at the flip icon's weight so the two read as one control in one slot. -->
+    <button id="btnFrame" class="topbtn" title="Reframe photo" aria-label="Reframe photo"><svg viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></button>
     <div class="hint" id="hint"></div>
     <div id="covHud"></div>
     <button id="btnBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Retake</button>
@@ -2076,6 +2109,15 @@
         <div id="shutterWrap">
       <button id="shutter" class="shutter" aria-label="Capture"><div class="spin"></div><div class="ring"></div><div class="core"></div></button>
       <div class="capLabel">Capture</div>
+    </div>
+    <!-- REFRAME. Sits where the shutter sits and replaces it, so a drag cannot end on Capture.
+         data-blocks-timer parks the aim clock for as long as this is on screen. -->
+    <div id="frameBar" data-blocks-timer>
+      <div id="frameHint">Drag to reposition &middot; pinch to zoom</div>
+      <div id="frameBtns">
+        <button id="frameReset" type="button">Reset</button>
+        <button id="frameDone" type="button">Done</button>
+      </div>
     </div>
     <!-- gallery: the photo path must stay reachable from the camera too, not only the hero -->
     <button id="btnPhoto" class="camBtn" aria-label="Pick a photo" title="Pick a photo">
@@ -2716,6 +2758,26 @@ function chClearReply(){ chReplyTo=""; chReplyName=""; chReplyFromFeed=false; }
 const PAINT_MAX_W=1440;
 let paintDpr=dpr;
 let mode="compose", bgKind=null, facing="environment", stream=null;
+
+/* WHERE THE PHOTOGRAPH CAME FROM — one of the five words create_hide accepts, or null.
+ *
+ * NOT a duplicate of bgKind. bgKind answers "is the board showing a <video> or an <img>?" and
+ * is read by the torch, the flip button and the object-fit maths; it collapses three different
+ * origins into "photo". This answers "how did this image get here?", which is the question the
+ * row cannot currently be asked: a hide painted into a live capture, one painted into a picked
+ * snapshot, and one painted into somebody ELSE'S capture on a rehide are indistinguishable
+ * once published.
+ *
+ * Assigned at every door and nowhere else — startCamera(), usePhotoSrc(), usePhoto(), and the
+ * rehide branch. Left null by the debug harness's setBg on purpose: that is not a user's photo,
+ * and a value invented there would be a fabricated row in the one week of data this is meant to
+ * settle. Null simply publishes down the 14-argument rung, exactly as every page loaded before
+ * this deploy does, so nothing depends on it being set.
+ *
+ * `library` vs `library_cam`/`library_nocam` is honest ignorance versus a real reading: only the
+ * wrapper can see EXIF, so the <input type="file"> fallback and every build too old to send the
+ * flag say `library` and stay out of the comparison. See infra/2026-08-16-hide-source.sql. */
+let photoSrc=null;
 
 /* ===== KAMO+ FREE TRIAL — rollout / A-B switch =====
  *
@@ -3646,7 +3708,7 @@ async function startCamera(auto){
   const tries=[...(lens?[{video:{deviceId:{exact:lens},...hdHint()},audio:false}]:[]),{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; chClearReply(); startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose();
+    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; photoSrc="camera"; chClearReply(); startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose();
       /* AFTER the app is already working, and deliberately not awaited. Everything above has
          produced a live camera and a usable screen; widening is an upgrade on top of that, so
          it must never delay the first frame or be able to fail the acquisition. */
@@ -3695,8 +3757,15 @@ function pickPhoto(){
 }
 /* The native picker hands back a data URL; the input hands back a File. Same destination,
    two doors — this is the one usePhoto() reaches through after createObjectURL. */
-function usePhotoSrc(src){
+function usePhotoSrc(src,meta){
   if(!src) return;
+  /* `meta.cam` is the wrapper's reading of the picked asset's EXIF: true when a Make/Model tag
+     is present, false when EXIF came back without one. A camera always writes those tags, and
+     screenshots, memes, downloaded images and generated ones never do — so the false branch is
+     the whole point of the boolean. Absent (old wrapper, or the file-input fallback below) is
+     NOT false: it is `library`, unknown, and stays out of the comparison. */
+  photoSrc = (meta && typeof meta.cam === "boolean") ? (meta.cam ? "library_cam" : "library_nocam")
+                                                     : "library";
   /* A DIFFERENT PHOTO IS A DIFFERENT CONVERSATION. chRehide() hands the answered hide's own
      image straight to `photo` and never comes through here, so this only ever fires when the
      user has gone and picked something else — at which point the round has stopped being a
@@ -3714,10 +3783,14 @@ function usePhotoSrc(src){
    script: assigning into an undefined object throws at module scope, which is a blank app
    for everyone. */
 window.KAMO=window.KAMO||{};
-window.KAMO.usePickedPhoto=(src)=>{ try{ usePhotoSrc(src); }catch(e){} };
+/* The second argument is additive and optional in both directions: a wrapper that predates it
+   calls this with one argument and the photo is filed as `library`, and a page that predates it
+   ignores the extra one. Nothing about the picker's behaviour changes either way — the flag is
+   recorded, never acted on. */
+window.KAMO.usePickedPhoto=(src,meta)=>{ try{ usePhotoSrc(src,meta); }catch(e){} };
 /* The native sheet never opened. Fall through to the input rather than leaving a dead tap. */
 window.KAMO.pickPhotoFailed=()=>{ try{ $("#fileInput").click(); }catch(e){} };
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
+function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; photoSrc="library"; /* the file input cannot read EXIF — unknown, not "no camera" */ torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
@@ -3727,6 +3800,7 @@ function enterCompose(){
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
+  btnFrame.style.display=(bgKind==="photo")?"flex":"none"; setFraming(false);   // one slot, one source: see #btnFrame
   loadKamoV2();   // founder-gated, lazy, no-op for everyone else; hot-swaps the body when it lands
   clearCharacters(); spawnHider();
   /* KAMO+ COMPOSES AND PAINTS WITH NO CLOCK — founder's call, 2026-08-11. The copy had
@@ -3750,8 +3824,13 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
+  btnFrame.style.display=(bgKind==="photo")?"flex":"none"; setFraming(false);
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
+  /* The CROP survives a Retake on purpose, and only the reframe MODE is closed. Retake throws
+     away the paint, not the photograph — the user already decided which part of their picture
+     this round is about, and making them find it again would be the framing thrown away with
+     the strokes. #photo keeps its transform, so there is nothing to restore. */
   resumeCamera();   // paused for the whole hide by capture()
   /* KAMO+ COMPOSES AND PAINTS WITH NO CLOCK — founder's call, 2026-08-11. The copy had
      claimed "no aim clock" since the round_end pitch shipped while aimSeconds() only granted
@@ -3872,7 +3951,10 @@ let roundStartedAt=0, roundMs=0, captureWasAuto=false, aimStartedAt=0, aimGiven=
    So: camera keeps the fit frame, picked photos always fill the board. The crop is the same
    one every full-bleed photo surface takes, and it is what "full screen" means here.
    This changes NEW hides only — the bars on a published paint are pixels inside its stored
-   image, and nothing re-renders them. */
+   image, and nothing re-renders them.
+   AND THE CROP IS THE USER'S, NOT OURS — see photoFrame below. Filling the board with a 3:4
+   photo spends ~36% of its width, and which 36% is a decision only the person who took the
+   picture can make. Centring it is a default, not an answer. */
 const MIN_FIT_H=0.60;
 const fitPad=document.createElement("canvas");   // reused scratch for the letterbox fill — allocated per frame this would be 60 canvases/second
 let sceneBand={y:0,h:1};   // where the real frame sits inside the board, as fractions — read by extractPalette()
@@ -3888,14 +3970,169 @@ function usesFitFrame(sw,sh,dr){ if(bgKind==="photo") return false;   // picked 
 function syncPreviewFit(){
   try{
     if(bgKind==="cam") cam.style.objectFit=usesFitFrame(cam.videoWidth,cam.videoHeight)?"contain":"cover";
-    else if(bgKind==="photo") photo.style.objectFit=usesFitFrame(photo.naturalWidth,photo.naturalHeight)?"contain":"cover";
+    /* The photo's framing has ONE writer. usesFitFrame() is false for every picked photo, so
+       this branch could only ever have written "cover" — and writing it here as well would
+       stamp on the explicit box applyPhotoFrame() lays out for a dragged crop, silently
+       re-centring it the next time anything called this. */
+    else if(bgKind==="photo") applyPhotoFrame();
   }catch(_){}
 }
+/* ===== THE USER'S CROP =======================================================================
+ * A picked photo now fills the board (see FRAMING above), and filling costs width: a 3:4 shot
+ * on a 9:19.5 screen keeps ~64% of itself. Centring is a guess, and it is wrong exactly as
+ * often as the subject is off-centre — which, in a game about hiding a figure somewhere
+ * specific, is most of the time. So the crop is draggable.
+ *
+ * ONE STATE, TWO RENDERERS, AND THEY MUST NOT DRIFT. The preview is the live <img> under a CSS
+ * transform; the paint is coverInto() sampling a source rect. Those are different machines, and
+ * the moment they disagree the picture JUMPS at the shutter — the same failure syncPreviewFit()
+ * exists to prevent for the fit frame. So both read `photoFrame` and both derive their geometry
+ * from photoSrcRect() below, which is the single definition of "where the board is looking".
+ *
+ *   s      zoom, as a multiple of the cover fit. 1 = cover. Never below 1 — under it the photo
+ *          stops covering and the bars come back, which is the thing this whole path removed.
+ *   tu,tv  pan, as a fraction of BOARD width/height.
+ *
+ * AND THE PREVIEW IS LAID OUT, NOT TRANSFORMED. The first version of this drove the <img> with
+ * `transform: translate(...) scale(...)` on top of object-fit:cover, which is the obvious move
+ * and is wrong in a way that only shows up on screen: a transform moves the element's BOX, and
+ * #photo's box is exactly the stage. Drag it 150px left and the right-hand 150px of the screen
+ * has no element over it — black. Every coordinate was correct, the canvas and the preview
+ * agreed about which pixel belonged where, and the preview still had a hole in it.
+ * So the box is SIZED AND PLACED instead, straight out of photoSrcRect(): render the whole
+ * photo at the scale that makes the sampled rect fill the stage, and offset it so that rect
+ * lands on the stage. The box then always overhangs, never uncovers, and — the part that
+ * matters — there is no second piece of geometry to keep in step, because the preview and the
+ * paint are now two readings of one function instead of a mapping and its hand-written inverse. */
+const PHOTO_ZOOM_MAX=4;
+let photoFrame={s:1,tu:0,tv:0};
+function resetPhotoFrame(){ photoFrame={s:1,tu:0,tv:0}; applyPhotoFrame(); }
+function photoFramed(){ return photoFrame.s!==1||photoFrame.tu!==0||photoFrame.tv!==0; }
+/* The cover fit itself — the rect coverInto() drew before any of this existed, and still the
+   identity case. Extracted so the clamp and the sampler cannot compute it differently. */
+function coverRect(sw,sh,dr){ const sr=sw/sh;
+  return sr>dr ? {rx:(sw-sh*dr)/2,ry:0,rw:sh*dr,rh:sh}
+               : {rx:0,ry:(sh-sw/dr)/2,rw:sw,rh:sw/dr}; }
+/* Where the board is looking, in SOURCE pixels. Identity (s=1, no pan) returns the cover rect
+   unchanged, which is what keeps the camera and every un-dragged photo on the old path. */
+function photoSrcRect(sw,sh,dr,f){ const r=coverRect(sw,sh,dr);
+  if(!f||f.s===1&&!f.tu&&!f.tv) return r;
+  return { rx:r.rx+(0.5-(0.5+f.tu)/f.s)*r.rw, ry:r.ry+(0.5-(0.5+f.tv)/f.s)*r.rh,
+           rw:r.rw/f.s, rh:r.rh/f.s }; }
+/* THE CLAMP IS AGAINST THE SOURCE, NOT AGAINST s. The obvious bound — |tu| <= (s-1)/2 — is only
+   right when the cover rect already spans the whole source on that axis, and for the shape this
+   feature exists for it does not: a 3:4 photo cover-fitted to a tall board uses its FULL height
+   and only part of its width. That axis has slack at s=1, and the slack is the entire point —
+   pan across the photo at 1x without zooming into it first. So solve the real constraint
+   (0 <= rx' and rx'+rw' <= sw) for tu, per axis. */
+function clampPhotoFrame(f,sw,sh,dr){
+  f.s=Math.max(1,Math.min(PHOTO_ZOOM_MAX,f.s||1));
+  if(!(sw>0&&sh>0&&dr>0)) return f;
+  const r=coverRect(sw,sh,dr);
+  const uHi=f.s*(0.5+r.rx/r.rw)-0.5, uLo=0.5-f.s*((sw-r.rx)/r.rw-0.5);
+  const vHi=f.s*(0.5+r.ry/r.rh)-0.5, vLo=0.5-f.s*((sh-r.ry)/r.rh-0.5);
+  f.tu=Math.min(uHi,Math.max(uLo,f.tu||0));
+  f.tv=Math.min(vHi,Math.max(vLo,f.tv||0));
+  return f; }
+/* The preview half — the SAME rect, expressed as a box.
+   Put the whole photo on screen at the scale that makes the sampled rect exactly one stage
+   wide (W·sw/rw), then slide it so the rect's origin sits at the stage's (−rx·W/rw). The box
+   comes out proportional to the source — rw:rh always carries the board's aspect, so
+   sw/rw : sh/rh reduces to sw:sh — which is why object-fit can be `fill` here: there is
+   nothing left to crop, the crop IS the box. */
+function applyPhotoFrame(){
+  try{
+    const sw=photo.naturalWidth, sh=photo.naturalHeight;
+    const W=stage.clientWidth, H=stage.clientHeight, st=photo.style;
+    clampPhotoFrame(photoFrame,sw,sh,W/Math.max(1,H));
+    if(!photoFramed()||!(sw>0&&sh>0&&W>0&&H>0)){
+      /* Back to the stylesheet: inset:0 + object-fit:cover IS the identity crop, so the
+         un-dragged photo renders through exactly the path it did before any of this. */
+      st.left=st.top=st.right=st.bottom=st.width=st.height=st.objectFit=""; return;
+    }
+    const r=photoSrcRect(sw,sh,W/H,photoFrame);
+    st.objectFit="fill";
+    st.right="auto"; st.bottom="auto";   // inset:0 still sets these; left+width would be over-constrained
+    st.left=(-r.rx*W/r.rw)+"px"; st.top=(-r.ry*H/r.rh)+"px";
+    st.width=(W*sw/r.rw)+"px";  st.height=(H*sh/r.rh)+"px";
+  }catch(_){}
+}
+
+/* ===== REFRAME, THE GESTURE HALF =============================================================
+ * WHY THIS IS A MODE AND NOT JUST A DRAG. Compose already spends both gestures on the figure:
+ * one finger moves it (onDown/onMove below — and deliberately from ANYWHERE on the screen, not
+ * only from the figure, because the figure is small), two fingers scale and rotate it. There is
+ * no free gesture left. Arbitrating by hit-test would take away dragging the figure from the
+ * background, which is the forgiving half of that control, and it would make "did I just move
+ * the photo or the person" a thing the user has to work out mid-drag.
+ * So the surface is switched instead: #gl stops taking pointers, #photo starts, and the bottom
+ * of the screen says which one is live. One meaning per gesture at all times. */
+const framePtr=new Map();
+let framing=false, framePinch=0, frameS0=1, frameCx=0, frameCy=0;
+function frameCentroid(){ let x=0,y=0; for(const p of framePtr.values()){ x+=p.x; y+=p.y; }
+  const n=framePtr.size||1; return {x:x/n,y:y/n}; }
+/* Re-baselining on EVERY change of finger count, not just on the first touch. The centroid of
+   two fingers is nowhere near the centroid of one, so lifting a finger mid-pinch would otherwise
+   hand the next move() a delta of half the pinch width and throw the photo across the board. */
+function frameRebase(){ const c=frameCentroid(); frameCx=c.x; frameCy=c.y;
+  if(framePtr.size===2){ const p=[...framePtr.values()];
+    framePinch=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1; frameS0=photoFrame.s; } }
+function frameDown(e){ if(!framing) return; e.preventDefault();
+  try{ photo.setPointerCapture(e.pointerId); }catch(_){}
+  framePtr.set(e.pointerId,{x:e.clientX,y:e.clientY}); frameRebase(); }
+function frameMove(e){ if(!framing||!framePtr.has(e.pointerId)) return; e.preventDefault();
+  framePtr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const W=stage.clientWidth||1, H=stage.clientHeight||1, c=frameCentroid();
+  photoFrame.tu+=(c.x-frameCx)/W; photoFrame.tv+=(c.y-frameCy)/H;
+  frameCx=c.x; frameCy=c.y;
+  /* Zoom about the CENTRE while panning by the centroid. Zooming about the pinch midpoint would
+     be truer to the finger, and it is not worth the second inversion: the pan runs in the same
+     gesture, so the picture still follows the hand, and every result goes through the same clamp
+     either way. */
+  if(framePtr.size>=2){ const p=[...framePtr.values()];
+    photoFrame.s=frameS0*((Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1)/framePinch); }
+  applyPhotoFrame(); }
+function frameUp(e){ if(!framePtr.delete(e.pointerId)) return; frameRebase(); }
+function setFraming(on){
+  const want=!!on && mode==="compose" && bgKind==="photo";
+  framing=want; framePtr.clear();
+  stage.classList.toggle("framing",want);
+  btnFrame.classList.toggle("on",want);
+  /* Set on the ELEMENT, not through the .framing class. timerBlocked() reads
+     [data-blocks-timer] and watchBlockers() only observes class/style on the blockers
+     THEMSELVES — a rule keyed off #stage.framing would change the computed display without
+     mutating anything the observer is watching, and the clock would keep running. */
+  frameBar.style.display=want?"flex":"none";
+  syncTimerPause();
+}
+const btnFrame=$("#btnFrame"), frameBar=$("#frameBar"), frameDone=$("#frameDone"), frameReset=$("#frameReset");
+/* ANY new photo starts un-cropped, and this is the only place that says so. Four paths assign
+   photo.src — the native picker, the file input, the reply rehide and the dev setBg — and every
+   one of them overwrites photo.onload with its own cleanup, so a reset hung off that property
+   would be one new path away from being silently skipped, leaving the previous picture's crop
+   applied to a photo it was never chosen for. A load listener cannot be overwritten. */
+photo.addEventListener("load",()=>{ resetPhotoFrame(); syncPreviewFit(); });
+/* THE BOX IS IN PIXELS, SO IT GOES STALE. `inset:0` + object-fit:cover re-fitted itself on every
+   resize for nothing; an explicit left/top/width/height does not — and on iOS the stage resizes
+   without any rotation, every time the browser chrome collapses or the keyboard closes. A stale
+   box is an uncovered edge, which is the black band again. The clamp rides along, so a crop that
+   was legal in the old aspect is brought back inside the new one instead of being left hanging
+   off it. No-op for an un-dragged photo: that path has no inline geometry to refresh. */
+window.addEventListener("resize",()=>{ if(bgKind==="photo") applyPhotoFrame(); });
+btnFrame.addEventListener("click",()=>setFraming(!framing));
+frameDone.addEventListener("click",()=>setFraming(false));
+frameReset.addEventListener("click",()=>resetPhotoFrame());
+photo.addEventListener("pointerdown",frameDown);
+photo.addEventListener("pointermove",frameMove);
+photo.addEventListener("pointerup",frameUp);
+photo.addEventListener("pointercancel",frameUp);
 function coverInto(g,cw,ch){ let src,sw,sh; if(bgKind==="cam"&&cam.videoWidth){src=cam;sw=cam.videoWidth;sh=cam.videoHeight;} else if(bgKind==="photo"&&photo.naturalWidth){src=photo;sw=photo.naturalWidth;sh=photo.naturalHeight;} else { g.fillStyle="#223"; g.fillRect(0,0,cw,ch); return; }
-  const sr=sw/sh,dr=cw/ch;
+  const dr=cw/ch;
   if(!usesFitFrame(sw,sh,dr)){ sceneBand={y:0,h:1};
-    let rw,rh,rx,ry; if(sr>dr){rh=sh;rw=sh*dr;rx=(sw-rw)/2;ry=0;}else{rw=sw;rh=sw/dr;rx=0;ry=(sh-rh)/2;}
-    g.drawImage(src,rx,ry,rw,rh,0,0,cw,ch); return; }
+    /* The frame is the PHOTO's. A camera frame has no draggable crop — it is a live scene, you
+       move the phone — so it samples the plain cover rect, byte for byte as before. */
+    const r=photoSrcRect(sw,sh,dr,bgKind==="photo"?photoFrame:null);
+    g.drawImage(src,r.rx,r.ry,r.rw,r.rh,0,0,cw,ch); return; }
   const h=Math.max(1,Math.round(cw*sh/sw)), y=Math.round((ch-h)/2);
   sceneBand={y:y/ch,h:h/ch};
   /* The fill is the frame cover-cropped through a 1/16-scale canvas and blown back up —
@@ -3914,7 +4151,16 @@ function projectChar(char){ const v=new THREE.Vector3(); char.parts.spine.getWor
 function capture(){
   // The moment a live camera (or picked photo) becomes a paintable board — the step
   // between "camera works" and "started painting", where a silent drop would be invisible.
-  track("photo_captured",{source:bgKind,timed:timerArmed("aim"),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
+  // `source` stays bgKind — it is an established property with three weeks of history behind
+  // it and renaming it would split every existing chart. `origin` is the finer reading beside
+  // it, so the two can be compared rather than one silently replacing the other.
+  /* `framed`/`zoom` ride on this event rather than becoming one of their own. The question the
+     reframe control has to answer is "did anyone move the crop off centre", and that is a
+     property of the capture it produced — a separate event would also need a new name on the
+     wrapper's allow-list, which no shipped binary knows. Nothing to add anywhere: a property is
+     free on an event that already flows. */
+  setFraming(false);   // the shutter can still be reached by the aim clock — never enter paint with the reframe surface live
+  track("photo_captured",{source:bgKind,origin:photoSrc,framed:bgKind==="photo"&&photoFramed(),zoom:bgKind==="photo"?Math.round(photoFrame.s*100)/100:null,timed:timerArmed("aim"),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
   if(timerArmed("aim")&&aimStartedAt) recordAim(aimGiven,(Date.now()-aimStartedAt)/1000,captureWasAuto);
   aimStartedAt=0;
   captureWasAuto=false;   // consumed — the next capture is a thumb until the clock says otherwise
@@ -3959,7 +4205,7 @@ function capture(){
   beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   resetZoom();   // every round starts framed as shot — a leftover zoom would silently crop the next hide
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; kfShowBtn(false); $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; kfShowBtn(false); $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; btnFrame.style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
   /* Reset to the roller on every capture for a non-member. Nothing hands the slider over any
      more now that the free round is gone, but this stays as belt and braces: a small brush
@@ -10073,6 +10319,15 @@ function chCreateForms(base,who){
   const slot=chSlot();
   const runNow=(chReplyTo?(chStreak().run|0):0);
   const lq=chLqip();
+  /* THE 15-ARGUMENT RUNG — where the photograph came from, on top of everything the
+     14-argument rung carries. Guarded on photoSrc being set at all, for the same reason the
+     rung below is guarded on the lqip existing: the debug harness and any door added later
+     without a word of its own leave it null, and a null travelling up as an argument would be
+     a fifteenth-arity call carrying nothing. It climbs down instead and publishes identically.
+     ADDED, NEVER EDITED. The server clamps to the five-word vocabulary and nulls anything else
+     (infra/2026-08-16-hide-source.sql) — this is an anonymous client, and a hide is worth more
+     than a taxonomy. */
+  if(key&&slot&&slot.id&&lq&&photoSrc) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq,p_source:photoSrc});
   if(key&&slot&&slot.id&&lq) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq});
   if(key&&slot&&slot.id&&runNow>0) forms.push({...signed,p_reply_to:chReplyTo,p_author_key:key,p_id:slot.id,p_streak:runNow});
   if(key&&slot&&slot.id) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id});
@@ -12499,7 +12754,11 @@ function chSeek(hideId,opts){
           try{ URL.revokeObjectURL(url); }catch(_){}
         };
         photo.src=url;
-        photo.style.display="block"; cam.style.display="none"; bgKind="photo";
+        /* A REHIDE IS NOT AN UPLOAD. The image is the answered hide's own — somebody else's
+           capture, fetched back down — so filing it as `library` would inflate the exact number
+           this column exists to measure, and filing it as `camera` would credit a shutter this
+           user never pressed. It gets its own word. */
+        photo.style.display="block"; cam.style.display="none"; bgKind="photo"; photoSrc="rehide";
         enterCompose();
       })();
     }
