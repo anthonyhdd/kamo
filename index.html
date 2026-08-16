@@ -1314,16 +1314,37 @@
   .khWatch.lock::after{content:" ✦";font-size:10px;opacity:.9;}
   /* REACTIONS. The feed gave a player exactly two things to do with somebody else's photo —
      find it, or leave — and nothing to say back. Four emoji, no keyboard, no thread: the
-     cheapest possible signal, on the one screen where the round is already over. */
-  .chRx{display:flex;gap:8px;justify-content:center;margin:2px 0 4px;}
-  .chRxB{position:relative;display:flex;align-items:center;gap:5px;min-width:52px;justify-content:center;
-    background:rgba(255,255,255,.07);border:1px solid var(--stroke);border-radius:999px;
-    padding:7px 11px;font-size:16px;line-height:1;cursor:pointer;color:#fff;
+     cheapest possible signal.
+     ══ MOVED OUT OF THE ENDING CARD, founder's call 2026-08-16: "ajoute les emoji react
+     direct sur le feed, pas besoin de tapper d'abord."
+     He is right, and the old placement was costing most of them. Reactions lived on the card,
+     which only exists AFTER the round resolves — so the only people who could ever say
+     anything were the ones who had already spent their buzz. Everybody who looked at a photo
+     and scrolled on, which is the majority of the feed, met no way to respond at all. And
+     reacting is not a verdict on a round: "😂" is about the photograph, and the photograph is
+     on screen from the first frame.
+     A RAIL, ON THE RIGHT, mid-height. Not the top (the KAMO wordmark is hit-tested at the
+     document by coordinates — anything up there inherits the 2026-08-15 collision) and not
+     the bottom, which is where the ending card arrives. Mid-right is the one edge that is
+     free in both states, so the rail does not move when the round ends: the same control, in
+     the same place, before and after. */
+  .chRx{position:absolute;right:9px;top:50%;transform:translateY(-50%);z-index:6;
+    display:flex;flex-direction:column;gap:21px;align-items:center;pointer-events:auto;}
+  /* Column, so the count reads as a caption under the face rather than as a second chip. */
+  .chRxB{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:center;
+    width:46px;height:46px;
+    background:rgba(4,6,10,.5);border:1px solid rgba(255,255,255,.18);border-radius:999px;
+    padding:0;font-size:19px;line-height:1;cursor:pointer;color:#fff;
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
     -webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.3,1.5,.5,1),
       background .18s ease,border-color .18s ease;}
   .chRxB:active{transform:scale(.9);}
-  .chRxB.on{background:rgba(95,230,164,.16);border-color:rgba(95,230,164,.45);}
-  .chRxN{font-family:var(--font);font-size:12.5px;font-weight:700;opacity:.75;}
+  .chRxB.on{background:rgba(95,230,164,.18);border-color:rgba(95,230,164,.5);}
+  /* Under the chip, not inside it: at 46px there is no room for a number beside a 19px face,
+     and a count that pushed the emoji off-centre would make the four chips disagree. */
+  .chRxN{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;
+    font-family:var(--font);font-size:11.5px;font-weight:700;opacity:.8;
+    font-variant-numeric:tabular-nums;text-shadow:0 1px 3px rgba(0,0,0,.6);}
   /* THE TAP HAS TO LAND, and until now the only thing that moved was a background colour
      swapping in under the thumb — which is the one pixel a thumb is covering. Three things
      fire together instead, all of them CSS so none of them can be skipped by a backgrounded
@@ -6785,6 +6806,14 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    while they land on the web one, and the funnel would read zero. */
 "sent_feed_tapped",
 "feed_opened","feed_closed","feed_slide","feed_empty","feed_empty_cta",
+/* THE THREE NEW ONES, AND WHY THEY ARE HERE RATHER THAN ON THE BRIDGE. Same reason as every
+   name around them: no shipped binary's WEB_EVENTS list knows them, so through the wrapper
+   they would be dropped in silence and the feature would look like it produced no behaviour.
+   `feed_skipped` is also the FIRST measurement of the feed's give-up, which has never existed
+   in any form — see kfNoteSkip(). It lands on the same Amplitude user as feed_opened and
+   feed_slide, which is the only way the rate is readable: skips over slides, one denominator,
+   one user. Through the bridge it would land on the native user and be unjoinable. */
+"feed_skipped","board_shown","run_broken",
 "feed_load_failed","hide_visibility_set",
 /* THE ONE THAT SAYS HOW LONG IT TOOK, and it has to travel with the rest of the family.
    `feed_first_paint` carries the milliseconds from the tap to the first photograph being
@@ -9649,6 +9678,42 @@ function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=fals
  * caller: the const is a TDZ hazard exactly like chReplyTo, and this file has been bitten by
  * that once already. */
 const KF_AUTHOR_KEY="kamo_author_key";
+/* THE SAME KEY, READ WITHOUT CREATING ONE — and the distinction is the whole reason this
+   exists rather than a second call to kfAuthorKey().
+   That function MINTS on a miss, deliberately: the key comes into being with the first hide,
+   the same rule the handle follows. The seek trace wants to carry the key so the streak board
+   can group on something stable (handles collide — 576 combinations, 187 already shared), but
+   a trace is written by every visitor who opens a link, most of whom have never published
+   anything. Calling the minting version there would stamp a permanent device id onto every
+   anonymous passer-by, which is precisely what kfAuthorKey's own note argues against.
+   So: same validation, same key, no write. Empty is a correct answer and means "this device
+   has never made a kamo" — which is also why the board's empty state can honestly say that
+   making one is how you get on it.
+   A `function` declaration, not a const arrow: this file has been bitten by TDZ twice
+   (chReplyTo, KF_AUTHOR_KEY) and a hoisted declaration cannot be. */
+function kfAuthorKeyRO(){
+  try{
+    const k=localStorage.getItem(KF_AUTHOR_KEY);
+    return (k&&/^[a-z0-9]{16,40}$/.test(k)) ? k : "";
+  }catch(e){ return ""; }
+}
+/* THE RUN — the seeker's live streak of finds, and their record.
+   WHY IT IS HERE rather than beside chNoteSeek, which writes it: three callers outside that
+   function read it. chCreateForms() stamps it onto a reply so a challenge arrives with a
+   number on it; the board prints it; the round paints it. The writer stays with the round it
+   describes — one owner for the write, several for the read.
+   TWO NUMBERS AND THEY DO NOT OVERLAP. `run` is live and continuous: it survives midnight,
+   because a streak amputated by a timezone the player cannot see reads as a bug rather than
+   as a rule. `best` is their all-time record. "Today" is deliberately NOT kept here — the
+   board owns it, computed server-side over one UTC day, and a second local notion of today
+   would be a second answer to the same question. */
+const CH_RUN_KEY="kamo_seek_run", CH_BEST_KEY="kamo_seek_best";
+function chStreak(){
+  try{
+    return {run:parseInt(localStorage.getItem(CH_RUN_KEY)||"0",10)||0,
+            best:parseInt(localStorage.getItem(CH_BEST_KEY)||"0",10)||0};
+  }catch(e){ return {run:0,best:0}; }
+}
 function kfAuthorKey(){
   try{
     const k=localStorage.getItem(KF_AUTHOR_KEY);
@@ -9694,8 +9759,23 @@ function chCreateForms(base,who){
      The id rides on top of the author key rather than replacing a rung, because losing the
      author key to gain a fast link would trade a blockable hide for a share — and a hide
      nobody can block is a worse thing to publish than a link that arrives a second late. */
+  /* THE 13-ARGUMENT RUNG — the challenger's run, and it only ever rides on a REPLY.
+     "Challenge back" (PR #262) delivers by publishing: the address is already on the row and
+     the recipient finds it through my_replies. What arrives is a round with nothing at stake,
+     which is the same emptiness the seeker side has — so the reply carries the number the
+     sender built getting there, and the recipient is answering a person on a run rather than
+     receiving another photograph.
+     GUARDED ON chReplyTo, not merely included when known. The column's meaning, written into
+     infra/2026-08-16-streak-and-skip.sql, is "the challenger's run at the moment the reply
+     was made". A run stamped onto a hide that answers nobody would be a number with no claim
+     attached, and the reading side would have to guess which kind it was holding.
+     ADDED, NEVER EDITED, like every rung below: a page loaded before this migration climbs
+     down to the 12-argument form and publishes exactly as it does today. The server clamps
+     the value to 1..999 and nulls anything else — this is an anonymous client. */
   const key=kfAuthorKey();
   const slot=chSlot();
+  const runNow=(chReplyTo?(chStreak().run|0):0);
+  if(key&&slot&&slot.id&&runNow>0) forms.push({...signed,p_reply_to:chReplyTo,p_author_key:key,p_id:slot.id,p_streak:runNow});
   if(key&&slot&&slot.id) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id});
   if(key) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key});
   if(chReplyTo) forms.push({...signed,p_reply_to:chReplyTo});
@@ -10968,14 +11048,43 @@ function chSeek(hideId,opts){
       return {n:parseInt(localStorage.getItem(CH_SEEN_KEY)||"0",10)||0,
               hit:parseInt(localStorage.getItem(CH_HIT_KEY)||"0",10)||0};
     }catch(_){ return {n:0,hit:0}; } };
+  /* THE RUN, AND WHY THIS IS THE FEATURE RATHER THAN A DECORATION.
+     Measured 2026-08-15 over three days: 55% of failed rounds end inside four seconds, 28%
+     inside two. Nobody is searching — they tap and swipe, because a wrong tap costs exactly
+     nothing. No clock runs out, no score moves, nothing is lost.
+     A run is the cheapest possible price. It is built by the player, it is visible before the
+     tap, and one careless guess destroys it. That is the whole mechanism: it does not ask
+     anyone to look harder, it makes not looking expensive.
+     It also repairs the measurement everything else waits on. `n_found / n_attempts` cannot
+     describe how well a photo was painted while most of its attempts were reflexes; the
+     creator side of this product cannot be scored until the seeker side has a stake.
+     TWO NUMBERS, AND THEY DO NOT OVERLAP. `run` is live and continuous — it survives midnight,
+     because a streak amputated by a timezone the player cannot see reads as a bug. `best` is
+     their record, all-time. "Today" is not kept here at all: the board owns it, computed
+     server-side over one UTC day, and a second local notion of today would be a second answer
+     to the same question. See streak_board() in infra/2026-08-16-streak-and-skip.sql. */
+  /* THE READER LIVES AT MODULE SCOPE (chStreak, next to kfAuthorKeyRO) because two callers
+     outside this function need it: chCreateForms(), which stamps the run onto a reply, and
+     the board. Only the WRITER is here, with the round it describes. */
   /* Once per ROUND, from the one place a round can end — not from each branch, or a miss that
-     also reveals an ancestor would count twice. */
+     also reveals an ancestor would count twice.
+     RETURNS WHAT THE CARD NEEDS TO SPEAK: the run after this round, the record, and `broke` —
+     the length the run had reached when it died, which is the only number a loss owns. Read
+     before the write, because after it there is no way back to it. */
   const chNoteSeek=(hit)=>{ try{
       const r=chSeekRecord();
       localStorage.setItem(CH_SEEN_KEY,String(r.n+1));
       if(hit) localStorage.setItem(CH_HIT_KEY,String(r.hit+1));
-    }catch(_){} };
-  try{ window.KAMOSEEK={record:chSeekRecord,min:CH_MIN_SEEKS}; }catch(_){}
+      const s=chStreak(), run=hit?s.run+1:0, best=Math.max(s.best,run);
+      localStorage.setItem(CH_RUN_KEY,String(run));
+      if(best!==s.best) localStorage.setItem(CH_BEST_KEY,String(best));
+      /* A RUN COUNTS FROM 1 — that is what streak_board() ranks (`where streak > 0`) and what
+         the pill shows. But CELEBRATING one does not: "1 best yet" on somebody's first ever
+         find is noise dressed as an achievement, and the same threshold is why a broken run
+         only speaks from 2. One rule, both directions. */
+      return {run:run,best:best,broke:hit?0:s.run,record:(run>=2&&run>s.best)};
+    }catch(_){ return {run:0,best:0,broke:0,record:false}; } };
+  try{ window.KAMOSEEK={record:chSeekRecord,min:CH_MIN_SEEKS,streak:chStreak}; }catch(_){}
   const ctl={destroy:()=>{}};
   const st=document.createElement("style");
   st.textContent=
@@ -10999,6 +11108,26 @@ function chSeek(hideId,opts){
     /* The clock is a floating pill, mint like every score in the app, and it only ever
        counts UP — urgency colours belonged to a clock that could kill the round. */
     +".chClock{position:absolute;top:calc(12px + var(--safe-t));right:12px;z-index:5;font-family:var(--display);font-weight:700;font-size:15px;color:var(--mint);padding:7px 12px;border-radius:999px;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);pointer-events:none;font-variant-numeric:tabular-nums;}"
+    /* THE RUN, ON THE LEFT, FACING THE CLOCK. It has to be readable BEFORE the tap or it
+       cannot change the tap — a run revealed on the ending card is a scoreboard, not a stake.
+       TOP-LEFT AND NOT TOP-CENTRE, and that is not taste. The KAMO wordmark is hit-tested at
+       the DOCUMENT by coordinates (onBrand, clientX/Y, capture phase), so z-index does not
+       protect anything placed in its box — that is the 2026-08-15 hotfix, where the feed's
+       centred pill opened the name modal instead of its own menu. Anything that lands in the
+       top middle of a KAMO screen inherits that bug.
+       Same shell as the clock (radius, blur, backdrop) so the two read as one instrument. */
+    +".chRun{position:absolute;top:calc(12px + var(--safe-t));left:12px;z-index:5;font-family:var(--display);font-weight:700;font-size:15px;color:#ffd48a;padding:7px 12px;border-radius:999px;background:rgba(4,6,10,.55);border:1px solid rgba(255,212,138,.34);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);pointer-events:none;font-variant-numeric:tabular-nums;display:none;}"
+    /* THE BREAK IS THE POINT OF THE WHOLE FEATURE, so it is the one thing on this screen that
+       is allowed to be loud: the pill goes red, shakes once, and stays dead until the round
+       is over. A run that simply disappears teaches nothing — the player has to watch it die.
+       forwards, so it does not snap back to gold on the last frame. */
+    +".chRun.dead{color:#ff8f8f;border-color:rgba(255,143,143,.5);animation:chRunDie .5s cubic-bezier(.36,.07,.19,.97) forwards;}"
+    +"@keyframes chRunDie{0%{transform:scale(1)}18%{transform:scale(1.14) translateX(-3px)}38%{transform:scale(1.02) translateX(3px)}60%{transform:scale(1) translateX(-2px)}100%{transform:scale(.96);opacity:.72}}"
+    /* A new personal record is the only good news this pill ever carries, and it gets one
+       pulse — not a burst. confettiBurst() already owns the find; a second celebration on the
+       same frame would compete with it. */
+    +".chRun.pb{animation:chRunPb .6s ease-out;}"
+    +"@keyframes chRunPb{0%{transform:scale(1)}40%{transform:scale(1.16)}100%{transform:scale(1)}}"
     +".chQuit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--safe-b));z-index:5;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.72);font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
     /* Same pill as the give-up button, opposite corner, mint because it is the only control
        on this screen that helps rather than ends. */
@@ -11096,6 +11225,14 @@ function chSeek(hideId,opts){
     +'<h1 class="chHead" id="chHead">Loading…</h1>'
     +'<p class="chSub" id="chSub"></p></div>'
     +'<div class="chClock" id="chClock" style="display:none">0.0s</div>'
+    /* Hidden in the markup and shown only when there is a run to show — a pill reading "0"
+       in front of somebody's first round is a scoreboard telling them they have nothing. */
+    +'<div class="chRun" id="chRun" style="display:none"></div>'
+    /* THE RAIL IS PART OF THE ROUND NOW, not of the card that ends it — see the note on .chRx.
+       Built empty and filled once the hide is known to exist; a rail over "This hide is gone"
+       would offer to react to nothing. Feed only: a link round is one photo from one person
+       who is waiting for an answer, not a surface to browse. */
+    +(FEED?'<div class="chRx" id="chRx"></div>':'')
     +'<div id="chFoot"></div>';
   HOST.appendChild(w);
   /* SCOPED TO THIS ROUND'S WRAPPER, not to the document. The feed keeps a neighbouring
@@ -11145,10 +11282,103 @@ function chSeek(hideId,opts){
     }catch(_){}
   }
 
+  /* ══ THE RUN PILL ═══════════════════════════════════════════════════════════════════════
+     DECLARED HERE, ABOVE THE ASYNC BLOCK, AND THAT POSITION IS THE POINT. ending() is called
+     from inside it on the very first line — "This hide is gone" — which runs long before the
+     round's own locals are initialised. Declared down there with the trace, these two would
+     be in the temporal dead zone at that moment: harmless today, because that call passes no
+     `rehide` and the guard below never reaches them, but it is one careless argument away
+     from a ReferenceError thrown inside the only error path this screen has. This file has
+     been bitten by exactly that twice (chReplyTo, KF_AUTHOR_KEY). Above the block it cannot
+     happen at all.
+     THREE STATES, AND EACH SAYS WHAT IT MEANS. The first draft reused "🔥 4" for the break
+     and only turned it red, which reads as "you have 4" to anyone not watching the colour —
+     the opposite of what just happened, on the one frame the feature exists for. So the dead
+     state stops counting and starts reporting.
+     NEVER ON A REPLAY: the player already knows where the figure is, so a replay is a
+     guaranteed hit and must not build a run. */
+  /* ══ THE REACTION RAIL ═══════════════════════════════════════════════════════════════════
+     FOUR TAPS, ONE PER EMOJI. Capped locally rather than server-side: there are no accounts
+     here, so a cap is a courtesy and not a guarantee — and the honest place for a courtesy is
+     the device that owes it. The counts come back from the server so the number is
+     everybody's, not this phone's.
+     ONE TAP PER EMOJI, NOT ONE PER HIDE. The cap used to be a single reaction for the whole
+     photo: react once and the other three chips went dead, silently. A reaction is not a vote
+     to be rationed, it is the only thing a seeker can say back, and "🔥 and 😂" is an
+     ordinary thing to mean. The courtesy is preserved exactly — one device can still add at
+     most one of each — and a spent chip says so by staying lit instead of by going quiet.
+     STORED AS A LIST, and the old single-value key is read as one: a device that reacted
+     under the previous build wrote "1", which is not an emoji and matches nothing, so those
+     people get their remaining chips back rather than a corrupted set.
+     MOUNTED WITH THE ROUND (founder, 2026-08-16), not with the card that ends it. */
+  function chRxMount(){
+    const box=$$("chRx"); if(!box) return;
+    const EM=["🔥","😂","😱","👏"], KEY="kamo_rx_"+HID;
+    let spent=[]; try{ spent=String(localStorage.getItem(KEY)||"").split(",").filter(Boolean); }catch(e){}
+    box.innerHTML=EM.map(e=>'<button class="chRxB'+(spent.indexOf(e)<0?'':' on')+'" data-e="'+e+'">'+e
+      +'<span class="chRxN" data-n="'+e+'"></span></button>').join("");
+    const paint=(rows)=>{ (rows||[]).forEach(r=>{ const el=box.querySelector('[data-n="'+r.emoji+'"]');
+      if(el) el.textContent=r.n>0?String(r.n):""; }); };
+    try{ chRpcRows("hide_reactions_of",{p_id:HID}).then(paint).catch(()=>{}); }catch(e){}
+    /* THE RAIL MUST NOT COST A BUZZ, and this is the whole risk of moving it onto the live
+       round. The stage owns every gesture on this screen — pointerdown there opens the aim
+       reticle and pointerup commits the shot — and the rail now sits on top of it. Without
+       this, tapping 😂 would arm an aim at the emoji's coordinates and the pointerup would
+       fire the player's single shot into the right-hand margin.
+       Stopped at pointerdown on the CONTAINER, in the bubble phase: the stage's listeners are
+       on an ancestor, so the event is killed before it reaches them while the button's own
+       click still resolves normally. */
+    ["pointerdown","pointerup","pointercancel"].forEach(t=>
+      box.addEventListener(t,e=>{ e.stopPropagation(); },false));
+    box.querySelectorAll(".chRxB").forEach(b=>{
+      b.onclick=()=>{
+        const em=b.dataset.e;
+        if(spent.indexOf(em)>=0) return;
+        spent.push(em);
+        try{ localStorage.setItem(KEY,spent.join(",")); }catch(e){}
+        b.classList.add("on"); haptic(10);
+        /* Restarted rather than merely added: a second tap on a chip that still carries the
+           class would not replay the animation, and these chips sit next to each other — the
+           pop has to be honest about WHICH one was hit. */
+        b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+        const fly=document.createElement("span");
+        fly.className="chRxFly"; fly.textContent=em;
+        b.appendChild(fly); setTimeout(()=>{ try{ fly.remove(); }catch(_){} },700);
+        const n=b.querySelector(".chRxN");
+        if(n){ n.textContent=String((parseInt(n.textContent||"0",10)||0)+1);
+          n.classList.remove("tick"); void n.offsetWidth; n.classList.add("tick"); }
+        /* `live` separates the two eras: a reaction placed while the photo was still a puzzle
+           is a different act from one placed over the answer, and this is the only way to
+           tell whether moving the rail earned anything. */
+        track("hide_reacted",TP({emoji:em,nth:spent.length,live:chLive}));
+        try{ chRpc("react_to_hide",{p_id:HID,p_emoji:em}).catch(()=>{}); }catch(e){}
+      };
+    });
+  }
+
+  const runEl=$$("chRun");
+  const chRunShow=(n,mode)=>{ if(!runEl||REPLAY) return;
+    const v=n|0;
+    if(v<=0&&mode!=="dead"){ runEl.style.display="none"; return; }
+    /* textContent: the only values here are integers this device wrote, but this file's rule
+       is that nothing reaches the DOM as markup unless it has to. */
+    runEl.textContent = mode==="dead" ? ("Run of "+v+" broken")
+                      : mode==="pb"   ? ("🔥 "+v+" best yet")
+                                      : ("🔥 "+v);
+    runEl.className="chRun"+(mode?" "+mode:"");
+    runEl.style.display="block";
+  };
+
   (async()=>{
     let h; try{ h=await chRpc("get_hide",{p_id:HID}); }catch(e){}
     if(killed) return;                 // swiped past before the hide arrived — build nothing
     if(!h||!h.img_path){ track("seek_missing",TP()); ending("This hide is gone.","Expired, or taken down.",{}); return; }
+    /* THE RAIL GOES UP HERE, and the position in this function is the whole of its contract:
+       after the existence check, so nothing offers to react to a hide that is gone, and
+       before the photo finishes decoding, so it is on screen for the entire time the player
+       is looking. That span — from first paint to the buzz — is the one the old placement
+       had no control in at all. */
+    chRxMount();
     /* Read, not incremented: `round` is which round THIS is, so a seeker's second hide
        reports 2 at the moment it opens. Grouping seek_opened by it answers the question
        directly — no funnel, no joins. 0 inside the app, where the counter is not kept. */
@@ -11204,9 +11434,29 @@ function chSeek(hideId,opts){
        count stays the fallback rather than the exception. Narrowed by cleanHandle() when it
        was typed and rendered with textContent on the other side, the same two-sided rule the
        seeker headline already follows for the author's name. */
+    /* `k` — WHOSE ROUND THIS IS, and it is the reason the board can exist without a new table.
+       seek_traces has carried `who` since it shipped, but a handle is not an identity: they
+       are minted from 24 adjectives × 24 nouns = 576 combinations against 169 seekers a day,
+       and 187 handles in this database already belong to more than one device. A board keyed
+       on the name merges strangers and hands one person's run to another. So the board groups
+       on this and DISPLAYS `who`.
+       READ-ONLY, and that is the whole care in this line. kfAuthorKey() MINTS when the key is
+       missing; calling it here would stamp a device id onto every anonymous visitor who ever
+       opened a link, which is exactly the thing that function's own comment says not to do.
+       The key is born on the first publish and nowhere else, so `k` is empty for anybody who
+       has never made a kamo — which is also the board's entry ticket, on purpose.
+       `r` — A REPLAY IS A GUARANTEED HIT: the player already knows where it is. It files no
+       attempt (see the REPLAY branch in buzz) and it must not build a run either. Flagged here
+       so the board can drop it server-side as well. */
     const trace={v:1,src:(FEED?"feed":"link"),who:(getHandle()||"").slice(0,16),
+                 k:kfAuthorKeyRO(),
                  vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
+    if(REPLAY) trace.r=1;
     const clockEl=$$("chClock");
+    /* PAINTED AT MOUNT, NOT AT THE FIRST TAP: the number has to be on screen while the shot
+       is still unspent, or it is a scoreboard instead of a stake. chRunShow itself is
+       declared above the async block — see the note there for why. */
+    if(!REPLAY){ const s0=chStreak(); if(s0.run>0) chRunShow(s0.run); }
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
       clock=setInterval(()=>{ syncPause(); clockEl.textContent=(elapsed()/1000).toFixed(1)+"s"; },100);
       ctl._clock=clock; };   // the handle destroy() clears — see `killed` above
@@ -11691,9 +11941,33 @@ function chSeek(hideId,opts){
          is the same guard chBumpRounds uses: it marks a real round, so "this hide is gone"
          (which arrives with no opts) cannot count as a seek nobody played. A win is the only
          head that starts with Found. */
-      if(eopts&&eopts.rehide) chNoteSeek(/^Found/.test(String(head||"")));
+      /* NEVER ON A REPLAY, and this is a correction as much as a new guard. A replay is the
+         creator watching a round back on a hide whose answer this device already knows — it
+         files no attempt (see the REPLAY branch in buzz) precisely because it is not a hunt.
+         It has been counting toward the seeker's record since that record shipped; the record
+         has never been displayed, so nothing anybody has seen was ever wrong, and fixing it
+         before the run starts printing is the only moment where the fix is free. Left in and
+         a creator could build a 40-run by rewatching their own hides. */
+      const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(/^Found/.test(String(head||""))) : null;
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
+      /* THE RUN SPEAKS ON THE CARD TOO, because the pill is about to leave with the round.
+         A WIN adds one and says so; a NEW RECORD says that instead, because it is the bigger
+         news and two lines about the same number is one line too many.
+         A LOSS ONLY SPEAKS IF THERE WAS SOMETHING TO LOSE. `broke` is the length the run had
+         reached, and at 0 or 1 there is no sentence worth printing — "you broke a run of 1"
+         is a scold aimed at somebody who has not started. From 2 up it is the truest thing on
+         the screen, and it is the sentence the whole feature exists to make land. */
+      if(sk){
+        if(sk.run>0)          chRunShow(sk.run, sk.record?"pb":"");
+        else if(sk.broke>=2){ chRunShow(sk.broke,"dead");
+          /* THE ONE NUMBER THAT SAYS WHETHER ANY OF THIS WORKED. If the run is doing its job,
+             the distribution of `at` climbs — people are looking longer before they tap —
+             and the 3.5s median of a failed round rises with it. If `at` stays pinned at 2
+             and 3, the stake is not being felt and the answer is not more copy. */
+          track("run_broken",TP({at:sk.broke,src:FEED?"feed":"link"})); }
+        else if(runEl)        runEl.style.display="none";
+      }
       const q=$$("chQuit"); if(q) q.remove();
       /* THE ROUND IS BANKED HERE, and only where there is something to send back — which is
          also the only shape that IS a round. "This hide is gone" arrives with no opts, and a
@@ -11748,7 +12022,10 @@ function chSeek(hideId,opts){
                has already answered the question the store page asks, so the store stops being
                the secondary action. Round 1 is unchanged and still sells the loop. */
             : '<button class="'+((eopts.rehide&&chRoundsPlayed()<1)?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+'</button>')
-        +(FEED?'<div class="chRx" id="chRx"></div>':'')
+        /* THE REACTION SLOT IS GONE FROM THIS CARD — the rail lives on the round now and is
+           already on screen behind it. Left in, this markup would mint a SECOND element with
+           id="chRx", and $$() is a querySelector: every later lookup would resolve to
+           whichever came first in the document and the taps would land on the wrong one. */
         /* NOT IN THE FEED, where the bar's ⚑ is on screen at all times and does exactly this
            — two report links on one photo is one too many, and the founder counted them.
            IT STAYS EVERYWHERE ELSE, and that is not tidiness: a hide opened from a LINK has
@@ -11783,54 +12060,10 @@ function chSeek(hideId,opts){
          head, the sub and the two buttons paint first, the reveal is read, and then the
          sheet arrives over a screen the user has already seen. */
       if(eopts&&eopts.rehide) setTimeout(()=>pwFirstOffer("seek_end"),1500);
-      /* FOUR TAPS, ONE PER HIDE. Capped locally rather than server-side: there are no
-         accounts here, so a cap is a courtesy and not a guarantee — and the honest place for
-         a courtesy is the device that owes it. The counts come back from the server so the
-         number is everybody's, not this phone's. */
-      /* ONE TAP PER EMOJI, NOT ONE TAP PER HIDE.
-         The cap used to be a single reaction for the whole photo: react once and the other
-         three chips went dead, silently — nothing said so, they simply stopped answering.
-         That is the wrong shape for what this control is. A reaction here is not a vote to
-         be rationed, it is the only thing a seeker can say back, and "🔥 and 😂" is a
-         perfectly ordinary thing to mean. The courtesy the cap exists to provide — one
-         person cannot run a number up on their own — is preserved exactly, because it was
-         never about the total: each emoji still accepts one tap from this device, so the
-         most anybody can add is one of each, and a chip that has been used says so by
-         staying lit instead of by going quiet.
-         STORED AS A LIST, and the old single-value key is read as one: a device that reacted
-         under the previous build wrote "1", which is not an emoji and so matches nothing —
-         those people get their remaining three chips back rather than a corrupted set. */
-      if($$("chRx")){
-        const EM=["🔥","😂","😱","👏"], KEY="kamo_rx_"+HID;
-        let spent=[]; try{ spent=String(localStorage.getItem(KEY)||"").split(",").filter(Boolean); }catch(e){}
-        const box=$$("chRx");
-        box.innerHTML=EM.map(e=>'<button class="chRxB'+(spent.indexOf(e)<0?'':' on')+'" data-e="'+e+'">'+e
-          +'<span class="chRxN" data-n="'+e+'"></span></button>').join("");
-        const paint=(rows)=>{ (rows||[]).forEach(r=>{ const el=box.querySelector('[data-n="'+r.emoji+'"]');
-          if(el) el.textContent=r.n>0?String(r.n):""; }); };
-        try{ chRpcRows("hide_reactions_of",{p_id:HID}).then(paint).catch(()=>{}); }catch(e){}
-        box.querySelectorAll(".chRxB").forEach(b=>{
-          b.onclick=()=>{
-            const em=b.dataset.e;
-            if(spent.indexOf(em)>=0) return;
-            spent.push(em);
-            try{ localStorage.setItem(KEY,spent.join(",")); }catch(e){}
-            b.classList.add("on"); haptic(10);
-            /* Restarted rather than merely added: a second tap on a chip that still carries
-               the class would not replay the animation, and these chips sit next to each
-               other — the pop has to be honest about WHICH one was hit. */
-            b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
-            const fly=document.createElement("span");
-            fly.className="chRxFly"; fly.textContent=em;
-            b.appendChild(fly); setTimeout(()=>{ try{ fly.remove(); }catch(_){} },700);
-            const n=b.querySelector(".chRxN");
-            if(n){ n.textContent=String((parseInt(n.textContent||"0",10)||0)+1);
-              n.classList.remove("tick"); void n.offsetWidth; n.classList.add("tick"); }
-            track("hide_reacted",TP({emoji:em,nth:spent.length}));
-            try{ chRpc("react_to_hide",{p_id:HID,p_emoji:em}).catch(()=>{}); }catch(e){}
-          };
-        });
-      }
+      /* THE REACTION RAIL IS NOT BUILT HERE ANY MORE — see chRxMount(), which runs at the
+         start of the round. It is already on screen, and already carries whatever this player
+         tapped while they were still looking. Rebuilding it here would wipe those taps with
+         the card that follows them. */
       /* THE SEND, AND WHY IT NEEDS NONE OF THE COMPOSER'S MACHINERY.
          #ssInvite has to reserve a slot, start an upload, decide whether the round cleared
          the coverage floor and then wait up to eight seconds for create_hide to answer,
@@ -12178,6 +12411,23 @@ const KF_CSS=
   +".kmStat.send{border-color:rgba(255,255,255,.85);color:#fff;background:rgba(255,255,255,.06);}"
   +".kmStat.send b{color:#fff;}"
   +".kmGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
+  /* ══ THE BOARD ═══════════════════════════════════════════════════════════════════════════
+     Same shell as the My-kamos panel (.kfMine: absolute, inset 0, z 26, over the slides) so
+     the three scopes are one surface with three contents rather than three screens. Rows, not
+     a grid: a name and two numbers is a line, and a 2-column grid of text cells would be the
+     mine grid's furniture holding something that is not a photo. */
+  +".kbHead{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.3px;padding:2px 2px 2px;}"
+  +".kbSub{font-size:12.5px;opacity:.62;padding:4px 2px 14px;font-variant-numeric:tabular-nums;}"
+  +".kbRow{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:14px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);margin-bottom:7px;}"
+  /* The reader's own line is the only one that gets colour: a board where every row competes
+     for attention has no anchor, and the one question somebody opens it with is "where am I". */
+  +".kbRow.kbMe{background:rgba(95,230,164,.11);border-color:rgba(95,230,164,.42);}"
+  +".kbRank{font-family:var(--display);font-weight:700;font-size:14px;opacity:.55;min-width:26px;font-variant-numeric:tabular-nums;}"
+  +".kbRow.kbMe .kbRank{opacity:.9;color:var(--mint);}"
+  +".kbWho{flex:1 1 auto;font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
+  +".kbRun{font-family:var(--display);font-weight:700;font-size:15px;color:#ffd48a;font-variant-numeric:tabular-nums;}"
+  +".kbIn{font-size:11.5px;opacity:.5;font-variant-numeric:tabular-nums;min-width:62px;text-align:right;}"
+  +".kbFoot{margin-top:16px;padding:13px;border-radius:14px;border:1px dashed rgba(255,255,255,.16);font-size:13px;line-height:1.45;opacity:.85;}"
   /* align-self:start — kept, though every cell now carries the same one-button row and so the
      heights already match. It is what stops a cell stretching to its neighbour's height and
      paying for it with a strip of empty card under its photo, which the founder read as a
@@ -12334,6 +12584,14 @@ function chFeed(opts){
     +  '<button data-s="all" class="on"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/>'
     +     '<path d="M3.5 19c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8"/><circle cx="17" cy="9" r="2.4"/>'
     +     '<path d="M15.6 14.6c2.6-.5 4.9 1.1 4.9 4.4"/></svg>Everyone</button>'
+    /* THE THIRD LINE, AND THE MENU IS WHERE IT BELONGS. The ceiling of two controls set on
+       2026-08-15 is on the BAR — it is why Profile came out of the bar in the first place —
+       and the menu is the destination list that move created. A board reached from a bar
+       button would spend the allowance the report flag needs.
+       Trophy in stroke, matching every other glyph in this file. */
+    +  '<button data-s="board"><svg viewBox="0 0 24 24"><path d="M7.5 4.5h9v4a4.5 4.5 0 0 1-9 0z"/>'
+    +     '<path d="M7.5 6h-2a2 2 0 0 0 2 2M16.5 6h2a2 2 0 0 1-2 2"/>'
+    +     '<path d="M12 13v3.5M9 19.5h6"/></svg>Today\'s runs</button>'
     +  '<button data-s="mine"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/>'
     +     '<path d="M5 20c0-3.5 3.1-5.6 7-5.6s7 2.1 7 5.6"/></svg>My kamos</button>'
     +'</div>'
@@ -12341,6 +12599,9 @@ function chFeed(opts){
        run — same principle (and same machinery) as the profile card, timerBlocked() reads
        the attribute on anything visible. */
     +'<div class="kfMine" id="kfMine" data-blocks-timer></div>'
+    /* data-blocks-timer for the same reason kfMine carries it: while this covers a live
+       round, the round's clock must not run. Same class, so the two panels are one shell. */
+    +'<div class="kfMine" id="kfBoard" data-blocks-timer></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
@@ -12370,6 +12631,11 @@ function chFeed(opts){
 
   function close(silent){
     if(kfState!==S) return;
+    /* THE LAST SLIDE COUNTS TOO. Leaving the feed on a photo nobody answered is the same act
+       as scrolling past it, and without this the one hide at the end of every session — the
+       most common way a session ends — would never be recorded. Before the teardown, while
+       S.answered still describes the round that is about to be destroyed. */
+    try{ kfNoteSkip(); }catch(_){}
     kfState=null;
     try{ if(S.round) S.round.destroy(); }catch(_){}
     try{ io.disconnect(); }catch(_){}
@@ -12392,13 +12658,51 @@ function chFeed(opts){
      and a feed that keeps them is a feed that gets slower the longer it is used. The photo
      stays (kfPrev), so scrolling back shows the picture — just not a second playable round
      on a hide whose answer this device has already spent. */
+  /* ══ THE GIVE-UP THAT HAS NEVER BEEN RECORDED ═══════════════════════════════════════════
+     There is no "I give up" button in the feed — deliberately, the swipe IS the exit. So a
+     player who studies a photo, finds nothing and scrolls on writes nothing at all: no
+     attempt, no trace, no row. `n_attempts` has only ever counted the people who chose to
+     fire.
+     That one hole explains the number that made no sense: feed rounds are found 59.2% of the
+     time in 3.6s average against 48.0% in 7.3s on a link. The feed does not hold easier hides
+     or better players — it records the rounds somebody already felt sure about and silently
+     discards every round where the camouflage actually worked. Which is why no creator-side
+     score in this product can mean anything yet: the evidence of a photo working is the
+     evidence that was never collected.
+     THE FLOOR IS 1.5 SECONDS, and it is doing one job: separating a look from a flick. A
+     scroll-snap feed passes slides under the thumb on the way somewhere, and counting those
+     as "saw it, gave up" would make a fast scroller look like a defeated one. 1.5s is above
+     the 1s that a snap plus a decode costs and well under the 3.5s median of a real failed
+     round, so it sits in a gap rather than on a distribution.
+     FIRE AND FORGET, ALWAYS. It is telemetry on the swipe path: it must never block the next
+     slide, never surface an error, and never be awaited. */
+  const KF_SKIP_MS=1500;
+  function kfNoteSkip(){
+    try{
+      const id=S.skipId, t=S.skipT;
+      S.skipId=null; S.skipT=0;
+      if(!id||S.answered||!t) return;
+      if(kfNow()-t < KF_SKIP_MS) return;
+      track("feed_skipped",{ms:Math.round(kfNow()-t)});
+      chRpc("log_skip",{p_id:id}).catch(()=>{});
+    }catch(_){}
+  }
+
   function activate(i){
     if(i<0||i>=S.slides.length||i===S.active) return;
+    /* BEFORE the previous round is torn down, while S.answered still describes it. */
+    kfNoteSkip();
     if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
     S.active=i;
     const s=S.slides[i];
     kfMarkSeen(s.row.id);
     S.played++;
+    /* NOT ON A REPLAY SLIDE. That is the creator's own hide, and scrolling past your own
+       photograph is not a seeker giving up on it — filing it would credit the author with a
+       camouflage win against themselves, on the one counter that exists to measure whether
+       their painting works. `answered` pre-set rather than skipId left empty, so the flush
+       is a single rule with a single exception instead of two ways of not counting. */
+    S.skipId=s.row.id; S.skipT=kfNow(); S.answered=!!s.replay;
     /* THE FIRST SLIDE CARRIES THE WAIT, and only the first: every later one is a swipe the
        user chose to make, and stamping those would bury the one number that is about the
        app being slow under a pile of numbers that are about somebody scrolling.
@@ -12418,7 +12722,10 @@ function chFeed(opts){
       host:s.host, feed:true, replay:!!s.replay, firstInFeed:(S.played===1),
       /* onEnded no longer kills the hint — see killHint. It still exists as the feed's signal
          that the card is up, which the drop/block paths read; only the removal moved. */
-      onEnded:()=>{},
+      /* AND IT NOW ANSWERS THE SKIP QUESTION TOO. A round that reaches its card was resolved
+         — found, missed, given up, or a hide that was already gone — and none of those is
+         somebody scrolling past. This is the one callback that fires for all of them. */
+      onEnded:()=>{ S.answered=true; },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       onReported:(id)=>drop(id),
       onBlocked:(id,stored)=>blockDrop(id,stored),
@@ -12433,6 +12740,10 @@ function chFeed(opts){
   function drop(id){
     const i=S.slides.findIndex(s=>s.row.id===id);
     if(i<0) return;
+    /* A REPORT IS NOT A SKIP. The photo is leaving because somebody objected to it, and
+       filing that as "seen and given up on" would credit its author with a camouflage win
+       for content that is about to be pulled. Same for a block, which routes through here. */
+    if(S.skipId===id) S.answered=true;
     const wasActive=(i===S.active);
     try{ S.slides[i].el.remove(); }catch(_){}
     S.slides.splice(i,1);
@@ -12452,6 +12763,9 @@ function chFeed(opts){
   function blockDrop(id,stored){
     const i=S.slides.findIndex(s=>s.row.id===id);
     if(i<0) return;
+    /* Same rule as drop(): a block is an objection, never a camouflage win. Set before the
+       early return so the short path (which delegates to drop) and the long one agree. */
+    if(S.skipId===id) S.answered=true;
     if(!stored){ drop(id); return; }   // nothing durable to re-filter on — just this photo
     if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
     S.slides.slice(i).forEach(s=>{ try{ s.el.remove(); }catch(_){} });
@@ -12632,7 +12946,8 @@ function chFeed(opts){
      the profile card. The pill names the CURRENT scope, the menu switches it — Instagram's
      home grammar, chosen over side-by-side tabs (founder's call, 2026-08-15). */
   const scopeBtn=root.querySelector("#kfScope"), menuEl=root.querySelector("#kfMenu"), mineEl=root.querySelector("#kfMine");
-  let mineOpen=false;
+  const boardEl=root.querySelector("#kfBoard");
+  let mineOpen=false, boardOpen=false;
   const menuShow=(on)=>{ if(menuEl) menuEl.style.display=on?"block":"none"; };
   /* THE MENU'S TICK BELONGS TO THE PANEL, NOT TO THE BUTTON THAT WAS PRESSED. It used to be
      set inside the menu's own click handler, which is correct for exactly one of the three
@@ -12812,11 +13127,123 @@ function chFeed(opts){
     { const f=root.querySelector("#kfFlag"); if(f) f.style.display="";
       const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
   }
+  /* ══ TODAY'S RUNS ════════════════════════════════════════════════════════════════════════
+     WHAT IT RANKS AND WHY THAT SHAPE. Longest run of consecutive finds, over one UTC day,
+     tie-broken by the FEWEST rounds spent reaching it. The tie-break is the whole fairness
+     argument: longest-run is monotonic in rounds played, so on a bare max() the person who
+     played 219 rounds on 2026-08-15 (against a median of 14) wins every day forever and the
+     board becomes furniture. Ranking ties by rounds spent means 7-in-9 beats 7-in-40 — no
+     artificial cap to explain, nobody's rounds silently not counting, and the sentence says
+     itself.
+     BUILT FROM TRACES THAT WERE ALREADY BEING WRITTEN. No new table, no new write on the hot
+     path: seek_traces has carried the verdict of every hunt since it shipped. The page adds
+     one key to that payload (`k`) so the server can group on something that is not a handle.
+     THE ENTRY TICKET IS ONE KAMO, and it is a consequence rather than a rule. `k` is minted
+     on the first publish and nowhere else, so somebody who has only ever hunted has no key
+     and cannot be grouped — which is exactly the population the empty state is written for.
+     The feed carried 890 of one day's won rounds and produced 62 taps on "make one" (7%); a
+     board with names on it and a line saying how to join is a second way to ask. */
+  const kbToday=()=>{ try{ return new Date().toISOString().slice(0,10); }catch(_){ return ""; } };
+  /* The countdown is the return trigger, so it has to be the real one: the board resets at
+     UTC midnight because that is the boundary streak_board() slices on, and a countdown that
+     disagreed with the query would be a lie the user could catch by waiting. */
+  const kbLeft=()=>{ try{
+      const n=new Date();
+      const ms=Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate()+1)-n.getTime();
+      const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000);
+      return h>0 ? (h+"h "+m+"m") : (m+"m");
+    }catch(_){ return ""; } };
+  /* DOM NODES, NOT A TEMPLATE STRING. Every handle here came off somebody else's device and
+     lands in front of a stranger; the file's rule is that it reaches the page as text and
+     never as markup, and building the row this way makes that structural instead of a
+     discipline somebody has to remember. */
+  const kbRow=(r)=>{
+    const d=document.createElement("div");
+    d.className="kbRow"+(r&&r.me?" kbMe":"");
+    const rk=document.createElement("span"); rk.className="kbRank"; rk.textContent="#"+(r.rank|0);
+    const wh=document.createElement("span"); wh.className="kbWho";
+    wh.textContent=r.who?("@"+r.who):"Someone";
+    const rn=document.createElement("span"); rn.className="kbRun"; rn.textContent="🔥 "+(r.streak|0);
+    const inn=document.createElement("span"); inn.className="kbIn";
+    inn.textContent="in "+(r.rounds|0)+(((r.rounds|0)===1)?" round":" rounds");
+    d.appendChild(rk); d.appendChild(wh); d.appendChild(rn); d.appendChild(inn);
+    return d;
+  };
+  async function boardShow(){
+    boardOpen=true;
+    scopeBtn.innerHTML='Today\'s runs <i>▾</i>';
+    scopeMark("board");
+    boardEl.style.display="block";
+    /* Same chrome as the other panel: the flag reports the SLIDE, which is underneath here.
+       The profile door stays shut — it belongs to the grid, where the subject is you. */
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="none";
+      const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
+    killHint();
+    boardEl.innerHTML='<div class="kmMid"><div class="kfSpin"></div></div>';
+    const meKey=kfAuthorKeyRO();
+    let rows=null;
+    try{ rows=await chRpcRows("streak_board",{p_day:kbToday(),p_me:meKey||null,p_limit:50}); }catch(e){}
+    if(!boardOpen||kfState!==S) return;   // switched away or the feed closed while fetching
+    const s=chStreak();
+    track("board_shown",{rows:(rows&&rows.length)|0,joined:!!meKey,best:s.best|0});
+    boardEl.innerHTML="";
+    const head=document.createElement("div"); head.className="kbHead"; head.textContent="Today's runs";
+    const sub=document.createElement("div"); sub.className="kbSub";
+    /* OFFLINE AND EMPTY ARE DIFFERENT SENTENCES — the same honesty rule khResults() and
+       mineShow() already follow. A failed fetch that renders as "nobody yet" tells the user
+       something false about other people. */
+    /* THREE STATES, NOT TWO. A board that came back EMPTY is not a board that failed to load
+       and not a board with people on it — early in a UTC day nobody has a run yet, and the
+       honest sentence there says so rather than printing a rule above nothing. */
+    sub.textContent = rows===null ? "Couldn't load the board."
+                    : rows.length ? ("Longest run of finds · resets in "+kbLeft())
+                                  : ("Nobody has a run going yet today · resets in "+kbLeft());
+    boardEl.appendChild(head); boardEl.appendChild(sub);
+    if(rows&&rows.length) rows.forEach(r=>boardEl.appendChild(kbRow(r)));
+    const foot=document.createElement("div"); foot.className="kbFoot";
+    if(!meKey){
+      /* The one population that cannot be on this board, told the one thing that puts them
+         on it — and it is the same act the whole product is short of. */
+      foot.textContent="Hide a kamo to get on the board. Then every find in a row counts.";
+    }else if(rows&&!rows.some(r=>r.me)){
+      /* "ONE FIND", NOT "TWO IN A ROW". streak_board() ranks everything above zero (`where
+         streak > 0`), so a single find does put somebody here — and the first person to land
+         on this screen after one lucky round would otherwise read a rule the board itself had
+         just broken. The copy follows the query, never the other way round. */
+      foot.textContent = s.best>0
+        ? ("Not on today's board yet. Your best run is "+s.best+".")
+        : "Not on today's board yet. One find puts you on it.";
+    }else if(s.best>0){
+      foot.textContent="Your best run ever: "+s.best+".";
+    }else{
+      foot.textContent="One find puts you on the board. Two in a row starts a run.";
+    }
+    boardEl.appendChild(foot);
+  }
+  function boardHide(){
+    boardOpen=false;
+    scopeBtn.innerHTML='Everyone <i>▾</i>';
+    scopeMark("all");
+    boardEl.style.display="none"; boardEl.innerHTML="";
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
+  }
+  /* THREE SCOPES, ONE PANEL AT A TIME. Written as "close whatever is open, then open the one
+     that was asked for" rather than as a pair of toggles: with two panels a toggle was the
+     whole logic, with three it is the bug — mine -> board would leave the grid mounted under
+     the board, and the chrome each one restores would fight. */
   menuEl.querySelectorAll("button").forEach(b=>{ b.onclick=()=>{ haptic(8); menuShow(false);
     const s=b.dataset.s;
-    menuEl.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
-    if(s==="mine"&&!mineOpen){ track("feed_scope_changed",{to:"mine"}); mineShow(); }
-    else if(s==="all"&&mineOpen){ track("feed_scope_changed",{to:"all"}); mineHide(); }
+    if((s==="mine"&&mineOpen)||(s==="board"&&boardOpen)||(s==="all"&&!mineOpen&&!boardOpen)) return;
+    /* THE TICK IS NOT SET HERE. It belongs to the panel that ends up on screen — the note on
+       scopeMark() above says why, and setting it from the button as well would give one piece
+       of state two owners that disagree the moment a hide() runs after a show(). */
+    if(mineOpen) mineHide();
+    if(boardOpen) boardHide();
+    track("feed_scope_changed",{to:s});
+    if(s==="mine") mineShow();
+    else if(s==="board") boardShow();
+    /* "all" needs nothing more: the two hides above already put the feed back, and both of
+       them reset the pill and the tick to Everyone. */
   }; });
   /* Profile left the dropdown for the grid's top-right corner (founder's call, 2026-08-15) —
      same toggle contract the bar button always had, `src` keeps the eras comparable. */
