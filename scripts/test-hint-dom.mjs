@@ -46,7 +46,12 @@ const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
    sheet for something that does not exist. The served copy reads it off window so BOTH states
    are reachable here; the shipped file is asserted to be false further down, which is the half
    that actually protects the fleet. */
-let real2 = real.replace('const HINTS_LIVE=false;', 'const HINTS_LIVE=(window.__hintsLive===true);');
+/* The anchor matches EITHER shipped value. Pinning it to `false` meant that the day the flag was
+   deliberately flipped (PR #293, Hint shown to App Review) this whole suite exited 1 before its
+   first assertion — the gate went dark on the exact change it exists to watch, and took the
+   repo's CI with it. Which state ships is asserted further down; getting the file instrumented
+   is not the place to have an opinion about it. */
+let real2 = real.replace(/const HINTS_LIVE=(?:false|true);/, 'const HINTS_LIVE=(window.__hintsLive===true);');
 if (real2 === real) { console.error('  ✗ HINTS_LIVE anchor missing from index.html'); process.exit(1); }
 let html = real2;
 for (const [anchor, patch] of [
@@ -161,8 +166,49 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
       ? ok('and it lives inside #chFrame, so it rides the zoom instead of sliding off the photo')
       : bad('the zone is not a child of #chFrame — it will not follow a pinch');
   }
+  /* THAT SPEND EMPTIED THE WALLET (balance 0), SO THE BUTTON BECOMES THE OFFER.
+     It used to read "Hint used" and go dead, and this assertion used to demand exactly that.
+     The consequence was that the only route to the pack ran through ANOTHER hide: leave this
+     one, open the next, tap into an empty wallet, and meet the sheet on the round trip — a
+     purchase nobody navigates toward because nobody has been shown it. App Review least of
+     all, since hint_spend spends the free daily first: one tap reveals the zone for nothing
+     and the sheet is never reached at all. PR #295. */
   const b2 = await btn(p);
-  b2 && b2.disabled ? ok('the button locks after the zone is shown') : bad(`button after use: ${JSON.stringify(b2)}`);
+  b2 && b2.text === 'Get 5 more' && !b2.disabled
+    ? ok('the spent button becomes the pack offer, still tappable')
+    : bad(`button after use: ${JSON.stringify(b2)}`);
+  /* AND IT QUOTES NO PRICE. setPrices() carries `weekly` and `lifetime` and nothing else, so
+     a figure here could only be hardcoded — right in the US and wrong everywhere else, which
+     is the misstatement #pwPerDay stays hidden to avoid. Apple's sheet states the real one. */
+  /[$€£¥₹]|\d+[.,]\d{2}/.test((b2 && b2.text) || '')
+    ? bad(`the offer label quotes a price (${b2.text}) — the pack's price does not exist on this side`)
+    : ok('and quotes no price, because the page has none to quote');
+
+  await p.click('#chHint');
+  await p.waitForTimeout(400);
+  const bought = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  bought.length === 1 && bought[0].product === 'com.blisscoach.kamo.hints5'
+    ? ok('and one tap on it opens StoreKit for the pack, by its exact product id')
+    : bad(`tapping the offer posted ${JSON.stringify(bought)}`);
+  await p.close();
+}
+
+/* The other half of that branch, and the reason it is a branch at all: somebody who still
+   holds hints is not a buyer, so the button must lock exactly as it always did rather than
+   sell them what they already have. */
+{
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1',
+                         spend: { used: 'paid', region: REG, balance: 3, free_available: false } });
+  await p.click('#chHint');
+  await p.waitForTimeout(400);
+  const b = await btn(p);
+  b && b.text === '3 left' && b.disabled
+    ? ok('a spend off a stocked wallet locks the button and states the balance')
+    : bad(`button after a stocked spend: ${JSON.stringify(b)}`);
+  const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 0
+    ? ok('and nothing is sold to somebody who already has hints')
+    : bad(`offered a purchase anyway: ${JSON.stringify(posted)}`);
   await p.close();
 }
 
@@ -249,11 +295,21 @@ console.log('\nTHE HINT STAYS OFF UNTIL THE PACK IS APPROVED');
   await page.close();
 }
 {
+  /* WHAT SHIPS IS A DECISION, AND THIS IS WHERE IT IS WRITTEN DOWN.
+     It shipped `false` until 2026-08-16, when PR #293 turned the Hint button on so App Review
+     could see it rather than approving a build in which the feature is invisible. That is a
+     deliberate call and the guard now records it — but it stays a guard, because the danger it
+     was built for has not gone anywhere: if the hint pack is NOT approved in App Store Connect,
+     every tap on Hint opens a purchase sheet for a product that does not exist.
+     So the assertion is against the declared intent below, not against a hardcoded `false`. An
+     accidental flip in either direction still fails here, loudly, with the reason attached. */
+  const INTENDED = 'true';   // PR #293 — Hint shown to App Review. Set back to 'false' if the pack is pulled.
   const shipped = /const HINTS_LIVE=(\w+);/.exec(real);
-  shipped && shipped[1] === 'false'
-    ? ok('and index.html ships with HINTS_LIVE=false — flip it when the pack reads APPROVED')
-    : bad(`index.html ships HINTS_LIVE=${shipped && shipped[1]} — if the pack is not APPROVED in `
-        + 'App Store Connect this is selling a product that does not exist');
+  shipped && shipped[1] === INTENDED
+    ? ok(`and index.html ships HINTS_LIVE=${INTENDED}, which is the recorded intent (PR #293)`)
+    : bad(`index.html ships HINTS_LIVE=${shipped && shipped[1]} but the recorded intent is `
+        + `${INTENDED}. If this was deliberate, move INTENDED in this test and say why; if it `
+        + 'was not, an unapproved hint pack is being sold from the live build.');
 }
 
 await browser.close();
