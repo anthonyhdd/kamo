@@ -8305,23 +8305,16 @@ $("#ssInvite").onclick=async()=>{
     if(!chSlotLink() && !chInviteNudged && b0){
       chInviteNudged=true;
       const back=b0.innerHTML;
-      /* IT SPEAKS WHILE IT WAITS instead of printing one flat sentence and freezing.
-         "One moment — preparing your challenge" told the truth and told it badly: it is the
-         longest label on the sheet, it wraps on a narrow phone, and a line that does not move
-         for two seconds reads as a button that has hung. These are shorter, they are about
-         the ROUND rather than about the software, and they advance — a label that changes is
-         the cheapest proof that something is still happening.
-         Sequential, not shuffled: they narrate a progression, so a random order would have
-         the photo being sent before it was hidden. The last one holds, because that is where
-         the wait actually ends. Every restore is guarded on the label still being one of
-         ours, so a tap that changed it in the meantime is never overwritten. */
-      const NUDGE=["Hiding you in the photo…","Almost invisible…","Nearly there…"];
-      let ni=0; b0.textContent=NUDGE[0];
-      const spin=setInterval(()=>{
-        if(ni>=NUDGE.length-1||b0.textContent!==NUDGE[ni]){ clearInterval(spin); return; }
-        ni++; b0.textContent=NUDGE[ni]; },700);
-      setTimeout(()=>{ clearInterval(spin);
-        if(NUDGE.indexOf(b0.textContent)>=0) b0.innerHTML=back; },2200);
+      /* THE RING HERE TOO (founder, 2026-08-16) — after the native wait and "See it live"
+         got theirs, this was the last wait on the sheet still speaking in labels. The
+         rotating lines narrated the upload but changed the button's face three times in two
+         seconds; the spinner is now the sheet's one word for "working". Same beats
+         otherwise: 2.2s, still tappable — the SECOND tap is what actually sends — and the
+         restore is guarded on the ring still being the content, so a tap that changed the
+         button in the meantime is never overwritten. .pwSpin, dark, because this button is
+         white. */
+      b0.innerHTML='<span class="pwSpin"></span>';
+      setTimeout(()=>{ if(b0.querySelector(".pwSpin")) b0.innerHTML=back; },2200);
       track("share_deferred",{reason:"no_link",score:sc});
       return;
     }
