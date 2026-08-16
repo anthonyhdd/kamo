@@ -1386,6 +1386,15 @@
       background .18s ease,border-color .18s ease;}
   .chRxB:active{transform:scale(.9);}
   .chRxB.on{background:rgba(95,230,164,.18);border-color:rgba(95,230,164,.5);}
+  /* THE SAME FOUR CHIPS, READ RATHER THAN PRESSED — your own hide, see chRxMount(). The counts
+     stay because they are the one genuinely good thing on that screen: they are what other
+     people said about your photograph. What goes is the affordance. Four chips that look
+     pressable and answer nothing is a worse screen than four that never claimed to be buttons,
+     so the press response and the lit border go with the handler.
+     NO `opacity` HERE, deliberately: it would establish a group and take .chRxN down with it,
+     and the number is the entire payload of this variant. Flatter ground, quieter edge. */
+  .chRxB.read{cursor:default;background:rgba(4,6,10,.34);border-color:rgba(255,255,255,.1);}
+  .chRxB.read:active{transform:none;}
   /* Under the chip, not inside it: at 46px there is no room for a number beside a 19px face,
      and a count that pushed the emoji off-centre would make the four chips disagree. */
   .chRxN{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;
@@ -12063,21 +12072,41 @@ function chSeek(hideId,opts){
     const box=$$("chRx"); if(!box) return;
     const EM=["🔥","😂","😱","👏"], KEY="kamo_rx_"+HID;
     let spent=[]; try{ spent=String(localStorage.getItem(KEY)||"").split(",").filter(Boolean); }catch(e){}
-    box.innerHTML=EM.map(e=>'<button class="chRxB'+(spent.indexOf(e)<0?'':' on')+'" data-e="'+e+'">'+e
-      +'<span class="chRxN" data-n="'+e+'"></span></button>').join("");
     const paint=(rows)=>{ (rows||[]).forEach(r=>{ const el=box.querySelector('[data-n="'+r.emoji+'"]');
       if(el) el.textContent=r.n>0?String(r.n):""; }); };
-    try{ chRpcRows("hide_reactions_of",{p_id:HID}).then(paint).catch(()=>{}); }catch(e){}
-    /* THE RAIL MUST NOT COST A BUZZ, and this is the whole risk of moving it onto the live
+    /* THE RAIL MUST NOT COST A BUZZ, and this is the whole risk of mounting it on the live
        round. The stage owns every gesture on this screen — pointerdown there opens the aim
-       reticle and pointerup commits the shot — and the rail now sits on top of it. Without
-       this, tapping 😂 would arm an aim at the emoji's coordinates and the pointerup would
-       fire the player's single shot into the right-hand margin.
+       reticle and pointerup commits the shot — and the rail sits on top of it. Without this,
+       tapping 😂 would arm an aim at the emoji's coordinates and the pointerup would fire the
+       player's single shot into the right-hand margin.
        Stopped at pointerdown on the CONTAINER, in the bubble phase: the stage's listeners are
        on an ancestor, so the event is killed before it reaches them while the button's own
-       click still resolves normally. */
+       click still resolves normally. ABOVE THE OWN-HIDE BRANCH, because that variant needs it
+       just as much — a <div> readout swallows no gestures by itself, and a thumb landing on a
+       count would otherwise spend the shot. */
     ["pointerdown","pointerup","pointercancel"].forEach(t=>
       box.addEventListener(t,e=>{ e.stopPropagation(); },false));
+    /* ══ YOUR OWN PHOTOGRAPH: A READOUT, NOT A CONTROL ═══════════════════════════════════════
+       "See it live" seeds the feed with the hide you just published, and the rail came up
+       exactly as it does on a stranger's — four live chips inviting you to put 🔥 on your own
+       painting. The counts are worth keeping and were the only thing on that screen telling a
+       creator anything: they are what OTHER people said. The taps are not.
+       DIVS, NOT DISABLED BUTTONS. `disabled` blocks the click but leaves a <button> in the
+       accessibility tree announcing itself as a control that does nothing, and engines differ
+       on whether a disabled control dispatches pointer events at all — which is a poor thing
+       to depend on when the fallback behaviour is firing the player's single shot. A div is
+       inert by construction.
+       NO react_to_hide, NO local spend key: nothing here can write, so the counts under your
+       own photo stay everybody else's. */
+    if(MINE){
+      box.innerHTML=EM.map(e=>'<div class="chRxB read" data-e="'+e+'">'+e
+        +'<span class="chRxN" data-n="'+e+'"></span></div>').join("");
+      try{ chRpcRows("hide_reactions_of",{p_id:HID}).then(paint).catch(()=>{}); }catch(e){}
+      return;
+    }
+    box.innerHTML=EM.map(e=>'<button class="chRxB'+(spent.indexOf(e)<0?'':' on')+'" data-e="'+e+'">'+e
+      +'<span class="chRxN" data-n="'+e+'"></span></button>').join("");
+    try{ chRpcRows("hide_reactions_of",{p_id:HID}).then(paint).catch(()=>{}); }catch(e){}
     box.querySelectorAll(".chRxB").forEach(b=>{
       b.onclick=()=>{
         const em=b.dataset.e;
@@ -13770,6 +13799,10 @@ function chFeed(opts){
     if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
     S.active=i;
     const s=S.slides[i];
+    /* THE BAR FOLLOWS THE SLIDE. S.active is set one line up and kfFlagSync() reads it, so this
+       has to sit after the assignment and before anything can paint — the ⚑ belongs to whoever
+       made the photo now under the thumb, and on a "See it live" session slide 0 is yours. */
+    kfFlagSync();
     kfMarkSeen(s.row.id);
     S.played++;
     /* NOT ON A REPLAY SLIDE. That is the creator's own hide, and scrolling past your own
@@ -14442,7 +14475,9 @@ function chFeed(opts){
     scopeBtn.innerHTML='Everyone <i>▾</i>';
     scopeMark("all");
     mineEl.style.display="none"; mineEl.innerHTML="";
-    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="";
+    /* ASKS RATHER THAN ASSUMES — see kfFlagSync(). The panel does not know whose hide it is
+       uncovering, and on a "See it live" session that is your own. */
+    { kfFlagSync();
       const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
   }
   /* ══ CHALLENGES ══════════════════════════════════════════════════════════════════════════
@@ -14562,7 +14597,7 @@ function chFeed(opts){
     scopeBtn.innerHTML='Everyone <i>▾</i>';
     scopeMark("all");
     chalEl.style.display="none"; chalEl.innerHTML="";
-    { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
+    { kfFlagSync(); }   /* same rule as mineHide(): ask whose slide is underneath */
   }
   /* THREE SCOPES, ONE PANEL AT A TIME. Written as "close whatever is open, then open the one
      that was asked for" rather than as a set of toggles: with two panels a toggle was the
@@ -14592,6 +14627,27 @@ function chFeed(opts){
       const open=!!(el&&el.classList.contains("show"));
       track("feed_profile_tapped",{open:!open,src:"mine_bar"});
       if(open) closeKamoHome(); else openKamoHome(); }; }
+  /* ══ THE ⚑ IS PER-SLIDE NOW, BECAUSE ONE OF THE SLIDES CAN BE YOURS ══════════════════════
+     The bar outlives every round in the feed, so the flag used to be a fixture: mounted once,
+     hidden only while a panel covered the slide it reports. That was true while every hide
+     under it belonged to a stranger. "See it live" broke the assumption — it seeds your own
+     published hide at slide 0 — and the flag sat on your own photograph offering to report it
+     to moderation.
+     APPLE'S 1.2 OBLIGATION IS UNTOUCHED. The requirement is a reporting path on other people's
+     content; your own is the one photo it cannot be about. Every stranger's hide keeps the ⚑,
+     and a link round keeps the card's "Report this photo" — nothing lost anywhere it matters.
+     AND THE TWO PANEL RESTORES BELOW CANNOT SIMPLY BLANK THE STYLE ANY MORE. Coming back from
+     My kamos onto your own slide with `display=""` would put the flag straight back on it —
+     the panels do not know which hide they are uncovering, so they ask.
+     DECLARATIONS, NOT `const` ARROWS. activate() is defined hundreds of lines above this and
+     calls kfFlagSync() on every slide; a const would be in the temporal dead zone until the
+     module body reached it. It happens to be safe today — the seeding IIFE awaits before it
+     can activate anything — but that is a race nobody should have to re-derive, and a
+     ReferenceError here kills the slide change, not just the flag. */
+  function kfOwnSlide(){ try{ const s0=S&&S.slides[S.active];
+    return !!(s0&&s0.row&&chMine().indexOf(s0.row.id)>=0); }catch(_){ return false; } }
+  function kfFlagSync(){ const f=root.querySelector("#kfFlag");
+    if(f) f.style.display=kfOwnSlide()?"none":""; }
   /* Acts on whatever slide is live. Reports and drops in one move — the reporter should not
      have to look at it again while the page they are holding catches up. */
   root.querySelector("#kfFlag").onclick=()=>{
