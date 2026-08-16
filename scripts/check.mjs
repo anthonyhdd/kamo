@@ -1063,6 +1063,21 @@ try {
   bad('THE REPLY LOOP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12b-quinquies. The challenges panel ---------------------------------------------------
+   The other half of the reply loop: the screen where an answer is finally SEEN. Its three
+   silent failure modes — a stranger's handle reaching the DOM as markup, the replay flag
+   stuck the wrong way (a spent answer inflating the author's attempt count, or a fresh one
+   refusing to file), and a no-hides device being asked to wait on a network call whose
+   answer is [] by construction — are all runtime state, so they get a browser. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-chal-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-chal-dom.mjs', 'CHALLENGES TEST', out)
+    : ok('the challenges panel behaves (node scripts/test-chal-dom.mjs)');
+} catch (e) {
+  bad('THE CHALLENGES PANEL IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 12b-bis. The share sends THIS round's hide, and sends it now -------------------------
    Two field-reported bugs that hid each other: the upload starting on the same gesture as
    the tap (an 8s wait, then the generic invite), and chId surviving capture() so the second
