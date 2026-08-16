@@ -1693,7 +1693,7 @@
      It costs the peek nothing until it is earned: #ssGet ships display:none and only
      chMarkSent() reveals it, so the sheet still ARRIVES short — the card's height is
      content-driven, so it simply grows by one row at the moment there is something to say. */
-  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssSub):not(.ssSign):not(.ssSignIn):not(.ssInvite):not(.ssSeeLive):not(.ssVis):not(.ssGet){display:none!important;}
+  #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssSub):not(.ssSign):not(.ssSignIn):not(.ssInvite):not(.ssGoPub):not(.ssSeeLive):not(.ssVis):not(.ssGet){display:none!important;}
   /* RESIZING BETWEEN THE TWO STATES IS A TRANSITION, NOT A CUT. Short and long differ by a few
      hundred pixels and the card used to jump between them in one frame, which on a bottom sheet
      reads as a glitch rather than as a change of size.
@@ -1867,6 +1867,13 @@
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
     mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;
     animation:pwShimmer 3.4s linear infinite;}
+  /* THE POST-SEND GO-PUBLIC OFFER. Mint tint, not white: white is the primary's skin and
+     this is an option, revealed only after the send has gone out and only while the toggle
+     above says Private. One tap does exactly what tapping the toggle does — the row exists
+     because the moment is different, not the act: the photo just left for a friend, and
+     "also let strangers play it" is a question best asked when saying yes costs nothing. */
+  .ssBtn.ssGoPub{background:rgba(95,230,164,.12);border-color:rgba(95,230,164,.45);color:#eafff5;}
+  .ssBtn.ssGoPub.on{background:rgba(95,230,164,.2);color:var(--mint);pointer-events:none;}
   /* Save, once JS has moved it in here (native only — see the move in the share block).
      The other rows carry an emoji in .ic; this one keeps the download/check SVG pair it
      already had, because that swap is the truthful "actually written to the camera roll"
@@ -2475,6 +2482,14 @@
       <span class="ssVisSw"><i></i></span>
     </button>
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Send to a friend</button>
+    <!-- THE SECOND ASK, EARNED BY THE FIRST. Hidden until chMarkSent() reveals it, and only
+         when the visibility row above says Private: the hide just went out to somebody, so
+         the marginal cost of also playing in the feed is zero and the moment is the one time
+         that is obvious. One tap performs the toggle's own act (preference, row, row-level
+         set_hide_public) — it is a shortcut to a control already on this sheet, not a second
+         consent surface. A direct child of .ssCard and exempted from the peek rule, because
+         the short sheet is where nearly every send happens. -->
+    <button class="ssBtn ssGoPub" id="ssGoPub" style="display:none">Put it in the feed too</button>
     <!-- THE PROOF, AND IT REPLACES A SIMULATION. Until now the only way to see what you had
          made was a local rehearsal drawn from the board still in memory — which could not
          prove the photo uploaded, the link resolved, or the hide reached the feed. This opens
@@ -6938,6 +6953,14 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    say whether a delivered answer actually gets played, which the reply loop has never been
    able to ask (reply_pending only ever counted the dot lighting up). */
 "replies_grid_shown","reply_opened",
+/* The night of 2026-08-16, one name per question. `sent_public_offer_*` — does the post-send
+   go-public offer convert three-quarters of published-private hides into feed supply.
+   `sign_nudge_*` — does telling a played-but-anonymous creator so make them sign.
+   `reaction_pending` — the wordmark dot's third reason, counted apart from the other two.
+   `feed_best_seeded` — the banger slot actually found something to seed. */
+"sent_public_offer_shown","sent_public_accepted",
+"sign_nudge_shown","sign_nudge_tapped",
+"reaction_pending","feed_best_seeded",
 /* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
    names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
    so a coverage event travelling by the bridge would answer for a different user and no ratio
@@ -7455,6 +7478,12 @@ function peekShareSheet(){
   if(!finished) return;   // the reveal went away before this could run
   ssState="peek";
   updateInviteBtn();
+  /* THE GO-PUBLIC OFFER IS PER ROUND. The button is static markup, so a receipt left over
+     from the previous hide ("In the feed ✓") would greet the next one claiming something
+     about the wrong photo. Presentation is the round boundary the sheet actually has. */
+  try{ const g=$("#ssGoPub");
+    if(g){ g.classList.remove("on"); g.style.display="none"; g.textContent="Put it in the feed too"; }
+  }catch(e){}
   /* THE SHORT STATE SHOWS THE HEADLINE, AND THE HEADLINE MAKES A CLAIM — "Your challenge is
      now live!" or "Only people you send it to". It is whitelisted through the peek rule, so
      it has to be painted on this path too: openShareSheet() is the other door and the short
@@ -7871,6 +7900,38 @@ function ssShowAgain(){ try{ const a=$("#ssAgain"); if(a) a.style.display="flex"
 function ssOfferApp(){
   try{ if(window.ReactNativeWebView) return;
        const g=$("#ssGet"); if(g) g.style.display="flex"; }catch(e){}
+}
+/* THE GO-PUBLIC OFFER, revealed only from chMarkSent() — the one moment a hide has provably
+   gone out — and only while the visibility row says Private. Three-quarters of published
+   hides never reach the feed, and most of that is not a decision, it is a default nobody
+   revisited at a moment when they were thinking about one friend. This asks once, after the
+   send, when saying yes costs nothing. Saying nothing costs nothing too: the button performs
+   the toggle's own act, so there is no second consent surface to keep honest. */
+function ssOfferPub(){
+  try{
+    if(kfWantPublic()) return;
+    const g=$("#ssGoPub"); if(!g||g.classList.contains("on")) return;
+    if(g.style.display!=="none") return;   // already offered this round
+    g.style.display="flex";
+    track("sent_public_offer_shown",{});
+  }catch(e){}
+}
+{ const g=$("#ssGoPub");
+  if(g) g.onclick=async(e)=>{
+    e.stopPropagation();
+    if(g.classList.contains("on")) return;
+    haptic(10);
+    /* THE RECEIPT FIRST, THE NETWORK AFTER. The tap has to land visibly on a sheet that
+       otherwise does not move; the row-level flag is fire-and-forget like every
+       set_hide_public call, and its failure direction is the safe one (stays private). */
+    g.classList.add("on"); g.textContent="In the feed ✓";
+    kfSetWantPublic(true);
+    kfRenderVis();
+    let id=chId;
+    if(!id){ try{ id=await chAwaitId(2500); }catch(err){} }
+    if(id) kfApplyVisibility(id,true);
+    track("sent_public_accepted",{published:!!id});
+  };
 }
 /* ssOfferFeed() IS GONE, AND THE BUTTON IT REVEALED WITH IT.
    It waited for chMarkSent() before showing "Your challenge is live · See it in the feed" —
@@ -9581,6 +9642,23 @@ function chGeom(){
 /* The board is full retina — up to ~1290x2796, which is megabytes of JPEG for something
    that will be looked at on a phone. 1080 on the long side at q0.72 lands ~150-250 KB,
    inside the bucket's 400 KB ceiling with room to spare. */
+/* THE PLACEHOLDER, MADE WHERE THE PHOTO IS MADE. Twenty pixels wide off the same board the
+   real JPEG is encoded from, as a data URL small enough to live IN the row (~500 bytes
+   against a 150-250 KB photo). Synchronous on purpose — toDataURL is, and the forms builder
+   that calls this cannot await. The server re-validates the shape and the length; this end
+   just refuses to send anything oversized or that is not a JPEG data URL, so a browser with
+   a strange canvas implementation degrades to publishing without one. */
+function chLqip(){
+  try{
+    const src=board;
+    if(!src||!src.width||!src.height) return "";
+    const W=20, H=Math.max(1,Math.round(src.height/src.width*W));
+    const c=document.createElement("canvas"); c.width=W; c.height=H;
+    c.getContext("2d").drawImage(src,0,0,W,H);
+    const d=c.toDataURL("image/jpeg",0.5);
+    return (typeof d==="string"&&d.length<6000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(d))?d:"";
+  }catch(e){ return ""; }
+}
 function chBlob(src){
   src=src||board;
   return new Promise(res=>{
@@ -9912,9 +9990,17 @@ function chCreateForms(base,who){
      ADDED, NEVER EDITED, like every rung below: a page loaded before this migration climbs
      down to the 12-argument form and publishes exactly as it does today. The server clamps
      the value to 1..999 and nulls anything else — this is an anonymous client. */
+  /* THE 14-ARGUMENT RUNG — the tiny placeholder, on top of everything the 13-argument rung
+     carries. p_streak rides as null on a non-reply rather than splitting into two more rungs:
+     PostgREST resolves by the exact key SET, so one wide form with nulls is one overload,
+     and the server already treats an out-of-range streak as "no claim". Guarded on the lqip
+     existing at all — a board with no pixels yet produces none, and that publish simply
+     climbs the rungs below, exactly as every page loaded before this deploy does. */
   const key=kfAuthorKey();
   const slot=chSlot();
   const runNow=(chReplyTo?(chStreak().run|0):0);
+  const lq=chLqip();
+  if(key&&slot&&slot.id&&lq) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq});
   if(key&&slot&&slot.id&&runNow>0) forms.push({...signed,p_reply_to:chReplyTo,p_author_key:key,p_id:slot.id,p_streak:runNow});
   if(key&&slot&&slot.id) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id});
   if(key) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key});
@@ -10056,6 +10142,12 @@ function kfRenderVis(){
   if(sub) sub.textContent = window.ReactNativeWebView
     ? "We'll tell you when someone taps."
     : "Come back to see who tried.";
+  /* The go-public offer answers to the toggle like everything else on this sheet: the moment
+     the row says Public the offer is moot and goes away — unless it is already a receipt
+     (.on), which is the one state that must survive its own consequence. Revealing it is
+     chMarkSent's job alone; this line only ever takes it down. */
+  const gp=$("#ssGoPub");
+  if(gp&&pub&&!gp.classList.contains("on")) gp.style.display="none";
   /* OFFERED FOR A PRIVATE HIDE TOO, and the reason it was not is a mistake worth naming: the
      button was gated on kfWantPublic() on the grounds that it "would open a screen the hide is
      not on". It does not. chFeed({first}) seeds that exact hide as slide 0 by fetching it with
@@ -10361,6 +10453,9 @@ async function chMarkSent(){
      and no way to schedule it — so the browser is offered the thing that could, at the exact
      moment it is worth having. Same promise, same moment, told honestly. */
   try{ ssOfferApp(); }catch(e){}
+  /* And the supply-side ask, on the same earned moment: a hide that just went out privately
+     is one tap from also feeding the feed. See ssOfferPub for why here and nowhere else. */
+  try{ ssOfferPub(); }catch(e){}
   /* Nothing to reveal for the wrapper any more: its half of this beat is "See it live", which
      has been on the sheet since it opened rather than waiting to be earned by a send. */
 }
@@ -11080,11 +11175,25 @@ async function chReplyCheck(){
     track("reply_pending",{n:rows.length,signed:!!rows[0].name});
   }
 }
+/* THE DOT'S THIRD REASON. Same shape as chReplyCheck: totals compared to a high-water mark
+   this device stamped the last time the mine grid showed them (see mineShow). A reaction
+   that expires with its hide cannot un-ring the bell — the total only ever grows while the
+   hide lives, and a shrunk total simply never fires. */
+async function chRxCheck(){
+  const ids=chMine(); if(!ids.length) return;
+  let rows=[];
+  try{ rows=await chRpcRows("my_reactions",{p_ids:ids}); }catch(e){ return; }
+  const total=(rows||[]).reduce((a,x)=>a+((x&&x.n)|0),0);
+  if(!total) return;
+  let seen=0; try{ seen=parseInt(localStorage.getItem("kamo_rx_seen")||"0",10)||0; }catch(e){}
+  if(total>seen){ brandDot(true); track("reaction_pending",{n:total-seen}); }
+}
 async function chNewsCheck(){
   try{
     /* Not awaited together with the tally: a reply is worth the dot on its own, and one of
-       the two failing must not take the other with it. */
+       the two failing must not take the other with it. Same for the reactions. */
     chReplyCheck().catch(()=>{});
+    chRxCheck().catch(()=>{});
     const t=await chTally(); if(!t) return;
     if(t.tried>seenTries()){ brandDot(true); track("results_pending",{tried:t.tried,found:t.found}); }
   }catch(e){}
@@ -11444,7 +11553,19 @@ function chSeek(hideId,opts){
      for the rest of the launch — and a stuck flag means the dwell backstop never fires for
      exactly the population it exists for. */
   ctl.destroy=()=>{ killed=true; chLive=false; try{ clearInterval(ctl._clock); }catch(_){} try{ w.remove(); }catch(_){} };
-  const buzzHaptic=(p)=>{ try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){} };
+  /* TWO CHANNELS, ONE CALL. navigator.vibrate is a no-op on every iPhone (WKWebView never
+     implemented it), so the strongest moments in this game — the find, the snap — have been
+     haptically SILENT for the entire iOS fleet since the day they shipped. The bridge is the
+     channel that actually reaches the Taptic engine, and it is fire-and-forget by
+     construction: every wrapper ever shipped answers an unknown haptic style with
+     selectionAsync (a soft tick) and a wrapper with no handler ignores the message, so there
+     is nothing to gate — the worst case everywhere is today's behaviour or better. The
+     wrapper learns the real styles (success / error / heavy) in its next release; the fleet
+     upgrades into the full vocabulary with no second web deploy. */
+  const buzzHaptic=(p,style)=>{
+    if(style){ try{ postNative({type:"haptic",style:style}); }catch(_){} }
+    try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){}
+  };
 
   /* Self-removing on purpose: the ending card mounts a moment later, and an effect layer
      that outlived it would sit over the CTA. 900ms covers the longest of the three. */
@@ -11468,7 +11589,9 @@ function chSeek(hideId,opts){
       }
       host.appendChild(fx);
       setTimeout(()=>fx.remove(),900);
-      buzzHaptic([12,40,18]);
+      /* The find is the one success this screen has — notification-success on the bridge,
+         which is the first haptic an iPhone in this fleet has ever felt here. */
+      buzzHaptic([12,40,18],"success");
     }catch(_){}
   }
 
@@ -11683,7 +11806,18 @@ function chSeek(hideId,opts){
        and it is the honest thing to print above a photo the player is about to be told they
        searched wrong. Silent at round 1, which is every hide that is not an answer. */
     const rnd=(h.round|0)>1?(h.round|0):0;
-    $$("chSub").textContent=(rnd?"Round "+rnd+" · ":"")+"One tap to find";
+    /* THE STAKES LINE. On the first feed slide (and every link round) the sub teaches the
+       rule, because that reader may never have played. From the second slide on the rule is
+       known and the only thing worth the line is the CHALLENGE: how many tried this photo
+       and how it went for them. "nobody found them" is the strongest sentence this screen
+       can print — it is a dare, and it is only ever printed when it is true. Numbers come
+       off the row the server just served; below 3 attempts they are noise and the rule
+       keeps the line. */
+    const tries=h.n_attempts|0, found=h.n_found|0;
+    const stat=(FEED&&!OPT.firstInFeed&&tries>=3)
+      ? (tries+" tried · "+(found>0?found+" found them":"nobody found them"))
+      : "One tap to find";
+    $$("chSub").textContent=(rnd?"Round "+rnd+" · ":"")+stat;
 
     /* NO GIVE-UP IN THE FEED. On a link there is nowhere else to go, so quitting has to be a
        button. In a feed the exit already exists and is the gesture the whole surface is built
@@ -12053,7 +12187,9 @@ function chSeek(hideId,opts){
            only needs `_b`; holding it back for a frame that is not drawn for another 360ms
            was spending the whole wave round trip on the moment that matters most. */
         img.src=bSrc; revealedSrc=bSrc; flipped=true;
-        buzzHaptic([28,50,28]);
+        /* The snap is the double-take — one frame, invisible to visible — and it earns the
+           heaviest impact the engine has. Same note as chCelebrate on why this is ungated. */
+        buzzHaptic([28,50,28],"heavy");
         try{ wSrc=await wP; }catch(_){}
         track("seek_reveal_shown",{assets:wSrc?"wave":"still"});
         /* IL BOUGE: two frames alternating — up, wave, up — then it settles standing.
@@ -12154,6 +12290,10 @@ function chSeek(hideId,opts){
       if(sk){
         if(sk.run>0)          chRunShow(sk.run, sk.record?"pb":"");
         else if(sk.broke>=2){ chRunShow(sk.broke,"dead");
+          /* A broken run is the one loss with something behind it, and it gets the error
+             buzz — the stake has to be FELT, which is exactly what run_broken's `at`
+             distribution is watching for. */
+          buzzHaptic([40,60,40],"error");
           /* THE ONE NUMBER THAT SAYS WHETHER ANY OF THIS WORKED. If the run is doing its job,
              the distribution of `at` climbs — people are looking longer before they tap —
              and the 3.5s median of a failed round rises with it. If `at` stays pinned at 2
@@ -12929,9 +13069,13 @@ function chFeed(opts){
        This is the ROUND-MOUNTED milestone — the spinner is gone and the game is wired.
        The picture may still be arriving; that is feed_first_paint below, and the gap between
        the two is exactly how much of the wait is the photo rather than the code. */
-    track("feed_slide", S.played===1
+    /* `best` only when true, so every dashboard reading feed_slide bare keeps its shape —
+       the property exists to compare the seeded slide's completion against its neighbours. */
+    const sp=S.played===1
       ? {n:1,replay:!!s.replay,ms:Math.round(kfNow()-S.t0),ms_page:S.msPage|0,cached:!!S.cached}
-      : {n:S.played,replay:!!s.replay});
+      : {n:S.played,replay:!!s.replay};
+    if(s.best) sp.best=true;
+    track("feed_slide",sp);
     /* ③ BEAT TWO — THE SWIPER. Somebody who finishes a feed round is already covered by
        seek_end (the card fires it), so what is left here is the person who scrolls past
        hides without answering any of them: a real session, several minutes long, that
@@ -13011,8 +13155,17 @@ function chFeed(opts){
     });
   }
 
-  function addSlide(row,replay){
+  function addSlide(row,replay,at){
     const el=document.createElement("section"); el.className="kfSlide";
+    /* THE LQIP PAINTS BEFORE ANY NETWORK BYTE ARRIVES. Twenty blurred pixels of the photo's
+       own colours, carried IN the feed row, stretched across the slide as a background —
+       so a swipe on cellular lands on the picture's light instead of on black while the
+       real JPEG travels. Re-validated here even though create_hide clamps it on the way in:
+       this string is about to become CSS on a stranger's device, and a second door is how
+       the first one stops being load-bearing. Absent on every hide published before
+       tonight, which degrades to exactly today's behaviour. */
+    const lq=(row.lqip&&typeof row.lqip==="string"&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(row.lqip))?row.lqip:"";
+    if(lq){ el.style.backgroundImage='url("'+lq+'")'; el.style.backgroundSize="cover"; el.style.backgroundPosition="center"; }
     const img=document.createElement("img");
     img.className="kfPrev"; img.alt=""; img.decoding="async"; img.draggable=false;
     /* EIGHT PHOTOS USED TO START AT ONCE, and only one of them was on screen.
@@ -13053,14 +13206,30 @@ function chFeed(opts){
            appended synchronously, long before any decode resolves, so this reports how many
            slides the page actually produced instead of the zero it was at this line. */
         try{ track("feed_first_paint",{ms:Math.round(kfNow()-S.t0),ms_page:S.msPage|0,
-                                       cached:!!S.cached,slides:S.slides.length,ok:!!ok}); }catch(e){} };
+                                       cached:!!S.cached,slides:S.slides.length,ok:!!ok,
+                                       /* Whether the wait happened over the photo's own
+                                          colours or over black — the property that judges
+                                          the LQIP without a second event. */
+                                       lqip:!!lq}); }catch(e){} };
       try{ if(img.decode) img.decode().then(()=>paint(true),()=>paint(false));
            else { img.onload=()=>paint(true); img.onerror=()=>paint(false); } }catch(e){}
     }
     const host=document.createElement("div"); host.className="kfHost";
     el.appendChild(img); el.appendChild(host);
-    scroll.appendChild(el);
-    const s={el,host,row,replay:!!replay}; S.slides.push(s);
+    /* `at` inserts instead of appending — the banger slot's door, and ONLY its door. DOM and
+       S.slides move together or every index-based reader (activate, drop, blockDrop) is
+       renumbered against a list that no longer matches the screen. S.active shifts with the
+       insertion for the same reason. Every existing caller passes no `at` and appends,
+       byte-for-byte the old behaviour. */
+    const s={el,host,row,replay:!!replay};
+    if(at>=0&&at<S.slides.length){
+      scroll.insertBefore(el,scroll.children[at]||null);
+      S.slides.splice(at,0,s);
+      if(S.active>=at) S.active++;
+    } else {
+      scroll.appendChild(el);
+      S.slides.push(s);
+    }
     io.observe(el);
     return s;
   }
@@ -13291,6 +13460,52 @@ function chFeed(opts){
       + (waiting?'<span class="kmStat send"><b>'+waiting+'</b> to send</span>':'');
     mineEl.innerHTML='<div class="kmStats">'+chips+'</div><div class="kmGrid">'+rows.map(kmCellHtml).join("")+'</div>';
     track("mine_grid_shown",{hides:rows.length,tried:t.tried,found:t.found,unsent:waiting});
+    /* ══ THE SIGNATURE NUDGE ═══════════════════════════════════════════════════════════════
+       109 of 115 feed photos say "Someone", and the reason is not a decision — it is that
+       nothing ever tells an anonymous creator their photos are BEING PLAYED unsigned. This
+       is the one screen where that fact and the person it concerns are in the same place:
+       real plays, their own grid, no handle. One line, one tap, and it opens the card whose
+       headline IS the name field. Shown only when there is something behind it (plays > 0)
+       and nothing on it (no handle) — a nudge with no evidence is an ad. */
+    try{
+      if((t.tried|0)>0 && !getHandle()){
+        const st=mineEl.querySelector(".kmStats");
+        if(st){
+          const nb=document.createElement("button");
+          nb.className="kmStat send"; nb.style.width="100%"; nb.style.justifyContent="center";
+          nb.textContent="✍️ "+t.tried+" plays and nobody knows it's you — sign your kamos";
+          nb.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
+            track("sign_nudge_tapped",{tried:t.tried|0}); openKamoHome(); };
+          st.appendChild(nb);
+          track("sign_nudge_shown",{tried:t.tried|0});
+        }
+      }
+    }catch(e){}
+    /* ══ REACTIONS, FINALLY REACHING THEIR CREATOR ════════════════════════════════════════
+       458 reactions a day and until tonight not one of them was ever shown to the person
+       whose photo earned it. Patched onto the cells AFTER the grid paints, off the critical
+       path: a slow my_reactions costs a missing counter, never a missing grid. The count is
+       the same stroke-icon vocabulary as plays and the trophy (SVG, not emoji — the house
+       rule on kmMeta). The seen high-water mark is stamped here because the grid IS the
+       delivery: once the counts have been in front of somebody, the dot's promise is kept. */
+    try{
+      const ids=rows.map(r=>r&&r.id).filter(Boolean);
+      if(ids.length) chRpcRows("my_reactions",{p_ids:ids}).then(rx=>{
+        if(!mineOpen||kfState!==S||!rx||!rx.length) return;
+        const m={}; rx.forEach(x=>{ if(x&&x.hide_id) m[x.hide_id]=x.n|0; });
+        const ICO_RX='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.9c0 5.4-7.5 10-7.5 10z"/></svg>';
+        mineEl.querySelectorAll(".kmCell").forEach((cell,i)=>{
+          const n=m[(rows[i]||{}).id]|0; if(!n) return;
+          const meta=cell.querySelector(".kmMeta"); if(!meta) return;
+          const sp=document.createElement("span"); sp.className="kmM";
+          sp.innerHTML=ICO_RX;                       // a constant of this file, never user data
+          sp.appendChild(document.createTextNode(String(n)));
+          meta.appendChild(sp);
+        });
+        const total=rx.reduce((a,x)=>a+((x&&x.n)|0),0);
+        try{ localStorage.setItem("kamo_rx_seen",String(total)); }catch(e){}
+      }).catch(()=>{});
+    }catch(e){}
     mineEl.querySelectorAll("[data-i]").forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation(); chShareHide(rows[+b.dataset.i],b); }; });
     /* ONE HANDLER, because there is one button. The replay path went with its control (it is
        still wired on the player card's rows, where khReplay's other caller lives).
@@ -13447,6 +13662,24 @@ function chFeed(opts){
       foot.textContent="One find puts you on the board. Two in a row starts a run.";
     }
     boardEl.appendChild(foot);
+    /* ══ THE RESET IS THE ONLY DEADLINE THIS PRODUCT HAS, and nothing ever used it. Somebody
+       who opened the board cared about the board; this arms ONE local one-shot for the
+       morning after the reset they just read the countdown to (next UTC midnight + 10h),
+       keyed so re-opening the board re-arms the same slot instead of stacking. Same
+       machinery as armResultsPing: gated on the capability, never requests permission,
+       silently a no-op everywhere the wrapper cannot keep the promise. The wrapper clamps
+       the delay (5min .. 14 days) and reports back through __kamoNotifResult, so
+       web_notif_armed{key:"board"} is the measure of whether this ever arms at all. */
+    if(nativeCaps&&nativeCaps.notifSchedule){
+      try{
+        const n2=new Date();
+        const msLeft=Date.UTC(n2.getUTCFullYear(),n2.getUTCMonth(),n2.getUTCDate()+1)-n2.getTime();
+        const mins=Math.round(msLeft/60000)+600;
+        postNative({type:"notif-schedule",notif:{key:"board",delayMinutes:mins,
+          subtitle:"Today's runs reset",
+          body:"New board, empty rows. One find puts you on it."}});
+      }catch(e){}
+    }
   }
   function boardHide(){
     boardOpen=false;
@@ -13659,6 +13892,31 @@ function chFeed(opts){
      already uses. The hint button also excludes itself here (hintsOn() tests !REPLAY), so
      nobody is ever sold a hint for a photo they painted.
      Failure is silent and costs nothing: no row, no slide, and the feed opens normally. */
+  /* ══ THE BANGER SLOT ═════════════════════════════════════════════════════════════════════
+     One proven hide (5+ plays, ranked by the same score the feed sorts with) seeded at slide
+     3, so a session contains at least one photo the room has already voted for — the fresh
+     bands the ordering serves first are, by construction, UNPROVEN. Slide 3, not 0: the
+     freshness-first doctrine holds the door, the banger holds the middle.
+     AFTER the first paint and off the critical path entirely: a slow or failed feed_best
+     costs nothing anybody is waiting on. Every filter the page owes is applied — seen, mine,
+     already-on-screen — and the server already filtered blocks and shadowbans. Skipped on a
+     seeded session (FIRST): that session's opening slide is somebody's own proof, and
+     rearranging it would bury the thing "See it live" promised. */
+  async function kfSeedBest(){
+    try{
+      if(kfState!==S||FIRST) return;
+      if(S.slides.length<4) return;   // a short room needs no rearranging
+      const rows=await kfRpc("feed_best",{p_limit:3,p_block_tags:kfBlocked()});
+      if(kfState!==S||!rows||!rows.length) return;
+      const skip=new Set(kfSeen().concat(chMine()));
+      S.slides.forEach(x=>skip.add(x.row.id));
+      const r=rows.find(x=>x&&x.id&&x.img_path&&!skip.has(x.id));
+      if(!r) return;
+      const s=addSlide(r,false,3);
+      s.best=true;
+      track("feed_best_seeded",{plays:r.n_attempts|0,found:r.n_found|0});
+    }catch(e){}
+  }
   (async()=>{
     if(FIRST){
       try{
@@ -13667,7 +13925,7 @@ function chFeed(opts){
           n_attempts:h.n_attempts|0,n_found:h.n_found|0},true);
       }catch(e){}
     }
-    load().then(paint);
+    load().then(paint).then(()=>{ try{ kfSeedBest(); }catch(e){} });
   })();
   /* OPENED STRAIGHT ONTO YOUR OWN GRID. The player card's results row leads here, and it
      leads to My kamos rather than to the public feed — the question it answers is "what
@@ -13795,7 +14053,13 @@ pwFirstArm();
    like it never deployed.
    Kept identical to the binary's constants at rev 1: this ships the mechanism, not a copy
    change, so a build that picks it up behaves exactly as it does today. */
-const CH_NOTIF_REV="1";
+/* REV 2, 2026-08-16: three hunt lines join the seven hide lines. Every reminder this app has
+   ever sent was about MAKING one — and since 08-13 the product has a second verb, playing
+   other people's, which is the cheaper ask of the two (no camera, no painting, one thumb).
+   The rev bump is load-bearing: the wrapper ignores a payload whose rev it has already
+   stored, and the queue runs a fortnight ahead, so without it these lines would sit behind
+   two weeks of old reminders and read as never deployed. */
+const CH_NOTIF_REV="2";
 const CH_NOTIF={
   rev:CH_NOTIF_REV,
   title:"⚠️ Time to KAMO ⚠️",
@@ -13806,7 +14070,14 @@ const CH_NOTIF={
     {subtitle:"Look up from the phone",body:"Somewhere in this room, something can disappear."},
     {subtitle:"Nothing hidden today",body:"The camera is one tap away."},
     {subtitle:"Your record",body:"Beat your best hide.",requiresHistory:true},
-    {subtitle:"No schedule, ever",body:"You never know when KAMO hits. It just did."}
+    {subtitle:"No schedule, ever",body:"You never know when KAMO hits. It just did."},
+    /* The three hunt lines are written to be true on WHATEVER day the queue delivers them —
+       same honesty rule as the rest: no dated claims, no invented crowds. "Hides you haven't
+       played" and "somebody's still hidden" hold for any feed with content in it, and the
+       wrapper's own kill switch (notif.json) covers the day that stops being true. */
+    {subtitle:"Strangers are hiding",body:"The feed has kamos you haven't played. Find one."},
+    {subtitle:"Somebody's still hidden",body:"Out there in the feed, unfound. One tap decides it."},
+    {subtitle:"One find starts a run",body:"Today's board is open. Two in a row and you're on it."}
   ],
   firstHide:{subtitle:"Still nothing hidden",body:"Your first one takes two minutes."}
 };
