@@ -5584,25 +5584,24 @@ const pwText=(v)=>(typeof v==="function"?v():v);/* Snapshot the markup copy ONCE
    loses its tools to .pwCover, so the answer to "Challenge back" was a photo, a sales sheet
    and no brush. That one is refused outright and says nothing: the ending card underneath it
    is already selling the app, better.
-   A FINGER ON A LOCKED CONTROL STILL GETS AN ANSWER, because a refusal that shows nothing is
-   a dead button — the failure this file already learned once, when the web CTA sat on
-   "Currently unavailable" forever. PW_USER_INITIATED is the line: those are requests, and a
-   request is answered with the sheet exactly as before (it is also the only door to the
-   creator pass — see bindPassHold on #pwRestore — which a blanket refusal would wall off in
-   the browser the founder actually tests in). Everything else gets the pill, which names
-   where the tool lives and goes to the store.
+   NO SOURCE IS EXEMPT, INCLUDING ✦ (founder's second call, same evening: "coupe aussi le ✦
+   en web"). The first version of this kept PW_USER_INITIATED — a tap on a KAMO+ control still
+   opened the sheet — on the argument that a request deserves the screen it asked for. The
+   numbers do not support paying for that with a sales screen: `plus` ran 937 impressions over
+   the same two days inside a population that produced 40 install taps in total. What a request
+   deserves is an ANSWER, and in a browser the honest answer is "this is in the app", which is
+   what the pill says and where its tap goes.
+   A REFUSAL THAT SHOWS NOTHING IS A DEAD BUTTON, though — the failure this file already
+   learned once, when the web CTA sat on "Currently unavailable" forever. So everything except
+   the uninvited offer gets the pill.
+   THE CREATOR PASS MOVED WITH IT. Its only door was a 1.2s hold on the paywall's Restore, and
+   a paywall that never opens is a door that never appears: on the web that pass would have
+   been unrevocably unreachable. bindPassHold is now bound to the ✦ as well — same gesture,
+   same single implementation, on the control that is actually on screen in a browser.
    pwWebOffer() IS THE TEST AND IT ALREADY EXISTED: no bridge, so no StoreKit, AND no prices,
    so the one web surface that could ever price — a future web checkout — takes all of this
    back by setting them. Inside the wrapper nothing here changes. */
-/* PW_USER_INITIATED PLUS THE ONE TAP IT LEAVES OUT. That set governs BUDGETS — who is exempt
-   from the caps — and `home` (the upgrade row on the member card) is force:true, so it never
-   needed the exemption and is deliberately still counted as an interruption. It is a finger on
-   an upgrade button all the same, and this question is a different one: not "should this skip a
-   cap" but "did somebody ask". Kept as its own set so widening one can never quietly widen the
-   other. */
-const PW_WEB_ASKED=new Set([...PW_USER_INITIATED,"home"]);
 function pwWebRefused(src,force){
-  if(PW_WEB_ASKED.has(src)) return false;
   /* NOTHING AT ALL FOR THE UNINVITED OFFER — no sheet, no pill, no event. It is the only
      source with no control behind it, so there is nothing to explain and nobody waiting for
      an answer, and its removal is already measured exactly by `paywall_viewed source=first`
@@ -6127,6 +6126,13 @@ function bindPassHold(b){
   ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,cancel));
 }
 bindPassHold($("#pwRestore"));
+/* AND ON THE ✦, WHICH IS THE ONLY ONE OF THE TWO A BROWSER CAN REACH. Since the web refusal
+   (see pwWebRefused) the paywall never opens outside the wrapper, so #pwRestore is a button
+   inside a screen 97% of this product can no longer see — and the pass would have been
+   unreachable exactly where a creator without the app is standing. Same implementation, same
+   phrase, same revocation by rotating PASS_HASH; the support sentence outside the app becomes
+   "hold the ✦". In the wrapper both doors answer, which costs nothing. */
+bindPassHold($("#btnPlus"));
 /* THE PLAYER CARD IS AN ACCOUNT SCREEN NOW, so Restore belongs on it. It was reachable only
    from the paywall — the screen you are on when you want to BUY, not the one you are on when
    you already did and the app has forgotten. Five people tapped Restore in seven days and all
@@ -9334,8 +9340,14 @@ $("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); pickPhoto(); };
    target, so a click that bubbles takes a photo on the way past. */
 $("#btnFeed").onclick=e=>{ e.stopPropagation(); haptic(10); chFeed(); };
 /* No pitch key for "plus": the ✦ button is not a refusal, so there is no tool to answer —
-   it keeps the generic copy. The source still rides on paywall_viewed. */
-$("#btnPlus").onclick=e=>{ e.stopPropagation(); openPaywall("plus"); };
+   it keeps the generic copy. The source still rides on paywall_viewed.
+   THE HOLD GUARD IS THE PASS, not a debounce. bindPassHold below puts the creator-pass door on
+   this button, and a 1.2s press ends in a pointerup that would otherwise also read as a tap —
+   opening the paywall (or, in a browser, printing the pill) over the phrase field the hold
+   just raised. Same one-line guard #pwRestore uses, and the same shared flag. */
+$("#btnPlus").onclick=e=>{ e.stopPropagation();
+  if(pwRestoreHeld){ pwRestoreHeld=false; return; }
+  openPaywall("plus"); };
 
 /* ---- torch ----
    Web torch = track.applyConstraints({advanced:[{torch}]}), supported on Android

@@ -126,7 +126,19 @@ async function fresh() {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__p, null, { timeout: 10000 });
-  await page.evaluate(() => { try { openPaywall('plus', true); } catch (e) { document.getElementById('paywall').classList.add('show'); } });
+  /* THE SHEET HAS TO BE OPEN FOR #pwRestore TO BE HOLDABLE, and since 2026-08-16 openPaywall()
+     refuses outright on a page with no bridge and no prices (pwWebRefused) — so the wrapper is
+     borrowed for the length of the open, exactly as test-pwfull-dom does. Without it this file
+     would hold a button inside a screen that never appeared and report the pass as dead.
+     THE OTHER DOOR IS NOT TESTED HERE: bindPassHold is also on the ✦ now, which is what a
+     browser can reach. Same one implementation, and test-pwgate-dom asserts that the hold
+     raises the field there. */
+  await page.evaluate(() => {
+    const rn = window.ReactNativeWebView; window.ReactNativeWebView = { postMessage() {} };
+    try { openPaywall('plus', true); }
+    catch (e) { document.getElementById('paywall').classList.add('show'); }
+    finally { if (rn) window.ReactNativeWebView = rn; else delete window.ReactNativeWebView; }
+  });
   return page;
 }
 
