@@ -2717,6 +2717,26 @@ const PAINT_MAX_W=1440;
 let paintDpr=dpr;
 let mode="compose", bgKind=null, facing="environment", stream=null;
 
+/* WHERE THE PHOTOGRAPH CAME FROM — one of the five words create_hide accepts, or null.
+ *
+ * NOT a duplicate of bgKind. bgKind answers "is the board showing a <video> or an <img>?" and
+ * is read by the torch, the flip button and the object-fit maths; it collapses three different
+ * origins into "photo". This answers "how did this image get here?", which is the question the
+ * row cannot currently be asked: a hide painted into a live capture, one painted into a picked
+ * snapshot, and one painted into somebody ELSE'S capture on a rehide are indistinguishable
+ * once published.
+ *
+ * Assigned at every door and nowhere else — startCamera(), usePhotoSrc(), usePhoto(), and the
+ * rehide branch. Left null by the debug harness's setBg on purpose: that is not a user's photo,
+ * and a value invented there would be a fabricated row in the one week of data this is meant to
+ * settle. Null simply publishes down the 14-argument rung, exactly as every page loaded before
+ * this deploy does, so nothing depends on it being set.
+ *
+ * `library` vs `library_cam`/`library_nocam` is honest ignorance versus a real reading: only the
+ * wrapper can see EXIF, so the <input type="file"> fallback and every build too old to send the
+ * flag say `library` and stay out of the comparison. See infra/2026-08-16-hide-source.sql. */
+let photoSrc=null;
+
 /* ===== KAMO+ FREE TRIAL — rollout / A-B switch =====
  *
  * WHY THIS EXISTS. Over the 60 days to 2026-08-03 the paywall was seen 432 times, a plan
@@ -3646,7 +3666,7 @@ async function startCamera(auto){
   const tries=[...(lens?[{video:{deviceId:{exact:lens},...hdHint()},audio:false}]:[]),{video:{facingMode:{ideal:facing},...hdHint()},audio:false},{video:{facingMode:facing,...hdHint()},audio:false},{video:{facingMode:{ideal:facing}},audio:false},{video:true,audio:false}];
   let lastErr;
   for(const c of tries){
-    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; chClearReply(); startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose();
+    try{ if(stream) stream.getTracks().forEach(t=>t.stop()); stopCamView(); /* new stream → back to the <video> until the canvas has a frame of it (also covers Flip) */ stream=await gumSafe(c,gumMs); cam.srcObject=stream; cam.style.display="block"; photo.style.display="none"; try{await cam.play();}catch(_){} bgKind="cam"; photoSrc="camera"; chClearReply(); startCamView(); torchOn=false; /* new track starts with the torch off */ track("camera_granted",{auto:!!auto,...camSize()}); enterCompose();
       /* AFTER the app is already working, and deliberately not awaited. Everything above has
          produced a live camera and a usable screen; widening is an upgrade on top of that, so
          it must never delay the first frame or be able to fail the acquisition. */
@@ -3695,8 +3715,15 @@ function pickPhoto(){
 }
 /* The native picker hands back a data URL; the input hands back a File. Same destination,
    two doors — this is the one usePhoto() reaches through after createObjectURL. */
-function usePhotoSrc(src){
+function usePhotoSrc(src,meta){
   if(!src) return;
+  /* `meta.cam` is the wrapper's reading of the picked asset's EXIF: true when a Make/Model tag
+     is present, false when EXIF came back without one. A camera always writes those tags, and
+     screenshots, memes, downloaded images and generated ones never do — so the false branch is
+     the whole point of the boolean. Absent (old wrapper, or the file-input fallback below) is
+     NOT false: it is `library`, unknown, and stays out of the comparison. */
+  photoSrc = (meta && typeof meta.cam === "boolean") ? (meta.cam ? "library_cam" : "library_nocam")
+                                                     : "library";
   /* A DIFFERENT PHOTO IS A DIFFERENT CONVERSATION. chRehide() hands the answered hide's own
      image straight to `photo` and never comes through here, so this only ever fires when the
      user has gone and picked something else — at which point the round has stopped being a
@@ -3714,10 +3741,14 @@ function usePhotoSrc(src){
    script: assigning into an undefined object throws at module scope, which is a blank app
    for everyone. */
 window.KAMO=window.KAMO||{};
-window.KAMO.usePickedPhoto=(src)=>{ try{ usePhotoSrc(src); }catch(e){} };
+/* The second argument is additive and optional in both directions: a wrapper that predates it
+   calls this with one argument and the photo is filed as `library`, and a page that predates it
+   ignores the extra one. Nothing about the picker's behaviour changes either way — the flag is
+   recorded, never acted on. */
+window.KAMO.usePickedPhoto=(src,meta)=>{ try{ usePhotoSrc(src,meta); }catch(e){} };
 /* The native sheet never opened. Fall through to the input rather than leaving a dead tap. */
 window.KAMO.pickPhotoFailed=()=>{ try{ $("#fileInput").click(); }catch(e){} };
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
+function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; photoSrc="library"; /* the file input cannot read EXIF — unknown, not "no camera" */ torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
 
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
@@ -3914,7 +3945,10 @@ function projectChar(char){ const v=new THREE.Vector3(); char.parts.spine.getWor
 function capture(){
   // The moment a live camera (or picked photo) becomes a paintable board — the step
   // between "camera works" and "started painting", where a silent drop would be invisible.
-  track("photo_captured",{source:bgKind,timed:timerArmed("aim"),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
+  // `source` stays bgKind — it is an established property with three weeks of history behind
+  // it and renaming it would split every existing chart. `origin` is the finer reading beside
+  // it, so the two can be compared rather than one silently replacing the other.
+  track("photo_captured",{source:bgKind,origin:photoSrc,timed:timerArmed("aim"),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
   if(timerArmed("aim")&&aimStartedAt) recordAim(aimGiven,(Date.now()-aimStartedAt)/1000,captureWasAuto);
   aimStartedAt=0;
   captureWasAuto=false;   // consumed — the next capture is a thumb until the clock says otherwise
@@ -10068,6 +10102,15 @@ function chCreateForms(base,who){
   const slot=chSlot();
   const runNow=(chReplyTo?(chStreak().run|0):0);
   const lq=chLqip();
+  /* THE 15-ARGUMENT RUNG — where the photograph came from, on top of everything the
+     14-argument rung carries. Guarded on photoSrc being set at all, for the same reason the
+     rung below is guarded on the lqip existing: the debug harness and any door added later
+     without a word of its own leave it null, and a null travelling up as an argument would be
+     a fifteenth-arity call carrying nothing. It climbs down instead and publishes identically.
+     ADDED, NEVER EDITED. The server clamps to the five-word vocabulary and nulls anything else
+     (infra/2026-08-16-hide-source.sql) — this is an anonymous client, and a hide is worth more
+     than a taxonomy. */
+  if(key&&slot&&slot.id&&lq&&photoSrc) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq,p_source:photoSrc});
   if(key&&slot&&slot.id&&lq) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq});
   if(key&&slot&&slot.id&&runNow>0) forms.push({...signed,p_reply_to:chReplyTo,p_author_key:key,p_id:slot.id,p_streak:runNow});
   if(key&&slot&&slot.id) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id});
@@ -12494,7 +12537,11 @@ function chSeek(hideId,opts){
           try{ URL.revokeObjectURL(url); }catch(_){}
         };
         photo.src=url;
-        photo.style.display="block"; cam.style.display="none"; bgKind="photo";
+        /* A REHIDE IS NOT AN UPLOAD. The image is the answered hide's own — somebody else's
+           capture, fetched back down — so filing it as `library` would inflate the exact number
+           this column exists to measure, and filing it as `camera` would credit a shutter this
+           user never pressed. It gets its own word. */
+        photo.style.display="block"; cam.style.display="none"; bgKind="photo"; photoSrc="rehide";
         enterCompose();
       })();
     }
