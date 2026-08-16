@@ -898,6 +898,18 @@ try {
   bad('SHARE PATHS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 7. The challenge link's head ----------------------------------------------------------
+   infra/edge-h.ts renders every playkamo.com/h/<id> — the unfurl in the thread AND the only
+   URL on the ranking domain anyone links to. It is deployed by hand to Supabase, so nothing
+   else in this repo forces it to stay honest. Chained here for the same reason as the share
+   paths: one command before a push. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edge-h.mjs')], { stdio: 'pipe' });
+  ok('the challenge link unfurls and keeps its domain (node scripts/test-edge-h.mjs for the detail)');
+} catch (e) {
+  bad('CHALLENGE LINK HEAD BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
    Everything above reads the file. Two bugs shipped this week that reading the file could not
    see: the preview card was whitelisted in the short sheet's CSS while nothing ever added the
