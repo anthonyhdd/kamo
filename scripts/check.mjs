@@ -577,6 +577,15 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     ['the reveal starts the upload without publishing', 'function enterFinished(', 'chPrepare()',
       'enterFinished() no longer calls chPrepare() — the image upload goes back to starting '
       + 'on the same gesture as the tap, which is the eight-second wait this split removed'],
+    /* The go-public offer only exists if the send reveals it, and it is only honest if its
+       tap performs the toggle's own act. Both halves are one deleted line away and neither
+       is visible in a diff: the button just stays hidden, or stays a label. */
+    ['the send reveals the go-public offer', 'async function chMarkSent(', 'ssOfferPub()',
+      'chMarkSent() no longer calls ssOfferPub() — the post-send go-public offer never '
+      + 'appears, and three-quarters of published hides keep missing the feed by default'],
+    ['the go-public tap performs the toggle\'s own act', 'function ssOfferPub(', 'kfWantPublic()',
+      'ssOfferPub() no longer gates on kfWantPublic() — the offer would appear over a toggle '
+      + 'already saying Public, asking a question the sheet just answered'],
     /* Same guard as the peek path above, on the other door into the sheet. The visibility
        answer is remembered across rounds, so a sheet opened without this paints the previous
        hide's wording — and one of the two wordings is a claim the toggle underneath it
@@ -610,6 +619,33 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
     if (body === null) bad(`could not locate ${start} — this check needs updating`);
     else if (!body.includes(needs)) bad(why);
     else ok(label);
+  }
+}
+
+/* ---- 5d-sexies. The go-public tap must actually publish -----------------------------------
+   The #ssGoPub handler is an arrow in a block, so the function-anchored wiring table above
+   cannot reach it. What must hold: the tap performs the visibility toggle's own act — the
+   sticky preference, the repaint, and the ROW-LEVEL flag. A handler that sets the label and
+   skips kfApplyVisibility would show "In the feed ✓" over a hide that never left private,
+   which is the one dishonest state this sheet must never produce. */
+{
+  /* Anchored on the onclick assignment, not on the $("#ssGoPub") lookup — peekShareSheet's
+     per-round reset holds the same lookup earlier in the file, and indexOf would land there
+     and read 5000 characters of the wrong neighbourhood. */
+  const at = html.indexOf('g.onclick=async(e)=>{');
+  if (at < 0) bad('the #ssGoPub handler block is gone — the go-public offer has no tap');
+  else {
+    /* 5000 raw characters, because the slice happens BEFORE the comments are stripped and
+       this block narrates its reasoning — a window measured against stripped code would be
+       measured against a length this file does not have at that offset. */
+    const seg = html.slice(at, at + 5000)
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    const wants = ['kfSetWantPublic(true)', 'kfRenderVis()', 'kfApplyVisibility(id,true)', 'track("sent_public_accepted"'];
+    const missing = wants.filter((w) => !seg.includes(w));
+    missing.length
+      ? bad('the #ssGoPub handler is missing: ' + missing.join(', ') + ' — the receipt and the '
+          + 'publish have to travel together or the label lies')
+      : ok('the go-public tap flips the preference, repaints the sheet, and publishes the row');
   }
 }
 
@@ -1061,6 +1097,18 @@ try {
     : ok('a reply knows who it answers (node scripts/test-reply-dom.mjs)');
 } catch (e) {
   bad('THE REPLY LOOP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
+/* ---- 12b-sexies. The feed's quality pass ----------------------------------------------------
+   The LQIP is stranger-authored CSS and the banger is a positional insertion into two lists
+   that must move together — both invisible in a diff, both asserted in a browser. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-feedq-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-feedq-dom.mjs', 'FEED-QUALITY TEST', out)
+    : ok('the lqip paints (and only the real shape), the banger inserts fourth (node scripts/test-feedq-dom.mjs)');
+} catch (e) {
+  bad('THE FEED QUALITY PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
 /* ---- 12b-quinquies. The challenges panel ---------------------------------------------------
