@@ -63,6 +63,17 @@ const html = real.slice(0, at)
   + 'text:(document.getElementById("khScore")||{}).textContent||"",'
   + 'shown:(document.getElementById("khScore")||{}).style.display};},'
   + 'dot(){const b=document.querySelector(".brand");return !!b&&b.classList.contains("hasNews");},'
+  /* THE SIGN NUDGE, read off the grid it lives on. setName() sets the two states that decide
+     it: an ASSIGNED handle (minted by the publish path, which is everybody) versus a CHOSEN
+     one. That distinction is exactly what the nudge shipped without on 2026-08-16, and the
+     reason it never rendered for a single user. */
+  + 'setName(h,chosen){try{h?localStorage.setItem("kamo_handle",h):localStorage.removeItem("kamo_handle");'
+  + 'chosen?localStorage.setItem("kamo_handle_chosen","1"):localStorage.removeItem("kamo_handle_chosen");}catch(e){}},'
+  + 'nudge(){const b=document.querySelector("#kfMine .kmStats button");return b?b.textContent:"";},'
+  /* chFeed() refuses to open twice (`if(kfState) return`), so a block that runs after another
+     one has left the feed up would silently read the PREVIOUS block's grid — door() would
+     return, the assertions would run, and they would be about stale DOM. */
+  + 'closeFeed(){const c=document.getElementById("kfClose");if(c)c.click();},'
   /* THE BOX'S CLICK LEAVES THE CARD NOW (2026-08-15) — it opens the My-kamos grid, so a real
      click here would destroy the list this block is about to read. What survives in place is
      the khOpenNext path, which is the one a "somebody found your hide" notification takes
@@ -331,6 +342,51 @@ console.log('\nAND IT IS VISIBLE ON THE REVEAL, WITHOUT EATING THE WIPE');
     : bad(`it takes pointer events on the reveal (pointer-events:${on.pe}) — #revealHandle's line runs `
         + 'straight through the wordmark, so a drag started on it would be swallowed');
   await page.evaluate(() => window.__m.reveal(false));
+}
+
+console.log('\nTHE SIGN NUDGE ASKS THE ONLY QUESTION THAT HAS TWO ANSWERS');
+{
+  /* IT SHIPPED ON A CONDITION THAT IS NEVER TRUE. The nudge (2026-08-16) was gated on
+     !getHandle() — but the publish path ASSIGNS a handle to every creator (mintHandle), so
+     every device that reaches this grid already has one and it rendered for nobody. Founder's
+     report the same day, off a leaderboard of @OchreWren / @OchreRaven / @OchreHare: the
+     generated names are obvious and nothing pushed anyone to change theirs. The real question
+     is whether the person ever CHOSE the name.
+     A FRESH PAGE PER CASE, and that is not tidiness. This suite shares one page across every
+     block, and by here the feed has been opened, the card closed and #khScore rebound several
+     times — a door() on that page silently no-ops and the assertion reads a stale grid, which
+     is exactly what the first draft of this block did. The handle is planted before boot, so
+     each case is one clean launch with one state. */
+  const state = async (handle, chosen) => {
+    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await p2.addInitScript((a) => {
+      localStorage.setItem('kamo_handle', a.handle);
+      if (a.chosen) localStorage.setItem('kamo_handle_chosen', '1');
+      else localStorage.removeItem('kamo_handle_chosen');
+    }, { handle, chosen });
+    await p2.goto(url, { waitUntil: 'load' });
+    await p2.waitForTimeout(800);
+    await p2.evaluate(() => window.__m.seed(['a', 'b'],
+      { a: { n_attempts: 4, n_found: 1, img_path: 'aaa.jpg' }, b: { n_attempts: 2, n_found: 0, img_path: 'bbb.jpg' } }, null));
+    await p2.evaluate(() => window.__m.openCard());
+    await p2.evaluate(() => window.__m.door());
+    const out = await p2.evaluate(() => window.__m.nudge());
+    await p2.close();
+    return out;
+  };
+
+  const assigned = await state('MossyOwl', false);
+  /make it your name/i.test(assigned)
+    ? ok(`an assigned name is challenged ("${assigned.trim()}")`)
+    : bad(`no nudge over a grid signed with a name nobody chose — got ${JSON.stringify(assigned)}`);
+  /MossyOwl/.test(assigned)
+    ? ok('and it names the pseudonym, which is the whole argument')
+    : bad(`the nudge does not show the assigned handle: ${JSON.stringify(assigned)}`);
+
+  const chosen = await state('tony', true);
+  chosen === ''
+    ? ok('and somebody who picked their own name is never asked again')
+    : bad(`the nudge nags a user who already chose: ${JSON.stringify(chosen)}`);
 }
 
 await browser.close();

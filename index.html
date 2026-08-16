@@ -5833,13 +5833,27 @@ function recordHide(sec,cov){
  * The @ is markup, never stored — keeping it in the value would double it the first time
  * someone typed one themselves. */
 const HANDLE_KEY="kamo_handle";
+/* WHOSE NAME IT IS — the question getHandle() cannot answer, and the one that matters.
+   EVERY publisher has a handle, because the publish path assigns one (see mintHandle), so
+   "does this device have a name" is true for everybody and useless as a test. It is also the
+   test the sign nudge shipped with on 2026-08-16, which is why that nudge has never once
+   appeared: it asked !getHandle() of a population that is 100% named.
+   What separates a person from a bot on the board is whether they ever CHOSE it. Written only
+   by the paths where somebody typed — never by ensureHandle(), whose whole contract is that
+   it invents one nobody asked for. */
+const HANDLE_CHOSE_KEY="kamo_handle_chosen";
+function handleChosen(){ try{ return localStorage.getItem(HANDLE_CHOSE_KEY)==="1"; }catch(e){ return false; } }
 function cleanHandle(v){
   return String(v||"").trim().replace(/^@+/,"").replace(/[^A-Za-z0-9_.]/g,"").slice(0,16);
 }
 function getHandle(){ try{ return cleanHandle(localStorage.getItem(HANDLE_KEY)); }catch(e){ return ""; } }
-function setHandle(v){
+function setHandle(v,byUser){
   const h=cleanHandle(v);
   try{ h ? localStorage.setItem(HANDLE_KEY,h) : localStorage.removeItem(HANDLE_KEY); }catch(e){}
+  /* ONE WRITER, THREE CALL SITES. The flag is set here rather than at each keyboard handler
+     so that a fourth way of typing a name — and there will be one — cannot forget it.
+     Guarded on `h`: clearing the field is not choosing. */
+  if(byUser&&h){ try{ localStorage.setItem(HANDLE_CHOSE_KEY,"1"); }catch(e){} }
   /* AND OUT OF THE WEBVIEW, because this store has already lost this value once for real.
      1.0.2 ran the WebView with `incognito` — a non-persistent data store — so every kamo_*
      key died on close and the name had to be retyped every launch. That flag is gone and
@@ -6211,7 +6225,7 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
   const inp=$("#khHandle");
   if(inp){
     /* The headline follows every keystroke — see khRenderName(). */
-    inp.addEventListener("input",()=>{ setHandle(inp.value); khRenderName(); });
+    inp.addEventListener("input",()=>{ setHandle(inp.value,true); khRenderName(); });
     /* AND THE FIELD STANDS DOWN WHEN THEY STOP TYPING — on blur, not on input. Collapsing
        mid-keystroke would pull the field out from under the caret on the first character.
        Blur is the moment they are done: the name is saved, the headline already shows it, and
@@ -6224,7 +6238,7 @@ function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("s
          "Find the body". Same guard the chip's dialog had: only when the name actually
          changed, and chRepublish() itself bails when nothing is published yet. */
       const before=getHandle();
-      inp.value=setHandle(inp.value);
+      inp.value=setHandle(inp.value,true);
       if(getHandle()!==before){
         track("hide_signed",{had_name:!!before,named:!!getHandle()});
         chRepublish();
@@ -10091,7 +10105,7 @@ function ssRenderSign(){
          name that was already on the row — the hide is going out signed either way, and an
          empty box is far more likely to be a mis-tap than a decision. */
       if(v&&v!==before){
-        setHandle(v); ssNamePreview="";
+        setHandle(v,true); ssNamePreview="";
         track("hide_signed",{had_name:!!before,named:true,src:"sheet"});
         /* The hide may already be published — the sheet publishes on first touch — so the row
            behind the link has to be re-stamped or the friend opens a challenge signed with the
@@ -13513,17 +13527,28 @@ function chFeed(opts){
        real plays, their own grid, no handle. One line, one tap, and it opens the card whose
        headline IS the name field. Shown only when there is something behind it (plays > 0)
        and nothing on it (no handle) — a nudge with no evidence is an ad. */
+    /* !handleChosen(), NOT !getHandle() — and that correction is the whole feature. Shipped on
+       2026-08-16 asking "do they have a name" of a population where the publish path assigns
+       one to everybody, so it evaluated false for every single person it was written for and
+       has never rendered once. The real question is whether they ever CHOSE it.
+       AND IT NAMES THE PSEUDONYM, because that is the argument. "Sign your kamos" is abstract;
+       "@MossyOwl" over their own grid is the moment somebody realises the name strangers see
+       is not theirs — which is exactly what a board of Ochre-somethings makes obvious
+       (founder's report, 2026-08-16). textContent, and it is this device's own handle. */
     try{
-      if((t.tried|0)>0 && !getHandle()){
+      if((t.tried|0)>0 && !handleChosen()){
         const st=mineEl.querySelector(".kmStats");
+        const mine0=getHandle();
         if(st){
           const nb=document.createElement("button");
           nb.className="kmStat send"; nb.style.width="100%"; nb.style.justifyContent="center";
-          nb.textContent="✍️ "+t.tried+" plays and nobody knows it's you — sign your kamos";
+          nb.textContent = mine0
+            ? ("✍️ "+t.tried+" "+((t.tried|0)===1?"play":"plays")+" as @"+mine0+" — make it your name")
+            : ("✍️ "+t.tried+" "+((t.tried|0)===1?"play":"plays")+" and nobody knows it's you — sign your kamos");
           nb.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
-            track("sign_nudge_tapped",{tried:t.tried|0}); openKamoHome(); };
+            track("sign_nudge_tapped",{tried:t.tried|0,assigned:!!mine0}); openKamoHome(); };
           st.appendChild(nb);
-          track("sign_nudge_shown",{tried:t.tried|0});
+          track("sign_nudge_shown",{tried:t.tried|0,assigned:!!mine0});
         }
       }
     }catch(e){}
