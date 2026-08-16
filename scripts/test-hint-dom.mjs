@@ -166,8 +166,47 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
       ? ok('and it lives inside #chFrame, so it rides the zoom instead of sliding off the photo')
       : bad('the zone is not a child of #chFrame — it will not follow a pinch');
   }
+  /* THE BUTTON NO LONGER GOES DEAD HERE, AND THAT IS THE POINT OF PR #295.
+     It used to read "Hint used" and lock, which meant the only route to the pack was to leave
+     this hide, open another one, tap Hint and discover on the round trip that the wallet was
+     empty — and App Review least of all navigates toward a purchase it has not been shown. The
+     free daily is spent first, so a reviewer who taps Hint once saw the zone appear for nothing
+     and never met the sheet at all.
+     This fixture spends the LAST one (balance:0), so the button becomes the offer. The old
+     assertion — `disabled` — was written against the retired contract, and it is what failed on
+     main once #295 merged. The branch that still locks is asserted below. */
   const b2 = await btn(p);
-  b2 && b2.disabled ? ok('the button locks after the zone is shown') : bad(`button after use: ${JSON.stringify(b2)}`);
+  b2 && b2.text === 'Get 5 more' && !b2.disabled
+    ? ok('spending the last hint turns the button into the offer, still tappable')
+    : bad(`button after use: ${JSON.stringify(b2)}`);
+
+  /* AND THE OFFER HAS TO BE WIRED, not merely relabelled. offerPackAfterUse() replaces the
+     onclick outright — takeHint() would bail on `hintZone` — so a label change with the old
+     handler still attached would read correctly and sell nothing, which is exactly the failure
+     #295 exists to end. Asserted through the product id that leaves the page. */
+  await p.click('#chHint');
+  await p.waitForTimeout(300);
+  const soldAfterUse = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  soldAfterUse.length === 1 && soldAfterUse[0].product === 'com.blisscoach.kamo.hints5'
+    ? ok('and tapping it posts the pack purchase, by its exact product id')
+    : bad(`the relabelled button posted ${JSON.stringify(soldAfterUse)}`);
+  await p.close();
+}
+
+/* THE BRANCH THAT STILL LOCKS, and it is the half a "the button stays live now" reading would
+   quietly delete. A wallet with hints left has nothing to be sold: the zone is on screen, the
+   balance is stated, and another tap could only redraw what is already there. */
+{
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1',
+                         spend: { used: 'wallet', region: REG, balance: 3, free_available: false } });
+  await p.click('#chHint');
+  await p.waitForTimeout(400);
+  const b = await btn(p);
+  b && b.text === '3 left' && b.disabled
+    ? ok('a wallet with hints left states the balance and locks — there is nothing to sell')
+    : bad(`button reads ${JSON.stringify(b)}`);
+  const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 0 ? ok('and no purchase is offered to somebody who already paid') : bad(`posted ${JSON.stringify(posted)}`);
   await p.close();
 }
 
