@@ -1235,6 +1235,20 @@ try {
   bad('THE REPLAY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12d. The bell on your own hide ------------------------------------------------------
+   The one notification opt-in the user opens rather than one we interrupt with. Every way it
+   can be wrong looks correct on screen: offered on a stranger's slide (where the promise is
+   a lie), offered to somebody who already granted, offered in a browser or on a wrapper that
+   cannot answer it, or claiming success on a refusal. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-bell-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-bell-dom.mjs', 'BELL TEST', out)
+    : ok('the notification bell is offered where it is true, and answers honestly (node scripts/test-bell-dom.mjs)');
+} catch (e) {
+  bad('THE NOTIFICATION BELL IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
    initThree() runs at module top level; before this guard existed, that throw killed
    everything after it — seeker, feed, tracking — and looked exactly like churn (17 devices
