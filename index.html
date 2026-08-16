@@ -11484,11 +11484,15 @@ function chSeek(hideId,opts){
        is over. A run that simply disappears teaches nothing — the player has to watch it die.
        forwards, so it does not snap back to gold on the last frame. */
     +".chRun.dead{color:#ff8f8f;border-color:rgba(255,143,143,.5);animation:chRunDie .5s cubic-bezier(.36,.07,.19,.97) forwards;}"
-    /* Static, because the break moves into .chTop's flow (see chRunShow): the absolute top /
-       left / right above — and the .chIn override of them — go inert, and the flex column
-       centres it under the subtitle. margin-top rather than the column's 3px gap: this is a
-       new thought, not a third line of the same one. */
-    +".chRun.dead{position:static;margin-top:9px;}"
+    /* Static, because both end states move into .chTop's flow (see chRunShow): the absolute
+       top / left / right above — and the .chIn override of them — go inert, and the flex
+       column centres them under the subtitle. margin-top rather than the column's 3px gap:
+       this is a new thought, not a third line of the same one.
+       MEASURED, NOT ESTIMATED. In the feed the headline sits at padding-top 56px + safe-area
+       and the chip at top 52px + safe-area — the same row, by construction — so anything that
+       outgrows the chip's width lands on the title. At 390px: the break overlaps it by 44px,
+       the record by 12-22px depending on the string. The live chip clears it and stays put. */
+    +".chRun.dead,.chRun.pb{position:static;margin-top:9px;}"
     +"@keyframes chRunDie{0%{transform:scale(1)}18%{transform:scale(1.14) translateX(-3px)}38%{transform:scale(1.02) translateX(3px)}60%{transform:scale(1) translateX(-2px)}100%{transform:scale(.96);opacity:.72}}"
     /* A new personal record is the only good news this pill ever carries, and it gets one
        pulse — not a burst. confettiBurst() already owns the find; a second celebration on the
@@ -11808,18 +11812,22 @@ function chSeek(hideId,opts){
       : mode==="pb"   ? (v+" best yet")
                       : String(v)));
     runEl.className="chRun"+(mode?" "+mode:"");
-    /* THE BREAK IS A SENTENCE, SO IT LEAVES THE CHIP COLUMN. Live, the run is a status chip
-       and belongs beside the clock; broken, it stops being "2" and becomes "Run of 2 broken",
-       which is four times as wide and lands on the ending headline. The rule above reasons
-       that the two can never touch because ".chHead is max-width:20ch, so the pill starts at
-       x≈320" — true of the chip, false of the sentence, which starts near x≈228 and collided
-       with "Lost in 1.8s" on a real round (founder screenshot, 2026-08-16).
+    /* A SENTENCE LEAVES THE CHIP COLUMN; A CHIP STAYS IN IT. Live, the run is "2" beside the
+       clock. At the end it turns into prose — "Run of 2 broken", "7 best yet" — three to four
+       times as wide, and lands on the ending headline. The rule above reasons that the two can
+       never touch because ".chHead is max-width:20ch, so the pill starts at x≈320": true of
+       the chip, false of the prose, which starts near x≈228 (break) and x≈268 (record). The
+       break was caught on a real round (founder screenshot, 2026-08-16); the record has the
+       same geometry and the same fix, rather than waiting to be photographed too.
        Moved rather than nudged: .chTop is the message block — headline, subtitle — and a
        centred flex column, so joining it makes the overlap impossible at any string length or
-       screen width instead of true until the next wording change. Same reason the move is
-       one-way: nothing returns it to the corner, because a round that has ended never goes
+       screen width instead of true until the next wording change.
+       THE PLAIN WIN IS LEFT ALONE on purpose: it is still just a number, it still starts past
+       x≈333, and it is the one end state whose pill can stay where the live one was — the
+       count ticking up in place is the reward.
+       One-way: nothing returns it to the corner, because a round that has ended never goes
        back to having a live run. */
-    if(mode==="dead"){
+    if(mode==="dead"||mode==="pb"){
       const top=runEl.parentNode&&runEl.parentNode.querySelector(".chTop");
       if(top&&runEl.parentNode!==top) top.appendChild(runEl);
     }
