@@ -12,16 +12,23 @@
  * Two rules follow, and this suite exists because both are invisible in a screenshot and
  * both fail silently — a paywall that opens when it should not looks exactly like a paywall.
  *
- *  ① THE OFFER IS GUARANTEED, AND IT IS GUARANTEED ONCE. 2026-08-15: 1481 new users, 100
- *    paywalls — 6.8%, because every source in the file fires from a locked control on the
- *    paint screen and most of this product is not the paint screen. The first offer now
- *    rides on activation beats with a dwell backstop under them. Asserted as a PAIR, and it
- *    has to be: "fires for everybody" and "fires once" are the two ways this breaks, and a
- *    test for either one alone passes against the other's worst version.
- *  ③ AND IN A BROWSER IT SELLS THE APP, NOT A DEAD BUTTON. 97% of KAMO is a browser, where
- *    setPrices() is never called and the CTA read "Currently unavailable" forever. It now
- *    routes to the store — and MUST NOT fall through to pwPurchase(), whose non-wrapper
- *    branch grants KAMO+ for free.
+ *  ① THE OFFER IS GUARANTEED, AND IT IS GUARANTEED ONCE — WHERE THERE IS SOMETHING TO SELL.
+ *    2026-08-15: 1481 new users, 100 paywalls — 6.8%, because every source in the file fires
+ *    from a locked control on the paint screen and most of this product is not the paint
+ *    screen. The first offer now rides on activation beats with a dwell backstop under them.
+ *    Asserted as a PAIR, and it has to be: "fires for everybody" and "fires once" are the two
+ *    ways this breaks, and a test for either one alone passes against the other's worst
+ *    version. Asserted on a PRICED page, because a browser with no store is now the one place
+ *    this guarantee deliberately does not apply — see ③.
+ *  ③ AND IN A BROWSER IT NEVER ARRIVES ON ITS OWN (2026-08-16). 6162 paywalls opened in a
+ *    browser over 15-16 August and produced 40 taps on "Get KAMO — free": 0.6%. 2755 of them
+ *    were the uninvited `first`, which lands 1500ms after a seek round ends — one tap from
+ *    "Challenge back" — and again off the dwell backstop, i.e. on the compose screen of the
+ *    reply the user had already started making. That one is refused and silent now. A finger
+ *    on a locked control still gets an answer, and the answer is the pill that goes to the
+ *    store; an explicit ✦ still opens the sheet, which is also the only door to the creator
+ *    pass. The sheet must still never fall through to pwPurchase(), whose non-wrapper branch
+ *    grants KAMO+ for free.
  *  ② THE TAIL IS CAPPED, INCLUDING FORCED OPENS. Every budget already in the file exempts
  *    user-initiated opens, which is exactly how a launch reached eleven. Asserted through the
  *    real ✦ button, which passes no force flag but is user-initiated and therefore skipped
@@ -56,8 +63,11 @@ const html = readFileSync(join(ROOT, 'index.html'), 'utf8')
   .replace('async function chRpc(fn,body){', 'async function chRpc(fn,body){ if(window.__rpc) return window.__rpc(fn,body);')
   .replace('const PW_FIRST_DWELL_MS=45000;', `const PW_FIRST_DWELL_MS=${DWELL_MS};`)
   /* Module scope, so the beats can be driven by name without waiting for a real hunt to end.
-     ③ below still drives the untouched production path. */
-  .replace('function pwFirstArm(){', 'window.__pwFirst=(b)=>pwFirstOffer(b);\nfunction pwFirstArm(){');
+     ③ below still drives the untouched production path.
+     `__pw` reaches the sources that have no button on the hero screen — `color` fires from a
+     swatch that only exists once a photo is on the board, and what is under test is the
+     REFUSAL, not the road to the swatch. */
+  .replace('function pwFirstArm(){', 'window.__pwFirst=(b)=>pwFirstOffer(b);\nwindow.__pw=(s,f)=>openPaywall(s,f);\nfunction pwFirstArm(){');
 const MIME = { '.js': 'text/javascript', '.png': 'image/png' };
 const server = createServer((rq, rs) => {
   const p = decodeURIComponent(rq.url.split('?')[0]);
@@ -76,8 +86,14 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
-/** A page with the wire recorded, and localStorage seeded before the app boots. */
-async function boot(seed) {
+/** A page with the wire recorded, and localStorage seeded before the app boots.
+ *
+ * `priced` IS HOW A SURFACE THAT CAN SELL IS REPRODUCED, and setPrices() is the honest way to
+ * do it: pwWebOffer() is `no bridge AND no prices`, so a real localized price is exactly what
+ * separates a browser from the wrapper as far as the paywall is concerned. Faking
+ * window.ReactNativeWebView instead would ALSO redirect track() into the native bridge, and
+ * every assertion in this file reads the Amplitude wire. */
+async function boot(seed, priced) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const sent = [];
   await page.route('**/api.eu.amplitude.com/**', async r => {
@@ -89,17 +105,22 @@ async function boot(seed) {
     Object.keys(s || {}).forEach(k => localStorage.setItem(k, s[k]));
   }, seed || {});
   await page.goto(base, { waitUntil: 'load' });
+  /* Before the 900ms settle, so a priced page is priced well inside the shortened dwell. */
+  if (priced) await page.evaluate(() => window.KAMO.setPrices({ weekly: '$2.99', lifetime: '$14.99' }));
   await page.waitForTimeout(900);
   return { page, sent };
 }
 const count = (sent, type) => sent.filter(e => e.event_type === type).length;
 
-console.log('\n① EVERY INSTALL IS OFFERED SOMETHING, AND ONLY ONCE');
+console.log('\n① EVERY INSTALL THAT CAN BUY IS OFFERED SOMETHING, AND ONLY ONCE');
 {
   /* Nothing is clicked in this block. A fresh device is booted and left alone, which is
      exactly the session the backstop exists for — 93% of the population never reaches a
-     locked control, and until this shipped they were asked nothing at all. */
-  const { page, sent } = await boot();
+     locked control, and until this shipped they were asked nothing at all.
+     PRICED, because that is where this guarantee lives now: a browser with no store refuses
+     the offer outright (③), so asserting the guarantee on an unpriced page would be asserting
+     the opposite rule and calling it this one. */
+  const { page, sent } = await boot(null, true);
   await page.waitForTimeout(DWELL_MS + 900);
   const first = sent.filter(e => e.event_type === 'paywall_viewed' && (e.event_properties || {}).source === 'first');
   first.length === 1
@@ -122,8 +143,11 @@ console.log('\n① EVERY INSTALL IS OFFERED SOMETHING, AND ONLY ONCE');
 {
   /* The persistence, from the other side: a device that met the offer on a previous launch
      is not asked again. Fails OPEN by design — see pwFirstDone() — so this is the only
-     assertion that the key is read at all. */
-  const { page, sent } = await boot({ kamo_pw_first: '1' });
+     assertion that the key is read at all.
+     PRICED for the same reason as above, and here it is load-bearing rather than tidy: on an
+     unpriced page this block passes with the key never read at all, because the web refusal
+     produces the same zero. */
+  const { page, sent } = await boot({ kamo_pw_first: '1' }, true);
   await page.waitForTimeout(DWELL_MS + 900);
   count(sent, 'paywall_viewed') === 0
     ? ok('a device that has already been offered is left alone on the next launch')
@@ -131,15 +155,62 @@ console.log('\n① EVERY INSTALL IS OFFERED SOMETHING, AND ONLY ONCE');
   await page.close();
 }
 
-console.log('\n③ IN A BROWSER THE CTA SELLS THE APP, AND GIVES NOTHING AWAY');
+console.log('\n③ IN A BROWSER NOTHING ARRIVES ON ITS OWN');
 {
+  /* THE FOUNDER'S BUG, ASSERTED WHERE HE MET IT. Left alone past the dwell, an unpriced page
+     must produce NO paywall at all — this is the same session as ① with the one difference
+     that decides it, and until 2026-08-16 it produced the sheet that landed on the compose
+     screen of a reply. The wire AND the class, because "it opened and closed" and "it never
+     opened" are the same silence on the wire alone. */
   const { page, sent } = await boot();
+  await page.waitForTimeout(DWELL_MS + 900);
+  const shown = await page.evaluate(() => document.getElementById('paywall').classList.contains('show'));
+  count(sent, 'paywall_viewed') === 0 && !shown
+    ? ok('an untouched browser is left alone — no sheet, and nothing on the wire')
+    : bad(`a browser saw ${count(sent, 'paywall_viewed')} paywalls${shown ? ' and one is on screen' : ''} — the offer is interrupting a page that cannot sell`);
+  /* AND THE LOCKED CONTROL STILL ANSWERS. A refusal that shows nothing is a dead button; the
+     pill is what replaces the sheet, and it has to say where the tool lives rather than
+     promise an unlock the page cannot perform. */
+  await page.evaluate(() => window.__pw('color', true));
+  await page.waitForTimeout(200);
+  const pill = await page.evaluate(() => {
+    const h = document.getElementById('hint');
+    return { text: (h.textContent || '').trim(), tap: h.classList.contains('tap') };
+  });
+  count(sent, 'paywall_viewed') === 0 && /in the app/i.test(pill.text) && pill.tap
+    ? ok(`a locked colour answers with the pill ("${pill.text}")`)
+    : bad(`the locked colour produced ${count(sent, 'paywall_viewed')} paywalls and the pill reads ${JSON.stringify(pill.text)} (tappable: ${pill.tap})`);
+  count(sent, 'paywall_web_hinted') === 1
+    ? ok('and the pill is measured, so the install taps beside it have a denominator')
+    : bad(`the pill produced ${count(sent, 'paywall_web_hinted')} events — the whole web ask is unmeasured`);
   /* The navigation is ABORTED rather than answered: the tap has to really leave the page for
      this to be the production path, and the document has to survive for the wire and the ✦
      to still be readable afterwards. A 204 was tried first — Chromium tore the context down
      anyway. */
   await page.route('**/onelink.me/**', r => r.abort());
+  await page.route('**/apps.apple.com/**', r => r.abort());
+  await page.evaluate(() => document.getElementById('hint').click());
+  await page.waitForTimeout(400);
+  count(sent, 'paywall_install_tapped') === 1
+    ? ok('tapping the pill goes to the store, and is measured as an install tap')
+    : bad(`the pill tap produced ${count(sent, 'paywall_install_tapped')} install taps — it is a sentence with nothing behind it`);
+  try { await page.close(); } catch {}
+}
+{
+  /* ✦ IS THE ONE DOOR THAT STAYS OPEN, and it is not sentiment: it is the only way into the
+     creator pass (bindPassHold on #pwRestore), which is how the founder unlocks KAMO+ on the
+     surface he actually tests on. Somebody who taps it asked for the offer by name, so it
+     still opens — and everything that made it safe on the web is asserted here unchanged. */
+  const { page, sent } = await boot();
+  await page.route('**/onelink.me/**', r => r.abort());
+  await page.route('**/apps.apple.com/**', r => r.abort());
   await page.waitForTimeout(DWELL_MS + 900);
+  await page.evaluate(() => window.__pw('plus'));
+  await page.waitForTimeout(200);
+  const opened = await page.evaluate(() => document.getElementById('paywall').classList.contains('show'));
+  opened
+    ? ok('a tap on ✦ still opens the sheet in a browser')
+    : bad('✦ no longer opens the paywall in a browser — the creator pass is unreachable on the web');
   const cta = await page.evaluate(() => {
     const b = document.getElementById('pwBuy');
     return { label: (b.textContent || '').trim(), disabled: !!b.disabled };
