@@ -11508,8 +11508,15 @@ function chSeek(hideId,opts){
        always visible. pointer-events:none — it is a sight, not a control. */
     +".chRet{position:fixed;z-index:6;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);pointer-events:none;}"
     +".chRet i{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}"
-    +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid rgba(255,255,255,.75);pointer-events:none;animation:chPop .45s ease-out forwards;}"
-    +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 6px rgba(95,230,164,.22);}"
+    /* THE MARK MUST NOT DEPEND ON WHAT IS UNDERNEATH IT — the same lesson .khHeatDot already
+       carries, never applied here until a founder screenshot showed the find ring dissolving
+       into a pale wall. The find is drawn in mint, the app's own accent, and mint on a light
+       photograph is two nearly-equal luminances: the ring is technically painted and visually
+       absent. So the ring is SANDWICHED between two dark hairlines, one outside and one in.
+       Those hairlines are what make it legible; the COLOUR between them is the only thing that
+       still encodes hit or miss. */
+    +".chMark{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2.5px solid rgba(255,255,255,.92);pointer-events:none;animation:chPop .45s ease-out forwards;box-shadow:0 0 0 1.5px rgba(4,6,10,.55),inset 0 0 0 1.5px rgba(4,6,10,.5);}"
+    +".chMark.hit{border-color:var(--mint);box-shadow:0 0 0 1.5px rgba(4,6,10,.6),0 0 0 7px rgba(95,230,164,.30),inset 0 0 0 1.5px rgba(4,6,10,.5),0 0 16px rgba(95,230,164,.5);}"
     +".chMark.stay{animation:chHold 1.6s ease-in-out infinite;opacity:1;}"
     /* The win layers: ring, flash, sparks — unchanged, self-removing. */
     +".chWin{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:hidden;}"
@@ -11523,7 +11530,10 @@ function chSeek(hideId,opts){
     +"background:var(--mint);animation:chSpark .8s cubic-bezier(.15,.8,.3,1) forwards;}"
     +"@keyframes chSpark{0%{transform:translate(0,0) scale(1);opacity:1}"
     +"100%{transform:translate(var(--sx),var(--sy)) scale(.2);opacity:0}}"
-    +"@keyframes chHold{0%,100%{transform:scale(1);box-shadow:0 0 0 6px rgba(95,230,164,.22)}50%{transform:scale(1.12);box-shadow:0 0 0 12px rgba(95,230,164,.05)}}"
+    /* The held pulse re-declares box-shadow on every frame, so it would ERASE the two dark
+       hairlines .chMark just bought — an animated property wins over the rule it animates.
+       Both hairlines are therefore repeated in both stops; only the halo breathes. */
+    +"@keyframes chHold{0%,100%{transform:scale(1);box-shadow:0 0 0 1.5px rgba(4,6,10,.6),0 0 0 7px rgba(95,230,164,.30),inset 0 0 0 1.5px rgba(4,6,10,.5)}50%{transform:scale(1.12);box-shadow:0 0 0 1.5px rgba(4,6,10,.6),0 0 0 13px rgba(95,230,164,.06),inset 0 0 0 1.5px rgba(4,6,10,.5)}}"
     +"@keyframes chPop{from{transform:scale(.4);opacity:1}to{transform:scale(1.25);opacity:0}}"
     +"@keyframes chShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}"
     +".chShake{animation:chShake .3s}"
@@ -11563,7 +11573,14 @@ function chSeek(hideId,opts){
        body in here" printed straight through it. The round moves down rather than the ✕
        moving in: the headline is the thing that has to be readable, and the corner is the
        thing that has to be findable in the same place on every slide. */
-    +".chS.chIn .chTop{padding-top:calc(56px + var(--safe-t));}"
+    /* AND IT DROPS ITS OWN SCRIM. .chTop darkens the top edge because on the LINK path it is
+       the only thing standing between the headline and a bright photograph. In a feed slide
+       .kfBar is already painting the same gradient from the same edge, so the two stack into
+       a black band that reads as chrome rather than as a photo — visible in the founder's
+       screenshot as a hard smear above the picture. The headline and sub carry their own
+       text-shadow, so nothing here depends on the second layer. Feed only: the link path,
+       which has no .kfBar, keeps it. */
+    +".chS.chIn .chTop{padding-top:calc(56px + var(--safe-t));background:none;}"
     /* AND THE RUN PILL CLEARS THEM TOO — the same collision as the headline above, missed
        because the pill only exists once a player has a live streak, so an empty-run device
        (every test, every first session) renders a feed that looks correct. Founder's report,
