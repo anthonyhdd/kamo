@@ -612,6 +612,16 @@
   /* paywall */
   #paywall{position:absolute;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(3,5,8,.62);backdrop-filter:blur(6px);}
   #paywall.show{display:flex;animation:pwFade .28s ease;}
+  /* THE HUD GOES AWAY WHILE A SHEET IS UP. z-index already puts every pill under these
+     overlays, but the backdrops are 55-62% over a 5-6px blur — enough to dim the board,
+     not enough to erase a bright chip. So "🫥 100% hidden · 12s" stayed perfectly legible
+     across the top of a pitch about brush size, reading as part of the sheet.
+     .sheetUp is DERIVED from the overlays by syncSheetChrome(), same as the clock's pause —
+     it is not toggled by whoever opened the sheet. !important because JS drives these with
+     inline display; the class only masks them, so dropping it restores whatever state the
+     round had set with no bookkeeping. */
+  body.sheetUp #scoreChip, body.sheetUp #timerTag, body.sheetUp #timerNum,
+  body.sheetUp #timerBar, body.sheetUp .hint, body.sheetUp #revealHint{display:none !important;}
   /* KAMO+ celebration (post-purchase, plan-aware) */
   /* TWO SHEETS, ONE LOOK. #kamoPlus is the one-time welcome after a purchase; #kamoHome is
      what tapping the wordmark opens for a member, every time. They are the same object at
@@ -4289,8 +4299,7 @@ function resumeTimer(reason){
    Anything new that covers the screen only needs data-blocks-timer on it — including
    whatever a paywall experiment adds. */
 const TIMER_BLOCKERS="#paywall,#shareSheet,#confirmSheet,#kamoPlus,[data-blocks-timer]";
-function timerBlocked(){
-  if(document.hidden) return true;
+function overlayUp(){
   const els=document.querySelectorAll(TIMER_BLOCKERS);
   for(const el of els){
     if(el.classList.contains("show")) return true;
@@ -4298,22 +4307,34 @@ function timerBlocked(){
   }
   return false;
 }
+function timerBlocked(){ return document.hidden || overlayUp(); }
 function syncTimerPause(){ if(timerBlocked()) pauseTimer("ui"); else resumeTimer("ui"); }
-document.addEventListener("visibilitychange",syncTimerPause);
+/* THE HUD READS THE SAME SCREEN, for the same reason the clock does. Hiding the pills was
+   first written as paired calls in openPaywall/closePaywall — the exact shape the comment
+   above says is a bug waiting to happen, and it already had two ways to strand: the
+   reset loops in backToCompose()/exitFinished() clear #confirmSheet directly without
+   going through closeConfirm(), so a discard-prompt dismissed that way would never have
+   removed the class. Derived, there is nothing to pair.
+   The failure mode inverts the same way too: an overlay this does not know about shows
+   the pills over itself — ugly — instead of hiding the HUD for the rest of the round.
+   Same data-blocks-timer opt-in for anything new. */
+function syncSheetChrome(){ document.body.classList.toggle("sheetUp",overlayUp()); }
+function syncOverlays(){ syncTimerPause(); syncSheetChrome(); }
+document.addEventListener("visibilitychange",syncOverlays);
 /* Scoped to the overlays, so ordinary class churn (swatch .active, the countdown's own
    .tick) does not wake it. */
 (function watchBlockers(){
-  const mo=new MutationObserver(syncTimerPause);
+  const mo=new MutationObserver(syncOverlays);
   const attach=()=>document.querySelectorAll(TIMER_BLOCKERS).forEach(el=>{
     if(el.__timerWatched) return; el.__timerWatched=true;
     mo.observe(el,{attributes:true,attributeFilter:["class","style"]});
   });
   attach();
   // pick up overlays added later (a new paywall surface, say)
-  new MutationObserver(()=>{ attach(); syncTimerPause(); }).observe(document.body,{childList:true,subtree:true});
+  new MutationObserver(()=>{ attach(); syncOverlays(); }).observe(document.body,{childList:true,subtree:true});
   // last-resort self-heal: any tap re-derives, so a missed mutation can never strand the
-  // round in a paused state
-  document.addEventListener("pointerdown",syncTimerPause,true);
+  // round in a paused state or the HUD hidden
+  document.addEventListener("pointerdown",syncOverlays,true);
 })();
 /* NO HARD CUT. Expiry used to fire mid-gesture: the paint clock could land between two
    points of a stroke you were still drawing, and the aim clock could snatch the shutter
