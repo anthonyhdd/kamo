@@ -7329,7 +7329,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -11477,6 +11477,13 @@ function khPlayTrace(h,rec){
     const DUR=Math.max(1200,(rec.ms|0)||S[S.length-1][0]||3000);
     let raf=0, last=0, vt=0, playing=true, rate=1, ended=false, doubts=0;
     let covered=0, maxK=1;
+    /* WHAT THIS SCREEN HAS TO ANSWER, and what replay_watched alone cannot: an open is not a
+       watch. A KAMO+ surface that everybody opens and nobody finishes is a surface that sold
+       a promise it did not keep, and the two look identical from an open count. So: did it
+       run out (replay_finished), and what did they do with it before they left
+       (replay_closed). Both names are WEB_ONLY — no shipped binary knows them, so through
+       the bridge they would be dropped in silence, which is the same as not measuring. */
+    let agains=0, scrubs=0, slowed=0;
 
     /* THE STAGE TAKES THE PHOTO'S SHAPE, and it has to. The recorded transform is relative to
        the picture the seeker was looking at, so any letterboxing inside this box would offset
@@ -11634,6 +11641,11 @@ function khPlayTrace(h,rec){
       box.innerHTML=stats.map(s=>'<div class="khRpStat"><u>'+s[0]+'</u><i>0</i></div>').join("");
       endEl.className="khRpEnd on";
       [...box.querySelectorAll("i")].forEach((el,i)=>countUp(el,stats[i][1],stats[i][2],700+i*110));
+      /* The figures are sent with it. They are what the screen just claimed, so if the report
+         is ever wrong — a hunt reading 0% searched, a max zoom of 1 — it says so here rather
+         than waiting for somebody to notice on their own results. */
+      track("replay_finished",{why:rec.why||"",ms:rec.ms|0,doubts:doubts,
+        covered:covered,max_k:+maxK.toFixed(1),again:agains});
     }
 
     function play(){ clearAll(); vt=0; playing=true;
@@ -11673,8 +11685,10 @@ function khPlayTrace(h,rec){
       const x=Math.max(0,Math.min(1,((ev.clientX||0)-r.left)/(r.width||1)));
       vt=x*DUR; rebuild(vt); if(vt>=DUR) finish();
     };
+    /* Counted on the press, not inside seek(): a drag fires seek on every pointermove, and a
+       single scrub would report as forty. */
     bar.onpointerdown=(ev)=>{ try{ bar.setPointerCapture(ev.pointerId); }catch(e){}
-      seek(ev); bar.onpointermove=(e)=>{ if(e.buttons) seek(e); }; };
+      scrubs++; seek(ev); bar.onpointermove=(e)=>{ if(e.buttons) seek(e); }; };
     bar.onpointerup=()=>{ bar.onpointermove=null; };
     document.getElementById("khRpPP").onclick=()=>{
       if(ended){ play(); return; }
@@ -11683,11 +11697,17 @@ function khPlayTrace(h,rec){
       pp.innerHTML=playing?ICO_PAUSE:ICO_PLAY;
       pp.setAttribute("aria-label",playing?"Pause":"Play"); };
     document.getElementById("khRpRate").onclick=()=>{
-      rate=rate===1?0.5:1;
+      rate=rate===1?0.5:1; if(rate!==1) slowed++;
       const b=document.getElementById("khRpRate");
       b.innerHTML=rate===1?"1&times;":"0.5&times;"; b.classList.toggle("on",rate!==1); };
-    document.getElementById("khRpAgain").onclick=()=>{ haptic(8); play(); };
-    const close=()=>{ cancelAnimationFrame(raf); removeEventListener("resize",fit); w.remove(); };
+    document.getElementById("khRpAgain").onclick=()=>{ haptic(8); agains++; play(); };
+    const close=()=>{
+      cancelAnimationFrame(raf); removeEventListener("resize",fit);
+      /* HOW FAR THEY GOT, on the way out. `pct` is the honest denominator for this screen:
+         replay_watched counts opens, and an open that leaves at 12% is not a watch. */
+      track("replay_closed",{why:rec.why||"",pct:Math.round(Math.min(1,vt/DUR)*100),
+        finished:!!ended,again:agains,scrubs:scrubs,slowed:slowed});
+      w.remove(); };
     document.getElementById("khRpX").onclick=close;
     track("replay_watched",{why:rec.why||"",ms:rec.ms|0});
   }catch(e){}
