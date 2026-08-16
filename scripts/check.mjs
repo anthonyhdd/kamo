@@ -1026,7 +1026,13 @@ try {
     ? skipped('test-hint-dom.mjs', 'HINT TEST', out)
     : ok('the hint is gated on the native capability and drawn where the server put it (node scripts/test-hint-dom.mjs)');
 } catch (e) {
-  bad('THE HINT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  /* BOTH STREAMS, because the \u2717 lines are on NEITHER the one this used to read. test-hint-dom
+     prints its passes with console.log and its failures with console.error, so filtering
+     stdout for \u2717 found nothing and this printed "THE HINT IS BROKEN:" followed by a blank
+     line \u2014 a red CI that names no cause, on the check whose whole job is to name one. */
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('\u2717'));
+  bad('THE HINT IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
 }
 
 /* ---- 11f. What the sheet claims, and to whom --------------------------------------------- */
