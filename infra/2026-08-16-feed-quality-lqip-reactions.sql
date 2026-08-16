@@ -98,3 +98,35 @@ alter table public.hides add column if not exists lqip text;
 --
 -- The lesson for the next rung: any bounded quantifier over ~255 in a Postgres regex is a
 -- runtime throw, not a validator. Bound with length(), match shape with '+'.
+--
+-- ══════════════════════════════════════════════════════════════════════════════════════
+-- FOLLOW-UP 2026-08-16 (migration `feed_score_too_easy_penalty`), from the founder's
+-- question: "on ajouterait pas un emoji react 👎 pour éliminer les paints trop faciles ?"
+--
+-- THE ANSWER IS NO, AND THE NUMBERS ARE WHY. The whole reaction corpus is 483 taps over 3119
+-- public hides, and it is FLAT: 🔥 136 / 😂 120 / 👏 114 / 😱 113. Four buttons chosen at very
+-- nearly uniform random is not a verdict, it is a fidget — a fifth button would inherit the
+-- same ~120 taps, spread over ~110 hides, and rank nothing. It would, however, ship ~120 real
+-- negative pushes to the people whose photographs they are, in a room this small.
+--
+-- Meanwhile the signal a 👎 is REACHING FOR is already dense and already collected: 10,815
+-- attempts across 404 hides with 5+ tries, of which 103 are found by more than 80% of the
+-- people who look. "Too easy" is not an opinion here. It is a measured found-rate.
+--
+-- So the score gets the penalty the bonus never had a mirror for:
+--   - case when n_attempts >= 5 and n_found * 5 >= n_attempts * 4 then 3 else 0 end
+--
+-- Symmetric with the sweet-spot +3, so a proven camouflage now outranks a proven giveaway by
+-- six points rather than three. Applied to BOTH live feed_page overloads and to feed_best,
+-- where it matters most: that is the one slide a fresh session is promised as strong, and a
+-- photo everybody finds is the worst thing to spend it on. Row types unchanged, so REPLACE
+-- rather than the drop-and-recreate the lqip widening required.
+--
+-- Measured after apply, over the played band (n_attempts >= 3, 2900-odd rows):
+--   avg score, too-easy hides ..... -2.78
+--   avg score, sweet-spot hides ... +3.11
+--
+-- CAVEAT WORTH KEEPING: the first ORDER BY key is still least(n_attempts, 3), and the fresh
+-- band is 104 hides deep against 2923 played ones. So for the first ~13 pages of a session
+-- this penalty changes NOTHING — distribution still outranks quality, by design, because
+-- untouched-hides-first is what fixed 271-of-2980-ever-opened. It bites from page 14 on.
