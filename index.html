@@ -12006,8 +12006,21 @@ function chSeek(hideId,opts){
      is nothing to gate — the worst case everywhere is today's behaviour or better. The
      wrapper learns the real styles (success / error / heavy) in its next release; the fleet
      upgrades into the full vocabulary with no second web deploy. */
-  const buzzHaptic=(p,style)=>{
+  /* `reps` IS FOR TODAY'S FLEET ONLY, and it retires itself. A style 1.0.2 does not know
+     degrades to selectionAsync — the faintest thing iOS has — so the moments that lean on
+     `error` are, on every shipped binary, a tick indistinguishable from the one a SUCCESSFUL
+     press gives. Where that inversion actually misleads, the caller asks for extra
+     impactAsync(Light) ticks: the strongest 1.0.2 can produce, and three of them read as a
+     rejection rather than a confirmation.
+     Gated on a capability that does not exist yet, which is the point — `hapticStyles` is
+     undefined on every wrapper in the wild, so the ticks fire now; the release that teaches
+     the wrapper the real styles announces the cap, and these stop on their own without a
+     second web deploy or a line of this file changing. */
+  const buzzHaptic=(p,style,reps)=>{
     if(style){ try{ postNative({type:"haptic",style:style}); }catch(_){} }
+    if(reps && style && !(nativeCaps&&nativeCaps.hapticStyles)){
+      for(let i=1;i<reps;i++) setTimeout(()=>{ try{ postNative({type:"haptic",style:"impact"}); }catch(_){} }, i*80);
+    }
     try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){}
   };
 
@@ -12682,6 +12695,10 @@ function chSeek(hideId,opts){
           {rehide:true,camoSrc:camoSrc});
         frames.then(f=>{ if(f) armFlipUI(); });
       } else {
+        /* THE SHAKE WAS SILENT, and the buzz that answers it lives in ending() rather than
+           here — see the note there. ending() is reached synchronously from this branch, so
+           the feeling still lands on this shake; putting the call here as well is what would
+           make it two. */
         img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
         track("seek_failed",TP({reason:"miss",ms:ms,old_round:(res&&res.old_round)|0}));
         sendTrace("miss");
@@ -12925,19 +12942,35 @@ function chSeek(hideId,opts){
          reached, and at 0 or 1 there is no sentence worth printing — "you broke a run of 1"
          is a scold aimed at somebody who has not started. From 2 up it is the truest thing on
          the screen, and it is the sentence the whole feature exists to make land. */
+      /* EXACTLY ONE BUZZ PER ENDING, AND IT IS DECIDED HERE. The obvious place for a miss
+         buzz is the tap that missed — but this is a one-buzz game, so that tap IS the
+         ending, and ending() runs in the same synchronous tick as the shake. Two calls in
+         one tick is not two feelings: navigator.vibrate REPLACES a running pattern, so the
+         second would silently eat the first on web, and the bridge would get four messages
+         for one moment on native. So the loss buzzes once, from the branch that already
+         knows which loss it was.
+         A win is not buzzed here — chCelebrate already did it. `sk` is null for "This hide
+         is gone", which is neither, so it stays silent. */
       if(sk){
         if(sk.run>0)          chRunShow(sk.run, sk.record?"pb":"");
         else if(sk.broke>=2){ chRunShow(sk.broke,"dead",sk.best);
           /* A broken run is the one loss with something behind it, and it gets the error
              buzz — the stake has to be FELT, which is exactly what run_broken's `at`
              distribution is watching for. */
-          buzzHaptic([40,60,40],"error");
+          buzzHaptic([40,60,40],"error",3);
           /* THE ONE NUMBER THAT SAYS WHETHER ANY OF THIS WORKED. If the run is doing its job,
              the distribution of `at` climbs — people are looking longer before they tap —
              and the 3.5s median of a failed round rises with it. If `at` stays pinned at 2
              and 3, the stake is not being felt and the answer is not more copy. */
           track("run_broken",TP({at:sk.broke,src:FEED?"feed":"link"})); }
-        else if(runEl)        runEl.style.display="none";
+        else {
+          /* A LOSS WITH NOTHING BEHIND IT still has to feel like a refusal. This is the
+             common ending — the first round anyone ever plays lands here — and it was the
+             silent one: the shake said no and the phone said nothing. Lighter than the
+             broken run on purpose, because less was at stake, and short enough to finish
+             inside the .3s chShake it rides. */
+          buzzHaptic([26,54,26,54,26],"error",3);
+          if(runEl) runEl.style.display="none"; }
       }
       const q=$$("chQuit"); if(q) q.remove();
       /* THE ROUND IS BANKED HERE, and only where there is something to send back — which is
