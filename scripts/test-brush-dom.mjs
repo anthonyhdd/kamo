@@ -93,11 +93,20 @@ const html = real.slice(0, at)
   + 'const o={clientY:y,clientX:r.left+5,bubbles:true,pointerId:1};'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
   + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));return brush;},'
+  /* THE WRAPPER IS BORROWED FOR THE LENGTH OF THE GESTURE. Since 2026-08-16 a page with no
+     bridge and no prices refuses every paywall and answers with a pill instead (pwWebRefused);
+     that rule has its own suite, test-pwgate-dom. What THIS one is about is the size bar — that
+     a reach under the floor is an aimed request, that it reports as `size`, and that it is
+     never silently swallowed. Those hold on either surface, and the sheet is the one this file
+     can read. Restored immediately, so nothing downstream inherits a fake wrapper. */
   + 'tapFoot(){const r=sizeBar.getBoundingClientRect(),h=r.height-48;'
   + 'const y=r.top+24+starZoneY(h)+6;'
   + 'const o={clientY:y,clientX:r.left+5,bubbles:true,pointerId:1};'
-  + 'sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
-  + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));return brush;},'
+  + 'const rn=window.ReactNativeWebView;window.ReactNativeWebView={postMessage(){}};'
+  + 'try{sizeBar.dispatchEvent(new PointerEvent("pointerdown",o));'
+  + 'sizeBar.dispatchEvent(new PointerEvent("pointerup",o));}'
+  + 'finally{if(rn)window.ReactNativeWebView=rn;else delete window.ReactNativeWebView;}'
+  + 'return brush;},'
   + 'lock(){const l=document.getElementById("sizeLock");if(!l)return{shown:false,top:0,h:0};'
   + 'return{shown:getComputedStyle(l).display!=="none",top:parseFloat(l.style.top)||0,'
   + 'h:parseFloat(l.style.height)||0};},'
