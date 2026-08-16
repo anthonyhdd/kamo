@@ -10311,7 +10311,12 @@ async function chShareHide(h,btn){
      message never quotes seconds or taps again, whatever the row still stores. */
   const text = head+"\nOne tap to find it."+"\n\n"+link;
   track("resend_tapped",{played:((h&&h.n_attempts)|0)>0});
-  if(nativeCaps && nativeCaps.invite){ postNative({type:"invite",message:text,score:0}); return; }
+  /* NO `score` FIELD — 0 is not "no score" on the other side. The native rating gate
+     (storeReview.js maybeAsk) treats any finite score as real, and 0 ≤ minScore means a
+     confirmed share from here was ALWAYS swallowed as skipped_low_score: 71 of the 78
+     such events over 14 days (to 08-16) carried score=0, all from this line and the
+     feed's. Omitting the field is the documented "absent → don't block" path. */
+  if(nativeCaps && nativeCaps.invite){ postNative({type:"invite",message:text}); return; }
   let shared=false, cancelled=false;
   try{ if(navigator.share){ await navigator.share({text:text}); shared=true; } }
   catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
@@ -12084,8 +12089,10 @@ function chSeek(hideId,opts){
         track("feed_send_tapped",TP({native:useNative,signed:!!who}));
         if(useNative){
           /* The wrapper owns the outcome and reports invite_sent / invite_cancelled itself;
-             the web gets no callback, so there is no optimistic "Sent" to print here. */
-          postNative({type:"invite",message:text,score:0});
+             the web gets no callback, so there is no optimistic "Sent" to print here.
+             NO `score` FIELD — same rule as the resend path: score:0 read as a real score
+             fed every feed share to skipped_low_score. Absent means "don't block". */
+          postNative({type:"invite",message:text});
           track("feed_sent",TP({how:"native"}));
           return;
         }
