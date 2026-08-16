@@ -1193,6 +1193,21 @@ try {
   bad('THE FIRST-OFFER GUARANTEE OR THE TAIL CAP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12b-septies. The record the broken run names ------------------------------------------
+   The run pill lives one row from the headline, and the fix for that is a MOVE — .dead goes
+   static inside .chTop before it prints prose. Adding the record lengthened that prose, so the
+   guarantee is now geometric rather than a copy length somebody can eyeball: the test reads
+   both rectangles out of a browser at 390px and 320px and intersects them. It also holds the
+   silence at equality, which is the half a later edit deletes without noticing. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-runrec-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-runrec-dom.mjs', 'RUN-RECORD TEST', out)
+    : ok('the record speaks on the break and stays off the title (node scripts/test-runrec-dom.mjs)');
+} catch (e) {
+  bad('THE BROKEN RUN IS LANDING ON THE HEADLINE OR MISSTATING THE RECORD:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* ---- 12c. The spectator seat ------------------------------------------------------------
    The replay animates a recorded transform into a travelling viewport, and its ending has
    to differ by outcome. One assertion there is a security boundary rather than a polish
