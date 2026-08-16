@@ -2660,7 +2660,14 @@ let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
  * new hide addressed to nobody, and carrying the previous answer's target into it would put a
  * notification on a stranger's lock screen about a hide that has nothing to do with them. */
 let chReplyTo="", chReplyName="";
-function chClearReply(){ chReplyTo=""; chReplyName=""; }
+/* WHERE THE REPLY WAS BORN. A reply started from a FEED round belongs to a browsing session:
+   the player was mid-scroll, took a detour through compose to answer somebody, and the send
+   receipt is the end of the detour — so the feed comes back on its own (founder, 2026-08-16:
+   "quand on clique challenge back après avoir fait son dessin ça devrait ramener vers le
+   feed"). A reply born on a LINK round has no feed behind it — a stranger in a browser — and
+   must not be dropped into one, which is why this is its own flag and not a read of chReplyTo. */
+let chReplyFromFeed=false;
+function chClearReply(){ chReplyTo=""; chReplyName=""; chReplyFromFeed=false; }
 /* DECLARED UP HERE, AND THAT IS THE WHOLE POINT. `let` in a module is in its temporal dead
    zone until execution reaches it, and both readers of these two — updateInviteBtn() and
    chClearReply() via startCamera()/usePhotoSrc() — run during module evaluation, thousands of
@@ -6926,6 +6933,11 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    features looked like they were producing no behaviour at all. Direct, for the same reason
    the share tap above is: this page deploys on its own and the binary does not. */
 "reply_started","reply_pending","prev_blocked_tapped","feed_available",
+/* The Challenges panel: the grid of hides that answered yours. `replies_grid_shown` carries
+   how many were waiting, `reply_opened` whether the tap replays a spent one — together they
+   say whether a delivered answer actually gets played, which the reply loop has never been
+   able to ask (reply_pending only ever counted the dot lighting up). */
+"replies_grid_shown","reply_opened",
 /* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
    names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
    so a coverage event travelling by the bridge would answer for a different user and no ratio
@@ -8133,6 +8145,24 @@ $("#ssInvite").onclick=async()=>{
       /* THE LABEL DOES NOT COME BACK. A receipt that reverts to "Send it back" invites a
          second reply to the same hide, which is a duplicate the recipient has to read as two
          answers to one question. The button stays spent; leaving the reveal is what resets it. */
+    }
+    /* THE DETOUR ENDS WHERE IT STARTED. A reply born on a feed round was an interruption of a
+       browsing session, and the receipt above is its last frame — so the feed comes back by
+       itself instead of leaving the player parked on a reveal whose only exits are manual
+       (founder, 2026-08-16). LINK-born replies skip this entirely: chReplyFromFeed is only
+       ever set true inside a feed round.
+       THE BEAT IS THE RECEIPT'S, not a spinner's: 1600ms is long enough to read "Challenged
+       @tony back" and feel the haptic land, short enough that the feed arrives as the next
+       thing rather than as an event. Guarded on kfState so a user who already reopened the
+       feed themselves is not handed a second one, and fromReveal so the feed's ✕ tears the
+       finished round down (canvases included) instead of uncovering a spent reveal. */
+    if(chReplyFromFeed){
+      chReplyFromFeed=false;
+      setTimeout(()=>{ try{
+        if(kfState) return;
+        closeShareSheet();
+        chFeed({fromReveal:true,src:"reply_done"});
+      }catch(e){} },1600);
     }
     return;
   }
@@ -12077,6 +12107,9 @@ function chSeek(hideId,opts){
          HID is what the row is stamped with, and the server only accepts it if it names a
          hide that really exists. */
       chReplyTo=HID; chReplyName=(h&&h.name)?String(h.name):"";
+      /* Captured with the address, cleared with it (chClearReply): the two travel together
+         or the send receipt returns somebody to a feed they never came from. */
+      chReplyFromFeed=FEED;
       track("reply_started",{signed:!!chReplyName});
       /* ctl.destroy() rather than w.remove()/st.remove(): same teardown, except it also
          clears the round's clock and leaves the stylesheet alone — it is shared by every
@@ -12687,7 +12720,19 @@ const KF_CSS=
   +".kfMid p{font-size:13.5px;line-height:1.45;opacity:.8;margin:0;}"
   +".kfMid button{width:100%;height:50px;border:none;border-radius:15px;background:#fff;color:#0a0b0e;font-family:var(--display);font-size:16px;font-weight:700;}"
   +".kfSpin{width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:var(--mint);animation:kfSpin .8s linear infinite;}"
-  +"@keyframes kfSpin{to{transform:rotate(360deg)}}";
+  +"@keyframes kfSpin{to{transform:rotate(360deg)}}"
+
+  /* ══ CHALLENGES ═════════════════════════════════════════════════════════════════════════
+     A played reply dims as one object. The grid says two things per cell — whose answer this
+     is, and whether it is still worth a tap — and the second one is carried by the whole
+     cell rather than by a badge someone has to decode: bright with the unsent-style border
+     while it is fresh (same .kmUnsent rule the mine grid already teaches), faded once its
+     round is spent. */
+  +".krPlayed{opacity:.55;}"
+  /* The menu's answer to the wordmark dot: same mint, same glow, sitting on the row that
+     resolves it. An <i> because the row is a flex line and a span would inherit nothing
+     useful either way; font-style is moot on an empty element. */
+  +".kfChalDot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 6px var(--mint);flex:0 0 auto;}";
 
 let kfState=null;
 /* opts.first = a hide id to put in front of the public page, used by the post-send offer
@@ -12754,6 +12799,16 @@ function chFeed(opts){
     +     '<path d="M12 13v3.5M9 19.5h6"/></svg>Today\'s runs</button>'
     +  '<button data-s="mine"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/>'
     +     '<path d="M5 20c0-3.5 3.1-5.6 7-5.6s7 2.1 7 5.6"/></svg>My kamos</button>'
+    /* THE FOURTH LINE: the hides that ANSWERED yours. They have always been delivered — the
+       row lands via my_replies, the wordmark dot says "something came back" — but the dot
+       resolved to nothing: no screen ever listed them, so an answer was findable only if the
+       push notification (3% of creators) happened to name it. This is that screen, and it
+       lives in the menu rather than inside My kamos because a challenge FOR you is not a kamo
+       OF yours — filing it under the creator's own grid would put somebody else's photo
+       behind a title that says "my". Reply arrow in stroke, same vocabulary as every glyph
+       here. */
+    +  '<button data-s="chal"><svg viewBox="0 0 24 24"><path d="M9.5 7.5 5 12l4.5 4.5"/>'
+    +     '<path d="M5 12h8a6 6 0 0 1 6 6v.8"/></svg>Challenges</button>'
     +'</div>'
     /* data-blocks-timer: while the grid covers a live round, the round's clock must not
        run — same principle (and same machinery) as the profile card, timerBlocked() reads
@@ -12762,6 +12817,8 @@ function chFeed(opts){
     /* data-blocks-timer for the same reason kfMine carries it: while this covers a live
        round, the round's clock must not run. Same class, so the two panels are one shell. */
     +'<div class="kfMine" id="kfBoard" data-blocks-timer></div>'
+    /* Challenges: same shell again — one surface, four contents. */
+    +'<div class="kfMine" id="kfChal" data-blocks-timer></div>'
     +'<div class="kfMid" id="kfMid"><div class="kfSpin"></div></div>';
   document.body.appendChild(root);
   const scroll=root.querySelector("#kfScroll"), mid=root.querySelector("#kfMid");
@@ -12778,7 +12835,10 @@ function chFeed(opts){
      under a phone crossing a timezone, and sub-millisecond. Guarded because it costs one
      expression to never care whether a WebView has it. */
   S.t0=kfNow();
-  track("feed_opened",{});
+  /* `src` names the door when a door is worth naming — today only "reply_done", the automatic
+     return after a challenge-back send. Absent on every path that existed before it, so every
+     dashboard reading feed_opened bare keeps meaning what it always meant. */
+  track("feed_opened",(opts&&opts.src)?{src:opts.src}:{});
 
   const midCard=(title,body,cta,onCta)=>{
     mid.style.display="flex";
@@ -13106,8 +13166,16 @@ function chFeed(opts){
      the profile card. The pill names the CURRENT scope, the menu switches it — Instagram's
      home grammar, chosen over side-by-side tabs (founder's call, 2026-08-15). */
   const scopeBtn=root.querySelector("#kfScope"), menuEl=root.querySelector("#kfMenu"), mineEl=root.querySelector("#kfMine");
-  const boardEl=root.querySelector("#kfBoard");
-  let mineOpen=false, boardOpen=false;
+  const boardEl=root.querySelector("#kfBoard"), chalEl=root.querySelector("#kfChal");
+  let mineOpen=false, boardOpen=false, chalOpen=false;
+  /* THE DOT RESOLVES HERE. chReplyCheck() lit the wordmark at launch when something answered;
+     this puts the same mint point on the menu row that actually opens the answers, so the
+     trail does not go cold between the brand and a four-line menu. Injected rather than baked
+     into the markup string: whether it exists at all is launch-time state. */
+  try{ if(chReplyNewest && chReplyNewest>replySeenAt()){
+    const cb=menuEl.querySelector('[data-s="chal"]');
+    if(cb){ const d=document.createElement("i"); d.className="kfChalDot"; cb.appendChild(d); }
+  } }catch(_){}
   const menuShow=(on)=>{ if(menuEl) menuEl.style.display=on?"block":"none"; };
   /* THE MENU'S TICK BELONGS TO THE PANEL, NOT TO THE BUTTON THAT WAS PRESSED. It used to be
      set inside the menu's own click handler, which is correct for exactly one of the three
@@ -13387,23 +13455,145 @@ function chFeed(opts){
     boardEl.style.display="none"; boardEl.innerHTML="";
     { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
   }
-  /* THREE SCOPES, ONE PANEL AT A TIME. Written as "close whatever is open, then open the one
-     that was asked for" rather than as a pair of toggles: with two panels a toggle was the
-     whole logic, with three it is the bug — mine -> board would leave the grid mounted under
-     the board, and the chrome each one restores would fight. */
+  /* ══ CHALLENGES ══════════════════════════════════════════════════════════════════════════
+     THE GRID OF WHAT CAME BACK. my_replies() has been answering since 2026-08-13 and until
+     today exactly one pixel consumed it: the wordmark dot. The rows were delivered, the
+     screen was not — a recipient could only reach a reply through the push (3% of devices)
+     or by meeting it as a notification they could not act on. This panel is the missing half
+     of the loop the reply_to column exists for.
+     THE CELL IS THE PHOTO, same doctrine as the mine grid — and the name on it is the whole
+     pitch: a photograph plus "@tony" already says "hidden back for you".
+     BUILT AS DOM NODES, never as a template string: the handle came off a stranger's device,
+     and this file's rule is that such a string reaches the page as text or not at all — the
+     board's kbRow states the same rule, and building the cell this way makes it structural.
+     TAP = PLAY, in the feed's own frame: full bleed, the sender's name over it, the buzz
+     filing normally, because this player has genuinely never seen the answer. Unless they
+     have — a reply already played routes through the replay flag, the same correctness rule
+     as the second lap and the mine-grid open: a spent answer must not inflate the author's
+     attempt count with a tap that was never a guess. */
+  function chalOpenInFeed(row){
+    if(!row||!row.id||!row.img_path) return;
+    haptic(10);
+    const seen=kfSeen().indexOf(row.id)>=0;
+    track("reply_opened",{replay:seen});
+    chalHide();
+    /* The public feed under this panel may be sitting on its own empty card — say nothing
+       false behind the photo about to open. Same line the mine-grid open carries. */
+    midOff();
+    let i=S.slides.findIndex(s=>s.row.id===row.id);
+    if(i<0){
+      addSlide({id:row.id,img_path:row.img_path,name:row.name,n_attempts:0,n_found:0},seen);
+      i=S.slides.length-1;
+    }
+    try{ S.slides[i].el.scrollIntoView({block:"start"}); }catch(_){}
+    activate(i);
+  }
+  async function chalShow(){
+    chalOpen=true;
+    scopeBtn.innerHTML='Challenges <i>▾</i>';
+    scopeMark("chal");
+    chalEl.style.display="block";
+    /* Same chrome as the board: the ⚑ reports the SLIDE, which is under this panel; the
+       profile door belongs to the grid, where the subject is you. */
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display="none";
+      const me=root.querySelector("#kfMe"); if(me) me.style.display="none"; }
+    killHint();
+    chalEl.innerHTML='<div class="kmMid"><div class="kfSpin"></div></div>';
+    const ids=chMine();
+    let rows=null;
+    /* A device that never published skips the network entirely: my_replies on an empty list
+       can only ever answer [], and the empty card below says the useful half in words. */
+    if(ids.length){ try{ rows=await chRpcRows("my_replies",{p_ids:ids}); }catch(e){} }
+    else rows=[];
+    if(!chalOpen||kfState!==S) return;   // switched away or the feed closed while fetching
+    track("replies_grid_shown",{n:(rows&&rows.length)|0,joined:!!ids.length});
+    /* Offline and empty are different sentences — khResults' rule, third panel to follow it. */
+    if(rows===null){
+      chalEl.innerHTML='<div class="kmMid"><div style="font-weight:700;opacity:.85;">Challenges didn\'t load<br><button class="kmBtn" id="krRetry" style="margin-top:12px;padding:0 18px;">Retry</button></div></div>';
+      const r=chalEl.querySelector("#krRetry"); if(r) r.onclick=()=>chalShow();
+      return;
+    }
+    if(!rows.length){
+      /* Two empties, one honest sentence each: a device that never published cannot have
+         been answered, and one that has published simply has not been yet. The CTA is the
+         same because the cure is — more of yours out in the world. */
+      chalEl.innerHTML='';
+      const mid=document.createElement("div"); mid.className="kmMid";
+      const card=document.createElement("div"); card.className="kfCard";
+      card.style.cssText="display:flex;flex-direction:column;gap:12px;align-items:center;width:min(90vw,380px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:22px 20px 18px;";
+      const h=document.createElement("h2"); h.style.cssText="font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:-.3px;margin:0;";
+      const p=document.createElement("p"); p.style.cssText="font-size:13.5px;line-height:1.45;opacity:.8;margin:0;";
+      h.textContent="No challenges yet";
+      p.textContent = ids.length
+        ? "When someone answers one of your kamos with their own, it lands here."
+        : "Challenges are answers to your kamos. Hide one, send it — what comes back lands here.";
+      const b=document.createElement("button");
+      b.style.cssText="width:100%;height:50px;border:none;border-radius:15px;background:#fff;color:#0a0b0e;font-family:var(--display);font-size:16px;font-weight:700;";
+      b.textContent="Make a hide";
+      b.onclick=()=>{ track("feed_empty_cta",{src:"chal"}); close(); };
+      card.appendChild(h); card.appendChild(p); card.appendChild(b);
+      mid.appendChild(card); chalEl.appendChild(mid);
+      return;
+    }
+    /* Seen is stamped on ARRIVAL at the grid, not on each cell's tap: the dot's promise was
+       "something is waiting", and once the list is laid in front of somebody it has been
+       kept. Newest first off the query, so rows[0] carries the high-water mark. */
+    try{ markRepliesSeen(String(rows[0].created_at||"")); }catch(_){}
+    try{ const d=menuEl.querySelector('[data-s="chal"] .kfChalDot'); if(d) d.remove(); }catch(_){}
+    chalEl.innerHTML='';
+    const head=document.createElement("div"); head.className="kbHead"; head.textContent="Challenges";
+    const sub=document.createElement("div"); sub.className="kbSub";
+    sub.textContent="Hidden back for you — tap one to play.";
+    chalEl.appendChild(head); chalEl.appendChild(sub);
+    const grid=document.createElement("div"); grid.className="kmGrid";
+    const seenSet=new Set(kfSeen());
+    rows.forEach(r=>{
+      if(!r||!r.id||!r.img_path) return;
+      const played=seenSet.has(r.id);
+      const cell=document.createElement("div");
+      cell.className="kmCell"+(played?" krPlayed":" kmUnsent");
+      const pic=document.createElement("span"); pic.className="kmPic";
+      const img=document.createElement("img"); img.className="kmShot"; img.alt=""; img.loading="lazy";
+      img.src=CH_URL+"/storage/v1/object/public/hides/"+encodeURIComponent(r.img_path);
+      const meta=document.createElement("span"); meta.className="kmMeta";
+      const who=document.createElement("span"); who.className="kmM";
+      who.textContent=r.name?("@"+r.name):"Someone";
+      meta.appendChild(who);
+      if(played){ const st=document.createElement("span"); st.className="kmM"; st.style.opacity=".7"; st.textContent="played"; meta.appendChild(st); }
+      pic.appendChild(img); pic.appendChild(meta);
+      cell.appendChild(pic);
+      cell.onclick=()=>chalOpenInFeed(r);
+      grid.appendChild(cell);
+    });
+    chalEl.appendChild(grid);
+  }
+  function chalHide(){
+    chalOpen=false;
+    scopeBtn.innerHTML='Everyone <i>▾</i>';
+    scopeMark("all");
+    chalEl.style.display="none"; chalEl.innerHTML="";
+    { const f=root.querySelector("#kfFlag"); if(f) f.style.display=""; }
+  }
+  /* FOUR SCOPES, ONE PANEL AT A TIME. Written as "close whatever is open, then open the one
+     that was asked for" rather than as a set of toggles: with two panels a toggle was the
+     whole logic, with three or more it is the bug — mine -> board would leave the grid
+     mounted under the board, and the chrome each one restores would fight. */
   menuEl.querySelectorAll("button").forEach(b=>{ b.onclick=()=>{ haptic(8); menuShow(false);
     const s=b.dataset.s;
-    if((s==="mine"&&mineOpen)||(s==="board"&&boardOpen)||(s==="all"&&!mineOpen&&!boardOpen)) return;
+    if((s==="mine"&&mineOpen)||(s==="board"&&boardOpen)||(s==="chal"&&chalOpen)
+      ||(s==="all"&&!mineOpen&&!boardOpen&&!chalOpen)) return;
     /* THE TICK IS NOT SET HERE. It belongs to the panel that ends up on screen — the note on
        scopeMark() above says why, and setting it from the button as well would give one piece
        of state two owners that disagree the moment a hide() runs after a show(). */
     if(mineOpen) mineHide();
     if(boardOpen) boardHide();
+    if(chalOpen) chalHide();
     track("feed_scope_changed",{to:s});
     if(s==="mine") mineShow();
     else if(s==="board") boardShow();
-    /* "all" needs nothing more: the two hides above already put the feed back, and both of
-       them reset the pill and the tick to Everyone. */
+    else if(s==="chal") chalShow();
+    /* "all" needs nothing more: the hides above already put the feed back, and each of
+       them resets the pill and the tick to Everyone. */
   }; });
   /* Profile left the dropdown for the grid's top-right corner (founder's call, 2026-08-15) —
      same toggle contract the bar button always had, `src` keeps the eras comparable. */
