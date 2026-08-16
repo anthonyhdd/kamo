@@ -104,7 +104,7 @@ const ANSWER = { reveal_hide: { cx: 0.5, cy: 0.5, r: 0.05 }, save_seek_trace: nu
 
 /* `mine` plants the published-id list the app reads on boot — addInitScript is the one hook
    that survives the navigation, and chMine() is read while the round is being built. */
-async function open({ mine, first, fromReveal }) {
+async function open({ mine, first, fromReveal, extra }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     if (a.mine) localStorage.setItem('kamo_hides', JSON.stringify(a.mine));
@@ -114,8 +114,8 @@ async function open({ mine, first, fromReveal }) {
       feed_page: a.rows,
       get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
       set_hide_public: null,
-    }, a.answer);
-  }, { mine: mine || null, rows: ROWS, answer: ANSWER });
+    }, a.answer, a.extra || {});
+  }, { mine: mine || null, rows: ROWS, answer: ANSWER, extra: extra || null });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
   await page.evaluate((o) => window.__chFeed(o), { first: first || undefined, fromReveal: !!fromReveal });
@@ -142,6 +142,83 @@ const readCard = page => page.evaluate(() => {
     newClass: (document.getElementById('chNew') || {}).className || '',
   };
 });
+
+const readRail = page => page.evaluate(() => {
+  const box = document.getElementById('chRx');
+  if (!box) return null;
+  const chips = [...box.children];
+  return {
+    tags: chips.map(c => c.tagName),
+    classes: chips.map(c => c.className),
+    counts: chips.map(c => { const n = c.querySelector('.chRxN'); return n ? n.textContent : null; }),
+  };
+});
+
+/* ══ THE RAIL AND THE FLAG, the two controls left over after the card was fixed ══════════════
+   Both assumed the photo belonged to somebody else, because until "See it live" every photo in
+   the feed did. The rail invited you to put 🔥 on your own painting; the ⚑ offered to report it
+   to moderation. The counts survive — they are what OTHER people said, and the only thing on
+   that screen that tells a creator anything — but nothing on it may write. */
+console.log('\nTHE REACTION RAIL IS A READOUT ON YOUR OWN PHOTO');
+{
+  const page = await open({ mine: [MINE], first: MINE, fromReveal: true,
+                            extra: { hide_reactions_of: [{ emoji: '🔥', n: 7 }, { emoji: '😂', n: 2 }] } });
+  await page.waitForTimeout(500);
+  const rail = await readRail(page);
+
+  rail && rail.tags.length === 4 && rail.tags.every(t => t === 'DIV')
+    ? ok('the four chips are divs — inert by construction, not buttons talked out of it')
+    : bad(`the rail is ${JSON.stringify(rail && rail.tags)}`);
+  rail && rail.classes.every(c => /\bread\b/.test(c))
+    ? ok('and every one wears .read, so the press response and the lit border are gone')
+    : bad(`chip classes: ${JSON.stringify(rail && rail.classes)}`);
+  /* THE HALF THAT IS WORTH KEEPING. A rail that showed nothing would be a simpler diff and a
+     worse screen: the counts are the creator's only feedback anywhere in this app. */
+  rail && rail.counts[0] === '7' && rail.counts[1] === '2'
+    ? ok('and the counts still paint — 7 and 2, straight off hide_reactions_of')
+    : bad(`counts read ${JSON.stringify(rail && rail.counts)}`);
+
+  /* NOTHING MAY BE WRITTEN. A tap that reached react_to_hide would let a creator inflate the
+     one number on their own hide that is supposed to belong to everybody else. */
+  await page.evaluate(() => { window.__rpc.length = 0; [...document.getElementById('chRx').children].forEach(c => c.click()); });
+  await page.waitForTimeout(400);
+  const wrote = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'react_to_hide'));
+  wrote.length === 0
+    ? ok('and tapping all four writes nothing — the counts stay everybody else\'s')
+    : bad(`react_to_hide was called ${wrote.length}×`);
+
+  /* AND THE TAP MUST NOT COST THE SHOT. The stage owns every gesture on this screen; a div
+     swallows none by itself, which is why the stopPropagation listeners sit above the branch. */
+  const spent = await page.evaluate(() => !!document.querySelector('#chFoot .chCard'));
+  !spent ? ok('and does not fire the round\'s single buzz into the margin') : bad('a tap on the rail ended the round');
+
+  await page.close();
+}
+
+console.log('\nAND THE ⚑ IS NOT OFFERED ON YOUR OWN PHOTO');
+{
+  const page = await open({ mine: [MINE], first: MINE, fromReveal: true });
+  const own = await page.evaluate(() => {
+    const f = document.getElementById('kfFlag');
+    return f ? getComputedStyle(f).display : 'absent';
+  });
+  own === 'none' ? ok('slide 0 is yours, and the flag is not on the bar') : bad(`the flag reads display:${own} on your own hide`);
+
+  /* THE OTHER HALF, and the one that keeps Apple's 1.2 obligation intact: a stranger's hide
+     still has a reporting path. The flag is a bar fixture, so this is a per-slide question and
+     scrolling is the only way to ask it. */
+  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  await page.waitForTimeout(900);
+  const next = await page.evaluate(() => {
+    const f = document.getElementById('kfFlag');
+    return f ? getComputedStyle(f).display : 'absent';
+  });
+  next !== 'none' && next !== 'absent'
+    ? ok('and it comes back on the very next slide, which is a stranger\'s')
+    : bad(`the flag stayed ${next} after scrolling onto somebody else's hide — reporting is now unreachable`);
+
+  await page.close();
+}
 
 console.log('\nYOUR OWN HIDE: NOTHING ON THE CARD POINTS AT YOU');
 {
