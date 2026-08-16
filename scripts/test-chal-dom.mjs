@@ -79,11 +79,16 @@ const REPLIES = [
   { id: 'r-played', reply_to: 'mine1', name: 'tony', img_path: 'rb.jpg', created_at: '2026-08-15T09:00:00Z' },
 ];
 
-async function open({ mine, replies, seen } = {}) {
+async function open({ mine, replies, seen, hasReplies } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     if (a.mine) localStorage.setItem('kamo_hides', JSON.stringify(a.mine));
     if (a.seen) localStorage.setItem('kamo_feed_seen', JSON.stringify(a.seen));
+    /* The cached "this device has been answered before" flag the menu row is gated on. Set
+       explicitly rather than left to the launch probe: the probe fires 1200ms after boot and
+       this harness opens the feed before that, so relying on it would make every assertion
+       below a race. */
+    if (a.hasReplies) localStorage.setItem('kamo_has_replies', '1');
     window.__seed = {
       feed_page: a.feed,
       my_replies: a.replies || [],
@@ -91,7 +96,7 @@ async function open({ mine, replies, seen } = {}) {
       hide_reactions_of: [],
       set_hide_public: null,
     };
-  }, { mine: mine || null, replies: replies || null, seen: seen || null, feed: FEED });
+  }, { mine: mine || null, replies: replies || null, seen: seen || null, hasReplies: !!hasReplies, feed: FEED });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
   await page.evaluate(() => document.getElementById('btnFeed').click());
@@ -106,7 +111,7 @@ async function toChal(page) {
 
 console.log('\nTHE MENU CARRIES THE DOOR');
 {
-  const page = await open({ mine: ['mine1'], replies: REPLIES, seen: ['r-played'] });
+  const page = await open({ mine: ['mine1'], replies: REPLIES, seen: ['r-played'], hasReplies: true });
   const rows = await page.evaluate(() => [...document.querySelectorAll('#kfMenu [data-s]')].map(b => b.dataset.s));
   rows.includes('chal')
     ? ok(`the scope menu offers Challenges (${rows.join(' / ')})`)
@@ -160,20 +165,43 @@ console.log('\nTHE MENU CARRIES THE DOOR');
   await page.close();
 }
 
-console.log('\nA DEVICE THAT NEVER PUBLISHED IS TOLD SO, OFF THE NETWORK');
+console.log('\nNO CHALLENGES, NO DOOR');
 {
+  /* Founder's call, 2026-08-16, and the same doctrine as the feed button's own gate: a menu
+     line that can only ever lead to "No challenges yet" spends the one bit of curiosity a new
+     control gets on an empty room. Most devices are this one — a reply needs somebody to have
+     published, sent, been played AND answered — so this is the DEFAULT state of the menu, not
+     an edge case. */
   const page = await open({});
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#kfMenu [data-s]')].map(b => b.dataset.s));
+  !rows.includes('chal') && rows.length === 3
+    ? ok(`a device that has never been answered is not offered the row (${rows.join(' / ')})`)
+    : bad(`the empty Challenges row is still in the menu: ${rows.join(', ')}`);
+  /* And nothing downstream trips over its absence — the menu still works. */
+  const still = await page.evaluate(() => {
+    document.getElementById('kfScope').click();
+    document.querySelector('#kfMenu [data-s="mine"]').click();
+    return true;
+  });
+  await page.waitForTimeout(400);
+  const mineOpen = await page.evaluate(() => getComputedStyle(document.getElementById('kfMine')).display);
+  still && mineOpen === 'block'
+    ? ok('and the rest of the menu is untouched by the missing row')
+    : bad(`the menu broke without the chal row: mine panel display=${mineOpen}`);
+  await page.close();
+}
+
+console.log('\nA CACHE THAT OUTLIVED ITS REPLIES STILL EXPLAINS ITSELF');
+{
+  /* The row is painted from a cached flag so it does not pop in 1200ms late, which means it
+     can outlive the replies themselves — they expire at 30 days. That device opens a panel
+     with nothing in it, and the empty card is what makes that honest rather than broken. */
+  const page = await open({ mine: ['mine1'], replies: [], hasReplies: true });
   await toChal(page);
-  const state = await page.evaluate(() => ({
-    copy: (document.querySelector('#kfChal p') || {}).textContent || '',
-    asked: (window.__rpc || []).some(c => c[0] === 'my_replies'),
-  }));
-  /chose|answers to your kamos/i.test(state.copy)
+  const copy = await page.evaluate(() => (document.querySelector('#kfChal p') || {}).textContent || '');
+  /answers to your kamos|lands here/i.test(copy)
     ? ok('the empty card explains what a challenge is and how to earn one')
-    : bad(`empty copy reads ${JSON.stringify(state.copy)}`);
-  !state.asked
-    ? ok('and my_replies was never called — an empty id list has only one possible answer')
-    : bad('my_replies went to the network for a device with no hides');
+    : bad(`empty copy reads ${JSON.stringify(copy)}`);
   await page.close();
 }
 

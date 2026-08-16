@@ -11164,11 +11164,33 @@ const REPLY_SEEN_KEY="kamo_replies_seen";
 function replySeenAt(){ try{ return localStorage.getItem(REPLY_SEEN_KEY)||""; }catch(e){ return ""; } }
 function markRepliesSeen(iso){ try{ if(iso) localStorage.setItem(REPLY_SEEN_KEY,String(iso)); }catch(e){} }
 let chReplyNewest="";
+/* THE CHALLENGES ROW DOES NOT EXIST UNTIL A CHALLENGE DOES — the same gate, and the same
+   argument, as the feed button's kfHasContent: a menu line that leads to "No challenges yet"
+   is worse than no line, because it spends the one bit of curiosity a new control gets on an
+   empty room (founder's call, 2026-08-16). Most devices have nothing here: a reply requires
+   somebody to have published, sent, been played AND answered.
+   CACHED ACROSS LAUNCHES, for the reason the feed button's cache was added — the probe runs
+   1200ms after boot, so reading it live would pop the row in late on every open, which reads
+   as jank rather than as honesty. The last answer paints the menu instantly and the probe
+   corrects it: an explicit empty answer clears both the flag and the key.
+   HIDDEN IS THE SAFE DIRECTION when the probe has not answered at all (offline, first launch,
+   a feed opened within the first second). The replies are not lost — the row is back on the
+   next launch, and the wordmark dot fires off the same check. */
+let chHasReplies=false;
+try{ if(localStorage.getItem("kamo_has_replies")==="1") chHasReplies=true; }catch(e){}
+function chSetHasReplies(on){
+  chHasReplies=!!on;
+  try{ if(on) localStorage.setItem("kamo_has_replies","1"); else localStorage.removeItem("kamo_has_replies"); }catch(e){}
+}
 async function chReplyCheck(){
-  const ids=chMine(); if(!ids.length) return;
+  /* No published hides means nothing can ever have answered — a free answer, no round trip. */
+  const ids=chMine(); if(!ids.length){ chSetHasReplies(false); return; }
   let rows=[];
+  /* A THROW IS NOT AN EMPTY ANSWER. The catch leaves the cached flag alone: an unreachable
+     server must not retract a row this device has legitimately earned. */
   try{ rows=await chRpcRows("my_replies",{p_ids:ids}); }catch(e){ return; }
-  if(!rows.length) return;
+  if(!rows.length){ chSetHasReplies(false); return; }
+  chSetHasReplies(true);
   chReplyNewest=String(rows[0].created_at||"");
   if(chReplyNewest && chReplyNewest>replySeenAt()){
     brandDot(true);
@@ -12965,8 +12987,14 @@ function chFeed(opts){
        OF yours — filing it under the creator's own grid would put somebody else's photo
        behind a title that says "my". Reply arrow in stroke, same vocabulary as every glyph
        here. */
-    +  '<button data-s="chal"><svg viewBox="0 0 24 24"><path d="M9.5 7.5 5 12l4.5 4.5"/>'
-    +     '<path d="M5 12h8a6 6 0 0 1 6 6v.8"/></svg>Challenges</button>'
+    /* ONLY WHEN THERE IS SOMETHING BEHIND IT — see chHasReplies. Everything downstream already
+       tolerates the row's absence: the dot injector guards on the element, scopeMark's toggle
+       is a no-op on a button that is not there, and the scope switch cannot be asked for a
+       panel the menu never offered. */
+    +(chHasReplies
+      ? '<button data-s="chal"><svg viewBox="0 0 24 24"><path d="M9.5 7.5 5 12l4.5 4.5"/>'
+        +'<path d="M5 12h8a6 6 0 0 1 6 6v.8"/></svg>Challenges</button>'
+      : '')
     +'</div>'
     /* data-blocks-timer: while the grid covers a live round, the round's clock must not
        run — same principle (and same machinery) as the profile card, timerBlocked() reads
