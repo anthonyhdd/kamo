@@ -46,7 +46,12 @@ const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
    sheet for something that does not exist. The served copy reads it off window so BOTH states
    are reachable here; the shipped file is asserted to be false further down, which is the half
    that actually protects the fleet. */
-let real2 = real.replace('const HINTS_LIVE=false;', 'const HINTS_LIVE=(window.__hintsLive===true);');
+/* The anchor matches EITHER shipped value. Pinning it to `false` meant that the day the flag was
+   deliberately flipped (PR #293, Hint shown to App Review) this whole suite exited 1 before its
+   first assertion — the gate went dark on the exact change it exists to watch, and took the
+   repo's CI with it. Which state ships is asserted further down; getting the file instrumented
+   is not the place to have an opinion about it. */
+let real2 = real.replace(/const HINTS_LIVE=(?:false|true);/, 'const HINTS_LIVE=(window.__hintsLive===true);');
 if (real2 === real) { console.error('  ✗ HINTS_LIVE anchor missing from index.html'); process.exit(1); }
 let html = real2;
 for (const [anchor, patch] of [
@@ -249,11 +254,21 @@ console.log('\nTHE HINT STAYS OFF UNTIL THE PACK IS APPROVED');
   await page.close();
 }
 {
+  /* WHAT SHIPS IS A DECISION, AND THIS IS WHERE IT IS WRITTEN DOWN.
+     It shipped `false` until 2026-08-16, when PR #293 turned the Hint button on so App Review
+     could see it rather than approving a build in which the feature is invisible. That is a
+     deliberate call and the guard now records it — but it stays a guard, because the danger it
+     was built for has not gone anywhere: if the hint pack is NOT approved in App Store Connect,
+     every tap on Hint opens a purchase sheet for a product that does not exist.
+     So the assertion is against the declared intent below, not against a hardcoded `false`. An
+     accidental flip in either direction still fails here, loudly, with the reason attached. */
+  const INTENDED = 'true';   // PR #293 — Hint shown to App Review. Set back to 'false' if the pack is pulled.
   const shipped = /const HINTS_LIVE=(\w+);/.exec(real);
-  shipped && shipped[1] === 'false'
-    ? ok('and index.html ships with HINTS_LIVE=false — flip it when the pack reads APPROVED')
-    : bad(`index.html ships HINTS_LIVE=${shipped && shipped[1]} — if the pack is not APPROVED in `
-        + 'App Store Connect this is selling a product that does not exist');
+  shipped && shipped[1] === INTENDED
+    ? ok(`and index.html ships HINTS_LIVE=${INTENDED}, which is the recorded intent (PR #293)`)
+    : bad(`index.html ships HINTS_LIVE=${shipped && shipped[1]} but the recorded intent is `
+        + `${INTENDED}. If this was deliberate, move INTENDED in this test and say why; if it `
+        + 'was not, an unapproved hint pack is being sold from the live build.');
 }
 
 await browser.close();
