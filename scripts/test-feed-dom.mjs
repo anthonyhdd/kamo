@@ -1169,6 +1169,59 @@ console.log('\nTHE BUTTON WAITS FOR THE FEED TO EXIST');
   await full.close();
 }
 
+console.log('\nTHE ROUND\'S CHROME NEVER COVERS THE FEED\'S CONTROLS');
+{
+  /* THE PILL ONLY EXISTS FOR A PLAYER ON A STREAK, WHICH IS WHY THIS SHIPPED. .chRun is
+     display:none until chRunShow() reveals it, and it is only revealed when the device has a
+     live run — so every test, and every first session, renders a feed that looks perfectly
+     correct. The founder's screenshot on 2026-08-16 showed the gold pill sitting on top of
+     BOTH the ✕ and the ⚑: the round's own top-left chrome landing in the feed bar's corner.
+     Never a dead button (the pill is pointer-events:none, so taps went through), but two
+     controls nobody could read, one of which is the report flag Apple guideline 1.2 requires.
+
+     ASSERTED AS GEOMETRY, NOT AS A CSS STRING. A rule-text check would pass the day somebody
+     changes the bar's padding instead of the pill's position; overlap is the actual invariant
+     and rectangles are the only honest way to state it. The run is seeded through
+     localStorage before boot — without it this whole block would assert nothing, so the
+     visibility check below is a guard on the test itself, not decoration. */
+  const page = await open(ROWS(3), null, (p) => p.addInitScript(() => {
+    localStorage.setItem('kamo_seek_run', '3');
+    localStorage.setItem('kamo_seek_best', '5');
+  }));
+  const geo = await page.evaluate(() => {
+    const box = (sel) => {
+      const e = document.querySelector(sel);
+      if (!e) return null;
+      const b = e.getBoundingClientRect();
+      return { x: b.x, y: b.y, w: b.width, h: b.height, shown: getComputedStyle(e).display !== 'none' };
+    };
+    return { run: box('.chS.chIn .chRun'), clock: box('.chS.chIn .chClock'),
+             close: box('#kfClose'), flag: box('#kfFlag'), head: box('.chS.chIn .chHead') };
+  });
+  const hits = (a, b) => !!(a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h);
+
+  geo.run && geo.run.shown && geo.run.w > 0
+    ? ok('a device on a streak shows the run pill (so the overlap checks below mean something)')
+    : bad('the run pill never rendered — this block proves nothing: ' + JSON.stringify(geo.run));
+
+  !hits(geo.run, geo.close) && !hits(geo.run, geo.flag)
+    ? ok('and it clears the ✕ and the ⚑ — the report flag stays readable')
+    : bad(`the run pill covers the feed bar's controls again:\n      run=${JSON.stringify(geo.run)}\n      close=${JSON.stringify(geo.close)}\n      flag=${JSON.stringify(geo.flag)}`);
+
+  /* The two status chips are a column now. Touching is not overlapping, but if they ever
+     intersect the pair stops reading as one instrument and starts reading as a bug. */
+  !hits(geo.run, geo.clock)
+    ? ok('and it stacks under the clock without touching it')
+    : bad(`the run pill and the clock intersect: run=${JSON.stringify(geo.run)} clock=${JSON.stringify(geo.clock)}`);
+
+  /* The headline is centred and capped at 20ch precisely so the corners stay free; this is
+     the assertion that keeps that cap load-bearing rather than incidental. */
+  !hits(geo.run, geo.head)
+    ? ok('and the headline still clears it')
+    : bad(`the run pill overlaps the headline: run=${JSON.stringify(geo.run)} head=${JSON.stringify(geo.head)}`);
+  await page.close();
+}
+
 await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed plays real rounds and the visibility default is honest');
 process.exit(failed ? 1 : 0);
