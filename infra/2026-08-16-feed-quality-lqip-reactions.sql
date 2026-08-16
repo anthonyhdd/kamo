@@ -77,3 +77,24 @@ alter table public.hides add column if not exists lqip text;
 -- Full DDL lives in the dashboard migration `feed_quality_lqip_reactions`; this file is the
 -- record of what changed and why, per the house rule that this directory is the database's
 -- only version-controlled history.
+--
+-- ══════════════════════════════════════════════════════════════════════════════════════
+-- FIXED SAME DAY (migration `fix_lqip_regex_repetition`, ~35 minutes after deploy):
+--
+-- ⚠️ POSTGRES CAPS REGEX REPETITION COUNTS AT 255. The first cut of the 14-argument rung
+-- validated the lqip with '{1,6000}' — which is not a generous length cap, it is a syntax
+-- error POSTGRES RAISES AT RUNTIME, on every single call. The failure was exactly the shape
+-- the ladder is built for: the client's 14-argument form errored, chUpload fell back to the
+-- 13-argument rung, every publish succeeded — and lqip stored for nobody, silently. Caught by
+-- the post-deploy check (lqip_rows = 0 against fresh publishes), diagnosed with a rolled-back
+-- probe, and re-verified live: a valid data URL stores, url(javascript:…) nulls, probes
+-- deleted in the same statement.
+--
+-- The cap lives in length() now, where it should have been:
+--   v_lqip := case when p_lqip is not null
+--                   and length(p_lqip) <= 6000
+--                   and p_lqip ~ '^data:image/jpeg;base64,[A-Za-z0-9+/=]+$'
+--              then p_lqip else null end;
+--
+-- The lesson for the next rung: any bounded quantifier over ~255 in a Postgres regex is a
+-- runtime throw, not a validator. Bound with length(), match shape with '+'.
