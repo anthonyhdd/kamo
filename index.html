@@ -12158,12 +12158,28 @@ function chSeek(hideId,opts){
      artwork rather than an impression of it. Normalised to the same 21.4-unit height as the
      peeking mark, so the two poses swap without the pill's text shifting. */
   const RUN_MARK_OUT='<svg viewBox="1.3 1.3 13.83 21.4" aria-hidden="true"><path d="M7.82 1.3L9.19 1.41L10.28 1.83L11.3 2.63L12.01 3.64L12.47 5.02L12.5 6.01L12.33 7.07L11.97 7.97L11.51 8.64L10.98 9.19L10.07 9.88L10.68 10.39L11.13 10.41L11.86 10.75L13.21 12.1L14.32 13.8L14.89 15.23L15.08 15.97L15.13 16.83L14.91 17.63L14.3 18.26L13.92 18.41L13.44 18.43L13.17 18.32L12.94 18.01L12.89 17.57L12.96 17.27L12.64 16.91L12.68 16.22L12.39 15.65L12.16 15.65L12.18 16.26L11.99 16.98L12.05 18.01L11.97 19.37L11.55 21.23L11.63 22.24L11.38 22.59L11.4 22.7L4.96 22.7L5.02 22.6L4.83 22.38L4.77 22.09L4.84 21.21L4.41 19.1L4.41 16.98L4.25 16.2L4.25 15.55L4.06 15.55L4.03 15.8L3.68 16.28L3.76 16.89L3.42 17.29L3.49 17.94L3.19 18.34L2.56 18.43L2.04 18.22L1.53 17.69L1.3 17.08L1.3 16.2L1.53 15.27L2.25 13.59L2.73 12.79L4.23 11.06L5.03 10.5L5.84 10.31L6.35 9.88L5.34 9.13L4.98 8.75L4.43 7.93L4.14 7.25L3.95 6.37L3.93 5.44L4.29 3.89L4.9 2.88L5.64 2.16L6.45 1.66L7.17 1.41L7.8 1.32Z"/></svg>';
-  const chRunShow=(n,mode)=>{ if(!runEl||REPLAY) return;
-    const v=n|0;
+  /* THE RECORD PRINTS ON THE BREAK, AND ONLY THERE. `best` has been kept since the run
+     shipped and shown nowhere (chNoteSeek writes CH_BEST_KEY; nothing read it back), so this
+     is the first time a player sees the number they are playing against — and the loss is the
+     moment it is worth knowing, because it is the only end state that leaves the player
+     something to chase. A win already says the happier thing by ticking up in place.
+     THE PLACEMENT IS NOT A PREFERENCE, IT IS THE ONLY SAFE SLOT. Both live and plain-win keep
+     the pill absolutely positioned at the headline's row (the .chIn override: top 52px +
+     safe-area against a title at padding-top 56px), where the measurement above already found
+     that 12-22px of extra string lands on the title. `.dead` is static in .chTop's flex column
+     by then, so a longer sentence grows the column instead of crossing anything — which is
+     what makes this suffix free here and unaffordable four characters to the left.
+     ONLY WHEN THERE IS A BIGGER NUMBER. best >= broke always (the write ran first), and at
+     equality the run that just died IS the record — "Run of 6 broken · best 6" prints one
+     number twice and reads like a bug. Silence there also means the sentence appears exactly
+     when it motivates: somebody who has just set their record is told so by "best yet" on the
+     win, not by an epitaph. */
+  const chRunShow=(n,mode,best)=>{ if(!runEl||REPLAY) return;
+    const v=n|0, b=best|0;
     if(v<=0&&mode!=="dead"){ runEl.style.display="none"; return; }
     runEl.innerHTML=(mode==="dead"?RUN_MARK_OUT:RUN_MARK);
     runEl.appendChild(document.createTextNode(
-        mode==="dead" ? ("Run of "+v+" broken")
+        mode==="dead" ? ("Run of "+v+" broken"+(b>v?" · best "+b:""))
       : mode==="pb"   ? (v+" best yet")
                       : String(v)));
     runEl.className="chRun"+(mode?" "+mode:"");
@@ -12911,7 +12927,7 @@ function chSeek(hideId,opts){
          the screen, and it is the sentence the whole feature exists to make land. */
       if(sk){
         if(sk.run>0)          chRunShow(sk.run, sk.record?"pb":"");
-        else if(sk.broke>=2){ chRunShow(sk.broke,"dead");
+        else if(sk.broke>=2){ chRunShow(sk.broke,"dead",sk.best);
           /* A broken run is the one loss with something behind it, and it gets the error
              buzz — the stake has to be FELT, which is exactly what run_broken's `at`
              distribution is watching for. */
