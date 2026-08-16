@@ -142,6 +142,40 @@ console.log('\nA SEEN BANGER IS NO BANGER');
   await page.close();
 }
 
+console.log('\nA BLACK RECTANGLE IS NOT A ROUND');
+{
+  /* Founder's report, 2026-08-16: the feed serves photos that are entirely black. They pass
+     every server filter — coverage is 100%, because the whole frame got painted — and they
+     are unplayable. The source is fixed in chRehide (a reply photo that failed to load left
+     the scene on coverInto's #223 slab, and that slab got painted and published); this is the
+     half that cleans up what is already in the database, read off the lqip so it costs no
+     network.
+     THE SECOND CASE IS THE ONE THAT MATTERS. Dropping black rectangles is easy; dropping them
+     WITHOUT dropping a legitimately dark photograph is the whole difficulty, and a mean-only
+     test fails it. A filter that eats real photos is worse than the rectangles it removes. */
+  const LQ_BLACK = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAAbABQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJ+AAAAAAAD/2Q==";
+  const LQ_DARK = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAAbABQDASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAIBBv/EACcQAAICAQMDAgcAAAAAAAAAAAERAAIhEjFRAyLwQZFxgaGxwdHh/8QAFwEAAwEAAAAAAAAAAAAAAAAAAAECA//EABwRAAMAAgMBAAAAAAAAAAAAAAABESFRAgNhE//aAAwDAQACEQMRAD8A5WwAwBUAbjdbzHXSrXyGU/3vtDNArOyC4C5ilT26QERg8Hz7yrQmzR1BSoFQSPhEitraAelUmpDw8e0R/G5wXfC97aimM+e0xFY1l5fK8/sqwxUeiP5k9TsANcEoE/MReEXYOAGKMh9yJ+sSbXNUlkM4G8TLk1WJ9jTh/9k=";
+  const rows = [
+    { id: 'ok0', img_path: 'p0.jpg', name: 'tony', n_attempts: 0, n_found: 0, created_at: '2026-08-16T10:00:00Z', lqip: null },
+    { id: 'blk', img_path: 'p1.jpg', name: null, n_attempts: 1, n_found: 0, created_at: '2026-08-16T09:00:00Z', lqip: LQ_BLACK },
+    { id: 'night', img_path: 'p2.jpg', name: null, n_attempts: 2, n_found: 1, created_at: '2026-08-16T08:00:00Z', lqip: LQ_DARK },
+  ];
+  const page = await open({ rows, best: [] });
+  await page.waitForTimeout(900);   // the drop lands a frame after the slides mount
+  const left = await page.evaluate(() => [...document.querySelectorAll('.kfSlide .kfPrev')].map(i => i.src.split('/').pop()));
+  const ev = await page.evaluate(() => (window.__tr || []).filter(t => t[0] === 'feed_black_dropped').length);
+  !left.includes('p1.jpg') && ev === 1
+    ? ok('the black rectangle is pulled out of the feed')
+    : bad(`black slide survived: slides=${left.join(',')} drops=${ev}`);
+  left.includes('p2.jpg')
+    ? ok('and a genuinely dark photograph is NOT — flat AND dark is the test, not dark alone')
+    : bad('a real dark photo was dropped with the rectangles — the filter is too greedy');
+  left.includes('p0.jpg')
+    ? ok('and a hide with no placeholder at all is left alone')
+    : bad('a hide published before the lqip column was dropped on a guess');
+  await page.close();
+}
+
 await browser.close();
 server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed quality pass behaves');

@@ -297,9 +297,34 @@ console.log('\nSEND ONE BACK — drops into compose with the same photo, no came
   await page.waitForTimeout(900);
   const gone = await page.evaluate(() => !document.querySelector('.chS'));
   gone ? ok('seeker overlay dropped') : bad('overlay still up');
-  const ph = await page.evaluate(() => { const p = document.getElementById('photo') || document.querySelector('img#photo'); return p ? { display: p.style.display, src: p.src, cors: p.crossOrigin } : null; });
-  ph && ph.display === 'block' && ph.src.includes('x.jpg') ? ok('same photo loaded as the background') : bad('photo state: ' + JSON.stringify(ph));
-  ph && ph.cors === 'anonymous' ? ok('crossOrigin set (board will not taint)') : bad('crossOrigin missing');
+  /* THE PHOTO ARRIVES AS A BLOB NOW, and this assertion changed with it (2026-08-16).
+     It used to require `src` to be the storage URL with crossOrigin="anonymous" — the
+     MECHANISM rather than the property, and that mechanism was the bug: the feed has already
+     fetched the same URL without CORS, so WebKit serves the CORS request its no-cors cache
+     entry, the image never decodes, and coverInto() falls through to a near-black slab that
+     gets painted and published. chRehide fetches the bytes and hands over a blob: URL, which
+     is same-origin by construction.
+     SO THE TEST ASSERTS THE PROPERTY: the photo decoded, and a canvas it has been drawn into
+     can still be read. That is what crossOrigin was ever FOR — the publish path ends in
+     toBlob() — and it stays true whichever way the bytes get here next. */
+  const ph = await page.evaluate(() => {
+    const p = document.getElementById('photo');
+    if (!p) return null;
+    let readable = null;
+    try {
+      const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+      c.getContext('2d').drawImage(p, 0, 0, 8, 8);
+      c.toDataURL('image/jpeg');       // throws SecurityError on a tainted canvas
+      readable = true;
+    } catch (e) { readable = false; }
+    return { display: p.style.display, blob: p.src.startsWith('blob:'), w: p.naturalWidth, readable };
+  });
+  ph && ph.display === 'block' && ph.w > 0
+    ? ok(`the answered photo actually decoded (${ph.w}px wide)`)
+    : bad('the reply photo never loaded — this is the black-board bug: ' + JSON.stringify(ph));
+  ph && ph.readable
+    ? ok('and the board it feeds can still be read, so the publish can toBlob')
+    : bad('the photo taints the canvas — every publish from this round would die at toBlob');
   const composing = await page.evaluate(() => document.getElementById('start') ? document.getElementById('start').style.display === 'none' : true);
   composing ? ok('compose flow entered (splash gone)') : bad('splash still up');
   await page.close();
