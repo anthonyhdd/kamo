@@ -984,6 +984,12 @@
      openPaywall() stamps the same class on <body> for this one rule. test-pwfull-dom reads the
      computed visibility rather than the stylesheet, which is what caught the dead selector. */
   body.pwCover #shareSheet{visibility:hidden!important;}
+  /* Same hook for the member card. #kamoHome's backdrop is deliberately clear (the body
+     respawns in plain sight behind it), so without this the "Your kamo is live!" sheet
+     stays on screen UNDER the card — two stacked sheets, which is the founder's report of
+     2026-08-16. Hidden, not closed: closeKamoHome() already re-shows the sheet on the
+     reveal, and visibility is the only thing this rule owes it. */
+  body.khCover #shareSheet{visibility:hidden!important;}
   /* AND THE BOTTOM GETS ITS GROUND BACK. "No bottom scrim" was the call on 2026-08-12, taken
      when the arm was judged against a plain viewfinder; on the reveal the CTA lands on a
      photograph, and white-on-anything is a coin flip. Reversed today, deliberately, and kept
@@ -6107,6 +6113,9 @@ function openKamoHome(){
       characters.forEach(c=>applyFinish(c.charG)); }; });
     paintFin();
   }
+  /* body.khCover hides the share sheet while this card is up (see the pwCover rule it sits
+     next to) — the sheet must not show through the clear backdrop as a second stacked sheet. */
+  document.body.classList.add("khCover");
   el.classList.add("show"); haptic(12);
   track("home_opened",{has_handle:!!h,pro:isPro});
 }
@@ -6149,6 +6158,9 @@ function openKamoHome(){
   card.addEventListener("pointercancel",end,{passive:true});
 })();
 function closeKamoHome(){ const el=$("#kamoHome"); if(el) el.classList.remove("show");
+  /* Before the `finished` guard below: the guard returns early on the camera screen, and a
+     khCover left on <body> there would keep the NEXT round's sheet invisible. */
+  document.body.classList.remove("khCover");
   /* AND THE SHARE SHEET COMES BACK, SHORT. On the reveal the sheet is the only route to a
      share, and the wordmark now sits over that screen — so opening the card from there and
      closing it must not leave someone on a reveal with no way to send. Short rather than
@@ -8369,11 +8381,16 @@ $("#ssInvite").onclick=async()=>{
   const inviteBtn=$("#ssInvite"), inviteHtml=inviteBtn?inviteBtn.innerHTML:"";
   /* `&& !bare`: the wait exists to let a challenge finish uploading. Under the floor nothing
      was ever queued — chSlot() returns null and chUpload() returns early — so this would hold
-     the button at "Preparing your challenge…" for the full eight seconds and then send the
+     the button on its spinner for the full eight seconds and then send the
      invite. A bare hide goes out now, on this tap. */
   if(useNative && !bare){
     const pending=!chLink();
-    if(pending && inviteBtn){ inviteBtn.textContent="Preparing your challenge…"; inviteBtn.disabled=true; }
+    /* The ring, not "Preparing your challenge…" — same call as "See it live" (founder,
+       2026-08-16). The sentence was the longest label on the sheet and a line that does not
+       move for seconds reads as a hang; the spinner is the app's one gesture for "working".
+       .pwSpin because this button is white like the buy button it was drawn for — the white
+       .ssSpin would vanish on it. Restore via the captured innerHTML, unchanged. */
+    if(pending && inviteBtn){ inviteBtn.innerHTML='<span class="pwSpin"></span>'; inviteBtn.disabled=true; }
     await chAwaitId(8000);
     if(pending && inviteBtn){ inviteBtn.innerHTML=inviteHtml; inviteBtn.disabled=false; }
   }
