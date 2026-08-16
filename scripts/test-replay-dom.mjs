@@ -155,17 +155,38 @@ for (const why of ['miss', 'hit']) {
   if (hasWatch) {
     await page.evaluate(() => document.querySelector('.khWatch').click());
     await page.waitForTimeout(1400);
+    /* THE RECTANGLE SURVIVED THE REDESIGN, IT MOVED. Since the replay went full screen the
+       camera is what travels — the frame is scaled and re-origined onto what the seeker had —
+       and #khRpView is the same rectangle drawn at thumbnail size on the minimap. Same
+       element, same percentages, so this assertion still says what it always said: the
+       recorded transform is being read and turned into a position. */
     const mid = await page.evaluate(() => {
       const v = document.getElementById('khRpView');
-      return v ? { w: v.style.width, l: v.style.left } : null;
+      const f = document.getElementById('khRpFrame');
+      return v ? { w: v.style.width, l: v.style.left, cam: f ? f.style.transform : '',
+                   verdict: !!document.querySelector('#khRpEnd.on') } : null;
     });
     mid && mid.w ? ok(`viewport is travelling (w=${mid.w} l=${mid.l})`) : bad('viewport not positioned');
+    mid && /scale\(/.test(mid.cam)
+      ? ok(`the camera is on it too (${mid.cam})`)
+      : bad('#khRpFrame carries no scale() — the photo is not being flown, only the minimap moves');
+    /* THE ENDING IS NOT PRINTED OVER THE FILM. The card version put "They found you in 12.4s"
+       above a replay that had not played a frame; the whole point of watching is not knowing
+       yet. #khRpEnd may only light up once the hunt has run out. */
+    mid && !mid.verdict
+      ? ok('the verdict is still withheld mid-hunt')
+      : bad('#khRpEnd is already on — the replay gives its ending away before it plays');
     await page.waitForTimeout(7200);
     const end = await page.evaluate(() => ({
       fx: document.getElementById('khRpFx').className,
       buzz: !!document.querySelector('.khRpAim.buzz'),
       aims: document.querySelectorAll('.khRpAim').length,
+      verdict: !!document.querySelector('#khRpEnd.on'),
+      stats: document.querySelectorAll('#khRpStats .khRpStat').length,
     }));
+    end.verdict && end.stats === 4
+      ? ok(`the verdict and its report arrive at the end (${end.stats} figures)`)
+      : bad('no verdict or no report at the end: ' + JSON.stringify(end));
     if (why === 'miss') {
       end.buzz && end.fx.includes('lose') ? ok(`miss ends on the wrong spot (${end.aims} marks)`) : bad('miss end wrong: ' + JSON.stringify(end));
     } else {
