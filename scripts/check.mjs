@@ -1445,6 +1445,30 @@ try {
   bad('THE TRIAL COPY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* THE FEED'S load() MUST HAND A JOINER THE PAGE IT IS ALREADY FETCHING.
+   Every caller pages off this promise — `load().then(paint)` in the opening sequence, in the
+   second lap, in the Retry card and in dry(), the path everything left after the black-
+   rectangle filter takes a page away. While it was `async function load(){ if(S.loading)
+   return; …}` a second caller got a promise that had ALREADY resolved, so paint() ran against
+   an empty slide list and drew the cold start — "Nothing here yet.", the invitation to publish
+   the very first hide — milliseconds before the page in flight appended its slides and the
+   IntersectionObserver started a round underneath it. Nothing takes that card down: midOff()
+   only runs inside a paint(), and no second paint is coming. It shipped, and the founder
+   photographed it on 2026-08-17.
+   Asserted structurally because the race is a matter of microseconds on a real device and a
+   DOM test would have to lose it on purpose to catch anything. */
+{
+  const m = html.match(/\n  function load\(\)\{[\s\S]*?\n  \}/);
+  if (!m) bad('the feed\'s load() is gone or is async again — a joiner cannot be checked for the\n'
+    + '    in-flight page, and an async load() with a bare `if(S.loading) return` is exactly the\n'
+    + '    bug: paint() then draws "Nothing here yet." over a round that is about to start.');
+  else if (!/if\(S\.loading\)\s*return\s+S\.inflight/.test(m[0]))
+    bad('load() no longer hands the in-flight promise to a concurrent caller — whatever it\n'
+      + '    returns instead resolves before a single row has landed, and every `load().then(paint)`\n'
+      + '    paints an empty feed on top of one that is loading.');
+  else ok('a concurrent load() joins the page in flight instead of resolving empty');
+}
+
 /* nativeCaps is read by trialAdvertised(), which applyTrialCopy() calls at module scope. A
    `let` declared after that call is a temporal-dead-zone throw that kills the whole script
    before window.KAMO exists — a blank app for every user, from one moved line. */
