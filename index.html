@@ -1966,6 +1966,13 @@
      on one line; the fixed height and nowrap keep it true if a label ever grows. */
   .ssRow2 .ssBtn{flex:1 1 0;min-width:0;margin-bottom:9px;height:48px;font-size:15px;
     white-space:nowrap;line-height:1;}
+  /* AND THE THIRD ONE DOES NOT TAKE A SHARE OF THE LINE. `flex:0 0 48px` is the whole reason
+     Instagram can come back without re-creating the failure the rule above describes: it is a
+     square glyph, so it costs 57px of a 350px sheet and the two labelled buttons keep every
+     pixel they had at two-across. A labelled Instagram at flex:1 is what wrapped "Remove mark"
+     onto two lines, and it is also what out-ranked the send — the two reasons it was cut.
+     Icon-only answers both: present, reachable, and visibly not competing with "Send". */
+  .ssRow2 .ssBtn.ssIG{flex:0 0 48px;width:48px;padding:0;gap:0;}
   .ssBtn .ic{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
   /* THE SELECTED-PLAN TREATMENT, ON PURPOSE. Same --ring gradient, same 3.4s pwShimmer
      clock and the same mask-composite trick as .pwPlan.active — the sheet already teaches
@@ -2725,6 +2732,25 @@
          it stays TINTED rather than white: it is an offer, not a destination, and it must not
          out-rank the send above it. -->
     <div class="ssRow2" id="ssRow2">
+    <!-- INSTAGRAM IS BACK, AS A GLYPH. The comment above cut it on seven days of
+         share_target_tapped — invite 2804 (86.6%), instagram 221 (6.8%) — and the reasoning
+         was right about the WIDTH and wrong about the DIRECTION, because the average was
+         taken over the days before the wave and the button was removed on the evening of the
+         day it doubled. The daily series it was cut on:
+           10/08 14 · 11/08 27 · 12/08 32 · 13/08 36 · 14/08 37 · 15/08 66 · 16/08 0 · 17/08 0
+         AND `more` DID NOT ABSORB IT: 8 -> 20 over the same break, +12 against 66 lost. The
+         "it stays reachable through More" half of the trade is the half that did not happen;
+         roughly 80% of the volume simply stopped.
+         WHY IT MATTERS MORE THAN 6.8%. Meccha Chameleon is an Instagram trend and Instagram
+         is where this app's audience is arriving from. It is also the ONE destination whose
+         return traffic we cannot see — an IG Story carries no clickable caption, so it has no
+         invite_landed to defend itself with. A channel that cannot be measured loses every
+         comparison by default, which is exactly how a growing one got deleted.
+         SO IT COMES BACK ON THE TERMS THAT WERE ACTUALLY WRONG WITH IT, not on the volume:
+         icon-only (see .ssIG), on the secondary row, never out-ranking "Send". No label to
+         wrap, no width taken from More, and nothing above the send. -->
+      <button class="ssBtn ssIG" id="ssIG" data-target="instagram" style="display:none"
+              aria-label="Share to Instagram Stories" title="Instagram Stories"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg></button>
       <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
     <!-- WHAT COMES AFTER THE SEND. Every ending in this product closes on itself: you share a
          challenge and the sheet just sits there, at the moment of highest intent in the whole
@@ -7112,7 +7138,7 @@ window.KAMO.openFound=(id)=>{
     if(typeof openKamoHome==="function") openKamoHome();
   }catch(e){}
 };
-window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn();
+window.KAMO.setNativeCaps=(c)=>{ nativeCaps=c||{}; if(typeof updateLightBtn==="function") updateLightBtn(); if(typeof updateInviteBtn==="function") updateInviteBtn(); if(typeof updateSaveBtn==="function") updateSaveBtn(); if(typeof updateIGBtn==="function") updateIGBtn();
   /* The boot camera decision is waiting on exactly this. Resolving it here rather than on
      the 700ms timer means a returning user reaches compose as fast as they always did. */
   if(typeof bootCamera==="function" && bootCamera.decide) bootCamera.decide();
@@ -8410,6 +8436,23 @@ function updateSaveBtn(){
   saveBtn.style.display = canSave ? "" : "none";
 }
 updateSaveBtn();   // plain browser → visible immediately; native → re-run on setNativeCaps
+/* THE WRAPPER IS THE WHOLE GATE, AND IT IS THE OPPOSITE OF THE OLD BUTTON'S. The Instagram
+   slab that shipped on 2026-07-13 had no gate at all: it rendered in a plain browser too,
+   where `nativeShare` ends on a postNative that nobody receives — a button that looks
+   identical to the working one and does nothing. It is hidden by default in the markup and
+   only shown here, so that failure cannot come back with it.
+   `ReactNativeWebView` AND NOT A CAPABILITY FLAG, deliberately. Share.shareSingle's
+   INSTAGRAM_STORIES branch is keyed on `msg.target === 'instagram'` in App.js and has been in
+   every released binary since the button first shipped — it was serving 66 taps a day up to
+   the moment the markup was deleted. Gating on a capability nothing announces is how
+   #ssInvite spent its whole life at display:none (see updateInviteBtn), and there is nothing
+   here to announce: an older wrapper without the reveal encoder already falls back to the
+   static-image branch on its own, inside nativeShare. */
+function updateIGBtn(){
+  const b=document.getElementById("ssIG"); if(!b) return;
+  b.style.display = window.ReactNativeWebView ? "" : "none";
+}
+updateIGBtn();     // browser → stays hidden; native → shown now, re-confirmed on setNativeCaps
 if(window.ReactNativeWebView){
   const saveBtn=$("#btnSave"), invite=$("#ssInvite");
   if(false && saveBtn&&invite&&invite.parentNode){
