@@ -1298,6 +1298,23 @@ try {
   bad('THE NOTIFICATION BELL IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12e. The card on slide 4 ------------------------------------------------------------
+   The feed's first ask, and it is half an experiment: the holdout is the only thing that makes
+   its effect separable from an ad spend that doubled the traffic every day it shipped into. So
+   the ways it can be wrong are not all cosmetic. Shown to somebody who already publishes is an
+   insult; shown to the control arm is not a smaller effect but no measurement at all; mounted
+   under the paywall it files an impression nobody saw and deflates the only ratio it has; and
+   deferred by that paywall WITHOUT a retry it never appears for the session at all. The tap
+   also has to leave without the live round underneath booking it as a guess. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-feedgate-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-feedgate-dom.mjs', 'FEED GATE TEST', out)
+    : ok('the feed asks once, of the right person, and counts it once (node scripts/test-feedgate-dom.mjs)');
+} catch (e) {
+  bad('THE FEED\'S FIRST ASK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
    initThree() runs at module top level; before this guard existed, that throw killed
    everything after it — seeker, feed, tracking — and looked exactly like churn (17 devices
