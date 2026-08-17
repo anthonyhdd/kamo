@@ -7536,7 +7536,13 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    NOTE FOR THE NEXT EDITOR: no bare double-quoted lowercase name may appear in this comment.
    check.mjs reads the WEB_ONLY names by regex over this whole literal, so a name quoted in
    prose is parsed as an ENTRY — which is exactly how the first version of this comment failed
-   the disjointness assertion by "adding" the carrier it was describing. Backticks below.
+   the disjointness assertion by `adding` the carrier it was describing. Backticks below.
+   AND THIS SENTENCE BROKE ITS OWN RULE UNTIL 2026-08-17: the word describing the mistake was
+   itself double-quoted, so `adding` was parsed as a 104th WEB_ONLY entry — a phantom name,
+   in the set, that no line of this file can ever emit. It survived because nothing checked
+   the other direction: the disjointness assertion asks whether a name is ALSO on the
+   wrapper's allow-list, never whether anything emits it at all. That check exists now (see
+   check.mjs, WEB_ONLY names with no call site), and it is what found this.
    This event fired from the same line as a trackCarried(`invite_tapped`) call, so ONE tap
    produced TWO records: the real name, which 1.0.2 drops (it is not on that binary's
    allow-list, and 1.0.2 is ~89% of the fleet), and the carrier `camera_requested`, which it
@@ -9074,8 +9080,26 @@ $("#ssInvite").onclick=async()=>{
        send, which is the one share people repeat. */
     /* `link` is the property that was missing when this went wrong: nothing recorded whether
        a send carried a playable challenge or the empty ?i=1 invite, so a share that reached
-       a friend with no game in it looked identical to one that worked. With it, the share
-       that produces no challenge_preview_opened is finally separable from the one that does. */
+       a friend with no game in it looked identical to one that worked. */
+    /* THE SECOND HALF OF THAT SENTENCE NAMED THE WRONG EVENT, AND IT COST A DAY (2026-08-17).
+       It read "the share that produces no challenge_preview_opened is finally separable from
+       the one that does", which describes a landing — somebody on the other end opening what
+       was sent. challenge_preview_opened was never that. It was fired by chPrevPlay(), the
+       SENDER rehearsing their own hide on the share sheet, and its own comment said so:
+       "THE REHEARSAL, NOT THE ROUND". It could not be a landing by construction — chSeek()
+       only runs on ?h= loads, where that overlay cannot exist. The rehearsal was removed with
+       its feature on 2026-08-15 (00db2d2), the event went to zero the next day, and this
+       sentence is the only reason anyone would read that zero as a broken funnel. It was read
+       exactly that way.
+       THE LANDING IS `seek_opened`, and it always was — the recipient's side, fired from
+       chSeek() once the hide resolves. It reported 7,140 uniques on 2026-08-16 against 547
+       hide_sent, so the loop this comment worried about was never the quiet one.
+       ⚠️ AND IT IS NOT A PER-SHARE JOIN. seek_opened lands on the RECIPIENT's Amplitude user
+       and hide_sent on the sender's, so the two divide in aggregate and never per hide. It
+       also counts feed rounds, not only ?h= link opens (see the seek_* routing note above),
+       which is why the ratio above is a floor on reach and not a click-through rate. `link`
+       still earns its place: it separates a send that carried a challenge from one that
+       carried the bare invite, on the sender's own user, which is a different question. */
     /* `bare` rides here too, and not only on share_target_tapped: that one goes through the
        WRAPPER, so it lands under a different Amplitude user than anything in WEB_ONLY, and a
        ratio built across the two is the mixed funnel this file warns about elsewhere.

@@ -519,6 +519,38 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
             + 'native path is lost. Remove them from WEB_ONLY.')
         : ok(`WEB_ONLY is disjoint from the wrapper's allow-list (${names.length} names routed direct)`);
     }
+
+    /* AND THE OTHER DIRECTION, WHICH NOTHING ASKED UNTIL 2026-08-17: does anything EMIT it?
+       The disjointness check above only compares two lists against each other, so a name can
+       sit in WEB_ONLY for weeks after its last call site is deleted and read, to anyone
+       grepping, exactly like a live event. That is not hypothetical — challenge_preview_opened
+       lost its emitter with the rehearsal overlay on 2026-08-15 (00db2d2) and the name stayed,
+       next to a comment describing it as the proof a share had landed. Amplitude then showed
+       it going 125 -> 0 across that date and it was read as a broken funnel rather than as a
+       feature that had been deliberately removed. A registered name that nothing writes is
+       indistinguishable from a metric that just died, and the difference is a day of work.
+       Reported as a LIST WITH REASONS rather than silently allowed, same as KNOWN_UNCALLED
+       above: the point is that each one is a decision somebody made, on the record. */
+    const KNOWN_DEAD_EVENTS = new Map([
+      ['challenge_preview_opened', 'the sender rehearsal overlay (chPrevPlay) removed 2026-08-15, 00db2d2'],
+      ['discord_opened', 'the Discord link is not on any surface right now'],
+      ['prev_blocked_tapped', 'the feed no longer blocks stepping backwards'],
+      ['visibility_consent_shown', 'the consent row became the publish act itself'],
+      ['visibility_consent', 'same row — the toggle reports through hide_visibility_set now'],
+    ]);
+    /* The name has to be quoted the way the source quotes it, and prose is not a call site:
+       this looks for track("<name>" specifically, which is how every event in this file is
+       emitted. A name reachable only through a variable would read as dead here — none is
+       today, and if one ever is, it belongs in the map above with that as its reason. */
+    const emitted = new Set([...html.matchAll(/track\(\s*"([a-z0-9_]+)"/g)].map((m) => m[1]));
+    const dead = names.filter((n) => !emitted.has(n) && !KNOWN_DEAD_EVENTS.has(n));
+    dead.length
+      ? bad(`in WEB_ONLY but never emitted: ${dead.join(', ')}\n    `
+          + 'A name in this set with no track("<name>") call site is a phantom: it routes '
+          + 'nothing, and it reads like a live metric to the next person who greps for it '
+          + '(see challenge_preview_opened, 2026-08-15). Emit it, remove it, or add it to '
+          + 'KNOWN_DEAD_EVENTS with the reason it is parked.')
+      : ok(`every WEB_ONLY name has a call site (${names.length - KNOWN_DEAD_EVENTS.size} live, ${KNOWN_DEAD_EVENTS.size} known-dead allowed)`);
   }
 }
 
