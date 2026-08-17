@@ -465,10 +465,19 @@ console.log('\nTHE HANDLE WALKS DOWN, AND THE FLOOR LEADS BACK UP');
     row.more.x < row.plus.x
       ? ok('More is on the left, the upsell on the right')
       : bad('the upsell is to the LEFT of More — the offer is leading the row');
-    Math.abs(row.more.w - row.plus.w) < 2
-      ? ok(`they split the line evenly (${Math.round(row.more.w)}px each)`)
-      : bad(`the cells are ${Math.round(row.more.w)}px and ${Math.round(row.plus.w)}px — one is `
-          + 'being squeezed, which is what happens when the flex share is not shared');
+    /* THEY DO NOT SPLIT IT EVENLY ANY MORE — founder's call, 2026-08-17. An even split is what
+       you give two controls of equal standing, and these are not: seven days of
+       share_target_tapped read invite 5768, save 360, instagram 240, more 64. One percent does
+       not buy half a row next to the only line on this sheet that sells anything. So More is a
+       glyph and the upsell takes the rest — the same trade Instagram took when it came back as
+       48px earlier the same day.
+       STILL AN ASSERTION ABOUT GEOMETRY, and still guarding the original failure from the other
+       side: More must stay small (a label creeping back re-wraps "Remove mark"), and the upsell
+       must actually receive the width rather than a hole appearing where it used to be. */
+    row.more.w <= 72 && row.plus.w > row.more.w * 2
+      ? ok(`More is a ${Math.round(row.more.w)}px glyph and the upsell takes the rest (${Math.round(row.plus.w)}px)`)
+      : bad(`the cells are ${Math.round(row.more.w)}px and ${Math.round(row.plus.w)}px — More is `
+          + 'taking the line back, or the width it gave up did not land on the upsell');
   }
 
   /* ONE MOVING THING ON THIS CARD. Instagram carried the paywall CTA's sheen, so the brightest
