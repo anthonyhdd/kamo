@@ -1,0 +1,302 @@
+#!/usr/bin/env node
+/**
+ * THE CARD ON SLIDE 4 — the feed's first ask, and the four ways it goes wrong in silence.
+ *
+ * It exists because 69% of feed openings die on the first slide and the people who survive
+ * that far are the ones who publish: feed_opened → hide_published converts at 10.3% with a
+ * median of 94 seconds, which is three or four slides. So the ask rides slide 4.
+ *
+ * Every failure mode here looks fine on screen and throws nothing:
+ *
+ *   - SHOWN TO A CREATOR. The sentence is "your turn" — said to somebody with forty hides it
+ *     is an insult and a bug. chMine() is the only local record of having published, and a
+ *     storage that throws must take the card AWAY, never show it.
+ *   - SHOWN TO THE CONTROL ARM. The whole point of the holdout is that half the devices meet
+ *     nothing. An arm that leaks is not a smaller effect, it is no measurement at all — and
+ *     nothing on screen would say so.
+ *   - UNDERNEATH THE PAYWALL. The first offer fires on slide 3 and lands full-screen. A card
+ *     mounted under it files feed_gate_shown for an impression nobody saw, and the only ratio
+ *     the card has — tapped over shown — quietly deflates. It must wait, and it must NOT give
+ *     up: a card deferred once and never retried is a card the session never gets.
+ *   - COUNTING THE TAP TWICE. The CTA leaves the feed through close(), which is also where a
+ *     card still on screen is filed as passed. Shown = tapped + passed or the ratio is fiction.
+ *
+ * And one that is not about measurement at all: the photo under the card is a LIVE round, so
+ * a tap that does not stop propagating also lands on the scene as a guess and books a miss on
+ * the way out.
+ *
+ *   PW_CORE=<dir with node_modules> node scripts/test-feedgate-dom.mjs
+ */
+import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { pwBases, chromeExe, PW_SETUP } from './lib/pw.mjs';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const req = createRequire(import.meta.url);
+let chromium = null;
+for (const b of pwBases(ROOT)) {
+  try { ({ chromium } = req(b ? join(b, 'node_modules/playwright-core') : 'playwright-core')); break; } catch {}
+}
+if (!chromium) { console.log('· playwright-core not installed — skipping the feed-gate test — run: ' + PW_SETUP); process.exit(0); }
+
+const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
+/* Stubbed at the declaration, not appended: chFeed() fetches its first page the moment it is
+   called, so a hook added at the end of the module is already too late. */
+const stub = (src, anchor) => {
+  if (!src.includes(anchor)) throw new Error('anchor missing: ' + anchor);
+  return src.replace(anchor, anchor +
+    'if(window.__seed&&Object.prototype.hasOwnProperty.call(window.__seed,fn)) return window.__seed[fn];');
+};
+let html = stub(real, 'async function kfRpc(fn,body){');
+html = stub(html, 'async function chRpc(fn,body){');
+html = stub(html, 'async function chRpcRows(fn,body){');
+html = html.replace('function track(event,props){',
+  'function track(event,props){window.__tr=window.__tr||[];window.__tr.push([event,props]);');
+/* THE SECOND HOOK IS NOT REDUNDANT. track() is recorded at its own first line, which is
+   BEFORE the object carrying trial_arm, plan_arm and gate_arm is built — so __tr answers
+   "which events fired, with what the caller passed" and nothing about the arm. chWebTrack()
+   receives the finished payload, and in a plain browser (no wrapper, no bridge) every event
+   reaches it. That is the only place the assignment record is observable. */
+html = html.replace('function chWebTrack(event,props){',
+  'function chWebTrack(event,props){window.__sent=window.__sent||[];window.__sent.push([event,props]);');
+html = html.replace('function chFeed(opts){',
+  'window.__chFeed=(o)=>chFeed(o);\nfunction chFeed(opts){');
+
+const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.css': 'text/css' };
+const server = createServer((rq, rs) => {
+  const p = decodeURIComponent(rq.url.split('?')[0]);
+  if (p === '/' || p === '/index.html') { rs.writeHead(200, { 'Content-Type': 'text/html' }); return rs.end(html); }
+  try {
+    const b = readFileSync(join(ROOT, p.replace(/^\/+/, '')));
+    rs.writeHead(200, { 'Content-Type': MIME[p.slice(p.lastIndexOf('.'))] || 'application/octet-stream' });
+    rs.end(b);
+  } catch { rs.writeHead(404); rs.end('x'); }
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const base = `http://127.0.0.1:${server.address().port}/`;
+
+const exe = chromeExe();
+if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
+const browser = await chromium.launch({ executablePath: exe });
+let failed = 0;
+const ok = m => console.log('  ✓ ' + m);
+const bad = m => { failed++; console.error('  ✗ ' + m); };
+
+/* Eight strangers' hides — enough to scroll past slide 4 without the queue running dry and
+   turning this into a test of the second lap. None of them is this device's own. */
+const ROWS = Array.from({ length: 8 }, (_, i) => ({
+  id: 'hide' + i, img_path: 'p' + i + '.jpg', name: null,
+  n_attempts: i, n_found: 0, created_at: '2026-08-16T10:0' + i + ':00Z',
+}));
+
+/**
+ * A feed opened by a device with the arm, the hide list and the first offer in a known state.
+ *
+ * `arm` is what the coin already landed on — seeded, never flipped, so the test is not
+ * measuring Math.random(). `mine` is this device's published hides: empty is the only state
+ * the card is for. `firstOffer:'spent'` marks the paywall's one-per-install offer as already
+ * made, which is what most devices reaching slide 4 actually look like; 'pending' leaves it
+ * armed so the collision on slide 3 is the thing under test.
+ */
+async function open({ arm = 'on', mine = [], seen = false, firstOffer = 'spent' } = {}) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.addInitScript((a) => {
+    window.__seed = {
+      feed_page: a.rows,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: null },
+      log_skip: null,
+      log_attempt: null,
+    };
+    localStorage.setItem('kamo_feed_gate_arm', a.arm);
+    if (a.mine.length) localStorage.setItem('kamo_hides', JSON.stringify(a.mine));
+    if (a.seen) localStorage.setItem('kamo_feed_gate_seen', '1');
+    if (a.firstOffer === 'spent') localStorage.setItem('kamo_pw_first', '1');
+    localStorage.setItem('kamo_feed_swiped', '1');   // no teaching hint in the way
+  }, { rows: ROWS, arm, mine, seen, firstOffer });
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => window.__chFeed({}));
+  await page.waitForTimeout(900);
+  return page;
+}
+
+/* One slide down, then long enough for the round to mount and the card's own 900ms to run. */
+async function swipe(page, n = 1) {
+  for (let i = 0; i < n; i++) {
+    await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop += s.clientHeight; });
+    await page.waitForTimeout(1100);
+  }
+}
+const card = page => page.evaluate(() => {
+  const g = document.querySelector('.kfGate');
+  return g ? (g.textContent || '').trim() : null;
+});
+const evs = (page, name) => page.evaluate(n => (window.__tr || []).filter(e => e[0] === n), name);
+
+console.log('\nTHE CARD MEETS SOMEBODY WHO HAS NEVER MADE ONE, ON SLIDE 4');
+{
+  const page = await open();
+  await card(page) === null ? ok('nothing on the first slide — one photo is a glance, not a session')
+                            : bad('the card was up before the user had seen anything');
+  await swipe(page, 2);
+  await card(page) === null ? ok('and nothing on the third — the ask sits behind the offer, not next to it')
+                            : bad('the card appeared before slide 4');
+
+  await swipe(page);
+  const t = await card(page);
+  t && /Make one/.test(t) ? ok('slide 4 asks, in a card the thumb can pass')
+                          : bad(`no card on slide 4: ${JSON.stringify(t)}`);
+
+  const shown = await evs(page, 'feed_gate_shown');
+  shown.length === 1 && shown[0][1] && shown[0][1].n === 4
+    ? ok('and it is counted once, carrying the slide it landed on')
+    : bad(`feed_gate_shown fired ${shown.length} times: ${JSON.stringify(shown.map(e => e[1]))}`);
+
+  /* THE ROUND UNDER IT IS STILL THERE. That is the whole difference between this and a wall:
+     the card is a child of the slide, mounted alongside the round's host, not in place of it.
+     Asserted on the host rather than on a painted canvas because the photos 404 in this
+     harness — a bitmap that never arrives would fail this for a reason that is not the card. */
+  const over = await page.evaluate(() => {
+    const g = document.querySelector('.kfGate');
+    const sl = g && g.closest('.kfSlide');
+    return !!(sl && sl.querySelector('.kfHost'));
+  });
+  over ? ok('the hide underneath keeps its round — the card sits over it, not in place of it')
+       : bad('the card replaced the round instead of sitting over it');
+  await page.close();
+}
+
+console.log('\nA TAP LEAVES FOR THE CAMERA, AND IS COUNTED ONCE');
+{
+  const page = await open();
+  await swipe(page, 3);
+  await page.evaluate(() => document.querySelector('.kfGate button').click());
+  await page.waitForTimeout(400);
+
+  const tapped = await evs(page, 'feed_gate_tapped');
+  tapped.length === 1 ? ok('the tap is filed') : bad(`feed_gate_tapped fired ${tapped.length} times`);
+
+  const passed = await evs(page, 'feed_gate_passed');
+  passed.length === 0
+    ? ok('and never also as a thumb going by — the exit runs through close(), which files passes')
+    : bad('the same card was counted as tapped AND passed, so shown ≠ tapped + passed');
+
+  const gone = await page.evaluate(() => !document.getElementById('kfeed'));
+  gone ? ok('and the feed is closed, which is what "Make one" promises')
+       : bad('the CTA counted a tap and left the user in the feed');
+
+  /* stopPropagation, stated as a number: the photo under the card is a live round and a tap
+     that reaches it books a guess against a hide the user was leaving. */
+  const guessed = await page.evaluate(() => (window.__tr || []).filter(e => e[0] === 'seek_tap').length);
+  guessed === 0 ? ok('and the scene under it never took the tap as a guess')
+                : bad(`the CTA also registered ${guessed} guess(es) on the way out`);
+  await page.close();
+}
+
+console.log('\nA THUMB GOING PAST IS THE OTHER HALF OF THE RATIO');
+{
+  const page = await open();
+  await swipe(page, 3);
+  await card(page) !== null || bad('no card to scroll past');
+  await swipe(page);
+  const passed = await evs(page, 'feed_gate_passed');
+  passed.length === 1 ? ok('scrolling on files it as passed, once')
+                      : bad(`feed_gate_passed fired ${passed.length} times`);
+  await card(page) === null ? ok('and the card goes with the slide it belonged to')
+                            : bad('the card survived the slide it was mounted on');
+  const shown = await evs(page, 'feed_gate_shown');
+  shown.length === 1 ? ok('and it is not asked again in the same session')
+                     : bad(`feed_gate_shown fired ${shown.length} times in one session`);
+  await page.close();
+}
+
+console.log('\nAND NOWHERE IT WOULD BE A LIE OR A LEAK');
+{
+  const control = await open({ arm: 'off' });
+  await swipe(control, 5);
+  await card(control) === null
+    ? ok('the control arm meets nothing — a holdout that leaks measures nothing')
+    : bad('the card rendered for the off arm');
+  await control.close();
+
+  const creator = await open({ mine: ['hide99'] });
+  await swipe(creator, 5);
+  await card(creator) === null
+    ? ok('somebody who has already published is never told to make their first one')
+    : bad('the card was shown to a device with hides of its own');
+  await creator.close();
+
+  const again = await open({ seen: true });
+  await swipe(again, 5);
+  await card(again) === null
+    ? ok('and a device that has met it once is not asked again tomorrow')
+    : bad('the card came back on a device that had already seen it');
+  await again.close();
+}
+
+console.log('\nTHE PAYWALL COLLISION — DEFERRED, NEVER CANCELLED');
+{
+  /* THE SHEET IS PUT UP BY HAND, not by the offer that normally raises it. openPaywall()
+     refuses to render prices the store never returned, and there is no store in this harness —
+     driving the real offer here would test StoreKit plumbing and call it a card. What the card
+     actually contracts with is the CLASS: kfGateWanted() reads `show` on #paywall and refuses
+     while it is set. Setting it directly is that contract, and nothing else. */
+  const page = await open();
+  await page.evaluate(() => document.getElementById('paywall').classList.add('show'));
+  await swipe(page, 3);
+  const covered = await page.evaluate(() => document.getElementById('paywall').classList.contains('show'));
+  covered ? ok('the first offer is up on slide 4, as it is for most of this arm')
+          : bad('the sheet came down on its own — this case is not being tested');
+  await card(page) === null
+    ? ok('and no card mounts under it — an impression nobody saw is a denominator that lies')
+    : bad('the card mounted underneath the paywall');
+
+  await page.evaluate(() => document.getElementById('paywall').classList.remove('show'));
+  await page.waitForTimeout(300);
+  await swipe(page);
+  const t = await card(page);
+  t && /Make one/.test(t)
+    ? ok('and the next slide asks again — a refusal defers the card, it does not cancel it')
+    : bad(`the card was lost for the session after the paywall: ${JSON.stringify(t)}`);
+  const shown = await evs(page, 'feed_gate_shown');
+  shown.length === 1 && shown[0][1].n === 5
+    ? ok('counted once, on the slide it actually landed on')
+    : bad(`feed_gate_shown: ${JSON.stringify(shown.map(e => e[1]))}`);
+  await page.close();
+}
+
+console.log('\nAND EVERY EVENT CARRIES THE ARM');
+{
+  const page = await open();
+  await swipe(page, 3);
+  const armed = await page.evaluate(() => {
+    const t = window.__sent || [];
+    return { total: t.length, armed: t.filter(e => e[1] && e[1].gate_arm === 'on').length };
+  });
+  armed.total > 0 && armed.total === armed.armed
+    ? ok('gate_arm rides every event this page sends — feed_slide and hide_published included')
+    : bad(`${armed.total - armed.armed} of ${armed.total} events carried no arm`);
+
+  /* AND THE OTHER ARM SAYS SO, rather than saying nothing. A missing property and "off" are
+     the same shape in a segment builder — the first silently drops the holdout out of every
+     comparison it is the point of. */
+  const off = await open({ arm: 'off' });
+  await swipe(off, 1);
+  const ctrl = await off.evaluate(() => {
+    const t = window.__sent || [];
+    return { total: t.length, armed: t.filter(e => e[1] && e[1].gate_arm === 'off').length };
+  });
+  ctrl.total > 0 && ctrl.total === ctrl.armed
+    ? ok('and the control arm is stamped "off", not left blank')
+    : bad(`${ctrl.total - ctrl.armed} of ${ctrl.total} control events carried no arm`);
+  await off.close();
+  await page.close();
+}
+
+await browser.close();
+server.close();
+if (failed) { console.error(`\n✗ ${failed} feed-gate check(s) failed`); process.exit(1); }
+console.log('\n✓ the feed asks once, of the right person, and counts it once');

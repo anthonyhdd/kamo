@@ -3119,6 +3119,44 @@ let planArm;
   }
 }
 
+/* ===== THE FEED'S FIRST ASK — and why it is half the devices and not all of them =====
+ *
+ * The feed asks nothing of somebody who has never made a hide: they scroll, they leave, and
+ * 10.3% of them publish anyway (feed_opened → hide_published, median 94 seconds). The card
+ * this arm switches on says the quiet part on slide 4; see kfGate() for what it is, and for
+ * why it is a card that a thumb passes rather than a wall that stops one.
+ *
+ * THE HOLDOUT IS THE POINT. Traffic doubled every day this week — 2749 actives on the 13th,
+ * 6196 on the 14th, 11587 on the 16th — so a before/after on publishes, on depth, or on
+ * anything else this touches would be measuring the ad spend and calling it a card. Two arms
+ * on the same day is the only comparison that survives that, and it is still the only one
+ * that survives the day the spend stops.
+ *
+ * Written in the shape the note above argues for, not the one it condemns: the read may fail,
+ * the decision may not. A device whose storage throws still gets a real arm for this launch
+ * rather than silently sitting out the experiment on the initialiser — which is exactly what
+ * pwArm and planArm were doing to 40% of the fleet until it was caught.
+ *
+ * The assignment is never its own event: a track() during module evaluation would be a TDZ
+ * crash on WEB_ONLY. The property track() stamps on everything IS the assignment record.
+ * Kill it by setting the rollout to 0 — a stored "on" keeps its arm, which is what a rollback
+ * should do here: the card is one-per-device and already spent, so nobody meets it twice on
+ * the way out. */
+const FEED_GATE_ROLLOUT=50;
+let gateArm;
+{
+  const s=lsGet("kamo_feed_gate_arm");
+  if(s==="on"||s==="off") gateArm=s;
+  /* Pinned for the harness, and this one earns it twice over: a coin flipped at load would
+     make the card appear in half the runs of every OTHER feed test in scripts/. Off is the
+     state those tests assume; test-feedgate-dom.mjs seeds the arm it wants. */
+  else if(navigator.webdriver) gateArm="off";
+  else {
+    gateArm=(Math.random()*100<FEED_GATE_ROLLOUT)?"on":"off";
+    lsSet("kamo_feed_gate_arm",gateArm);
+  }
+}
+
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
    on every single use, forever. Users run ~8 hides a day, so by the third round these are not
@@ -7548,6 +7586,20 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    feed_slide, which is the only way the rate is readable: skips over slides, one denominator,
    one user. Through the bridge it would land on the native user and be unjoinable. */
 "feed_skipped","run_broken",
+/* THE CARD ON SLIDE 4, ALL THREE OF THEM, because every question they answer is a ratio and a
+   ratio needs one denominator on one Amplitude user. `feed_gate_shown` is the impression,
+   `feed_gate_tapped` the conversion, `feed_gate_passed` the thumb that went straight by —
+   shown = tapped + passed, and the gap between them is the session that ended with the card
+   still up. All three are new names, so no shipped binary's WEB_EVENTS knows any of them and
+   the bridge would drop the lot in silence; and they have to land on the same user as
+   `feed_slide` and `hide_published`, which are here, or the only comparison worth making —
+   did the people who met the card publish more than the ones who did not — spans two users
+   and reads as nothing. All three are emitted from kfGate()/kfNoteGate(): a name in this set
+   that nothing emits is the trap the note further down describes.
+   NOTE FOR THE NEXT EDITOR: backticks in this prose, never double quotes — check.mjs reads
+   these names by regex over the whole literal and a name quoted in a comment is parsed as an
+   ENTRY. */
+"feed_gate_shown","feed_gate_tapped","feed_gate_passed",
 "feed_load_failed","hide_visibility_set",
 /* THE ONE THAT SAYS HOW LONG IT TOOK, and it has to travel with the rest of the family.
    `feed_first_paint` carries the milliseconds from the tap to the first photograph being
@@ -7835,7 +7887,11 @@ function track(event,props){
   /* `plan_arm` rides along for the same reason design_arm does: the assignment is never its
      own event (a track() during module evaluation would be a TDZ crash on WEB_ONLY), so the
      property on the events IS the assignment record. */
-  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,emit:"web"};
+  /* `gate_arm` rides along for the same reason, and it has to be HERE rather than on the three
+     feed_gate_* events: the question the arm exists to answer is asked of hide_published, of
+     feed_slide's depth and of the seeker's own events, none of which know the card exists. One
+     property on everything is what makes those segmentable without a build. */
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -14371,7 +14427,18 @@ const KF_CSS=
   +".kfBell{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(30px + var(--safe-b));z-index:26;display:inline-flex;align-items:center;gap:8px;max-width:88vw;height:44px;padding:0 18px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(4,6,10,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;}"
   +".kfBell svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}"
   +".kfBell.on{border-color:rgba(95,230,164,.55);color:var(--mint);}"
-  +".kfBell[disabled]{opacity:.6;}";
+  +".kfBell[disabled]{opacity:.6;}"
+  /* THE CARD SITS WHERE THE BELL SITS, and the two can never share a slide: the bell is
+     mounted on a replay — your own hide — and this card is only ever shown to somebody whose
+     hide list is empty, so they have no replay to mount it on. Same corner, same z-index, no
+     collision by construction rather than by rule.
+     ABOVE THE PHOTO, NOT OVER IT. The round underneath is still live and still tappable
+     everywhere the card is not: a seeker who wants to play this one keeps playing it, which is
+     the whole difference between this and a wall. */
+  +".kfGate{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(30px + var(--safe-b));z-index:26;width:min(88vw,360px);padding:16px 16px 14px;border:1px solid rgba(255,255,255,.2);border-radius:20px;background:rgba(4,6,10,.72);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:#fff;display:flex;flex-direction:column;gap:6px;text-align:center;}"
+  +".kfGate b{font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.3px;}"
+  +".kfGate span{font-size:13px;line-height:1.35;color:rgba(255,255,255,.72);}"
+  +".kfGate button{margin-top:8px;height:44px;border:0;border-radius:999px;background:var(--mint);color:#04120c;font-family:var(--display);font-size:15px;font-weight:800;letter-spacing:-.2px;}";
 
 let kfState=null;
 /* opts.first = a hide id to put in front of the public page, used by the post-send offer
@@ -14509,6 +14576,10 @@ function chFeed(opts){
        most common way a session ends — would never be recorded. Before the teardown, while
        S.answered still describes the round that is about to be destroyed. */
     try{ kfNoteSkip(); }catch(_){}
+    /* Same argument for the card: a session that ends with it still on screen is a pass, and
+       the CTA's own exit runs through here too — S.gateTapped is already set by then, so the
+       tap is not double-counted as a thumb going by. */
+    try{ kfNoteGate(); }catch(_){}
     kfState=null;
     try{ if(S.round) S.round.destroy(); }catch(_){}
     try{ io.disconnect(); }catch(_){}
@@ -14603,10 +14674,81 @@ function chFeed(opts){
     if(!bellSeen){ bellSeen=true; track("notif_bell_shown",{}); }
   }
 
+  /* ── THE FIRST ASK, ON SOMEBODY WHO HAS NEVER MADE ONE ──────────────────────────────────
+     A CARD AND NOT A WALL, and the distribution is the whole argument. 69% of feed openings
+     die on the first slide (8754 → 2754 across 16-17/08) and what is left is flat: 1014
+     sessions reach slide 5, 815 reach 8, 198 are still going at 30. So a gate anywhere in this
+     screen meets almost nobody EXCEPT the deep scrollers — and those are the audience. A hide
+     that reaches the feed takes 3.82 attempts; one that only ever had a link takes 0.50, and
+     71.9% of those are never played by anyone at all. Blocking the people who scroll is taking
+     the plays away from the creators this card exists to produce. It rides slide 4 and a thumb
+     goes straight past it.
+     SLIDE 4 BECAUSE THAT IS WHERE THE CONVERSION ALREADY IS: feed_opened → hide_published
+     converts at 10.3% with a median of 94 seconds, which is three or four slides. The ask
+     lands among the people who were going to publish anyway rather than after they have gone.
+     ONE PER DEVICE. Somebody who scrolled past it has answered the question, and asking again
+     tomorrow is how a prompt becomes furniture. The flag is written at MOUNT, not at the tap,
+     so once is once whatever they do with it. */
+  const KF_GATE_KEY="kamo_feed_gate_seen";
+  function kfGateWanted(){
+    if(gateArm!=="on"||S.gate) return false;
+    if(lsGet(KF_GATE_KEY)==="1") return false;
+    /* THE ELIGIBILITY IS "HAS NEVER PUBLISHED", and chMine() is the only local record of that —
+       CH_MINE_KEY is written by chRemember() on every publish. A storage that throws takes the
+       card away rather than showing it: the failure mode of a wrong `true` here is telling
+       somebody with forty hides to go and make their first one. */
+    try{ if(chMine().length) return false; }catch(_){ return false; }
+    /* NOT UNDERNEATH THE PAYWALL. The first offer fires on slide 3 and this is slide 4; with
+       the sheet still up the card would mount invisibly, file feed_gate_shown, and put an
+       impression nobody saw into the denominator of the only ratio it has. Deferred, never
+       cancelled — the check runs again on the next slide. */
+    try{ if(paywallEl.classList.contains("show")) return false; }catch(_){}
+    return true;
+  }
+  function kfGate(s){
+    if(!s||s.replay||!kfGateWanted()) return;
+    const w=document.createElement("div");
+    w.className="kfGate";
+    w.innerHTML="<b></b><span></span><button type=\"button\"></button>";
+    /* THE PROMISE IS THAT SOMEBODY PLAYS IT, and that is the one thing the numbers actually
+       support: a hide that reaches this feed is played 3.82 times, one that only ever had a
+       link is played 0.50 and 71.9% of those are never opened by anyone at all. So the line
+       does not describe the camera — it says where the photo lands and who comes looking.
+       `kamo` rather than "figure" because they have just read "Someone hid a kamo here" on
+       every slide they scrolled to get here; this is the same word, turned around. */
+    w.querySelector("b").textContent="Your turn.";
+    w.querySelector("span").textContent="Hide a kamo in your own room — the people scrolling this feed are the ones who come looking for it.";
+    const b=w.querySelector("button");
+    b.textContent="Make one";
+    /* stopPropagation because the photo under this card is a live round: without it the tap
+       that leaves the feed also lands on the scene as a guess, and the round it belongs to
+       records a miss on the way out. */
+    b.onclick=(e)=>{ e.stopPropagation(); haptic(10); S.gateTapped=true;
+                     track("feed_gate_tapped",{n:S.played}); close(); };
+    s.el.appendChild(w);
+    S.gate=w;
+    lsSet(KF_GATE_KEY,"1");
+    track("feed_gate_shown",{n:S.played});
+  }
+  /* The other half of the pair, and it fires from the same two places as kfNoteSkip for the
+     same reason: the slide is about to be replaced, or the session is about to end on it. A
+     card left uncounted at the end of a session is the most common way one ends. */
+  function kfNoteGate(){
+    try{
+      const el=S.gate; if(!el) return;
+      S.gate=null;
+      if(!S.gateTapped) track("feed_gate_passed",{n:S.played});
+      try{ el.remove(); }catch(_){}
+    }catch(_){}
+  }
+
   function activate(i){
     if(i<0||i>=S.slides.length||i===S.active) return;
     /* BEFORE the previous round is torn down, while S.answered still describes it. */
     kfNoteSkip();
+    /* And before the card's own slide goes under the thumb: it is mounted ON that slide, so
+       leaving it to the teardown would drop the element without ever filing what happened. */
+    kfNoteGate();
     if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
     S.active=i;
     const s=S.slides[i];
@@ -14641,6 +14783,17 @@ function chFeed(opts){
        reaches no ending and no locked control. Three slides in, because one is a glance and
        the offer should not be the second thing that happens on this screen. */
     if(S.played===3) setTimeout(()=>pwFirstOffer("feed"),800);
+    /* ④ THE FIRST ASK — FROM slide 4, not ON it. The offer above is deferred by 800ms and lands
+       full-screen, so it is routinely still up when slide 4 comes round: kfGateWanted() refuses
+       to mount underneath it (an impression nobody saw is a denominator that lies), and a
+       one-shot at exactly 4 would turn that refusal into a card the session never gets. Retried
+       on each slide after it instead, until one of them is not covered.
+       900ms is behind the offer's own 800ms timer, so a fast thumb reaching slide 4 before it
+       fires finds the sheet either up — refused, asked again next slide — or not coming. The
+       re-check at fire time is not decoration: 900ms is several slides to somebody scrolling.
+       ONCE IS NOT ENFORCED HERE. The arm, the mounted card and the device flag written at mount
+       time are all read by kfGateWanted(); this line only decides when to ask it. */
+    if(S.played>=4 && gateArm==="on" && !S.gate) setTimeout(()=>{ if(kfState===S&&S.active===i) kfGate(s); },900);
     /* Mounted per slide, on the slide, so it rides the scroll with the photo it is about —
        and re-shown when the creator comes back to a round they had already ended. */
     kfBell(s);
