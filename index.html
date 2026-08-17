@@ -6476,14 +6476,18 @@ function recordHide(sec,cov){
 const HANDLE_KEY="kamo_handle";
 /* WHOSE NAME IT IS — the question getHandle() cannot answer, and the one that matters.
    EVERY publisher has a handle, because the publish path assigns one (see mintHandle), so
-   "does this device have a name" is true for everybody and useless as a test. It is also the
-   test the sign nudge shipped with on 2026-08-16, which is why that nudge has never once
-   appeared: it asked !getHandle() of a population that is 100% named.
-   What separates a person from a bot on the board is whether they ever CHOSE it. Written only
-   by the paths where somebody typed — never by ensureHandle(), whose whole contract is that
-   it invents one nobody asked for. */
+   "does this device have a name" is true for everybody and useless as a test. What separates
+   a person from a board of @Ochre-somethings is whether they ever CHOSE it. Written only by
+   the paths where somebody typed — never by ensureHandle(), whose whole contract is that it
+   invents one nobody asked for.
+   WRITE-ONLY ON PURPOSE, AND NOTHING MAY GATE UI ON IT YET. It began life on 2026-08-16 as
+   the sign nudge's condition and cost that feature its life the next day: the flag only
+   exists from the day it shipped, so every creator who typed their name BEFORE it — the
+   founder among them, on a grid signed @tony — reads as "never chose" for ever and got told
+   to make the name theirs under a name they had picked. `false` here means UNKNOWN, not
+   "assigned". The write stays because from 2026-08-16 forward it is true of new namings and
+   costs nothing; anything that reads it has to survive being wrong about everyone older. */
 const HANDLE_CHOSE_KEY="kamo_handle_chosen";
-function handleChosen(){ try{ return localStorage.getItem(HANDLE_CHOSE_KEY)==="1"; }catch(e){ return false; } }
 function cleanHandle(v){
   return String(v||"").trim().replace(/^@+/,"").replace(/[^A-Za-z0-9_.]/g,"").slice(0,16);
 }
@@ -7687,11 +7691,12 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
 "replies_grid_shown","reply_opened",
 /* The night of 2026-08-16, one name per question. `sent_public_offer_*` — does the post-send
    go-public offer convert three-quarters of published-private hides into feed supply.
-   `sign_nudge_*` — does telling a played-but-anonymous creator so make them sign.
    `reaction_pending` — the wordmark dot's third reason, counted apart from the other two.
-   `feed_best_seeded` — the banger slot actually found something to seed. */
+   `feed_best_seeded` — the banger slot actually found something to seed.
+   (`sign_nudge_*` was here for one day. Its control came off the My-kamos grid on
+   2026-08-17 and the names went with it — a name in this list that nothing emits is a trap,
+   which is the whole point of the assertion in check.mjs.) */
 "sent_public_offer_shown","sent_public_accepted",
-"sign_nudge_shown","sign_nudge_tapped",
 "reaction_pending","feed_best_seeded",
 /* `reply_photo_failed` is the one that matters on 2026-08-16: it is the black-hide factory,
    and until today it failed silently into a #223 board that got published. `feed_black_dropped`
@@ -15353,38 +15358,15 @@ function chFeed(opts){
       + (waiting?'<span class="kmStat send"><b>'+waiting+'</b> to send</span>':'');
     mineEl.innerHTML='<div class="kmStats">'+chips+'</div><div class="kmGrid">'+rows.map(kmCellHtml).join("")+'</div>';
     track("mine_grid_shown",{hides:rows.length,tried:t.tried,found:t.found,unsent:waiting});
-    /* ══ THE SIGNATURE NUDGE ═══════════════════════════════════════════════════════════════
-       109 of 115 feed photos say "Someone", and the reason is not a decision — it is that
-       nothing ever tells an anonymous creator their photos are BEING PLAYED unsigned. This
-       is the one screen where that fact and the person it concerns are in the same place:
-       real plays, their own grid, no handle. One line, one tap, and it opens the card whose
-       headline IS the name field. Shown only when there is something behind it (plays > 0)
-       and nothing on it (no handle) — a nudge with no evidence is an ad. */
-    /* !handleChosen(), NOT !getHandle() — and that correction is the whole feature. Shipped on
-       2026-08-16 asking "do they have a name" of a population where the publish path assigns
-       one to everybody, so it evaluated false for every single person it was written for and
-       has never rendered once. The real question is whether they ever CHOSE it.
-       AND IT NAMES THE PSEUDONYM, because that is the argument. "Sign your kamos" is abstract;
-       "@MossyOwl" over their own grid is the moment somebody realises the name strangers see
-       is not theirs — which is exactly what a board of Ochre-somethings makes obvious
-       (founder's report, 2026-08-16). textContent, and it is this device's own handle. */
-    try{
-      if((t.tried|0)>0 && !handleChosen()){
-        const st=mineEl.querySelector(".kmStats");
-        const mine0=getHandle();
-        if(st){
-          const nb=document.createElement("button");
-          nb.className="kmStat send"; nb.style.width="100%"; nb.style.justifyContent="center";
-          nb.textContent = mine0
-            ? ("✍️ "+t.tried+" "+((t.tried|0)===1?"play":"plays")+" as @"+mine0+" — make it your name")
-            : ("✍️ "+t.tried+" "+((t.tried|0)===1?"play":"plays")+" and nobody knows it's you — sign your kamos");
-          nb.onclick=(ev)=>{ ev.stopPropagation(); haptic(10);
-            track("sign_nudge_tapped",{tried:t.tried|0,assigned:!!mine0}); openKamoHome(); };
-          st.appendChild(nb);
-          track("sign_nudge_shown",{tried:t.tried|0,assigned:!!mine0});
-        }
-      }
-    }catch(e){}
+    /* NO SIGNATURE NUDGE HERE ANY MORE (removed 2026-08-17, one day after it shipped).
+       The line asked a creator with real plays to make the assigned pseudonym their own, and
+       it was gated on `!handleChosen()` — a flag only the naming card ever writes. Every
+       device that picked its name before that flag existed, or by any path that does not set
+       it, reads as "never chose" for ever, so the nudge accused people of being anonymous
+       under a handle they had typed themselves (founder's own grid, signed @tony, 2026-08-17).
+       A nudge that fires on a state it cannot measure is not a nudge, it is a bug with copy.
+       If the argument comes back it belongs where the name is edited, not stapled to the
+       stats row — and it needs a signal that is true of the person, not of a flag. */
     /* ══ REACTIONS, FINALLY REACHING THEIR CREATOR ════════════════════════════════════════
        458 reactions a day and until tonight not one of them was ever shown to the person
        whose photo earned it. Patched onto the cells AFTER the grid paints, off the critical
