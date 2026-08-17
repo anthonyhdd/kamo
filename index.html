@@ -5190,6 +5190,17 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
 const PRODUCT_ID="com.blisscoach.kamo.pro";
 // default to the plan we can actually sell today (the weekly sub isn't approved yet)
 const WEEKLY_ID="com.blisscoach.kamo.weekly", LIFETIME_ID="com.blisscoach.kamo.pro"; let pwPlan="weekly"; /* must stay in sync with the .active plan in the markup */ let pwBuyIntent=false;
+/* WHAT THE BUY TAP KNEW, HELD UNTIL THE OUTCOME COMES BACK. The outcome events — trial_started,
+   purchase_completed — are fired by the WRAPPER off RevenueCat, and the wrapper knows the
+   product and nothing else: App.js's track() at the `active` branch carries product_id and plan,
+   full stop. `source` has been sent over the purchase bridge since 2026-08-16 and nothing on the
+   other side reads it yet, so all 7 trials on 2026-08-16 arrived with an empty door and "which
+   of the eleven paywalls sells" stayed unanswerable — while `first` alone took 43% of 3,501
+   views that day.
+   Reading it at unlock time from pwLastSource would usually work and would be wrong on the day
+   it did not: StoreKit is modal, but nothing in this file guarantees no paywall opens between
+   the tap and the callback. Capturing at the tap makes the attribution exact by construction. */
+let pwBuyCtx=null;
 /* PREVIEW AS A FREE USER. Native re-injects setPro() from RevenueCat on every launch and on
    every entitlement sync, so setting kamo_pro=0 by hand is overwritten within a second — there
    was no way to look at the paywall once you owned the app. That also bites for a real reason,
@@ -6219,7 +6230,7 @@ function pwPurchase(planOverride){
      a loading state on the weekly button because someone tapped the lifetime line underneath
      it points the feedback at the wrong control — the haptic already confirms the tap, and
      StoreKit is the next thing on screen either way. */
-  haptic(16); pwBuyIntent=true;
+  haptic(16); pwBuyIntent=true; pwBuyCtx={source:pwLastSource,plan:plan,product_id:prod,nth:pwOpens,trial:trialOn()};
   if(window.ReactNativeWebView){ if(!planOverride) setPwBuyLoading(true);
     /* DID THE TAP EVEN LEAVE THIS PAGE. Over 2026-08-10..14, 209 Buy taps produced 114 native
        outcomes — cancelled, trial, completed, failed, restored — and 95 produced NOTHING. The
@@ -6343,7 +6354,25 @@ window.KAMO.setPro=(v)=>{
   refreshProUI(); setPwBuyLoading(false); if(isPro) closePaywall();
   /* Celebrate ONLY a fresh purchase — not a restore, not the cold-start pro-sync (both call
      setPro(true) too). pwBuyIntent is set only when the user taps Buy, so this fires once. */
-  if(isPro && pwBuyIntent){ pwBuyIntent=false; try{ showKamoPlus(); }catch(e){} } };
+  /* AND REPORT WHICH DOOR SOLD IT, WITHOUT WAITING FOR A REVIEW. This is the same instant the
+     celebration fires, which is the point: `pwBuyIntent` is already the guard that separates a
+     fresh purchase from a restore and from the cold-start pro-sync, so the condition that says
+     "somebody just bought" is the condition that says "attribute it". No new gate, no new state
+     machine — one event on a branch that already exists and already runs exactly once.
+     WHY IT DOES NOT DIVIDE AGAINST paywall_viewed. That one travels the bridge and lands on the
+     NATIVE Amplitude user; this one is WEB_ONLY and lands on the web one. The ratio to read is
+     `purchase_bridged` → `paywall_unlocked`, both direct, both carrying `source`, both the same
+     device id: that is the checkout rate by door. The offer rate by door — paywall_viewed →
+     purchase_initiated — is already answerable on the native side, where both names now travel
+     under themselves (`purchase_initiated` is allow-listed and 99% of the fleet is on 1.1.x as
+     of 2026-08-16). Two halves, each internally consistent, neither one crossing users. Compose
+     them; never divide across the seam.
+     It does NOT replace the native attribution, which is still the right long-term home — the
+     wrapper should stamp `msg.source` onto trial_started. It buys the answer today instead of
+     after the next App Store review, for every installed build including 1.0.2. */
+  if(isPro && pwBuyIntent){ pwBuyIntent=false;
+    track("paywall_unlocked",Object.assign({source:pwLastSource},pwBuyCtx||{})); pwBuyCtx=null;
+    try{ showKamoPlus(); }catch(e){} } };
 /* Post-purchase moment: no avatar (it's a photo toy) — a burst, a plan-aware line, and a push
    straight back into the toy to USE a Pro brush while the dopamine is high. */
 function kpConfetti(){ const host=$("#kpBurst"); if(!host) return; host.innerHTML=""; const cols=["#5fe6a4","#ffffff","#9affce","#5fe6a4","#c9fff0"];
@@ -7723,6 +7752,21 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    they do not divide — read it on its own terms: how many Buy taps report sent=false, and on
    which build. The count that matters is a count, not a ratio. */
 "purchase_bridged",
+/* THE OUTCOME, CARRYING THE DOOR — and it is here because the native one cannot carry it yet.
+   `trial_started` and `purchase_completed` are fired by the wrapper off RevenueCat, which knows
+   the product and nothing about why the sheet was open. The web has sent `source` over the
+   purchase bridge since 2026-08-16 and no shipped build reads it, so every trial on a phone
+   already installed reports an empty door — 7 of 7 on 2026-08-16. Waiting for that to change
+   means waiting a review cycle to learn which of the eleven paywall sources is worth keeping,
+   while `first` alone takes 43% of 3,501 daily views.
+   It lands on the SAME Amplitude user as `purchase_bridged`, deliberately and necessarily:
+   bridged is the tap, unlocked is the outcome, both carry `source`, and checkout-rate-by-door
+   is that division and only that division. Against `paywall_viewed` it would be a ratio across
+   two different users — the mistake this whole block exists to avoid.
+   ⚠️ It is NOT a duplicate of the native outcome. Two records exist for one purchase on any
+   build that reports both, under different names on different users. Count them separately;
+   never sum them, and never read this one as revenue — RevenueCat is the only revenue truth. */
+"paywall_unlocked",
 /* THE OFFER AFTER THE SEND, and it has to travel on this path rather than the wrapper's for
    a reason that is not about shipped binaries: it can only ever fire in a browser. The
    button that emits it is hidden inside the app by construction — offering the app to
@@ -12320,7 +12364,18 @@ function chSeek(hideId,opts){
   /* WHICH SURFACE THE ROUND WAS PLAYED ON. chWebTrack stamps `surface` off CH_SEEK, which is
      empty for every feed round — so without this the feed's funnel would land in the same
      bucket as the compose screen and "do feed players convert" would have no way to be asked. */
-  const TP=(o)=>FEED?Object.assign({src:"feed"},o||{}):(o||{});
+  /* AND THE LINK NAMES ITSELF NOW. `src` used to be stamped only on the feed's rounds, so a
+     round played from a received challenge carried nothing and had to be read by SUBTRACTION —
+     seek_opened total minus seek_opened src=feed. That worked while those were the only two
+     ways in, and it stopped being merely awkward on 2026-08-15, when `challenge_preview_opened`
+     was deleted with the sheet that fired it (commit 00db2d2) and took the only direct count of
+     "the recipient opened the link" with it. Since then the loop's delivery step has had no
+     event of its own anywhere: it is an arithmetic remainder, and a remainder silently absorbs
+     every third entry point the moment one appears.
+     ⚠️ A DISCONTINUITY, ON PURPOSE. Before this line the link rounds group under `(none)`;
+     after it they group under `link`. Any chart spanning the ship date shows both buckets and
+     must add them. That is the price of the name, and it is worth paying once. */
+  const TP=(o)=>Object.assign({src:FEED?"feed":"link"},o||{});
   /* HOW MANY ROUNDS THIS BROWSER HAS FINISHED — measurement only, nothing branches on it.
      The question it exists to answer: does anybody play a SECOND stranger's hide? The reveal
      currently sells "Send one back" first and "Get KAMO" second, deliberately, and the case
