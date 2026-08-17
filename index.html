@@ -1527,10 +1527,14 @@
     border:1.5px solid rgba(255,255,255,.34);box-shadow:0 2px 6px rgba(0,0,0,.4);
     border-radius:999px;padding:5px 10px;white-space:nowrap;}
   .khRpChip small{display:block;font-size:9px;font-weight:700;letter-spacing:1px;opacity:.55;}
-  /* button.b.icon, placed. Everything else about it — the 1px edge, the blur, the .9 squash
-     on press — comes from the component. */
-  .khRpX{position:absolute;left:14px;top:calc(60px + var(--safe-t));width:40px;height:40px;
-    background:rgba(10,12,16,.62);}
+  /* IT SAYS THE WORD. A bare ✕ in a circle was the only exit from a surface that covers the
+     whole screen, and in its first hour live not one replay_closed arrived while fourteen
+     replay_finished did — people were not leaving through it. The sheet this replaced had
+     both a written "Back" and tap-outside; losing both to a 36px glyph was the regression.
+     button.b with a label, the app's own back chevron, and the swipe is wired underneath. */
+  .khRpX{position:absolute;left:14px;top:calc(58px + var(--safe-t));height:40px;
+    padding:0 15px 0 11px;font-size:13.5px;background:rgba(10,12,16,.62);}
+  .khRpX svg{width:19px;height:19px;}
   /* THE VERDICT ARRIVES LAST, ON PURPOSE. The old card printed "They found you in 12.4s" over
      the replay before it had played a frame, which is the ending given away in the title. */
   .khRpEnd{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
@@ -11519,7 +11523,9 @@ function khShowHeat(h,pts,src){
 }
 function khPlayTrace(h,rec){
   try{
-    document.getElementById("khRp")?.remove();
+    /* Through the previous player's own closer, never a bare .remove() — see w._khClose. */
+    { const prev=document.getElementById("khRp");
+      if(prev){ if(typeof prev._khClose==="function") prev._khClose("superseded"); else prev.remove(); } }
     const w=document.createElement("div"); w.id="khRp"; w.className="khRpFull";
     const found=rec.why==="hit", gave=rec.why==="giveup";
     const secs=((rec.ms||0)/1000).toFixed(1);
@@ -11553,8 +11559,8 @@ function khPlayTrace(h,rec){
       +    '<div class="khRpChip"><small>DOUBTS</small><span id="khRpT">0</span></div>'
       +    '<div class="khRpChip"><small>TIME</small><span id="khRpClock">0.0s</span></div>'
       +  '</div></div>'
-      +'<button class="b icon khRpX" id="khRpX" aria-label="Back">'
-      +  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
+      +'<button class="b khRpX" id="khRpX">'
+      +  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Back</button>'
       +'<div class="khRpEnd" id="khRpEnd"><b>'+head+'</b>'
       +  '<div class="khRpSub"></div><div class="khRpStats" id="khRpStats"></div></div>'
       +'<div class="khRpMini"><img alt="" src="'+IMG+'">'
@@ -11812,14 +11818,42 @@ function khPlayTrace(h,rec){
       const b=document.getElementById("khRpRate");
       b.innerHTML=rate===1?"1&times;":"0.5&times;"; b.classList.toggle("on",rate!==1); };
     document.getElementById("khRpAgain").onclick=()=>{ haptic(8); agains++; play(); };
-    const close=()=>{
-      cancelAnimationFrame(raf); removeEventListener("resize",fit);
+    /* EVERY WAY OUT REPORTS, AND EACH ONE REPORTS ONCE. replay_closed had not fired a single
+       time in the first hour live while replay_finished — same commit, same WEB_ONLY routing,
+       same window — ingested fine. That was not lag: the exit was bound to the ✕ alone, so
+       the one exit that matters most for this screen, LEAVING BEFORE THE END, was the one
+       that went unrecorded. An abandon rate that can only be measured on the users who did
+       not abandon is not a measurement. */
+    let reported=false;
+    const report=(how)=>{
+      if(reported) return; reported=true;
       /* HOW FAR THEY GOT, on the way out. `pct` is the honest denominator for this screen:
          replay_watched counts opens, and an open that leaves at 12% is not a watch. */
       track("replay_closed",{why:rec.why||"",pct:Math.round(Math.min(1,vt/DUR)*100),
-        finished:!!ended,again:agains,scrubs:scrubs,slowed:slowed});
+        finished:!!ended,again:agains,scrubs:scrubs,slowed:slowed,how:how||"back"});
+    };
+    const onHide=()=>{ if(document.visibilityState==="hidden") report("background"); };
+    document.addEventListener("visibilitychange",onHide);
+    const close=(how)=>{
+      cancelAnimationFrame(raf);
+      removeEventListener("resize",fit);
+      document.removeEventListener("visibilitychange",onHide);
+      report(typeof how==="string"?how:"back");
       w.remove(); };
-    document.getElementById("khRpX").onclick=close;
+    /* Handed to the next replay, which used to drop this one with a bare .remove(): the rAF
+       loop kept running against detached nodes until it threw, and the session left no trace
+       at all. */
+    w._khClose=close;
+    document.getElementById("khRpX").onclick=()=>close("back");
+    /* SWIPE DOWN, because a full-screen surface has to answer the gesture every sheet in this
+       app already answers. Ignored on the controls: the scrub bar owns vertical drags that
+       start on it, and a scrub that dismissed the player would be unusable. */
+    let dy0=null;
+    w.addEventListener("pointerdown",(ev)=>{
+      dy0=ev.target.closest(".khRpBottom")?null:ev.clientY; },{passive:true});
+    w.addEventListener("pointerup",(ev)=>{
+      if(dy0!=null&&ev.clientY-dy0>90) close("swipe");
+      dy0=null; },{passive:true});
     track("replay_watched",{why:rec.why||"",ms:rec.ms|0});
   }catch(e){}
 }
