@@ -8872,13 +8872,23 @@ $("#ssInvite").onclick=async()=>{
        @tony back" and feel the haptic land, short enough that the feed arrives as the next
        thing rather than as an event. Guarded on kfState so a user who already reopened the
        feed themselves is not handed a second one, and fromReveal so the feed's ✕ tears the
-       finished round down (canvases included) instead of uncovering a spent reveal. */
+       finished round down (canvases included) instead of uncovering a spent reveal.
+       AND IT OPENS ON THE HIDE THAT WAS JUST SENT, which is the whole difference between a
+       return and a redirect. Without `first` this called the plain public feed — so the last
+       frame of "I painted this and sent it back" was a stranger's photograph, or, on a device
+       that has already played what the room holds, "Nothing here yet." over a spent round.
+       Founder's report, 2026-08-17: "ça devrait renvoyer vers le feed sur le dessin que j'ai
+       send back". `id` is the row this send just published (resolved above, chAwaitId already
+       spent), and chFeed fetches it BY ID with get_hide — which has no visibility filter, so a
+       private reply seeds exactly as well as a public one, same as "See it live" and the
+       My-kamos grid. No id (a bare paint that was never going to publish) degrades to today's
+       plain open rather than to an error. */
     if(chReplyFromFeed){
       chReplyFromFeed=false;
       setTimeout(()=>{ try{
         if(kfState) return;
         closeShareSheet();
-        chFeed({fromReveal:true,src:"reply_done"});
+        chFeed({first:id||"",fromReveal:true,src:"reply_done"});
       }catch(e){} },1600);
     }
     return;
@@ -14347,8 +14357,11 @@ function chFeed(opts){
   S.t0=kfNow();
   /* `src` names the door when a door is worth naming — today only "reply_done", the automatic
      return after a challenge-back send. Absent on every path that existed before it, so every
-     dashboard reading feed_opened bare keeps meaning what it always meant. */
-  track("feed_opened",(opts&&opts.src)?{src:opts.src}:{});
+     dashboard reading feed_opened bare keeps meaning what it always meant.
+     `seeded` rides with it, and only with it: it says whether that door had a hide to open ON,
+     which is the one thing that separates "the feed came back on my drawing" from "the feed
+     came back on strangers". Carried on the same condition so the bare shape stays bare. */
+  track("feed_opened",(opts&&opts.src)?{src:opts.src,seeded:!!FIRST}:{});
 
   const midCard=(title,body,cta,onCta)=>{
     mid.style.display="flex";
@@ -14688,8 +14701,35 @@ function chFeed(opts){
     return s;
   }
 
-  async function load(){
-    if(S.loading||S.done) return;
+  /* A CONCURRENT CALLER JOINS THE LOAD THAT IS ALREADY RUNNING. IT MUST NOT BE TOLD "DONE".
+     `load()` was async with `if(S.loading) return` at the top, so a second caller got a promise
+     that had already resolved — before a single row had landed. Every caller that pages off it
+     (`load().then(paint)`) then painted an empty room, and paint()'s empty room is the cold
+     start: "Nothing here yet." Milliseconds later the page in flight appended its slides, the
+     IntersectionObserver activated slide 0, the round mounted and started its clock — and
+     nothing ever took the card down, because midOff() only runs inside a paint() and no second
+     paint was coming. That is the screenshot from 2026-08-17: the invitation to make the very
+     first hide, printed over somebody else's photograph with the timer running underneath it.
+     activate() extends the feed three slides from the end (`if(i>=S.slides.length-3) load()`),
+     so a prefetch is in flight most of the time this screen is being used, and dry() —
+     everything left after the black-rectangle filter takes a page away — pages through exactly
+     this call. The two meet whenever the tail of the room is thin, which is most of the time.
+     So the in-flight promise is handed out instead of a resolved one, and the joiner waits for
+     the same rows. `S.done` still short-circuits: that one is genuinely an answer. */
+  function load(){
+    if(S.done) return Promise.resolve();
+    if(S.loading) return S.inflight||Promise.resolve();
+    /* Cleared through the promise itself rather than inside loadPage, so `inflight` and the
+       promise it names cannot disagree — and the identity test means a load that outlives its
+       own turn never clears a NEWER one. Both arms, because a joiner waiting on a rejected
+       page must still be released; loadPage already catches everything it can throw (the Retry
+       card is its own failure path), so this arm is insurance rather than a handler. */
+    const done=()=>{ if(S.inflight===p) S.inflight=null; };
+    const p=loadPage().then(done,done);
+    S.inflight=p;
+    return p;
+  }
+  async function loadPage(){
     S.loading=true;
     try{
       /* TWO CALLS, AND WHICH ONE IS SENT IS THE SAFETY PROPERTY.
