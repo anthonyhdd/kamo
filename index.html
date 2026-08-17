@@ -1908,6 +1908,33 @@
      headline and its grey line read as one block with 14px under the pair rather than 14px
      between them. */
   .ssCard .pwTitle{font-size:22px;text-align:center;}
+  /* THE HEADLINE LIGHTS UP ONCE, IN THE APP'S OWN GREEN. "Your kamo is live!" is the only
+     moment in the product where something the user made has just gone out into the world, and
+     it was announced in the same flat white as every other line on the sheet. A single mint
+     sweep across the words is the cheapest way to make the sentence land as news.
+     ON THE TITLE, NOT ON A BUTTON, and that is deliberate: the sheet already spends its one
+     animation on .ssPlus.asking, and a second moving control would turn a receipt into a
+     carnival. Nothing here is tappable, so nothing competes with the send.
+     ONE PASS, THEN GONE — the class is removed by ssShimmerTitle() a beat after it ends.
+     `background-clip:text` with `-webkit-text-fill-color:transparent` is the whole effect, and
+     the failure mode if it is ever unsupported is an INVISIBLE headline, so the class is only
+     applied where CSS.supports() confirms it and never left on afterwards. */
+  /* ⚠️ THE POSITION NEVER LEAVES 0-100%, AND THAT IS NOT A STYLE CHOICE. With an image wider
+     than its box, a percentage position interpolates over (box - image) — so 125% puts the
+     gradient two box-widths to the left and leaves the right half of the headline painted with
+     NOTHING. Clipped to text with a transparent fill, "nothing" means the letters disappear:
+     the first cut of this swept 125% → -45% and ate the sentence mid-animation (caught on a
+     screenshot, not in a test — no assertion can see this). Inside 0-100% the image always
+     covers the box, so every frame has all of the words. */
+  .ssCard .pwTitle.ssLit{
+    background-image:linear-gradient(100deg,#fff 0 38%,var(--mint) 50%,#fff 62% 100%);
+    background-size:260% 100%;background-repeat:no-repeat;background-color:transparent;
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    animation:ssLit 1.15s cubic-bezier(.35,0,.2,1) 1 both;}
+  @keyframes ssLit{from{background-position:100% 0}to{background-position:0% 0}}
+  /* Same rule as every other motion in this file: the news is the sentence, not the sweep. */
+  @media (prefers-reduced-motion:reduce){
+    .ssCard .pwTitle.ssLit{animation:none;background-image:none;-webkit-text-fill-color:currentColor;}}
   /* SMALL, GREY, AND NOT A SECOND HEADLINE. It exists to give the notification prompt a
      reason before iOS asks (see #ssSub in the markup) — which it can only do if it is read,
      and a line this size is read once and believed. Any louder and it argues with the
@@ -8121,8 +8148,33 @@ function openShareSheet(via){
      changes the long state's height — the upsell row, the kicker, the preview card, the CTA —
      and setSheetSize() plays the current height into the target one by measuring both. */
   setSheetSize("open"); haptic(10);
+  /* After setSheetSize, so the sweep runs on a card that has stopped moving. */
+  ssShimmerTitle();
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
-function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","ssMini","ssEditName"); ssState="hidden"; }
+/* THE HEADLINE'S ONE SWEEP — see .ssCard .pwTitle.ssLit.
+   ONCE PER SHEET, NOT ONCE PER RENDER. The title is written by kfRenderVis(), which runs on
+   every visibility toggle: driving the animation from there would re-light the sentence every
+   time somebody flipped Public, which reads as a glitch rather than as news. So it is armed
+   by the two functions that put the sheet on screen and disarmed when the sheet is dismissed —
+   a peek that expands into the open state gets one sweep, not two.
+   GUARDED ON SUPPORT, because the effect is `-webkit-text-fill-color:transparent` over a
+   clipped gradient: on an engine without background-clip:text that is not a missing shimmer,
+   it is a headline nobody can read. And removed on a timer whatever happens, so even a browser
+   that supports it but stalls the animation ends up back on plain white text. */
+let ssLitDone=false;
+function ssShimmerTitle(){
+  const h=$("#ssTitle"); if(!h||ssLitDone) return;
+  try{ if(!(window.CSS&&CSS.supports&&(CSS.supports("-webkit-background-clip","text")
+    ||CSS.supports("background-clip","text")))) return; }catch(e){ return; }
+  ssLitDone=true;
+  h.classList.remove("ssLit"); void h.offsetWidth; h.classList.add("ssLit");
+  clearTimeout(ssShimmerTitle._t);
+  ssShimmerTitle._t=setTimeout(()=>{ h.classList.remove("ssLit"); },1500);
+}
+function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","ssMini","ssEditName"); ssState="hidden";
+  /* Re-armed for the next hide, and only from here: sheetToFloor() leaves the sheet on screen,
+     so a round that folds to mini and comes back must not light the same sentence twice. */
+  ssLitDone=false; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part
    of the job: "Not now", a tap on the backdrop, and the return from a completed share all
@@ -8272,6 +8324,10 @@ function peekShareSheet(){
      nothing. */
   kfRenderVis(); ssRenderSign();
   shareSheetEl.classList.add("peek");
+  /* THE SHORT STATE IS WHERE MOST PEOPLE MEET THIS SENTENCE — the sheet presents itself on
+     the reveal and `share_opened` fires from the other door — so the sweep belongs here too,
+     and ssLitDone keeps a later expand from replaying it. */
+  ssShimmerTitle();
   haptic(8);
   /* THE SHEET THAT COMES TO THEM WAS INVISIBLE TO THE FUNNEL. `share_opened` fires only from
      openShareSheet(), which this state deliberately does not go through — so since 6 August,
@@ -8482,14 +8538,31 @@ async function nativeShare(target){
   /* "Tap to reveal" was a promise nothing could keep — there is no backend, the shared
      photo isn't hosted anywhere, so no link could ever reveal it. The ask is now the one
      thing a link CAN deliver: go hide one yourself. */
-  /* INSTAGRAM ALWAYS GETS THE REVEAL, whatever tab is showing. Stories is a video surface and
-     a still frame is the weakest thing that can be posted to it; the reveal is the clip people
-     actually watch. Challenge stays the default tab for everything else on purpose — that is
-     the send-to-one-person path, and its static card is what carries the invite loop.
-     Gated on the capability AND on beforeBoard, so when either is absent this collapses to
-     exactly today's behaviour instead of promising a video that cannot be encoded. Every build
-     before 1.1.0 lands in that branch, since none of them advertise revealVideo. */
-  const forceReveal = target==="instagram" && nativeCaps.revealVideo && !!beforeBoard;
+  /* EVERY MEDIA SHARE GETS THE REVEAL, NOT JUST INSTAGRAM — and the version of this line that
+     said `target==="instagram"` had quietly stopped firing at all.
+     WHAT HAPPENED. The clip was Instagram-only by design: Stories is a video surface and a
+     still frame is the weakest thing that can be posted to it. Then the Instagram button was
+     deleted on 2026-08-15 ("gone as a button, not as a destination" — it lives inside `more`
+     now), and with it went the only caller that could ever set target to "instagram".
+     `shareMode` has been the constant "challenge" since the tabs left on 08-12, so the other
+     half of `asReveal` was already dead. Net effect, unnoticed for two days because nothing
+     breaks: the reveal MP4 — the one artifact of this product that is fun to WATCH, whose
+     native encoder shipped in 1.1.0 on 08-10 — reached nobody at all. Everyone got the static
+     card, on every destination.
+     WHY THE FIX IS TO WIDEN IT RATHER THAN TO RESTORE THE BUTTON. The wrapper was always built
+     for this: its `reveal-video` handler branches on `msg.target` — Stories for instagram,
+     Snapchat for snapchat, the system sheet for everything else — and its own comment says
+     "the reveal video is KAMO's most shareable asset and most of it goes via More". The web
+     was the half that never asked. So the destination the user picks in the system sheet gets
+     the clip, whichever app that turns out to be.
+     AND THE LINK TRAVELS WITH IT. The reveal path passes `message`; the static one is the
+     branch that never has (see below). So this also closes the link-less hole for every media
+     share on a binary that can encode.
+     UNCHANGED WHERE IT CANNOT WORK: gated on the capability AND on beforeBoard, so a build
+     before 1.1.0, a failed encode, or a round with no before-frame collapses to exactly the
+     static share that ships today. `save` never reaches here — saveStatic() has its own path,
+     and a saved video is not a saved photo. */
+  const forceReveal = nativeCaps.revealVideo && !!beforeBoard;
   const asReveal = shareMode==="ba" || forceReveal;
   const message=asReveal
     ? ("Now you see him. Now you don't! Painted with Kamo — your turn → "+link)
@@ -8511,9 +8584,9 @@ async function nativeShare(target){
   let linkCopied=false;
   try{ navigator.clipboard.writeText(message); linkCopied=true; }catch(e){}
   if(linkCopied) setTimeout(()=>showHint("Link copied — paste it with your post",3200),700);
-  // Before/After mode — or any Instagram share — → animated reveal MP4 (native module). Falls
+  // Any media share on a binary that can encode → animated reveal MP4 (native module). Falls
   // back to the static image when the wrapper doesn't advertise the capability (older build)
-  // or has no before frame; `asReveal` already folds both of those conditions in for Instagram.
+  // or has no before frame; `asReveal` already folds both of those conditions in.
   if(asReveal && nativeCaps.revealVideo && beforeBoard){
     const hidden=composeShare(1080, board).toDataURL("image/jpeg",0.85);      // camouflaged (shown first)
     const revealed=composeShare(1080, beforeBoard).toDataURL("image/jpeg",0.85); // figure visible (wiped in)
