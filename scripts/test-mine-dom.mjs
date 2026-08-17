@@ -63,12 +63,10 @@ const html = real.slice(0, at)
   + 'text:(document.getElementById("khScore")||{}).textContent||"",'
   + 'shown:(document.getElementById("khScore")||{}).style.display};},'
   + 'dot(){const b=document.querySelector(".brand");return !!b&&b.classList.contains("hasNews");},'
-  /* THE SIGN NUDGE, read off the grid it lives on. setName() sets the two states that decide
-     it: an ASSIGNED handle (minted by the publish path, which is everybody) versus a CHOSEN
-     one. That distinction is exactly what the nudge shipped without on 2026-08-16, and the
-     reason it never rendered for a single user. */
-  + 'setName(h,chosen){try{h?localStorage.setItem("kamo_handle",h):localStorage.removeItem("kamo_handle");'
-  + 'chosen?localStorage.setItem("kamo_handle_chosen","1"):localStorage.removeItem("kamo_handle_chosen");}catch(e){}},'
+  /* THE STATS ROW CARRIES NO BUTTON, and this reads the row to keep it that way. The sign
+     nudge lived here for one day (2026-08-16 → 17) and was removed because it accused people
+     who HAD chosen their name — its gate read a flag, not the person. Anything that wants
+     this row again has to answer that first. */
   + 'nudge(){const b=document.querySelector("#kfMine .kmStats button");return b?b.textContent:"";},'
   /* chFeed() refuses to open twice (`if(kfState) return`), so a block that runs after another
      one has left the feed up would silently read the PREVIOUS block's grid — door() would
@@ -344,14 +342,13 @@ console.log('\nAND IT IS VISIBLE ON THE REVEAL, WITHOUT EATING THE WIPE');
   await page.evaluate(() => window.__m.reveal(false));
 }
 
-console.log('\nTHE SIGN NUDGE ASKS THE ONLY QUESTION THAT HAS TWO ANSWERS');
+console.log('\nTHE GRID SELLS NOTHING ON TOP OF THE STATS ROW');
 {
-  /* IT SHIPPED ON A CONDITION THAT IS NEVER TRUE. The nudge (2026-08-16) was gated on
-     !getHandle() — but the publish path ASSIGNS a handle to every creator (mintHandle), so
-     every device that reaches this grid already has one and it rendered for nobody. Founder's
-     report the same day, off a leaderboard of @OchreWren / @OchreRaven / @OchreHare: the
-     generated names are obvious and nothing pushed anyone to change theirs. The real question
-     is whether the person ever CHOSE the name.
+  /* THE NUDGE IS GONE, AND THIS IS THE GUARD ON ITS ABSENCE. It shipped 2026-08-16 gated on
+     `!handleChosen()` and was pulled the next day: that flag is written by one card only, so
+     every device that named itself by any other path — or before the flag existed — reads as
+     anonymous for ever and got told "make it your name" under a name it had typed. Both cases
+     below are people with plays on their own grid; neither may be asked for anything.
      A FRESH PAGE PER CASE, and that is not tidiness. This suite shares one page across every
      block, and by here the feed has been opened, the card closed and #khScore rebound several
      times — a door() on that page silently no-ops and the assertion reads a stale grid, which
@@ -376,17 +373,14 @@ console.log('\nTHE SIGN NUDGE ASKS THE ONLY QUESTION THAT HAS TWO ANSWERS');
   };
 
   const assigned = await state('MossyOwl', false);
-  /make it your name/i.test(assigned)
-    ? ok(`an assigned name is challenged ("${assigned.trim()}")`)
-    : bad(`no nudge over a grid signed with a name nobody chose — got ${JSON.stringify(assigned)}`);
-  /MossyOwl/.test(assigned)
-    ? ok('and it names the pseudonym, which is the whole argument')
-    : bad(`the nudge does not show the assigned handle: ${JSON.stringify(assigned)}`);
+  assigned === ''
+    ? ok('a grid signed with a generated name is left alone')
+    : bad(`something is being sold on the stats row: ${JSON.stringify(assigned)}`);
 
   const chosen = await state('tony', true);
   chosen === ''
-    ? ok('and somebody who picked their own name is never asked again')
-    : bad(`the nudge nags a user who already chose: ${JSON.stringify(chosen)}`);
+    ? ok('and so is one signed with a name its owner typed')
+    : bad(`the stats row nags a user who chose their name: ${JSON.stringify(chosen)}`);
 }
 
 await browser.close();
