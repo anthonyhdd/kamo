@@ -86,7 +86,40 @@ const html = real.slice(0, at)
   + 'scoreScrolls:s.scrollHeight>s.clientHeight+1,'
   + 'rows:document.querySelectorAll("#khScore .khRow").length,'
   + 'headText:(document.querySelector("#khScore .khHead")||{}).textContent||""};},'
-  + 'wipe(){try{localStorage.removeItem("kamo_handle")}catch(e){}}};\n'
+  + 'wipe(){try{localStorage.removeItem("kamo_handle")}catch(e){}},'
+  /* ══ THE NEWS TRAY ═══════════════════════════════════════════════════════════════════════
+     Seeded at the level khTray() actually reads: the two module lists chNewsCheck() fills at
+     launch, plus the tally object khResults() hands over. Driving the RPCs instead would test
+     Supabase; what is under test here is what the card does with three answers it already
+     has — the order, the caps, and the fact that a stale mark empties the row. */
+  + 'news(o){chNewsReplies=o.replies||[];chNewsRx=o.rx||[];'
+  + 'try{localStorage.setItem("kamo_seen_tries",String(o.seenTries|0));'
+  + 'localStorage.setItem("kamo_rx_seen",String(o.rxSeen|0));'
+  + 'o.replySeen?localStorage.setItem(REPLY_SEEN_KEY,o.replySeen):localStorage.removeItem(REPLY_SEEN_KEY);}catch(e){}'
+  + 'khTray({rows:o.rows||[],tried:o.tried|0,found:o.found|0,hides:(o.rows||[]).length});'
+  + 'const el=document.getElementById("khTray");'
+  + 'return{shown:el.style.display!=="none",n:el.children.length,'
+  + 'labels:[...el.querySelectorAll(".khTrayLbl")].map(x=>x.textContent),'
+  + 'metas:[...el.querySelectorAll(".khTrayMeta")].map(x=>x.textContent.trim()),'
+  + 'imgs:[...el.querySelectorAll(".khTrayPic img")].map(x=>x.getAttribute("src")||""),'
+  + 'rxSeen:(()=>{try{return localStorage.getItem("kamo_rx_seen")}catch(e){return null}})()};},'
+  /* The tap, through the cell's own handler — the routing and the event both live there. */
+  + 'tapNews(i){window.__nav=null;window.__ev=null;'
+  + 'const _f=chFeed,_t=track;chFeed=(o)=>{window.__nav=o||{};};track=(n,p)=>{if(n==="home_news_tapped")window.__ev=p;};'
+  + 'const b=document.querySelectorAll("#khTray .khTrayCell")[i];if(b)b.click();'
+  + 'chFeed=_f;track=_t;return{nav:window.__nav,ev:window.__ev,'
+  + 'open:document.getElementById("kamoHome").classList.contains("show")};},'
+  /* The two bodies: which is worn, which is locked, what each is showing, and what the strip
+     under the locked one is offering. */
+  + 'bodies(){const a=document.getElementById("khCharA"),b=document.getElementById("khCharB");'
+  + 'return{wornA:a.classList.contains("on"),wornB:b.classList.contains("on"),'
+  + 'lockB:b.classList.contains("lock"),'
+  + 'srcA:(document.getElementById("khBodyImgA")||{}).getAttribute?document.getElementById("khBodyImgA").getAttribute("src"):"",'
+  + 'srcB:(document.getElementById("khBodyImgB")||{}).getAttribute?document.getElementById("khBodyImgB").getAttribute("src"):"",'
+  + 'finA:document.querySelectorAll("#khFinA .khFinOpt").length,'
+  + 'finB:document.querySelectorAll("#khFinB .khFinOpt").length,'
+  + 'sell:document.getElementById("khFinB").classList.contains("sell"),'
+  + 'tappable:document.querySelectorAll("#khFinB button").length};}};\n'
   + real.slice(at);
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
@@ -131,10 +164,39 @@ console.log('\nTHE CARD OPENS FOR EVERYONE, AND CLAIMS ONLY WHAT IS TRUE');
   free.upsell === 'absent'
     ? ok('no upsell banner eating the results list')
     : bad(`the upsell banner is back (${free.upsell}) — it pushes the hides into a ~150px window`);
-  const locks = await page.evaluate(() => document.querySelectorAll('#kamoHome .khCharOpt.lock, #kamoHome .khFinOpt.lock').length);
+  /* .khBodyOpt since 2026-08-18 — the two pills became two renders of the models, and the ✦
+     rides on the locked TILE. Same assertion, same reason: this is the card's only route to
+     the paywall now that the banner is gone. */
+  const locks = await page.evaluate(() => document.querySelectorAll('#kamoHome .khBodyOpt.lock, #kamoHome .khFinOpt.lock').length);
   locks > 0
     ? ok(`and KAMO+ is still reachable from the card — ${locks} locked control(s) marked ✦`)
     : bad('nothing on the card leads to the paywall any more: the banner went and took the only route with it');
+
+  /* ══ THE BODIES ARE PICTURES, AND THE PAID COLOURS ARE VISIBLE TO A BUYER ═══════════════
+     Both halves of this block are regressions waiting to happen.
+     The pictures: two words ("Original", "New") named a difference of build that no label can
+     carry, and any hand-drawn stand-in would be a guess — so the assertion is that the tiles
+     point at the RENDERS, and that the worn one is the posed frame while the other stands.
+     The colours: the swatch row used to require the new body, and the new body requires
+     membership, so the four paid finishes were visible only to the people who already owned
+     them. A free user must now see them under the locked tile — dim, and NOT tappable, since
+     a tap there would paint nothing on the body they are wearing. */
+  const bod = await page.evaluate(() => window.__h.bodies());
+  bod.wornA && !bod.wornB
+    ? ok('a free user is wearing the original body, and the tile shows it')
+    : bad(`the worn tile is wrong for a free user (A:${bod.wornA} B:${bod.wornB})`);
+  /^vendor\/body-classic-wave\.png$/.test(bod.srcA) && /^vendor\/body-v2-stand\.png$/.test(bod.srcB)
+    ? ok('the worn body is the posed render and the other one stands — the pair says which is yours')
+    : bad(`the tiles are not showing the right renders (A:${bod.srcA} B:${bod.srcB})`);
+  bod.lockB
+    ? ok('the body they do not own wears the ✦')
+    : bad('the locked body carries no mark — the one paid object on the card is unlabelled');
+  bod.sell && bod.finB === 4 && bod.tappable === 0
+    ? ok('and its four paid finishes are on show under it, inert — an article a buyer can finally see')
+    : bad(`the finishes are not being offered under the locked body (sell:${bod.sell} n:${bod.finB} tappable:${bod.tappable})`);
+  bod.finA === 0
+    ? ok('nothing under the original body, which no finish applies to')
+    : bad(`${bod.finA} swatch(es) under the original body — they paint nothing there`);
   free.chips === 0
     ? ok('no perk list — the card is about who you are, not what the subscription contains')
     : bad(`${free.chips} perk chips are back on the player card`);
@@ -393,6 +455,86 @@ console.log('\nTEN CHALLENGES STILL FIT ON THE SCREEN');
     ? ok(`the summary rides above the open list ("${open.headText.trim()}")`)
     : bad(`the open state's header reads ${JSON.stringify(open.headText)} — the headline was `
         + 'thrown away by the expansion');
+}
+
+console.log('\nTHE NEWS TRAY SHOWS WHAT THE DOT WAS POINTING AT');
+{
+  /* The seeds are built HERE and passed in: page.evaluate ships the function to the browser,
+     where nothing in this file's scope exists. */
+  const R = (id, iso, name) => ({ id, created_at: iso, img_path: id + '.jpg', name });
+
+  /* NOTHING NEW IS THE COMMON CASE, and it must cost nothing on screen. An empty row, a
+     "nothing new" line or a spinner would each be worse than the absence. */
+  const quiet = await page.evaluate((o) => window.__h.news(o),
+    { rows: [{ id: 'a', img_path: 'a.jpg', n_attempts: 4, n_found: 1 }], tried: 4, seenTries: 4, rxSeen: 0 });
+  !quiet.shown && quiet.n === 0
+    ? ok('nothing new: no row at all, not an empty one')
+    : bad(`the tray renders with nothing to say (shown:${quiet.shown} n:${quiet.n})`);
+
+  /* THE ORDER IS BY KIND AND NEVER BY RECENCY. A reply is the only tile with an action behind
+     it, so it leads; a fixed position also means the row does not have to be re-read on every
+     open. And the caps are asymmetric on purpose — replies are one tile each (each is a
+     separate round to play), plays and reactions are one tile TOTAL, or three reactions on
+     three photos would push the only actionable tile off the edge. */
+  const full = await page.evaluate((o) => window.__h.news(o), {
+    replies: [R('r1', '2026-08-18T10:00:00Z', 'mira'), R('r2', '2026-08-18T09:00:00Z', null),
+              R('r3', '2026-08-18T08:00:00Z', 'zed'), R('r4', '2026-08-18T07:00:00Z', 'old')],
+    rx: [{ hide_id: 'h1', n: 3 }, { hide_id: 'h2', n: 12 }],
+    rows: [{ id: 'h1', img_path: 'h1.jpg', n_attempts: 4, n_found: 1 },
+           { id: 'h2', img_path: 'h2.jpg', n_attempts: 20, n_found: 5 }],
+    tried: 24, seenTries: 19, rxSeen: 2, replySeen: '2026-08-17T00:00:00Z' });
+  full.n === 5
+    ? ok('three answers, one plays tile and one reactions tile — five, never one per reaction')
+    : bad(`the tray rendered ${full.n} tiles: ${JSON.stringify(full.labels)}`);
+  full.labels.slice(0, 3).every((l) => /answered you/.test(l))
+    ? ok('the answers lead, because they are the only tiles that carry an action')
+    : bad(`the order is not replies-first: ${JSON.stringify(full.labels)}`);
+  /new plays/.test(full.labels[3] || '') && /new reactions/.test(full.labels[4] || '')
+    ? ok(`then the plays, then the reactions ("${full.labels[3]}" · "${full.labels[4]}")`)
+    : bad(`plays and reactions are out of order: ${JSON.stringify(full.labels)}`);
+  /5 new plays/.test(full.labels[3] || '')
+    ? ok('and the plays tile counts what is NEW since the last look, not the lifetime total')
+    : bad(`the plays label reads ${JSON.stringify(full.labels[3])} — it should be the 5 new ones, not 24`);
+  full.imgs.length === 5 && full.imgs.every((s) => /\/storage\/v1\/object\/public\/hides\//.test(s))
+    ? ok('every tile is the photograph it is about')
+    : bad(`the tiles are not showing the hides: ${JSON.stringify(full.imgs)}`);
+  /@mira/.test(full.metas[0] || '') && /Someone/.test(full.metas[1] || '')
+    ? ok('an answer is named, and an unsigned one says Someone')
+    : bad(`the answer tiles are not naming their sender: ${JSON.stringify(full.metas.slice(0, 2))}`);
+  /* The mark is stamped on delivery, exactly as the grid stamps it — otherwise the reactions
+     tile returns on every single open until the reader happens to visit the grid. */
+  full.rxSeen === '15'
+    ? ok('and showing the reactions spends them, so the tile does not cry wolf next open')
+    : bad(`the reactions high-water mark is ${full.rxSeen} after the tray delivered them`);
+
+  /* NAVIGATION. An answer opens ON that hide (chFeed seeds it as slide 0 by id); the reader's
+     own numbers open the grid, where every hide and every count lives. Both close the card
+     first — leaving it up would put the sheet over the thing it just opened. */
+  const tapReply = await page.evaluate(() => window.__h.tapNews(0));
+  tapReply.nav && tapReply.nav.first === 'r1' && !tapReply.open
+    ? ok('tapping an answer opens the feed on that exact hide, and the card gets out of the way')
+    : bad(`the answer tile routed to ${JSON.stringify(tapReply.nav)} (card still open: ${tapReply.open})`);
+  tapReply.ev && tapReply.ev.kind === 'reply'
+    ? ok('and it reports which kind was tapped')
+    : bad(`home_news_tapped carried ${JSON.stringify(tapReply.ev)}`);
+  const tapPlays = await page.evaluate(() => window.__h.tapNews(3));
+  tapPlays.nav && tapPlays.nav.mine === true
+    ? ok('the plays tile opens your own grid, where the numbers belong')
+    : bad(`the plays tile routed to ${JSON.stringify(tapPlays.nav)}`);
+  const tapRx = await page.evaluate(() => window.__h.tapNews(4));
+  tapRx.nav && tapRx.nav.mine === true
+    ? ok('and so does the reactions tile')
+    : bad(`the reactions tile routed to ${JSON.stringify(tapRx.nav)}`);
+
+  /* A HIDE THAT IS NOT IN THE TALLY CANNOT BE SHOWN. my_reactions answers by hide id and the
+     photograph comes from the tally rows — a reaction on a hide this device no longer lists
+     has no picture, and a tile with no picture is worse than no tile. */
+  const orphan = await page.evaluate((o) => window.__h.news(o),
+    { rx: [{ hide_id: 'gone', n: 9 }], rows: [{ id: 'h1', img_path: 'h1.jpg', n_attempts: 1, n_found: 0 }],
+      tried: 1, seenTries: 1, rxSeen: 0 });
+  orphan.n === 0
+    ? ok('a reaction on a hide with no photograph to show renders nothing')
+    : bad(`the tray invented a tile for a hide it has no image for: ${JSON.stringify(orphan.labels)}`);
 }
 
 await browser.close();

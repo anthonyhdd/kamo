@@ -1107,6 +1107,95 @@
   .khFinOpt.lock::after{content:"✦";position:absolute;right:-2px;bottom:-3px;font-size:11px;
     line-height:1;color:var(--mint);text-shadow:0 0 6px rgba(0,0,0,.8);}
   .khCharIco{width:17px;height:17px;fill:currentColor;flex:0 0 auto;}
+  /* ══ THE TWO BODIES, AS BODIES ═══════════════════════════════════════════════════════════
+     They were two pills reading "Original" and "New" — two words that describe nothing. The
+     difference between the models is proportion (the second is wider and rounder, with a much
+     bigger head) and no label carries that. Two renders side by side do, at a glance, and
+     they are the artwork rather than an impression of it: vendor/body-*.png come out of the
+     shipped models via scripts/shoot-bodies.mjs. Re-run it if either model changes.
+     THE WORN ONE IS BIGGER AND POSED, the other smaller and standing. Size and stillness
+     answer "which am I wearing" before the eye reaches the mint ring. Aligned by their BOTTOM
+     edge inside a fixed 86px slot, so the small tile does not ride up when the pair swaps and
+     both sets of feet stay on one line — which is what keeps the difference in build visible
+     instead of self-cancelling. */
+  .khBodies{display:flex;align-items:flex-start;justify-content:center;gap:14px;margin:10px 0 0;}
+  /* Both columns are the WORN tile's width, so the pair stays symmetric whichever one is
+     worn and the two tiles do not drift apart as they swap size. */
+  .khBodyCol{display:flex;flex-direction:column;align-items:center;width:86px;}
+  .khBodySlot{height:86px;display:flex;align-items:flex-end;}
+  .khBodyOpt{position:relative;padding:0;cursor:pointer;border-radius:20px;background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.14);width:64px;height:64px;opacity:.62;
+    display:flex;align-items:flex-end;justify-content:center;
+    transition:width .18s ease,height .18s ease,opacity .18s ease,border-color .15s,box-shadow .15s;}
+  .khBodyOpt img{width:100%;height:100%;object-fit:contain;padding:5px;pointer-events:none;}
+  .khBodyOpt.on{width:86px;height:86px;opacity:1;border-color:rgba(95,230,164,.55);
+    box-shadow:0 0 0 1px rgba(95,230,164,.25),0 0 16px rgba(95,230,164,.18);}
+  .khBodyOpt:active{transform:scale(.96);}
+  /* The pills' freeze rule survives them: mid-paint the choice is real, just not this round's. */
+  .khBodyOpt.frozen{opacity:.36;}
+  .khBodyOpt.frozen:active{transform:none;}
+  .khBodyOpt.lock::after{content:"✦";position:absolute;right:-4px;bottom:-4px;width:22px;height:22px;
+    border-radius:999px;background:#0b1a15;border:1px solid rgba(95,230,164,.75);color:var(--mint);
+    font-size:11px;line-height:20px;text-align:center;}
+  /* ══ THE FINISHES, WHERE THEY CAN BE SOLD ════════════════════════════════════════════════
+     The row only ever appeared under a body that requires membership to wear, so the four
+     PAID colours were visible exclusively to the people who already owned them — the article
+     kept in the stock room. They ride under whichever tile they belong to now: dim and inert
+     under a locked body (part of what that tile is selling, never a control that would paint
+     nothing), live under a worn one. */
+  /* width:0 — deliberate, and the only way this row can be centred UNDER ITS OWN TILE without
+     setting the width of the pair. Five 30px swatches are twice a tile wide; left in the
+     column's flow they pushed the two bodies 60px apart (measured). A zero-width flex box
+     still lays its children out and still contributes HEIGHT, so the strip overflows
+     symmetrically about the tile's centre and nothing below it moves. */
+  .khFinStrip{display:flex;gap:8px;justify-content:center;margin:10px auto 0;width:0;min-height:14px;}
+  .khFinStrip .khFinOpt{flex:0 0 auto;}
+  .khFinStrip.sell{pointer-events:none;}
+  .khFinStrip.sell .khFinOpt{width:14px;height:14px;opacity:.5;border-color:rgba(255,255,255,.22);}
+  .khFinStrip.sell .khFinOpt i{inset:2px;}
+  .khFinStrip.sell .khFinOpt::after{display:none;}
+  /* ══ THE NEWS, AS PHOTOGRAPHS ════════════════════════════════════════════════════════════
+     The wordmark's dot promises something new, and this card answered it with a count of the
+     user's own hides. chNewsCheck() has been computing the three real answers since it
+     shipped — replies, plays, reactions, each with its number — and dropping all three into an
+     8px grey point. They are rendered here instead, as the pictures they are about.
+     ITS OWN CLASSES, NOT THE GRID'S. .kmCell and the rest live in KF_CSS, injected the first
+     time the FEED is built; a card opened before that would render an unstyled row. The look
+     is deliberately the grid's, the stylesheet cannot be. */
+  /* CENTRED ONLY WHILE IT FITS. Plain `center` in a scroll container puts the overflow on
+     BOTH sides and the browser cannot scroll to the left half — measured at -20px on a
+     390px screen with four tiles, which is a photograph nobody can reach or tap. `safe`
+     falls back to flex-start the moment the row is wider than the box; the first declaration
+     is what browsers without it keep, and starting at the left edge is the safe failure. */
+  .khTray{display:flex;gap:10px;justify-content:flex-start;margin:16px 0 0;max-width:100%;
+    overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .khTray{justify-content:safe center;}
+  .khTray::-webkit-scrollbar{display:none;}
+  /* display:block on the BUTTON, and it is load-bearing. A button lays its children out in an
+     anonymous centred box, so the label under the photo did not grow the cell: measured, the
+     tile ended at 703px and its own label ran to 738 — straight through the "My kamos" row
+     underneath. Blocked, the two children stack and the cell is as tall as what is in it. */
+  .khTrayCell{flex:0 0 auto;display:block;width:100px;background:none;border:0;padding:0;cursor:pointer;
+    font-family:inherit;color:inherit;text-align:center;}
+  /* display:block on both children — they are <span>, and an inline box ignores height: the
+     photo did not push the label down, so the label ran out of the cell and through the row
+     below it (measured: cell ended at 703px, its own label at 738). */
+  .khTrayPic{display:block;position:relative;height:122px;border-radius:14px;overflow:hidden;background:#0a1a15;
+    border:1.5px solid rgba(95,230,164,.85);box-shadow:0 0 10px rgba(95,230,164,.22);
+    transition:transform .15s;}
+  .khTrayPic img{display:block;width:100%;height:100%;object-fit:cover;}
+  .khTrayPic::after{content:"";position:absolute;left:0;right:0;bottom:0;height:44px;pointer-events:none;
+    background:linear-gradient(180deg,rgba(4,6,10,0),rgba(4,6,10,.78));}
+  .khTrayMeta{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;justify-content:center;
+    gap:9px;padding:5px 6px;font-family:var(--display);font-size:12px;font-weight:700;color:#fff;
+    letter-spacing:-.2px;font-variant-numeric:tabular-nums;text-shadow:0 1px 4px rgba(0,0,0,.6);}
+  .khTrayMeta span{display:inline-flex;align-items:center;gap:4px;max-width:88px;overflow:hidden;
+    white-space:nowrap;text-overflow:ellipsis;}
+  .khTrayMeta svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
+  .khTrayMeta svg.solid{fill:currentColor;stroke:none;}
+  .khTrayLbl{display:block;margin-top:7px;font-size:11px;line-height:1.2;color:var(--mint);}
+  .khTrayCell:active .khTrayPic{transform:scale(.97);}
   .kpCard{width:min(92vw,420px);text-align:center;padding:0 24px;position:relative;animation:kpRise .4s cubic-bezier(.2,.9,.3,1);}
   /* THE PLAYER CARD DOES NOT FLOAT. It inherits .pwCard, which is a bottom sheet: a drop
      shadow to lift it off the reveal behind it, and a breathing mint glow across its top.
@@ -2575,18 +2664,30 @@
     </div>
     <!-- PICK YOUR CHARACTER. Applied the instant it is tapped, and visibly: this card's
          backdrop is deliberately clear so the body swaps in plain sight behind it.
-         The New chip wears the peeking-figure mark from the top bar — same path, verbatim:
-         the icon IS the new body's face in the UI, so the chip shows what it sells. -->
-    <div class="khChar" id="khChar">
-      <button class="khCharOpt" id="khCharA">Original</button>
-      <button class="khCharOpt" id="khCharB"><svg class="khCharIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>New</button>
+         TWO RENDERS, NOT TWO WORDS. "Original" and "New" named nothing anybody could picture,
+         and the thing they name is a difference of build. The <img> sources are stills of the
+         shipped models; when the card opens over a live compose scene the worn one is
+         replaced by a capture of the figure actually standing there, finish and all — see
+         khBodyShot(). The still is the mechanism, the capture is the improvement, because
+         animate() does not run outside compose and the canvas would be blank.
+         FINISHES RIDE WITH THE BODY THEY BELONG TO. Built by JS from the FINISHES table so the
+         swatches and the materials can never drift apart — an empty strip is the honest
+         failure if the script dies, not five chips that paint nothing. -->
+    <div class="khBodies" id="khChar">
+      <div class="khBodyCol">
+        <div class="khBodySlot"><button class="khBodyOpt" id="khCharA" aria-label="Original body"><img id="khBodyImgA" alt="" src="vendor/body-classic-stand.png"></button></div>
+        <div class="khFinStrip" id="khFinA"></div>
+      </div>
+      <div class="khBodyCol">
+        <div class="khBodySlot"><button class="khBodyOpt" id="khCharB" aria-label="New body"><img id="khBodyImgB" alt="" src="vendor/body-v2-stand.png"></button></div>
+        <div class="khFinStrip" id="khFinB"></div>
+      </div>
     </div>
-    <!-- FINISHES. Built by JS from the FINISHES table rather than typed here, so the swatches
-         and the materials can never drift apart — an empty row is the honest failure if the
-         script dies, not five chips that paint nothing. Same "changes in plain sight" trick
-         as the body chips above: the card's backdrop is clear, so tapping one repaints the
-         figure behind it. -->
-    <div class="khFin" id="khFin"></div>
+    <!-- #khFin is gone as an element and kept as an idea: the swatches live in the two strips
+         above, next to the body they paint. -->
+    <!-- WHAT IS NEW, AS PHOTOGRAPHS. Filled by khTray() from what chNewsCheck() already
+         fetched at launch; empty and hidden when nothing is new, which is most opens. -->
+    <div class="khTray" id="khTray" style="display:none"></div>
     <!-- WHAT HAPPENED TO THE HIDES YOU SENT. The count paints the instant the card opens —
          the ids are local, so "N challenges sent" is certain without a network — and
          khResults() swaps in the outcomes when the fetch lands. Still hidden for someone
@@ -6747,6 +6848,83 @@ function khRenderName(){
      and a card that has to grow a line back should find the line still there. */
   if(sub){ sub.textContent=""; sub.style.display="none"; }
 }
+/* ══ THE WORN TILE, CAPTURED RATHER THAN SHIPPED ═══════════════════════════════════════════
+ * The two <img> in the markup are stills of the models. They are the mechanism, not a
+ * fallback: this card opens from the wordmark on the camera AND from the grid's profile
+ * button, and animate() returns immediately unless mode==="compose" — so on the feed side the
+ * WebGL canvas holds nothing and a "live" tile would be a white square.
+ * Where the scene IS running, the still is replaced by what is actually on screen: the
+ * player's own figure, in their own finish, in the pose they left it in. One draw into the
+ * buffer that already has preserveDrawingBuffer, cropped on the character's AXIS (its world
+ * origin) rather than on its bounding box — a raised arm moves the box, and cropping to that
+ * pushes the body off-centre in its square, which is exactly how it looked before.
+ * Silent on failure: a tainted or lost context leaves the still in place. */
+function khBodyShot(v2){
+  const img=$(v2?"#khBodyImgB":"#khBodyImgA");
+  if(!img||mode!=="compose"||!renderer||!characters.length||!glCanvas) return;
+  try{
+    const c=characters[0]; if(!c||!c.charG) return;
+    renderer.render(scene,camera3);
+    const box=new THREE.Box3().setFromObject(c.charG), pts=[];
+    for(const x of [box.min.x,box.max.x]) for(const y of [box.min.y,box.max.y]) for(const z of [box.min.z,box.max.z]){
+      const p=new THREE.Vector3(x,y,z).project(camera3);
+      pts.push([(p.x*.5+.5)*glCanvas.clientWidth,(-p.y*.5+.5)*glCanvas.clientHeight]);
+    }
+    const ys=pts.map(p=>p[1]), bottom=Math.max(...ys), height=bottom-Math.min(...ys);
+    if(!(height>8)) return;                       // nothing drawn yet — keep the still
+    const root=new THREE.Vector3(); c.charG.getWorldPosition(root); root.project(camera3);
+    const side=height*1.38, cx=(root.x*.5+.5)*glCanvas.clientWidth, cy=bottom-side*.46;
+    const sx=glCanvas.width/glCanvas.clientWidth, sy=glCanvas.height/glCanvas.clientHeight;
+    const out=document.createElement("canvas"); out.width=out.height=200;
+    out.getContext("2d").drawImage(glCanvas,(cx-side/2)*sx,(cy-side/2)*sy,side*sx,side*sy,0,0,200,200);
+    img.src=out.toDataURL("image/png");
+  }catch(e){}
+}
+/* ══ THE SWATCHES, UNDER THE BODY THEY PAINT ═══════════════════════════════════════════════
+ * Two strips, and they mean different things by design.
+ *   · Under the WORN new body: the live control, every finish tappable, the current one
+ *     ringed — what the single row under the pills used to be.
+ *   · Under the LOCKED new body: the four paid colours, dim and inert. They are part of what
+ *     that tile is selling, not a control — tapping them would paint nothing, which is the
+ *     reason the row was hidden in the first place and is still a good reason.
+ *   · Under the original body: nothing, ever. The finishes do not apply to it.
+ * That asymmetry is the whole point: the paid colours used to be visible ONLY to the people
+ * who already owned them, because the row required the new body and the new body requires
+ * membership. An article no buyer could see.
+ * Built from the FINISHES table, never typed, so a swatch cannot advertise a material the
+ * renderer does not have. */
+function khPaintFinStrips(v2){
+  const live=$("#khFinB"), dead=$("#khFinA");
+  if(dead){ dead.innerHTML=""; dead.className="khFinStrip"; }
+  if(!live) return;
+  const own=(()=>{ try{ return canPro(); }catch(e){ return false; } })();
+  if(v2&&own){
+    const cur=curFinish().k;
+    live.className="khFinStrip";
+    live.innerHTML=FINISHES.map(f=>'<button class="khFinOpt'+(f.k===cur?" on":"")
+      +((f.pro&&!own)?" lock":"")+'" data-f="'+f.k+'" aria-label="'+f.label
+      +'"><i style="background:#'+f.color.toString(16).padStart(6,"0")+'"></i></button>').join("");
+    [...live.children].forEach(b=>{ b.onclick=(ev)=>{ ev.stopPropagation();
+      const f=FINISHES.find(x=>x.k===b.dataset.f); if(!f) return;
+      try{ localStorage.setItem(FINISH_KEY,f.k); }catch(e){}
+      haptic(10); track("finish_selected",{f:f.k,locked:!!(f.pro&&!own)});
+      if(f.pro&&!own){ khPaintFinStrips(true); closeKamoHome(); openPaywall("char",true); return; }
+      khPaintFinStrips(true);
+      /* Repaint in place rather than respawning: the materials are what changed, and a
+         respawn would throw away the pose and position the player just chose. */
+      characters.forEach(c=>applyFinish(c.charG));
+      khBodyShot(true); }; });
+  }else if(!own){
+    /* The advert, and ONLY to somebody who could buy it. A member wearing the original body
+       gets nothing here: dangling four colours under a body they already own would be the
+       card selling them their own property.
+       Stock is left out — it is the colour the body already wears, so it would spend one of
+       four slots saying "and also, no change". */
+    live.className="khFinStrip sell";
+    live.innerHTML=FINISHES.filter(f=>f.pro).map(f=>'<span class="khFinOpt" aria-hidden="true">'
+      +'<i style="background:#'+f.color.toString(16).padStart(6,"0")+'"></i></span>').join("");
+  }else{ live.className="khFinStrip"; live.innerHTML=""; }
+}
 function openKamoHome(){
   const el=$("#kamoHome"); if(!el) return;
   const inp=$("#khHandle");
@@ -6787,12 +6965,15 @@ function openKamoHome(){
     const froze=undoStack.length>1;
     $("#khCharA").classList.toggle("frozen",froze);
     $("#khCharB").classList.toggle("frozen",froze);
-    /* THE SWATCHES BELONG TO THE NEW BODY, so they only exist while it is chosen. On
-       Original they painted nothing anybody could see — a row of five taps with no visible
-       consequence, sitting between the name and the results, which reads as a broken control
-       rather than as an inapplicable one. Hidden rather than disabled: a dimmed row still
-       occupies the space and still invites the tap it will refuse. */
-    const fin=$("#khFin"); if(fin) fin.style.display = v ? "" : "none"; };
+    /* THE WORN ONE IS ALIVE, THE OTHER IS STILL. Two stills of the same pair say "these are
+       your two options"; a posed one next to a standing one says which is yours, without a
+       word and before the ring registers. Poses come from the same POSES table the tap on the
+       figure cycles — Wave is index 1. */
+    const a=$("#khBodyImgA"), b=$("#khBodyImgB");
+    if(a) a.src = v ? "vendor/body-classic-stand.png" : "vendor/body-classic-wave.png";
+    if(b) b.src = v ? "vendor/body-v2-wave.png" : "vendor/body-v2-stand.png";
+    khBodyShot(v);
+    khPaintFinStrips(v); };
   paintChar();
   /* THE PREFERENCE IS STORED EVEN WHEN IT IS LOCKED, and that is deliberate. wantsV2() and
      curFinish() both fall back on their own when membership is missing, so writing the choice
@@ -6819,27 +7000,6 @@ function openKamoHome(){
     loadKamoV2(); respawn(); };
   $("#khCharA").onclick=()=>pickChar("classic");
   $("#khCharB").onclick=()=>pickChar("v2");
-  /* ===== FINISH SWATCHES ===== built here, from the same table the materials read, so the
-     row cannot advertise a colour the renderer does not have. */
-  const finEl=$("#khFin");
-  const paintFin=()=>{ if(!finEl) return; const cur=curFinish().k;
-    [...finEl.children].forEach(b=>{ const f=FINISHES.find(x=>x.k===b.dataset.f);
-      b.classList.toggle("on",b.dataset.f===cur);
-      b.classList.toggle("lock",!!(f&&f.pro&&!canPro())); }); };
-  if(finEl){
-    finEl.innerHTML=FINISHES.map(f=>'<button class="khFinOpt" data-f="'+f.k+'" aria-label="'+f.label
-      +'"><i style="background:#'+f.color.toString(16).padStart(6,"0")+'"></i></button>').join("");
-    [...finEl.children].forEach(b=>{ b.onclick=()=>{
-      const f=FINISHES.find(x=>x.k===b.dataset.f); if(!f) return;
-      try{ localStorage.setItem(FINISH_KEY,f.k); }catch(e){}
-      haptic(10); track("finish_selected",{f:f.k,locked:!!(f.pro&&!canPro())});
-      if(f.pro&&!canPro()){ paintFin(); closeKamoHome(); openPaywall("char",true); return; }
-      paintFin();
-      /* Repaint in place rather than respawning: the materials are what changed, and a
-         respawn would throw away the pose and position the player just chose. */
-      characters.forEach(c=>applyFinish(c.charG)); }; });
-    paintFin();
-  }
   /* body.khCover hides the share sheet while this card is up (see the pwCover rule it sits
      next to) — the sheet must not show through the clear backdrop as a second stacked sheet. */
   document.body.classList.add("khCover");
@@ -7758,6 +7918,14 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    which is the whole point of the assertion in check.mjs.) */
 "sent_public_offer_shown","sent_public_accepted",
 "reaction_pending","feed_best_seeded",
+/* THE NEWS TRAY on the player card, 2026-08-18. `home_news_shown` carries how many tiles and
+   of which kinds; `home_news_tapped` carries the kind that was tapped. Read together they
+   answer the only question the tray exists for: when something IS waiting, does showing the
+   photograph get it opened — which `reply_pending` and `reaction_pending` cannot say, because
+   they fire when the news ARRIVES and know nothing about what the reader then did.
+   Direct rather than through the bridge, like every other name on this card: the page deploys
+   itself and the binary does not, so a bridged name would measure nothing until a review. */
+"home_news_shown","home_news_tapped",
 /* `reply_photo_failed` is the one that matters on 2026-08-16: it is the black-hide factory,
    and until today it failed silently into a #223 board that got published. `feed_black_dropped`
    counts the ones already out there, so the cleanup has a size.
@@ -12192,6 +12360,101 @@ function khPlayTrace(h,rec){
     track("replay_watched",{why:rec.why||"",ms:rec.ms|0});
   }catch(e){}
 }
+/* ══ THE NEWS TRAY ═════════════════════════════════════════════════════════════════════════
+ * What the wordmark's dot was pointing at, finally shown.
+ *
+ * The dot lights for three reasons and chNewsCheck() knows all three WITH their numbers —
+ * replies (my_replies), reactions (my_reactions), plays (chTally) — 1200ms after launch. It
+ * reduced them to one grey point, and the card the point leads to answered with a count of
+ * the reader's own hides. Every open where something was waiting was a promise half kept.
+ *
+ * PHOTOGRAPHS, NOT SENTENCES. "3 people answered you" is a report about pictures; the
+ * pictures are the thing. So each tile is the hide itself, with its number on it.
+ *
+ * ORDER IS BY KIND AND NEVER BY RECENCY: replies, then plays, then reactions.
+ *   · Only a reply carries an action — it is a round waiting to be played, and playing it is
+ *     how the loop turns. Plays and reactions are feedback; there is nothing to do with them.
+ *   · A fixed position teaches. Shuffled by time, the same kind of tile moves every open and
+ *     the row has to be re-read; fixed, the place says what it is before the label does.
+ *   · It puts the boundary in the right spot: somebody else's photo first, then yours. "What
+ *     came to you", then "what happened to your kamos" — two halves rather than one pile.
+ *
+ * AND THE COUNTS ARE ASYMMETRIC ON PURPOSE. A reply is a tile each (each one is a separate
+ * round, a separate tap), capped at three; plays and reactions are ONE tile each in total,
+ * the hide most concerned. Three reactions on three photos would otherwise fill the row and
+ * push the reply — the only actionable tile — off the edge.
+ *
+ * Called before khResults() stamps the seen marks, because those marks are the definition of
+ * "new". Stamping first would empty the tray on the very open it exists for. */
+function khTray(t){
+  const el=$("#khTray"); if(!el) return;
+  el.innerHTML=""; el.style.display="none";
+  if(!t||t.offline) return;
+  const rows=(t.rows||[]).filter(r=>r&&r.img_path);
+  const items=[];
+  const ICO_PLAY='<svg class="solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>';
+  const ICO_RX='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.9c0 5.4-7.5 10-7.5 10z"/></svg>';
+  /* ① THE ANSWERS. Someone else's photograph, so it is named — the one tile on this row that
+     is about a person rather than about a number. */
+  const seenAt=replySeenAt();
+  const fresh=(chNewsReplies||[]).filter(r=>r&&r.id&&r.img_path&&String(r.created_at||"")>seenAt).slice(0,3);
+  fresh.forEach(r=>items.push({kind:"reply",id:r.id,img:r.img_path,
+    who:r.name?("@"+r.name):"Someone", lbl:"answered you"}));
+  /* ② THE PLAYS, one tile: the hide that took the most of them. */
+  const newTried=(t.tried|0)-seenTries();
+  if(newTried>0&&rows.length){
+    const top=rows.slice().sort((a,b)=>((b.n_attempts|0)-(a.n_attempts|0)))[0];
+    if(top&&(top.n_attempts|0)>0){
+      items.push({kind:"plays",id:top.id,img:top.img_path,
+        html:'<span>'+ICO_PLAY+(top.n_attempts|0)+'</span>',
+        lbl:newTried+(newTried===1?" new play":" new plays")});
+    }
+  }
+  /* ③ THE REACTIONS, one tile: the hide holding the most of them. The high-water mark is a
+     TOTAL across every hide (see chRxCheck), so it can only answer "are there new ones",
+     never "on which" — the tile shows the count it can stand behind, the hide's own. */
+  let rxSeen=0; try{ rxSeen=parseInt(localStorage.getItem("kamo_rx_seen")||"0",10)||0; }catch(e){}
+  const rxTotal=(chNewsRx||[]).reduce((a,x)=>a+((x&&x.n)|0),0);
+  if(rxTotal>rxSeen){
+    const top=(chNewsRx||[]).slice().sort((a,b)=>((b&&b.n)|0)-((a&&a.n)|0))[0];
+    const hide=top&&rows.find(r=>r.id===top.hide_id);
+    if(hide){
+      items.push({kind:"rx",id:hide.id,img:hide.img_path,
+        html:'<span>'+ICO_RX+((top.n)|0)+'</span>', lbl:"new reactions"});
+      /* STAMPED HERE, on the same rule the grid stamps it: the delivery IS the reading. The
+         card does not clear this mark otherwise — only mineShow() does — so without this the
+         tile would come back on every single open until the reader happened to visit the
+         grid, which is the tray crying wolf about news it has already delivered. */
+      try{ localStorage.setItem("kamo_rx_seen",String(rxTotal)); }catch(e){}
+    }
+  }
+  if(!items.length) return;   // nothing new: no row at all, never an empty one
+  items.forEach(it=>{
+    const b=document.createElement("button");
+    b.className="khTrayCell"; b.type="button";
+    const pic=document.createElement("span"); pic.className="khTrayPic";
+    const img=document.createElement("img"); img.alt=""; img.loading="lazy";
+    img.src=CH_URL+"/storage/v1/object/public/hides/"+encodeURIComponent(it.img);
+    const meta=document.createElement("span"); meta.className="khTrayMeta";
+    /* A HANDLE IS SOMEBODY ELSE'S TYPING — textContent, the same rule the seeker screen
+       follows. The counters are constants of this file and may be innerHTML. */
+    if(it.who){ const s=document.createElement("span"); s.textContent=it.who; meta.appendChild(s); }
+    else meta.innerHTML=it.html;
+    pic.appendChild(img); pic.appendChild(meta);
+    const lbl=document.createElement("span"); lbl.className="khTrayLbl"; lbl.textContent=it.lbl;
+    b.appendChild(pic); b.appendChild(lbl);
+    b.onclick=()=>{ haptic(10); track("home_news_tapped",{kind:it.kind});
+      closeKamoHome();
+      /* A reply opens ON that hide — chFeed({first}) fetches it by id and seeds it as slide 0.
+         Plays and reactions are about the reader's own kamos, and the grid is where those live
+         with every number attached, so they land there rather than on one photo. */
+      try{ if(it.kind==="reply") chFeed({first:it.id}); else chFeed({mine:true}); }catch(e){} };
+    el.appendChild(b);
+  });
+  el.style.display="flex";
+  track("home_news_shown",{n:items.length,replies:fresh.length,
+    plays:items.some(i=>i.kind==="plays")?1:0, rx:items.some(i=>i.kind==="rx")?1:0});
+}
 async function khResults(){
   const el=$("#khScore"); if(!el) return;
   /* THE BOX IS ON SCREEN BEFORE THE NETWORK ANSWERS. It used to stay display:none until
@@ -12277,6 +12540,10 @@ async function khResults(){
         + (found ? '<span class="khSeg"><b>'+found+"</b> found you</span>"
                  : '<span class="khSeg khNone">nobody found you</span>')
         + (waiting ? ' · <span class="khSeg"><b>'+waiting+"</b> waiting</span>" : "");
+    /* THE TRAY GOES FIRST, AND THE ORDER IS THE FEATURE. The three marks below are what
+       "new" means; stamping them before rendering would empty the row on the one open it was
+       built for. Wrapped, because a throw here must not cost the results underneath it. */
+    try{ khTray(t); }catch(e){}
     /* Opening the card IS reading them — the dot goes out here, not on some later tap. */
     /* Both reasons the dot can be lit are cleared here, or it relights on the next check and
        the card the user just read starts crying wolf. */
@@ -12368,6 +12635,12 @@ const REPLY_SEEN_KEY="kamo_replies_seen";
 function replySeenAt(){ try{ return localStorage.getItem(REPLY_SEEN_KEY)||""; }catch(e){ return ""; } }
 function markRepliesSeen(iso){ try{ if(iso) localStorage.setItem(REPLY_SEEN_KEY,String(iso)); }catch(e){} }
 let chReplyNewest="";
+/* WHAT THE LAUNCH PROBE FOUND, HELD RATHER THAN DISCARDED. chNewsCheck() answers three
+   questions 1200ms after boot and used to reduce all three to one 8px dot; the player card
+   renders them. Empty is the honest state before the probe lands (offline, first launch, a
+   card opened within the first second) — the tray simply does not appear, exactly as it does
+   not for someone with no news. */
+let chNewsReplies=[], chNewsRx=[];
 /* THE CHALLENGES ROW DOES NOT EXIST UNTIL A CHALLENGE DOES — the same gate, and the same
    argument, as the feed button's kfHasContent: a menu line that leads to "No challenges yet"
    is worse than no line, because it spends the one bit of curiosity a new control gets on an
@@ -12393,8 +12666,13 @@ async function chReplyCheck(){
   /* A THROW IS NOT AN EMPTY ANSWER. The catch leaves the cached flag alone: an unreachable
      server must not retract a row this device has legitimately earned. */
   try{ rows=await chRpcRows("my_replies",{p_ids:ids}); }catch(e){ return; }
-  if(!rows.length){ chSetHasReplies(false); return; }
+  if(!rows.length){ chSetHasReplies(false); chNewsReplies=[]; return; }
   chSetHasReplies(true);
+  /* KEPT, NOT COUNTED AND DROPPED. These rows carry img_path and name — the whole reply, not
+     just the fact that one exists — and the player card renders them as photographs. The
+     fetch was already paid for; throwing the answer away and showing a grey dot instead was
+     the waste. Newest first off the query, so the order is the card's order. */
+  chNewsReplies=rows;
   chReplyNewest=String(rows[0].created_at||"");
   if(chReplyNewest && chReplyNewest>replySeenAt()){
     brandDot(true);
@@ -12409,6 +12687,7 @@ async function chRxCheck(){
   const ids=chMine(); if(!ids.length) return;
   let rows=[];
   try{ rows=await chRpcRows("my_reactions",{p_ids:ids}); }catch(e){ return; }
+  chNewsRx=rows||[];   // same reason as chNewsReplies: the card renders these, not a dot
   const total=(rows||[]).reduce((a,x)=>a+((x&&x.n)|0),0);
   if(!total) return;
   let seen=0; try{ seen=parseInt(localStorage.getItem("kamo_rx_seen")||"0",10)||0; }catch(e){}
