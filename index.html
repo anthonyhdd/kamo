@@ -12464,7 +12464,7 @@ function chSeek(hideId,opts){
      opens a link.
      It could not be derived from anything that already exists. CH_ROUNDS_KEY above counts
      rounds only OUTSIDE the wrapper (chCountsRounds is `!window.ReactNativeWebView`, on
-     purpose — it drives the Get KAMO / Play KAMO split for web visitors), so inside the app
+     purpose — it is the browser's own record and nothing else), so inside the app
      it is permanently 0; reusing it would both read zero and corrupt that CTA logic. And the
      hit/miss itself was never written anywhere: submit_attempt answers the client and the
      answer is used to draw the ending, then dropped. save_seek_trace does send `why` to the
@@ -12804,6 +12804,17 @@ function chSeek(hideId,opts){
     }catch(_){}
   }
 
+  /* HOW THE ROUND ENDED, read by chRehide(). ending() owns the flag; chRehide() is a click
+     handler that fires long after it, and both exit events have to report the same outcome
+     or the card's win/loss split is only measurable on one of its two buttons.
+     ABOVE THE ASYNC BLOCK FOR THE REASON THE NEXT PARAGRAPH GIVES, and it was written down
+     there first: ending() runs from the `seek_missing` early return — "This hide is gone" —
+     which is reached before any of the block's own locals initialise, so a `let` inside it is
+     in the temporal dead zone at that moment. Unlike the two below, this one is ASSIGNED on
+     every ending, guard or no guard, so down there it did not merely risk a ReferenceError,
+     it threw one on the only error path this screen has and took the card with it. Caught by
+     scripts/test-reflink-dom.mjs, which taps that exact CTA. Third time for this file. */
+  let endWon=false;
   /* ══ THE RUN PILL ═══════════════════════════════════════════════════════════════════════
      DECLARED HERE, ABOVE THE ASYNC BLOCK, AND THAT POSITION IS THE POINT. ending() is called
      from inside it on the very first line — "This hide is gone" — which runs long before the
@@ -13594,7 +13605,7 @@ function chSeek(hideId,opts){
        runs from here: place, paint, send. crossOrigin, or the board taints and the
        publish dies at toBlob — storage answers ACAO:* (verified). */
     function chRehide(src){
-      track("seek_rehide_tapped",TP({round:chRoundsPlayed()}));
+      track("seek_rehide_tapped",TP({round:chRoundsPlayed(),won:endWon}));
       /* THE ANSWER'S ADDRESS, captured at the only moment it is knowable. From here on the
          user is making a hide, and the app has no other way to learn who it is for — the
          share sheet will never say. `h.name` is what the button and the notification print;
@@ -13688,7 +13699,12 @@ function chSeek(hideId,opts){
          has never been displayed, so nothing anybody has seen was ever wrong, and fixing it
          before the run starts printing is the only moment where the fix is free. Left in and
          a creator could build a 40-run by rewatching their own hides. */
-      const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(/^Found/.test(String(head||""))) : null;
+      /* THE WIN FLAG, HOISTED. It was computed inline for the seeker's record and now also
+         decides which of the card's two buttons is the primary one — so it is read once and
+         means one thing in both places. "Found" is the only head a win ever produces. */
+      const won=/^Found/.test(String(head||""));
+      endWon=won;
+      const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(won) : null;
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
       /* THE RUN SPEAKS ON THE CARD TOO, because the pill is about to leave with the round.
@@ -13767,7 +13783,25 @@ function chSeek(hideId,opts){
            offered to answer themselves; the reply it would file (chReplyTo=HID) names a hide
            this device made, so the notification, the receipt and the "someone answered you"
            line would all point home. There is no counterparty on this card. */
-        +((eopts.rehide&&!MINE)?'<button class="'+((!FEED&&chRoundsPlayed()>=1)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
+        /* THE PRIMARY SLOT IS DECIDED BY THE OUTCOME, NOT BY THE ROUND NUMBER — 2026-08-17.
+           It used to read chRoundsPlayed()>=1, which was written to mean "from the second
+           round on, sell the app". It never did that: chBumpRounds() above runs BEFORE this
+           markup, so the counter is already 1 when the first round's card is built, and the
+           loop button has been the ghost on every link round since. The comment two blocks
+           down said "Round 1 is unchanged and still sells the loop" and was false the day it
+           shipped.
+           Measured before changing it (08-16, link path): "Challenge back" took 605 taps from
+           the SECONDARY slot against 158 for "Get KAMO" in the primary one, on ~23 500 cards.
+           So the slot is not what is holding the store button at 0.7%, and handing it the win
+           costs the loop four taps to buy one.
+           A WIN HAS A COUNTERPARTY AND A LOSS DOES NOT. That is the whole rule. The player who
+           just found it has somebody to answer and is in the one mood where answering is the
+           obvious move; the player who just lost — 54% of finished rounds, most of them inside
+           four seconds — has nothing to send back, and that card is where the store belongs.
+           WHAT SETTLES IT: seek_cta_tapped and seek_rehide_tapped now both carry `won`. Split
+           on it. If rehides on wins do not rise by more than the store loses, revert to the
+           single primary — this is two conditions. */
+        +((eopts.rehide&&!MINE)?'<button class="'+((!FEED&&!won)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
         /* AND IT TAKES THE PRIMARY SLOT THERE, because on your own hide it is the only control
            left that does anything for the hide. A photo nobody was sent is a photo nobody
            plays: this is the whole reason the screen exists after "See it live". */
@@ -13788,16 +13822,18 @@ function chSeek(hideId,opts){
            instruction a first-round player needs stays on screen until they obey it. */
         +(FEED
             ? ''
-            /* THE SECOND ROUND SELLS THE APP — the half of #175 whose measurement shipped
-               and whose product change never did. Somebody opening a SECOND stranger's hide
-               has already answered the question the store page asks, so the store stops being
-               the secondary action. Round 1 is unchanged and still sells the loop. */
+            /* THE LOSS SELLS THE APP — see the note on chReh above for why this stopped being
+               a round count. Primary on every ending that leaves the player with nothing to
+               send back: a loss, their own hide, or a dead link. Secondary on a win, and only
+               there, because that is the one card where the other button has a person behind
+               it. Exactly one primary in every combination — chReh only exists when
+               `rehide && !MINE`, which is the same test this line demotes on. */
             /* AND IT CARRIES THE FIGURE. This is the one button on the card that goes to the
                store, and it is being pressed by somebody who has spent the last thirty seconds
                hunting exactly this silhouette in a photo. The word "KAMO" is a brand they met
                four minutes ago; the figure is the thing they just found. Decorative to a
                screen reader (aria-hidden) — the label already says everything. */
-            : '<button class="'+((eopts.rehide&&chRoundsPlayed()<1)?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+CH_CTA_FIG+'</button>')
+            : '<button class="'+((eopts.rehide&&!MINE&&won)?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+CH_CTA_FIG+'</button>')
         /* THE REACTION SLOT IS GONE FROM THIS CARD — the rail lives on the round now and is
            already on screen behind it. Left in, this markup would mint a SECOND element with
            id="chRx", and $$() is a querySelector: every later lookup would resolve to
@@ -13827,7 +13863,7 @@ function chSeek(hideId,opts){
          failure this change exists to end. Split seek_cta_tapped by tier and a template that
          stopped resolving shows up as a column, not as a slow drift in "organic". */
       if($$("chGo")) $$("chGo").onclick=()=>{ const u=refLink("seek_cta",HID);
-        track("seek_cta_tapped",TP({tier:u===appLink?"plain":"onelink",round:chRoundsPlayed()}));
+        track("seek_cta_tapped",TP({tier:u===appLink?"plain":"onelink",round:chRoundsPlayed(),won:won}));
         location.href=u; };
       /* The feed is told the moment this card exists, so it can drop the swipe hint before
          the pill and the card's own buttons occupy the same 40 pixels. */
