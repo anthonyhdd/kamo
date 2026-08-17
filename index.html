@@ -5569,7 +5569,10 @@ function showLockHint(src){
   hintEl.classList.add("tap");
   const clear=()=>{ hintEl.classList.remove("tap"); hintEl.onclick=null; };
   // force=true: they just asked for it, so the cap that produced this hint must not eat it.
-  hintEl.onclick=()=>{ clear(); showHint(""); if(web) pwWebInstall(); else openPaywall(src,true); };
+  /* `src` PASSED THROUGH, not left to pwLastSource — see pwWebInstall. This pill is the only
+     thing standing between a locked control and the store, so it is the only place that knows
+     which control the tap belongs to. */
+  hintEl.onclick=()=>{ clear(); showHint(""); if(web) pwWebInstall(src); else openPaywall(src,true); };
   clearTimeout(showLockHint._t); showLockHint._t=setTimeout(clear,3600);
 }
 /* EVERY NUMBER HERE IS READ FROM THE THING IT DESCRIBES.
@@ -5966,9 +5969,17 @@ function pwWebOffer(){ return !window.ReactNativeWebView && !storeReady; }
    A NEW EVENT NAME IS SAFE HERE, uniquely: the wrapper's WEB_EVENTS allow-list drops names
    it does not know, and this path cannot run inside the wrapper by construction. In a
    browser track() posts straight to Amplitude. */
-function pwWebInstall(){
+/* THE SOURCE HAS TO BE PASSED IN FROM THE PILL, and finding that out cost a run against the
+   deployed file: every pill tap reported `source:"generic"`. pwLastSource is written by
+   openPaywall AFTER its refusal returns, so on the web — where the refusal is now the whole
+   path — it is never written at all and keeps its initial value. The pill IS the web ask, so
+   its conversions saying "generic" would make the one measured web event unsplittable, on the
+   exact question this change has to answer: which locked control sends people to the store.
+   The argument is optional because #pwBuy still calls this with the sheet open, where
+   pwLastSource is the honest answer. */
+function pwWebInstall(src){
   const u=refLink("paywall",CH_SEEK||"");
-  track("paywall_install_tapped",{source:pwLastSource,nth:pwOpens,first_beat:pwFirstBeat,
+  track("paywall_install_tapped",{source:src||pwLastSource,nth:pwOpens,first_beat:pwFirstBeat,
     tier:u===appLink?"plain":"onelink"});
   haptic(16);
   location.href=u;
