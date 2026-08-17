@@ -54,13 +54,31 @@ const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
    goes over the wire, and a test that only reads the button would pass on a broken build. */
 const anchor = 'async function chRpc(fn,body){';
 if (!real.includes(anchor)) throw new Error('anchor missing: ' + anchor);
-const html = real.replace(anchor, anchor +
+const staged = real.replace(anchor, anchor +
   'window.__rpc=window.__rpc||[];window.__rpc.push([fn,body]);' +
   'if(window.__seed&&Object.prototype.hasOwnProperty.call(window.__seed,fn)) return window.__seed[fn];')
   /* 45 seconds is the right number for a user and an absurd one for a suite. Shortened rather
      than stubbed: what block 3 asserts is that the REAL backstop, on its real path, no longer
      lands on the answer screen. */
   .replace('const PW_FIRST_DWELL_MS=45000;', 'const PW_FIRST_DWELL_MS=800;');
+
+/* THE TWO FACTS THE RETURN NEEDS, AND NEITHER IS REACHABLE FROM THE DOM. `chReplyFromFeed` is
+   set only inside a feed round — this suite's rounds arrive by link, which is the path that
+   deliberately does NOT auto-return — and `chId` is the id create_hide answered with, which
+   exists only after a real storage round trip. Both are module-scope `let`s, so the fixture is
+   appended inside the module rather than bolted onto window: the same door test-sheetlive uses,
+   and the reason nothing test-only has to live in index.html. */
+const tail = staged.lastIndexOf('</script>');
+const html = staged.slice(0, tail)
+  + '\nwindow.__rb={'
+  + 'arm(id){ chReplyFromFeed=true; chId=id; },'
+  + 'sent(){ document.getElementById("ssInvite").click(); },'
+  + 'feed(){ const h=document.getElementById("kfHint");'
+  + ' return{open:!!document.getElementById("kfeed"),hint:h?h.textContent:null,'
+  + ' slides:document.querySelectorAll("#kfeed .kfSlide").length,'
+  + ' card:(document.getElementById("kfMid")||{}).textContent||""}; },'
+  + '};\n'
+  + staged.slice(tail);
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.css': 'text/css' };
 const server = createServer((rq, rs) => {
@@ -316,6 +334,43 @@ console.log('\nAND NOBODY IS SOLD TO WHILE THEY ARE MAKING IT');
   st.shutter !== 'hidden' && st.loaded && st.camera === 'none'
     ? ok('and it is the answered photo with its tools, not the camera')
     : bad(`the reply screen reads shutter:${st.shutter} photo-loaded:${st.loaded} camera:${st.camera}`);
+  await page.close();
+}
+
+/* THE LAST FRAME OF A REPLY IS THE REPLY, NOT A ROOM FULL OF STRANGERS.
+   A reply born in the feed sends without a share sheet — the address is already known — and the
+   receipt is the button changing. The feed then comes back by itself, and for one release it
+   came back as the PLAIN public feed: the answer to "I painted this and sent it back" was
+   somebody else's photograph, and on a device that had already played what the room holds it
+   was the cold-start card, "Nothing here yet.", printed over the spent round. Founder's report,
+   2026-08-17, with the screenshot: "ça devrait renvoyer vers le feed sur le dessin que j'ai
+   send back".
+   ASSERTED ON THE WIRE AND ON THE SCREEN. get_hide carrying the id that was just published is
+   what "seeded by id" MEANS — chFeed fetches slide 0 rather than rendering it locally — and the
+   hint is how the screen says whose photo it is. Either one alone would pass on a build that
+   opened the right feed and drew the wrong thing. */
+console.log('\nAND THE FEED COMES BACK ON THE HIDE THAT WAS JUST SENT');
+{
+  const page = await replyFrom('tony');
+  const MINE = 'sentback00000001';
+  await page.evaluate((id) => { window.__rpc = []; window.__rb.arm(id); window.__rb.sent(); }, MINE);
+  /* The return is deliberately a beat behind the receipt (1600ms), so this waits for the feed
+     rather than sleeping past it — a fixed sleep here is a test that fails on a slow morning. */
+  await page.waitForSelector('#kfeed', { timeout: 10000 });
+  await page.waitForTimeout(400);
+  const st = await page.evaluate(() => window.__rb.feed());
+  const seeded = await page.evaluate((id) =>
+    window.__rpc.some(([fn, b]) => fn === 'get_hide' && b && b.p_id === id), MINE);
+
+  seeded
+    ? ok('the feed is opened ON the reply — get_hide asks for the id that was just published')
+    : bad('no get_hide for the published id — the reply return opened the plain public feed');
+  st.slides >= 1 && !/Nothing here yet/.test(st.card)
+    ? ok('so the sender lands on a slide, never on the cold start over their own send')
+    : bad(`the feed shows ${st.slides} slide(s) and says ${JSON.stringify(st.card.slice(0, 40))}`);
+  st.hint && /yours/i.test(st.hint)
+    ? ok(`and the slide is named as theirs ("${st.hint}")`)
+    : bad(`the seeded slide is unlabelled — hint reads ${JSON.stringify(st.hint)}`);
   await page.close();
 }
 
