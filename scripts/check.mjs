@@ -1175,6 +1175,23 @@ try {
   bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12b-ter. Instagram is reachable, native-only, and it does not out-rank the send ------
+   The button was cut on 2026-08-15 for two good reasons — a labelled slab took a third of a
+   row built for two, and it sat above the send — and one bad one: a seven-day average taken
+   over the days before the wave, on a series that was doubling right up to the evening the
+   markup was deleted. It is back as a 48px glyph, and every way it could go wrong again is a
+   layout fact or a gate, which is to say invisible in a diff: a label creeping back onto it
+   re-wraps "Remove mark", and a gate loosened to `nativeCaps` puts a dead button on the web.
+   Both fail here rather than on a phone. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-igbtn-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-igbtn-dom.mjs', 'INSTAGRAM BUTTON TEST', out)
+    : ok('Instagram is reachable, native-only, and does not out-rank the send (node scripts/test-igbtn-dom.mjs)');
+} catch (e) {
+  bad('THE INSTAGRAM TARGET IS UNREACHABLE OR IT IS EATING THE ROW:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* THE POST-SEND INSTALL OFFER, and the two ways it goes wrong are opposites. Shown inside the
    wrapper it sells the app to somebody holding it, on the most-seen surface in the product,
    after every send. Shown before anything is sent it is an advert on a sheet nobody has used.
