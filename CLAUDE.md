@@ -11,7 +11,14 @@ Three repos, and they are not equals:
 | `anthonyhdd/kamo-mirror` | the same file at `kamo.bliss-coach.com`. Share links point here. |
 | `anthonyhdd/kamo-app` | the Expo/React Native wrapper on the App Store. A WebView and a bridge. |
 
-KAMO is unrelated to the Sofia/Amelie/Charm/Alex portfolio. Nothing in that CLAUDE.md applies here.
+The *app* is unrelated to the Sofia/Amelie/Charm/Alex portfolio — none of that product CLAUDE.md
+applies to `index.html`. But **KAMO's entire YouTube acquisition pipeline lives in `~/SPANISH`**
+(`anthonyhdd/SPANISH`), and that is not a detail: `content-engine/` renders and schedule-uploads
+every Short, and the seven ex-persona channels were all converted to KAMO on 2026-08-17. Nothing
+in *this* repo mentions YouTube, so anyone asked about the video pipeline, the channels, or where
+the views come from will look here, find nothing, and answer from the wrong repo. Read
+`~/SPANISH/content-engine/config.json` and `upload.mjs` first — and read them on `main`, because
+the working checkout of that repo is usually parked on a feature branch that is weeks behind.
 
 ---
 
