@@ -191,9 +191,18 @@ console.log('\n③ IN A BROWSER NOTHING ARRIVES ON ITS OWN');
   await page.route('**/apps.apple.com/**', r => r.abort());
   await page.evaluate(() => document.getElementById('hint').click());
   await page.waitForTimeout(400);
-  count(sent, 'paywall_install_tapped') === 1
+  const installs = sent.filter(e => e.event_type === 'paywall_install_tapped');
+  installs.length === 1
     ? ok('tapping the pill goes to the store, and is measured as an install tap')
-    : bad(`the pill tap produced ${count(sent, 'paywall_install_tapped')} install taps — it is a sentence with nothing behind it`);
+    : bad(`the pill tap produced ${installs.length} install taps — it is a sentence with nothing behind it`);
+  /* AND IT SAYS WHICH CONTROL SENT THEM. Caught on a run against the deployed file: this read
+     `generic` for every pill tap, because pwLastSource is only written past the refusal the
+     pill replaced. The pill is the entire web ask now — unsplittable conversions from it would
+     leave "which lock sells the app" unanswerable, which is the question this whole change
+     hands to the pill. */
+  (installs[0] || {}).event_properties?.source === 'color'
+    ? ok('and it names the control that produced it (source=color)')
+    : bad(`the install tap reports source=${JSON.stringify((installs[0] || {}).event_properties?.source)} — every pill tap lands in one bucket`);
   try { await page.close(); } catch {}
 }
 {
