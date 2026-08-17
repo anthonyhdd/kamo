@@ -8365,14 +8365,31 @@ async function nativeShare(target){
   /* "Tap to reveal" was a promise nothing could keep — there is no backend, the shared
      photo isn't hosted anywhere, so no link could ever reveal it. The ask is now the one
      thing a link CAN deliver: go hide one yourself. */
-  /* INSTAGRAM ALWAYS GETS THE REVEAL, whatever tab is showing. Stories is a video surface and
-     a still frame is the weakest thing that can be posted to it; the reveal is the clip people
-     actually watch. Challenge stays the default tab for everything else on purpose — that is
-     the send-to-one-person path, and its static card is what carries the invite loop.
-     Gated on the capability AND on beforeBoard, so when either is absent this collapses to
-     exactly today's behaviour instead of promising a video that cannot be encoded. Every build
-     before 1.1.0 lands in that branch, since none of them advertise revealVideo. */
-  const forceReveal = target==="instagram" && nativeCaps.revealVideo && !!beforeBoard;
+  /* EVERY MEDIA SHARE GETS THE REVEAL, NOT JUST INSTAGRAM — and the version of this line that
+     said `target==="instagram"` had quietly stopped firing at all.
+     WHAT HAPPENED. The clip was Instagram-only by design: Stories is a video surface and a
+     still frame is the weakest thing that can be posted to it. Then the Instagram button was
+     deleted on 2026-08-15 ("gone as a button, not as a destination" — it lives inside `more`
+     now), and with it went the only caller that could ever set target to "instagram".
+     `shareMode` has been the constant "challenge" since the tabs left on 08-12, so the other
+     half of `asReveal` was already dead. Net effect, unnoticed for two days because nothing
+     breaks: the reveal MP4 — the one artifact of this product that is fun to WATCH, whose
+     native encoder shipped in 1.1.0 on 08-10 — reached nobody at all. Everyone got the static
+     card, on every destination.
+     WHY THE FIX IS TO WIDEN IT RATHER THAN TO RESTORE THE BUTTON. The wrapper was always built
+     for this: its `reveal-video` handler branches on `msg.target` — Stories for instagram,
+     Snapchat for snapchat, the system sheet for everything else — and its own comment says
+     "the reveal video is KAMO's most shareable asset and most of it goes via More". The web
+     was the half that never asked. So the destination the user picks in the system sheet gets
+     the clip, whichever app that turns out to be.
+     AND THE LINK TRAVELS WITH IT. The reveal path passes `message`; the static one is the
+     branch that never has (see below). So this also closes the link-less hole for every media
+     share on a binary that can encode.
+     UNCHANGED WHERE IT CANNOT WORK: gated on the capability AND on beforeBoard, so a build
+     before 1.1.0, a failed encode, or a round with no before-frame collapses to exactly the
+     static share that ships today. `save` never reaches here — saveStatic() has its own path,
+     and a saved video is not a saved photo. */
+  const forceReveal = nativeCaps.revealVideo && !!beforeBoard;
   const asReveal = shareMode==="ba" || forceReveal;
   const message=asReveal
     ? ("Now you see him. Now you don't! Painted with Kamo — your turn → "+link)
@@ -8394,9 +8411,9 @@ async function nativeShare(target){
   let linkCopied=false;
   try{ navigator.clipboard.writeText(message); linkCopied=true; }catch(e){}
   if(linkCopied) setTimeout(()=>showHint("Link copied — paste it with your post",3200),700);
-  // Before/After mode — or any Instagram share — → animated reveal MP4 (native module). Falls
+  // Any media share on a binary that can encode → animated reveal MP4 (native module). Falls
   // back to the static image when the wrapper doesn't advertise the capability (older build)
-  // or has no before frame; `asReveal` already folds both of those conditions in for Instagram.
+  // or has no before frame; `asReveal` already folds both of those conditions in.
   if(asReveal && nativeCaps.revealVideo && beforeBoard){
     const hidden=composeShare(1080, board).toDataURL("image/jpeg",0.85);      // camouflaged (shown first)
     const revealed=composeShare(1080, beforeBoard).toDataURL("image/jpeg",0.85); // figure visible (wiped in)
