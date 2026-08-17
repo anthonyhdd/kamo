@@ -1915,10 +1915,18 @@
      ON THE TITLE, NOT ON A BUTTON, and that is deliberate: the sheet already spends its one
      animation on .ssPlus.asking, and a second moving control would turn a receipt into a
      carnival. Nothing here is tappable, so nothing competes with the send.
-     ONE PASS, THEN GONE — the class is removed by ssShimmerTitle() a beat after it ends.
+     IT REPEATS, WITH A LONG PAUSE BETWEEN PASSES (founder, 2026-08-17: "relance-le toutes les
+     3-4 sec"). One sweep is easy to miss — the sheet presents itself while the user is still
+     reading the reveal behind it, so the sentence has to survive being arrived at late.
+     THE PAUSE IS INSIDE THE KEYFRAMES, not in a JS timer: the sweep runs over the first 30% of
+     a 3.6s cycle (~1.1s) and the remaining 2.5s parks on plain white. An interval would keep
+     firing after the sheet was gone and drift against everything else on the phone.
+     SIX PASSES, THEN IT STOPS — about 21 seconds, which outlasts any realistic dwell here.
+     Infinite would turn a receipt into a marquee, and it would still be moving under the
+     user's thumb while they edit their handle two rows up.
      `background-clip:text` with `-webkit-text-fill-color:transparent` is the whole effect, and
      the failure mode if it is ever unsupported is an INVISIBLE headline, so the class is only
-     applied where CSS.supports() confirms it and never left on afterwards. */
+     applied where CSS.supports() confirms it, and it comes off with the sheet. */
   /* ⚠️ THE POSITION NEVER LEAVES 0-100%, AND THAT IS NOT A STYLE CHOICE. With an image wider
      than its box, a percentage position interpolates over (box - image) — so 125% puts the
      gradient two box-widths to the left and leaves the right half of the headline painted with
@@ -1930,8 +1938,13 @@
     background-image:linear-gradient(100deg,#fff 0 38%,var(--mint) 50%,#fff 62% 100%);
     background-size:260% 100%;background-repeat:no-repeat;background-color:transparent;
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
-    animation:ssLit 1.15s cubic-bezier(.35,0,.2,1) 1 both;}
-  @keyframes ssLit{from{background-position:100% 0}to{background-position:0% 0}}
+    animation:ssLit 3.6s linear 6 both;}
+  /* Parked at 0% for the whole tail — that end of the gradient is white, so every frame
+     between passes is the headline exactly as it ships. */
+  @keyframes ssLit{
+    0%{background-position:100% 0}
+    30%{background-position:0% 0}
+    100%{background-position:0% 0}}
   /* Same rule as every other motion in this file: the news is the sentence, not the sweep. */
   @media (prefers-reduced-motion:reduce){
     .ssCard .pwTitle.ssLit{animation:none;background-image:none;-webkit-text-fill-color:currentColor;}}
@@ -2086,6 +2099,23 @@
      the 14px of air used to do. */
   .ssBtn:active{transform:scale(.96);}
   .ssMore{background:rgba(255,255,255,.06);}
+  /* MORE IS AN ICON NOW, AND THE WIDTH GOES TO THE UPSELL (founder's call, 2026-08-17).
+     Seven days of share_target_tapped: invite 5768 (90%), save 360, instagram 240, more 64 —
+     ONE PERCENT. Half a row is not what 1% buys, and it was buying it next to the only line on
+     this sheet that sells anything. It keeps its place rather than being deleted: `more` is the
+     system sheet, which is the only route to Snapchat, TikTok, Messages and Instagram that this
+     app has left — and since the reveal clip now travels through it, that route matters more
+     than its tap count suggests, not less.
+     56px, not 48: the glyph is three dots on one line and a square button reads as "one of the
+     two", which is the mistake being corrected. Slightly wider than tall makes it the small one
+     in a pair, without becoming a target people miss. */
+  .ssRow2 .ssMore{flex:0 0 auto;width:56px;padding:0;}
+  /* THE ROW HAS ONE BUTTON FOR A MEMBER — #ssPlus is display:none once KAMO+ is on — and a
+     56px pill alone on the left of an empty line reads as a layout that broke. The class is
+     written by ssRow2Fit() from the one place that decides that visibility. */
+  .ssRow2.alone .ssMore{flex:1 1 auto;width:auto;}
+  /* Nothing to sit beside the dots, so the icon carries the button on its own. */
+  .ssRow2 .ssMore .ic{margin:0;}
   /* WHERE THE PHOTO GOES, SAID BEFORE IT GOES THERE.
      This row is the entire consent surface for the feed, so it is a row and not a setting
      behind the gear: a default that publishes somebody's living room to strangers is only
@@ -2782,7 +2812,10 @@
          wrap, no width taken from More, and nothing above the send. -->
       <button class="ssBtn ssIG" id="ssIG" data-target="instagram" style="display:none"
               aria-label="Share to Instagram Stories" title="Instagram Stories"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg></button>
-      <button class="ssBtn ssMore" data-target="more"><span class="ic">•••</span>More</button>
+      <!-- ICON ONLY. The label went with the width — see .ssRow2 .ssMore. aria-label and title
+           are not decoration here: without the word, three dots are the entire affordance, and
+           VoiceOver would otherwise read the glyph. -->
+      <button class="ssBtn ssMore" data-target="more" aria-label="More" title="More"><span class="ic">•••</span></button>
     <!-- WHAT COMES AFTER THE SEND. Every ending in this product closes on itself: you share a
          challenge and the sheet just sits there, at the moment of highest intent in the whole
          session. This is the one action that reloads the loop, and it only appears once
@@ -8134,6 +8167,7 @@ function openShareSheet(via){
      forcing block would kill that centring the first time the sheet opens. Empty string
      hands the element back to the stylesheet. */
   { const p=$("#ssPlus"); if(p) p.style.display = isPro ? "none" : ""; }
+  ssRow2Fit();
   /* THE HEADLINE AND THE FEED BUTTON BOTH FOLLOW THE VISIBILITY TOGGLE, so they are painted
      from the same function that paints the toggle — on every open, because the answer is
      remembered across rounds and the sheet must never arrive claiming the opposite of what
@@ -8151,16 +8185,28 @@ function openShareSheet(via){
   /* After setSheetSize, so the sweep runs on a card that has stopped moving. */
   ssShimmerTitle();
   track("share_opened",{score:Math.round(currentScore||0),via:via||"tap"}); }
-/* THE HEADLINE'S ONE SWEEP — see .ssCard .pwTitle.ssLit.
-   ONCE PER SHEET, NOT ONCE PER RENDER. The title is written by kfRenderVis(), which runs on
-   every visibility toggle: driving the animation from there would re-light the sentence every
-   time somebody flipped Public, which reads as a glitch rather than as news. So it is armed
-   by the two functions that put the sheet on screen and disarmed when the sheet is dismissed —
-   a peek that expands into the open state gets one sweep, not two.
+/* WHO IS LEFT ON THE LAST ROW. `more` is a 56px icon beside the upsell — but the upsell is
+   hidden for a member, and a lone icon on the left of an empty line looks like a break rather
+   than a choice. One class, written from the one place that decides #ssPlus's visibility, so
+   the two can never disagree; the width itself stays in CSS where the rest of the row lives.
+   Reads the INLINE style rather than getComputedStyle: this runs inside openShareSheet, before
+   the card has been laid out, and a computed read there would measure a sheet mid-resize. */
+function ssRow2Fit(){
+  const r=$("#ssRow2"), p=$("#ssPlus"); if(!r) return;
+  r.classList.toggle("alone", !p || p.style.display==="none");
+}
+/* THE HEADLINE'S SWEEP — see .ssCard .pwTitle.ssLit, which owns the rhythm (six passes, one
+   every 3.6s) so nothing here has to keep time.
+   ARMED ONCE PER SHEET, NOT ONCE PER RENDER. The title is written by kfRenderVis(), which runs
+   on every visibility toggle: driving the animation from there would restart the sentence every
+   time somebody flipped Public, which reads as a glitch rather than as news. So it is armed by
+   the two functions that put the sheet on screen and disarmed when the sheet is dismissed — a
+   peek that expands into the open state keeps the run it already started rather than beginning
+   a second one on top of it.
    GUARDED ON SUPPORT, because the effect is `-webkit-text-fill-color:transparent` over a
    clipped gradient: on an engine without background-clip:text that is not a missing shimmer,
-   it is a headline nobody can read. And removed on a timer whatever happens, so even a browser
-   that supports it but stalls the animation ends up back on plain white text. */
+   it is a headline nobody can read. The class comes off in closeShareSheet() — no timer to
+   race the animation, and the parked frame is plain white anyway. */
 let ssLitDone=false;
 function ssShimmerTitle(){
   const h=$("#ssTitle"); if(!h||ssLitDone) return;
@@ -8168,12 +8214,14 @@ function ssShimmerTitle(){
     ||CSS.supports("background-clip","text")))) return; }catch(e){ return; }
   ssLitDone=true;
   h.classList.remove("ssLit"); void h.offsetWidth; h.classList.add("ssLit");
-  clearTimeout(ssShimmerTitle._t);
-  ssShimmerTitle._t=setTimeout(()=>{ h.classList.remove("ssLit"); },1500);
 }
 function closeShareSheet(){ shareSheetEl.classList.remove("show","peek","ssMini","ssEditName"); ssState="hidden";
-  /* Re-armed for the next hide, and only from here: sheetToFloor() leaves the sheet on screen,
-     so a round that folds to mini and comes back must not light the same sentence twice. */
+  /* THE CLASS GOES WITH THE SHEET. It carries a six-pass animation now, so leaving it on would
+     hand the next hide a headline mid-run — and re-arming without removing it would restart
+     nothing, since the class is already there.
+     Re-armed here and only here: sheetToFloor() leaves the sheet on screen, so a round that
+     folds to mini and comes back keeps the run it started rather than beginning a second. */
+  { const h=$("#ssTitle"); if(h) h.classList.remove("ssLit"); }
   ssLitDone=false; }
 
 /* THE FLOOR, AND EVERY EXIT ROUTES THROUGH IT. Making swipe-down stop at mini was only part

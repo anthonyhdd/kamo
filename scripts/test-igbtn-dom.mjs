@@ -139,9 +139,24 @@ const more=row.find(k=>/ssMore/.test(k.id));
 ig && ig.w<=56
   ? ok(`Instagram is a ${ig.w}px glyph, not a share of the line`)
   : bad('Instagram is taking row width again: '+JSON.stringify(row));
-more && more.w>=110
-  ? ok(`and More keeps its label width (${more.w}px)`)
-  : bad('More lost the line to Instagram: '+JSON.stringify(row));
+/* MORE IS A GLYPH TOO NOW — founder's call, 2026-08-17, hours after this file was written,
+   and the two decisions do not contradict each other: this suite exists so Instagram cannot
+   take the row back, and a 56px `more` does not take it either. What changed is who gets the
+   width Instagram is not allowed to have, and the answer is the upsell rather than a control
+   that ran 64 taps in seven days against the send's 5768.
+   THE ASSERTION IS INVERTED RATHER THAN DELETED, because the failure it was written against is
+   still real in the other direction: a label creeping back onto `more` re-wraps "Remove mark",
+   which is the regression the removal comment describes. Small is now the rule, and the height
+   check below is what actually guards the wrap. */
+more && more.w<=72
+  ? ok(`and More is a ${more.w}px glyph beside it, so the width goes to the upsell`)
+  : bad('More took the line back as a label — "Remove mark" is one word away from wrapping: '+JSON.stringify(row));
+/* AND THE WIDTH REALLY LANDED ON THE UPSELL. Both glyphs being small is only half the point;
+   without this, a row of three small buttons and a hole would pass. */
+{ const plus=row.find(k=>k.id==='ssPlus');
+  plus && plus.w>=140
+    ? ok(`Remove mark takes the rest of the line (${plus.w}px)`)
+    : bad('the upsell did not get the width the two glyphs gave up: '+JSON.stringify(row)); }
 /* THE ACTUAL REGRESSION THE REMOVAL WAS ABOUT: unequal heights, because one label wrapped.
    Asserted across every visible button in the row, so it also covers "Remove mark". */
 new Set(row.map(k=>k.h)).size===1
