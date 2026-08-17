@@ -39,7 +39,7 @@ const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const at = real.lastIndexOf('</script>');
 const html = real.slice(0, at)
   + '\nwindow.__p={'
-  + 'arm(){return{plan_arm:planArm,pwPlan:pwPlan,'
+  + 'arm(){return{plan_arm:planArm,pwPlan:pwPlan,pw_arm:pwArm,'
   + 'active:(document.querySelector("#pwPlans .pwPlan.active")||{dataset:{}}).dataset.plan};},'
   /* The arm has to be readable off an EVENT, not just off a variable: the whole experiment is
      unreadable in Amplitude if track() forgets to stamp it, and that is a silent failure. */
@@ -111,12 +111,88 @@ async function open(seed, prices, wrapper) {
   return { arm, view, stamp };
 }
 
+/* A REAL DEVICE WHOSE localStorage THROWS. This is the production population the arm code
+ * forgot: iOS privacy modes and the 1.0.2 `incognito` WebView can make the property reject
+ * outright, and the assignment used to live inside a try/catch wrapped around the read — so
+ * the throw skipped the decision too and left the initialisers standing. It was not
+ * hypothetical: on 2026-08-16, a day after PW_FULL_ROLLOUT went to 100, 796 of 1971
+ * paywall viewers still reported design_arm "sheet".
+ *
+ * Only the two experiment keys are made to throw. The page touches localStorage a hundred
+ * times for unrelated state, and poisoning all of it would test the app's overall resilience
+ * rather than this decision — a different question, and one that would fail for reasons that
+ * are not this bug.
+ *
+ * `navigator.webdriver` is forced false because the harness pin is the FIRST branch a
+ * headless run hits; leaving it true would assert the pin again and never reach the code
+ * this covers. `roll` then makes the coin deterministic.
+ *
+ * The constant is installed for the whole of module evaluation and torn down the instant it
+ * ends, rather than after a fixed number of calls: three.js loads from vendor/ BEFORE the
+ * inline script and consumes an unknown number of Math.random() calls generating object
+ * UUIDs, so "the arms are calls one and two" is wrong — it was, and it made this block fail
+ * inverted. `window.__p` is assigned on the last line of the module, which is exactly the
+ * moment both arms are decided, so its setter is the restore hook. Nothing downstream — boot,
+ * the 3D scene, the particle work — inherits a frozen Math.random. */
+async function openDenied(roll) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript((r) => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false, configurable: true });
+    const DENIED = new Set(['kamo_pw_design', 'kamo_plan_arm']);
+    const get = Storage.prototype.getItem, set = Storage.prototype.setItem;
+    Storage.prototype.getItem = function (k) {
+      if (DENIED.has(k)) throw new DOMException('storage denied', 'SecurityError');
+      return get.call(this, k);
+    };
+    Storage.prototype.setItem = function (k, v) {
+      if (DENIED.has(k)) throw new DOMException('storage denied', 'SecurityError');
+      return set.call(this, k, v);
+    };
+    const nativeRandom = Math.random;
+    Math.random = () => r;
+    let probe;
+    Object.defineProperty(window, '__p', {
+      configurable: true,
+      get() { return probe; },
+      set(v) { probe = v; Math.random = nativeRandom; },
+    });
+  }, roll);
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForFunction(() => !!window.__p, null, { timeout: 10000 });
+  const arm = await page.evaluate(() => window.__p.arm());
+  await page.close();
+  return arm;
+}
+
 console.log('\nTHE HARNESS PIN HOLDS — AN UNSEEDED HEADLESS RUN IS NOT A COIN FLIP');
 {
   const a = await open(null, null);
   a.arm.plan_arm === 'weekly' && a.arm.pwPlan === 'weekly'
     ? ok('navigator.webdriver lands on the weekly arm, so every other DOM test stays deterministic')
     : bad(`headless got plan_arm "${a.arm.plan_arm}" / pwPlan "${a.arm.pwPlan}" — every paywall assertion in this repo is now flaky`);
+}
+
+console.log('\nSTORAGE THAT THROWS STILL GETS AN ARM — IT DOES NOT SILENTLY OPT OUT');
+{
+  /* The deterministic one, and the one that cost 40% of the fleet: at rollout 100 no branch
+     can legitimately produce "sheet" on a real device — a stored value is promoted or
+     honoured, and an unstored device rolls `Math.random()*100<100`, true for every possible
+     value. So "sheet" here means the decision was skipped, whatever the coin said. */
+  const hi = await openDenied(0.9);
+  hi.pw_arm === 'full'
+    ? ok('a denied read still lands on the full-bleed paywall at PW_FULL_ROLLOUT 100')
+    : bad(`pwArm is "${hi.pw_arm}" with storage throwing — the retired sheet paywall is live again for these devices`);
+  hi.plan_arm === 'weekly'
+    ? ok('and the plan coin is consulted — a high roll gives the weekly arm')
+    : bad(`plan_arm is "${hi.plan_arm}" on a 0.9 roll — expected weekly`);
+
+  /* The half that a swallowed decision can never reach: before the fix `planArm` kept its
+     "weekly" initialiser no matter what the coin said, so the lifetime arm was unreachable
+     on these devices and the 50/50 read 68/32 in production. */
+  const lo = await openDenied(0.1);
+  lo.plan_arm === 'lifetime' && lo.pwPlan === 'lifetime'
+    ? ok('and a low roll really reaches the lifetime arm, rather than falling back to the initialiser')
+    : bad(`plan_arm is "${lo.plan_arm}" / pwPlan "${lo.pwPlan}" on a 0.1 roll — the lifetime arm is unreachable when storage throws`);
 }
 
 console.log('\nCONTROL: WEEKLY IS THE HERO, LIFETIME IS THE LINE');

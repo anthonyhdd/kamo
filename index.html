@@ -3022,10 +3022,37 @@ function trialAdvertised(){
    noticed. A tap on the size bar was opening the sheet for half the fleet, and that was never
    about the entry point — pwArm is a per-DEVICE coin flip, so "the wrong paywall" was simply
    the other side of a 50/50. */
+/* ===== STORAGE MAY FAIL. AN ARM ASSIGNMENT MAY NOT. =====
+ *
+ * Both arms below used to decide INSIDE a `try{...}catch(e){}` wrapped around the
+ * localStorage read. That reads like defensive code and is the opposite: when the read
+ * throws, the `catch` skips the decision along with it and leaves the hardcoded initialiser
+ * standing — `pwArm="sheet"` at PW_FULL_ROLLOUT 100, `planArm="weekly"` with the coin never
+ * flipped. Not a fallback. A silent opt-out of both experiments, on exactly the devices that
+ * cannot report why.
+ *
+ * IT WAS LIVE AND IT WAS MEASURABLE. On 2026-08-16, a full day after the founder rolled the
+ * full-bleed paywall to 100%, `paywall_viewed` still reported design_arm "sheet" for 796 of
+ * 1971 viewers — 40% of the fleet on the paywall that had been retired. At rollout 100 no
+ * other branch here can produce "sheet" on a real device: a stored "sheet" is promoted, a
+ * stored "full" is honoured, and an unstored device rolls `Math.random()*100<100`, which is
+ * always true. The throw was the only door left. The same day plan_arm split 68/32 toward
+ * weekly (2467 vs 1177 viewers over 15→17/08) instead of 50/50, because every stranded
+ * device landed on `planArm`'s initialiser.
+ *
+ * So: storage is a helper that is ALLOWED to fail, and the decision runs outside it. A device
+ * that cannot persist still gets a real arm for this launch — which is the deal 1.0.2 already
+ * has anyway, since its `incognito` WebView wipes storage at every app close.
+ *
+ * `trialArm` above is already written this way (its catch wraps only the read, and the coin
+ * flip happens after it regardless) — that is the shape to copy, not the one below was. */
+const lsGet=(k)=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } };
+const lsSet=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+
 const PW_FULL_ROLLOUT=100;
-let pwArm="sheet";
-try{
-  const s=localStorage.getItem("kamo_pw_design");
+let pwArm;
+{
+  const s=lsGet("kamo_pw_design");
   /* ⚠️ THE STORED VALUE IS STICKY, AND THAT IS WHY A ROLLOUT ALONE WOULD HAVE CHANGED NOTHING.
      Everybody who has opened this app already carries kamo_pw_design, so raising the number
      only reaches devices that have never been assigned — which, on a live app, is almost
@@ -3035,13 +3062,17 @@ try{
      promotion happens once and the value on disk keeps describing what the device shows.
      Deliberately one-way: at any rollout below 100 the stored value still wins, so this cannot
      quietly un-assign anybody if the number is ever lowered to run another test. */
-  if(s==="sheet"&&PW_FULL_ROLLOUT>=100){ pwArm="full"; try{ localStorage.setItem("kamo_pw_design","full"); }catch(e){} }
+  if(s==="sheet"&&PW_FULL_ROLLOUT>=100){ pwArm="full"; lsSet("kamo_pw_design","full"); }
   else if(s==="sheet"||s==="full") pwArm=s;
-  else if(!navigator.webdriver){
+  /* The harness pin, unchanged in effect and now explicit rather than a fall-through: every
+     DOM test in scripts/ boots headless Chromium, and a coin flipped at load would make the
+     paywall assertions flaky. A harness that wants the full arm seeds localStorage. */
+  else if(navigator.webdriver) pwArm="sheet";
+  else {
     pwArm=(Math.random()*100<PW_FULL_ROLLOUT)?"full":"sheet";
-    localStorage.setItem("kamo_pw_design",pwArm);
+    lsSet("kamo_pw_design",pwArm);
   }
-}catch(e){}
+}
 
 /* ===== WHICH PLAN IS THE HERO — weekly vs lifetime =====
  *
@@ -3074,18 +3105,19 @@ try{
  * or 100 — at 100 a stored "weekly" is NOT promoted, unlike PW_FULL_ROLLOUT above, because
  * this one may well need to be rolled back rather than out. */
 const PLAN_LIFETIME_ROLLOUT=50;
-let planArm="weekly";
-try{
-  const s=localStorage.getItem("kamo_plan_arm");
+let planArm;
+{
+  const s=lsGet("kamo_plan_arm");
   if(s==="weekly"||s==="lifetime") planArm=s;
   /* Pinned for the harness for the same reason pwArm is: every DOM test in scripts/ boots
      this page in headless Chromium, and a coin flipped at load makes the CTA assertions
      flaky. A test that wants the lifetime arm seeds kamo_plan_arm="lifetime" before load. */
-  else if(!navigator.webdriver){
+  else if(navigator.webdriver) planArm="weekly";
+  else {
     planArm=(Math.random()*100<PLAN_LIFETIME_ROLLOUT)?"lifetime":"weekly";
-    localStorage.setItem("kamo_plan_arm",planArm);
+    lsSet("kamo_plan_arm",planArm);
   }
-}catch(e){}
+}
 
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
