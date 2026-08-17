@@ -43,7 +43,17 @@ const real=readFileSync(join(ROOT,'index.html'),'utf8');
 // Stub the RPC layer, and make the storage POST take a REALISTIC 3s so the race is real.
 const html=real.replace('async function chRpc(fn,body){','async function chRpc(fn,body){ if(window.__rpc) return window.__rpc(fn,body);')
   // module scope is sealed: expose the id the share actually reads
-  .replace('let chId="";','let chId=""; window.__peek=()=>({chId,prep:!!chPrep});');
+  .replace('let chId="";','let chId=""; window.__peek=()=>({chId,prep:!!chPrep});')
+  /* THE ROUTING HOOK, and it fabricates only what a finished round would have left behind: a
+     before-frame and a capability. composeShare is stubbed to a tiny canvas because what is
+     under test is WHICH MESSAGE the web posts, not what the JPEG looks like — a real compose
+     needs a whole painted round to produce one. */
+  .replace('async function nativeShare(target){',
+    'window.__rv=async(t,caps)=>{ if(caps) window.KAMO.setNativeCaps(caps);'
+    + ' const cs=composeShare; composeShare=()=>{const c=document.createElement("canvas");c.width=c.height=8;return c;};'
+    + ' beforeBoard=document.createElement("canvas"); beforeBoard.width=beforeBoard.height=8;'
+    + ' try{ await nativeShare(t); } finally { composeShare=cs; } };\n'
+    + 'async function nativeShare(target){');
 const server=createServer((rq,rs)=>{const p=decodeURIComponent(rq.url.split('?')[0]);
   if(p==='/'||p==='/index.html'){rs.writeHead(200,{'Content-Type':'text/html'});return rs.end(html);}
   let b=null;try{b=readFileSync(join(ROOT,p.replace(/^\/+/,'')));}catch{}
@@ -148,6 +158,49 @@ r4.waited < 900
   ? ok("carrying round 4's own hide, and no ?i=1 anywhere in it")
   : bad('round 4 link: '+JSON.stringify(r4.msg.slice(-40)));
 
+/* ═══ THE CLIP REACHES THE DESTINATION THE USER PICKED ═══════════════════════════════════
+   The reveal MP4 is the only thing this product makes that is fun to WATCH, and for two days
+   it reached nobody: it was gated on `target==="instagram"`, and the Instagram button was
+   deleted on 2026-08-15 — so the condition could never be true again. Nothing broke, no test
+   failed, every share just quietly became the static card.
+   ASSERTED ON THE WIRE, because that is the only place the difference exists: `reveal-video`
+   and `share-target` are two different messages to the wrapper, and both "work". */
+console.log('\nTHE REVEAL IS THE SHARE, WHEREVER IT IS GOING');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(() => {
+    window.__posted = [];
+    window.ReactNativeWebView = { postMessage: (raw) => { try { window.__posted.push(JSON.parse(raw)); } catch (e) {} } };
+  });
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForFunction(() => !!window.__rv, null, { timeout: 15000 });
+
+  const post = async (target, caps) => page.evaluate(async ([t, c]) => {
+    window.__posted.length = 0;
+    await window.__rv(t, c);
+    return window.__posted.filter(m => m.type === 'reveal-video' || m.type === 'share-target')
+      .map(m => ({ type: m.type, target: m.target, msg: m.message || '' }));
+  }, [target, caps]);
+
+  const more = (await post('more', { revealVideo: true, invite: true }))[0] || {};
+  more.type === 'reveal-video' && more.target === 'more'
+    ? ok('a share to "more" posts reveal-video, carrying the target the wrapper branches on')
+    : bad(`"more" posted ${JSON.stringify(more)} — the clip is Instagram-only again, and Instagram has no button`);
+  /* The static path has never carried a link (see nativeShare) — so on the reveal path the
+     message is not decoration, it is the only way back to the app from a video post. */
+  /https?:\/\//.test(more.msg)
+    ? ok(`and the link rides with it ("…${more.msg.slice(-38)}")`)
+    : bad(`the reveal went out with message ${JSON.stringify(more.msg)} — a clip with no way back`);
+
+  /* THE OTHER HALF: an older binary must not be handed a video it cannot encode. Most of the
+     fleet is still there, and this is the branch that keeps working for them. */
+  const old = (await post('more', { invite: true }))[0] || {};
+  old.type === 'share-target'
+    ? ok('a wrapper without revealVideo still gets the static share it can handle')
+    : bad(`a build with no encoder was posted ${JSON.stringify(old)}`);
+  await page.close();
+}
+
 await browser.close(); server.close();
-console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant and always its own hide');
+console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant, always its own hide, and the clip goes wherever it is sent');
 process.exit(failed?1:0);
