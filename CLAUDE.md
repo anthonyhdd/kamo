@@ -28,13 +28,22 @@ PW_CORE=<dir with node_modules> node scripts/check.mjs
 ```
 
 It must be green before every push. It parses every inline script, resolves every unguarded
-element id, and chains six browser tests (`test-share`, `test-peek-dom`, `test-mine-dom`,
-`test-pass-dom`, `test-home-dom`, `test-seek-dom`). `playwright-core` is not a dependency —
+element id, and chains **34** browser tests — it was six when this line was written, and naming
+them here only teaches the next reader a list that is already wrong; `grep 'test-.*\.mjs'
+scripts/check.mjs` is the answer that stays true. `playwright-core` is not a dependency —
 install it anywhere and point `PW_CORE` at it, or the browser tests skip loudly and you are
 pushing on the static checks alone.
 
-**Always sync the mirror in the same breath.** Copy `index.html` across and restore the one line
-that differs — its `og:image` points at `kamo.bliss-coach.com`, not `anthonyhdd.github.io`.
+**Always sync the mirror in the same breath.** Copy `index.html` across — the whole file, and
+nothing to restore on the way. The two are byte-identical after a correct sync; the mirror's own
+`CNAME` is what makes the domain work, and that is a separate file.
+
+⚠️ This paragraph told you until 2026-08-17 to restore an `og:image` pointing at
+`kamo.bliss-coach.com`. **Do not.** The tag stopped being per-origin at `fd44f93` — both repos
+have served the branded fallback at `playkamo.com/img/og.jpg` since — so following the old
+instruction now *introduces* the very difference it was written to preserve, on the one tag that
+decides what a share link looks like in a thread. It was found by diffing the two files instead
+of trusting this line; do that before believing any other claim of divergence here.
 
 ## Two origins, on purpose
 
