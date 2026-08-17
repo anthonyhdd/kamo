@@ -15643,16 +15643,55 @@ function chFeed(opts){
        watches a spinner. A timing bug that reads as a perfect score is worse than no timing
        at all. (`loading` still has to be set BEFORE src; it is, above.) */
     if(first){
-      const paint=(ok)=>{ if(S.painted) return; S.painted=1;
+      /* `nat` EXISTS BECAUSE `ok` TURNED OUT TO ANSWER TWO QUESTIONS AT ONCE, measured
+         2026-08-17: ok=false on 5069 users against 1513 successes, and a first paint that
+         fails halves the chance of ever reaching slide 2 (24.9% against 49.2%). But
+         img.decode() rejecting does NOT mean the photograph is missing. It rejects on a real
+         decode failure AND, on some engines, for reasons of its own while the picture arrives
+         normally a moment later. Those are the same number today and they are not the same
+         bug: one is a feed showing black to half its openers, the other is a metric that
+         lies. Everything cheap has already been ruled out — 87% of the failures land under
+         300ms (so it is not somebody swiping away), the three paths that detach a slide are
+         all user actions, img_path needs no URL encoding on any of 7982 rows, and `src` is
+         set before decode() as the note above demands.
+         naturalWidth once the element settles separates the two, and it does it on the
+         EXISTING event name: a new one would be dropped by the compiled WEB_EVENTS
+         allow-list and measure nothing on the live build. */
+      const fire=(ok,nat,ms)=>{
         /* `slides` is read here rather than captured above on purpose: the whole page is
            appended synchronously, long before any decode resolves, so this reports how many
            slides the page actually produced instead of the zero it was at this line. */
-        try{ track("feed_first_paint",{ms:Math.round(kfNow()-S.t0),ms_page:S.msPage|0,
+        try{ track("feed_first_paint",{ms:Math.round(ms),ms_page:S.msPage|0,
                                        cached:!!S.cached,slides:S.slides.length,ok:!!ok,
+                                       nat:nat,
                                        /* Whether the wait happened over the photo's own
                                           colours or over black — the property that judges
                                           the LQIP without a second event. */
                                        lqip:!!lq}); }catch(e){} };
+      const paint=(ok)=>{ if(S.painted) return; S.painted=1;
+        /* ⚠️ `ms` IS STAMPED HERE, NOT WHERE THE EVENT LEAVES. The failure path below waits
+           for the image to settle before reporting, and reading the clock at that later
+           moment would silently redefine the one number this event exists for — the founder's
+           "le feed met du temps à s'ouvrir". Only the moment the event leaves the device
+           moves, and nothing reads that. */
+        const ms=kfNow()-S.t0;
+        /* The success path keeps its shape exactly: nothing left to learn, and the fast path
+           stays the cheap one. */
+        if(ok){ fire(true,"decoded",ms); return; }
+        let settled=false;
+        const settle=(nat)=>{ if(settled) return; settled=true; fire(false,nat,ms); };
+        /* addEventListener, not onload/onerror: the no-decode() fallback below assigns those
+           two properties, and stamping over them would break the browsers that need it. */
+        img.addEventListener("load",()=>settle(img.naturalWidth?"loaded":"failed"),{once:true});
+        img.addEventListener("error",()=>settle("failed"),{once:true});
+        /* AND A CAP, because an event that waits forever is an event that never fires, and
+           silence is exactly what a missing event looks like. `pending` is a real answer —
+           it means the photo had still not arrived four seconds after decode() gave up. */
+        setTimeout(()=>settle(img.complete?(img.naturalWidth?"loaded":"failed"):"pending"),4000);
+        /* LAST, AND AFTER THE LISTENERS. A genuine 404 can reject decode() and fire error in
+           the same turn, so by this line the element may already be done and no listener will
+           ever run. settle() is idempotent, so checking here costs nothing and covers it. */
+        if(img.complete) settle(img.naturalWidth?"loaded":"failed"); };
       try{ if(img.decode) img.decode().then(()=>paint(true),()=>paint(false));
            else { img.onload=()=>paint(true); img.onerror=()=>paint(false); } }catch(e){}
     }
