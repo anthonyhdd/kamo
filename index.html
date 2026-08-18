@@ -7340,7 +7340,17 @@ function brandTap(){ if(brandLongPressed){ brandLongPressed=false; return; }   /
 /* Clear the Buy spinner without showing a toast — used when a native purchase ends with
    no callback of its own (StoreKit cancel). Without it the button sat spinning, and
    pointer-events:none, for the full 6s of its own safety timer. */
-window.KAMO.buyDone=()=>{ setPwBuyLoading(false); };
+/* AND THE HINT BUTTON IS THE OTHER THING WAITING ON THAT SAME SIGNAL. Both bridges below
+   only ever cleared the PAYWALL's spinner, because the paywall was the only thing that could
+   be mid-purchase when they were written. The hint pack is now a second one: it sells from
+   the seek screen, never through the paywall, and its button goes to "…" on the tap that
+   opens Apple's sheet. A cancel or a failure left that "…" on screen for the full 45s of its
+   own safety timer — a dead control on the screen App Review is told to test, for three
+   quarters of a minute, after the one gesture that means "no thanks".
+   Registered by the seek screen while it is up (see __kamoHintBuyEnded there) and a no-op
+   everywhere else, so nothing outside a live hunt is touched. */
+const hintBuyEnded=()=>{ try{ if(window.__kamoHintBuyEnded) window.__kamoHintBuyEnded(); }catch(_){} };
+window.KAMO.buyDone=()=>{ setPwBuyLoading(false); hintBuyEnded(); };
 /* `setPrice` (singular) was defined here and never injected by ANY native build — the
    wrapper only ever calls setPrices. Removed rather than left as a decoy. */
 /* `p.trial` is the trial length as StoreKit actually reports it. No shipped wrapper sends
@@ -7409,7 +7419,7 @@ function applyPlanAvailability(p){
   // single plan left → the row is just noise, the buy button already says it
   const wrap=$("#pwPlans"); if(wrap) wrap.style.display = sold>1 ? "" : "none";
 }
-window.KAMO.hint=(t)=>{ setPwBuyLoading(false); showHint(t); };
+window.KAMO.hint=(t)=>{ setPwBuyLoading(false); hintBuyEnded(); showHint(t); };
 window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
 /* THE ONE LINE THAT MAKES HALF THE ANALYTICS JOINABLE.
  *
@@ -13781,6 +13791,18 @@ function chSeek(hideId,opts){
       } finally { hintPolling=false; }
     };
     window.__kamoHintsBought=pollHintCredit;
+
+    /* THE SHEET IS GONE AND NOTHING WAS BOUGHT — native says so on every path that is not a
+       success: userCancelled injects buyDone(), and every failure and unavailability injects
+       a toast through window.KAMO.hint. Both now reach here, so the button comes back at once
+       instead of sitting on "…" until the 45s timer. That timer stays as the backstop for the
+       one case with no callback at all (the app killed with the sheet up).
+       Never while polling: a credit in flight owns the button, and a stray toast arriving
+       mid-poll must not hand back a control that is about to say "5 left". */
+    window.__kamoHintBuyEnded=()=>{
+      if(!hintPending||hintPolling) return;
+      hintPending=false; hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel;
+    };
 
     hintBtn.onclick=()=>{ haptic(8); takeHint(); };
     if(hintsOn()){ w.appendChild(hintBtn); track("hint_offered",TP({})); }
