@@ -74,10 +74,18 @@ const html = real.slice(0, at)
   /* #shareSheet is in this list because it was missing from the CSS one, and it is the biggest
      thing on the screen the full arm opens over: on the reveal the sheet is auto-presented, so
      every paywall opened from a finished round had "Can they find you?", the challenge card,
-     Challenge a friend and the Instagram button burning through the hero. */
+     Challenge a friend and the Instagram button burning through the hero.
+     #covHud, #btnFeed and #sizeStar are here for the SAME reason, and they are the proof the
+     CSS rule needs a probe rather than a reader: it is an allow-list of ids, so every piece
+     of chrome added after 2026-08-12 defaulted to showing through. The coverage pill took
+     over #scoreChip's slot on 08-15 and not its entry in that list, and "85% hidden · ready
+     to challenge" sat lit on top of the hero until a founder screenshot on 08-18. Reading
+     visibility rather than the stylesheet is what makes the next omission a red test.
+     They read 'visible' rather than 'hidden' while display:none, which is exactly what the
+     close() assertion below wants — visibility and display are independent. */
   + 'chrome(){const g=q=>getComputedStyle(document.querySelector(q)).visibility;'
   + 'return{brand:g(".brand"),done:g("#btnDone"),back:g("#btnBack"),hint:g("#hint"),'
-  + 'sheet:g("#shareSheet")};},'
+  + 'sheet:g("#shareSheet"),cov:g("#covHud"),feed:g("#btnFeed"),star:g("#sizeStar")};},'
   + 'close(){closePaywall();return this.chrome();},'
   + 'facts(){return{paint:PAINT_SECONDS};}};\n'
   + real.slice(at);
@@ -182,7 +190,7 @@ console.log('\nTHE STAGE GOES QUIET UNDERNEATH, AND WAKES ON CLOSE');
   await page.evaluate(() => window.__f.open('char'));
   const c = await page.evaluate(() => window.__f.chrome());
   Object.values(c).every((v) => v === 'hidden')
-    ? ok('wordmark, Retake, Done, the hint and the share sheet are all hidden under the paywall')
+    ? ok('wordmark, Retake, Done, the hint, the share sheet, the coverage pill, the feed button and the Pro star are all hidden under the paywall')
     : bad(`stage chrome shows through the full arm: ${JSON.stringify(c)}`);
   const after = await page.evaluate(() => window.__f.close());
   Object.values(after).every((v) => v !== 'hidden')
