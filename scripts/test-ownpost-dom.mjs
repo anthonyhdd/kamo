@@ -163,7 +163,10 @@ console.log('\nTHE REACTION RAIL IS A READOUT ON YOUR OWN PHOTO');
 {
   const page = await open({ mine: [MINE], first: MINE, fromReveal: true,
                             extra: { hide_reactions_of: [{ emoji: '🔥', n: 7 }, { emoji: '😂', n: 2 }] } });
-  await page.waitForTimeout(500);
+  /* THE RAIL MOUNTS WITH THE ENDING CARD NOW, not with the round — so even on your own
+     photo, reaching it takes the same buzz (REPLAY makes it a guaranteed hit regardless of
+     where it lands, see the note on ANSWER above). */
+  await buzz(page);
   const rail = await readRail(page);
 
   rail && rail.tags.length === 4 && rail.tags.every(t => t === 'DIV')
@@ -186,11 +189,6 @@ console.log('\nTHE REACTION RAIL IS A READOUT ON YOUR OWN PHOTO');
   wrote.length === 0
     ? ok('and tapping all four writes nothing — the counts stay everybody else\'s')
     : bad(`react_to_hide was called ${wrote.length}×`);
-
-  /* AND THE TAP MUST NOT COST THE SHOT. The stage owns every gesture on this screen; a div
-     swallows none by itself, which is why the stopPropagation listeners sit above the branch. */
-  const spent = await page.evaluate(() => !!document.querySelector('#chFoot .chCard'));
-  !spent ? ok('and does not fire the round\'s single buzz into the margin') : bad('a tap on the rail ended the round');
 
   await page.close();
 }
