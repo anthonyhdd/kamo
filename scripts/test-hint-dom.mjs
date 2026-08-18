@@ -252,7 +252,74 @@ console.log('\n④ AN EMPTY WALLET IS THE ONLY THING THAT OPENS STOREKIT');
   await p.close();
 }
 
-console.log('\n⑤ THE ROUND IS OVER — THE HINT GOES WITH IT');
+/* ⑤ IS THE DOOR THE PRODUCT ACTUALLY SELLS THROUGH, and it had no test at all.
+   ④ above buys from an EMPTY wallet on a fresh hide, where hint_spend has no region to give
+   until the credit lands — so a poll that waits for a region happens to be right there. The
+   offer that sells is the other one: the free daily is spent on THIS hide, the zone is
+   already on screen, and hint_spend answers `already` WITH that region on the very first
+   poll, before the webhook has credited anything. A poll that exits on the region there tells
+   somebody who has just paid that their hint is "used" and their balance is zero. */
+console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CREDIT, NOT THE ZONE');
+{
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1',
+                         spend: { used: 'free', region: REG, balance: 0, free_available: false } });
+  await p.click('#chHint');                       // the free daily: zone drawn, wallet empty
+  await p.waitForTimeout(400);
+  /* What the server says from here on: this hide's hint is spent, so the same region comes
+     back under `already` and the wallet is untouched — 0 until the webhook lands. */
+  const ALREADY = { used: 'already', via: 'free', region: REG, balance: 0, free_available: false };
+  await p.evaluate((s) => { window.__seed.hint_spend = s; }, ALREADY);
+  await p.click('#chHint');                       // "Get 5 more" → StoreKit
+  await p.waitForTimeout(200);
+  const bought = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  bought.length === 1 ? ok('the offer opens StoreKit once') : bad(`posted ${JSON.stringify(bought)}`);
+
+  await p.evaluate(() => window.KAMO.hintsPurchased());
+  await p.waitForTimeout(700);
+  const mid = await btn(p);
+  mid && mid.text === '…'
+    ? ok('and the button holds while the webhook is still in flight')
+    : bad(`the poll gave up before the credit — the button reads ${JSON.stringify(mid)}, which `
+        + 'is what somebody who has just paid would be looking at');
+
+  await p.evaluate((s) => { window.__seed.hint_spend = s; },
+                   { used: 'already', via: 'free', region: REG, balance: 5, free_available: false });
+  await p.waitForTimeout(2200);
+  const after = await btn(p);
+  after && after.text === '5 left'
+    ? ok('and states the pack the moment the wallet grows')
+    : bad(`after the credit the button reads ${JSON.stringify(after)}`);
+  await p.close();
+}
+
+/* AND WHEN THE CREDIT NEVER ARRIVES, THE BUTTON MUST NOT BE A SECOND PURCHASE. The copy on
+   this path invites exactly one gesture — tap again in a moment — and it used to land on
+   offerHintPack, i.e. Apple's sheet, for a pack that has already been paid for. */
+{
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1',
+                         spend: { used: 'free', region: REG, balance: 0, free_available: false } });
+  await p.click('#chHint');
+  await p.waitForTimeout(400);
+  await p.evaluate((s) => { window.__seed.hint_spend = s; },
+                   { used: 'already', via: 'free', region: REG, balance: 0, free_available: false });
+  await p.click('#chHint');
+  await p.waitForTimeout(200);
+  await p.evaluate(() => window.KAMO.hintsPurchased());
+  await p.waitForTimeout(11000);                  // six polls at 1.5s, and not one of them credited
+  const b = await btn(p);
+  b && !b.disabled ? ok('the button comes back after a credit that never lands') : bad(`button is ${JSON.stringify(b)}`);
+  // Tolerated rather than awaited: a dead button is a failure this suite REPORTS, not one it
+  // crashes on — the assertion below is what says whether a second sheet was opened.
+  await p.click('#chHint', { timeout: 2000 }).catch(() => {});
+  await p.waitForTimeout(300);
+  const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 1
+    ? ok('and tapping it re-checks the wallet instead of buying the pack twice')
+    : bad(`the same pack was bought ${posted.length} times — the slow-credit button re-opens StoreKit`);
+  await p.close();
+}
+
+console.log('\n⑥ THE ROUND IS OVER — THE HINT GOES WITH IT');
 {
   const p = await hunt({ caps: { hints: true }, uid: 'user-1',
                          spend: { used: 'free', region: REG, balance: 0 } });
