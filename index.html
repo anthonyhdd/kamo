@@ -3324,6 +3324,42 @@ let gateArm;
   }
 }
 
+/* ═══ THE OPENER EXPERIMENT — does a proven photo at slide 0 stop the door-death? ═══════════
+ *
+ * 69% of feed openings die on the FIRST slide with the photo already painted — feed_first_paint
+ * settled the speed question on 2026-08-18: 92.7% of paints land under a second, so the people
+ * leaving are not waiting, they are declining. And the curve after slide 1 is FLAT (2754
+ * survivors → 1014 at slide 5 → 815 at 8 → 198 at 30): whoever swipes once goes deep. The
+ * whole session is decided by one photograph, and the ordering serves that slot, by
+ * construction, the LEAST proven photo in the room (least(n_attempts,3) asc).
+ *
+ * This arm moves the banger — the same feed_best row kfSeedBest already places at slide 3 —
+ * to slide 0 instead, for devices that have never published. One banger per session either
+ * way: the position is the only variable. Never-published only, because the freshness-first
+ * door exists to hand fresh hides their first plays, and creators scrolling deep are who
+ * deliver those; the arm spends the door-slot only on the population that is dying at the
+ * door. Same coin discipline as gateArm above: stored arm wins, webdriver pins off for the
+ * harness (test-banger-dom.mjs seeds the arm it wants), storage-throw sits the device out.
+ * Independent coin from gateArm — the two stamps make the 2×2 readable, and neither biases
+ * the other's read.
+ *
+ * READ IT AS: slide-1 survival (feed_slide reached ≥2 / feed opens) and rounds per session by
+ * banger_arm; stop rule mirrors the gate's — if the "on" arm PLAYS fewer rounds than "off",
+ * the proven door is buying glances with plays and it goes. feed_best_seeded carries pos:0|3
+ * so exposure is visible per session. Kill: rollout to 0 — a stored arm keeps reading, the
+ * next session simply seeds at 3 again (kfSeedBanger tests the arm live). */
+const FEED_BANGER_ROLLOUT=50;
+let bangerArm;
+{
+  const s=lsGet("kamo_feed_banger_arm");
+  if(s==="on"||s==="off") bangerArm=s;
+  else if(navigator.webdriver) bangerArm="off";
+  else {
+    bangerArm=(Math.random()*100<FEED_BANGER_ROLLOUT)?"on":"off";
+    lsSet("kamo_feed_banger_arm",bangerArm);
+  }
+}
+
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
    on every single use, forever. Users run ~8 hides a day, so by the third round these are not
@@ -8159,7 +8195,7 @@ function track(event,props){
      feed_gate_* events: the question the arm exists to answer is asked of hide_published, of
      feed_slide's depth and of the seeker's own events, none of which know the card exists. One
      property on everything is what makes those segmentable without a build. */
-  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,emit:"web"};
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -14735,6 +14771,31 @@ function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b
    kilobytes of JSON on a query that is indexed either way, and it happens at launch, minutes
    before anybody taps anything. What it buys is the whole wait: the feed opens on rows it
    already holds. */
+/* THE OPENER'S PREFETCH — why the banger can take slide 0 without costing the paint.
+   Slide 0 is the most tuned pixel in the app: kfProbe's cached first page, fetchpriority=high,
+   the LQIP — and feed_first_paint measures exactly that slot. Inserting a cold feed_best row
+   at open time would have added an RPC plus an unwarmed JPEG to the one wait this screen is
+   judged on, and the experiment would have confounded "proven content" with "slower door".
+   So the row is fetched HERE, at launch, on the same 1200ms timer as kfProbe and only for the
+   arm and population that will use it — and its JPEG is warmed through a detached Image(), so
+   by the time the feed opens the opener paints from HTTP cache like any cached slide 0.
+   Every failure is silent and costs nothing: no row simply means kfSeedBanger declines and
+   the session behaves exactly like the off arm (banger at 3, pos:3 says so). */
+let kfBangerRow=null;
+async function kfBangerProbe(){
+  if(bangerArm!=="on"||kfBangerRow) return;
+  try{ if(chMine().length) return; }catch(_){ return; }
+  try{
+    const rows=await kfRpc("feed_best",{p_limit:3,p_block_tags:kfBlocked()});
+    if(!rows||!rows.length) return;
+    const skip=new Set(kfSeen().concat(chMine()));
+    const r=rows.find(x=>x&&x.id&&x.img_path&&!skip.has(x.id));
+    if(!r) return;
+    kfBangerRow=r;
+    const im=new Image(); im.decoding="async";
+    im.src=CH_URL+"/storage/v1/object/public/hides/"+r.img_path;
+  }catch(_){}
+}
 let kfProbedOnce=false;
 async function kfProbe(){
   /* Guarded on "asked", not on "has content": with the cached `true` above, the old guard
@@ -16323,6 +16384,10 @@ function chFeed(opts){
      3, so a session contains at least one photo the room has already voted for — the fresh
      bands the ordering serves first are, by construction, UNPROVEN. Slide 3, not 0: the
      freshness-first doctrine holds the door, the banger holds the middle.
+     ⚠️ THAT DOCTRINE IS UNDER TRIAL — see bangerArm at the top of the file. In the "on" arm,
+     for a device that has never published, kfSeedBanger below claims slide 0 with the
+     prefetched feed_best row BEFORE the page loads, and this function stands down (the
+     some(x.best) guard): one banger per session, position is the only variable.
      AFTER the first paint and off the critical path entirely: a slow or failed feed_best
      costs nothing anybody is waiting on. Every filter the page owes is applied — seen, mine,
      already-on-screen — and the server already filtered blocks and shadowbans. Skipped on a
@@ -16331,6 +16396,7 @@ function chFeed(opts){
   async function kfSeedBest(){
     try{
       if(kfState!==S||FIRST) return;
+      if(S.slides.some(x=>x&&x.best)) return;   // the opener already spent this session's banger
       if(S.slides.length<4) return;   // a short room needs no rearranging
       const rows=await kfRpc("feed_best",{p_limit:3,p_block_tags:kfBlocked()});
       if(kfState!==S||!rows||!rows.length) return;
@@ -16340,8 +16406,32 @@ function chFeed(opts){
       if(!r) return;
       const s=addSlide(r,false,3);
       s.best=true;
-      track("feed_best_seeded",{plays:r.n_attempts|0,found:r.n_found|0});
+      track("feed_best_seeded",{plays:r.n_attempts|0,found:r.n_found|0,pos:3});
     }catch(e){}
+  }
+  /* THE OPENER — the banger takes slide 0 instead, for the arm and population the experiment
+     names (see bangerArm). Synchronous and BEFORE load(): the room is empty, so addSlide makes
+     it slide 0 and hands it everything slide 0 already owns — fetchpriority, the paint
+     instrumentation, the eager fetch — and the JPEG was warmed at launch by kfBangerProbe, so
+     the door pays no new wait (feed_first_paint keeps the receipts either way).
+     The id goes into S.served so the page request excludes it, and the loadPage dedup counts
+     any cached-first-page twin as `seeded`, which its comment already calls expected. A seen
+     row declines: an opener you have already met is furniture, not proof, and kfSeedBest's
+     skip-set will pass over it too — that session simply runs bangerless, which pos-less
+     absence records. No banger prefetched (RPC failed, storage threw, creator device) means
+     this returns and kfSeedBest runs exactly as it always has: the off arm's behaviour is the
+     failure mode, never a broken door. */
+  function kfSeedBanger(){
+    try{
+      if(bangerArm!=="on"||FIRST||!kfBangerRow||S.slides.length) return;
+      try{ if(chMine().length) return; }catch(_){ return; }
+      const r=kfBangerRow;
+      if(kfSeen().indexOf(r.id)>=0) return;
+      S.served.add(r.id);
+      const s=addSlide(r,false);
+      s.best=true;
+      track("feed_best_seeded",{plays:r.n_attempts|0,found:r.n_found|0,pos:0});
+    }catch(_){}
   }
   (async()=>{
     if(FIRST){
@@ -16351,6 +16441,7 @@ function chFeed(opts){
           n_attempts:h.n_attempts|0,n_found:h.n_found|0},true);
       }catch(e){}
     }
+    try{ kfSeedBanger(); }catch(e){}
     load().then(paint).then(()=>{ try{ kfSeedBest(); }catch(e){} });
   })();
   /* OPENED STRAIGHT ONTO YOUR OWN GRID. The player card's results row leads here, and it
@@ -16513,7 +16604,7 @@ const CH_NOTIF={
 /* AFTER EVERYTHING, AND NEVER ON THE SEEKER SCREEN. A stranger opening a challenge link has
    no hides of their own, and CH_SEEK is exactly that case. Delayed a beat so the launch path
    — camera permission, first frame — never waits on this. */
-if(!CH_SEEK) setTimeout(()=>{ try{ chNewsCheck(); }catch(e){} try{ kfProbe(); }catch(e){} },1200);
+if(!CH_SEEK) setTimeout(()=>{ try{ chNewsCheck(); }catch(e){} try{ kfProbe(); }catch(e){} try{ kfBangerProbe(); }catch(e){} },1200);
 
 /* HUNT-ONLY MODE for a device with no WebGL. Applied HERE, after every hero handler above
    is bound, so this override is the one that survives. Both hero buttons lead to the
