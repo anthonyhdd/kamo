@@ -7001,22 +7001,6 @@ function openKamoHome(){
      reopens the card must get the field back, not a button offering to change nothing. */
   khShowField(!h);
   khSetPlus();
-  /* TEMP DIAGNOSTIC, FOUNDER-VISIBLE ONLY BY TIMING — remove once the missing Hint button on
-     1.1.4 is explained. The web has no bridge field for the native version string (App.js
-     never sends one), so this cannot print "1.1.4" — what it CAN print is the two booleans
-     that actually gate the Hint button, which is the more useful read anyway: nativeCaps.hints
-     only turns true on a binary that ran the 1.1.4 inject at App.js:685, and chUserId only
-     turns non-empty once RevenueCat has configured. Six seconds, then #khSub reverts to its
-     normal empty/hidden state exactly as khRenderName() left it — nothing else on this card
-     changes. */
-  try{
-    const dbgSub=$("#khSub");
-    if(dbgSub){
-      dbgSub.textContent="hints="+(nativeCaps&&!!nativeCaps.hints)+" uid="+(!!chUserId);
-      dbgSub.style.display="";
-      setTimeout(()=>{ dbgSub.textContent=""; dbgSub.style.display="none"; },6000);
-    }
-  }catch(_){}
   /* Not awaited: the card must open at once. The row's COUNT is on screen in the same frame
      — khResults() paints it from the local ids before its first await — and the outcomes
      replace it when the fetch lands, never moving anything the user is already reaching for:
