@@ -102,8 +102,32 @@ async function breakRun(run, best, width) {
       overlap: !(p.right <= h.left || p.left >= h.right || p.bottom <= h.top || p.top >= h.bottom),
       offscreen: p.left < 0 || p.right > innerWidth,
       /* Two lines inside a 999px pill is not an overlap, but it is the same string being too
-         long for the same screen — worth failing while the cause is still one commit old. */
-      wrapped: p.height > 40,
+         long for the same screen — worth failing while the cause is still one commit old.
+         MEASURED AGAINST THE PILL'S OWN LINE, not against a constant. This read `> 40`, which
+         was the pill's height on the day it was written — an assertion about FONT SIZE wearing
+         the clothes of an assertion about wrapping. The docked pill of 2026-08-18 is two
+         points larger on purpose and tripped it at 390px while sitting plainly on one line,
+         and the honest reading of that failure is that the probe was wrong, not the pill.
+         Line-height plus the box's own padding and borders asks the question that was meant,
+         at any size this pill is ever given. */
+      wrapped: (() => {
+        const cs = getComputedStyle(pill);
+        const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+        const box = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+                  + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+        return p.height > lh * 1.6 + box;
+      })(),
+      /* WHERE IT ENDED UP, and this one is read as structure rather than as pixels because
+         the failure mode is not a collision — it is a silent disappearance. #chFoot is
+         written with innerHTML when the ending card is built, so a pill docked one line too
+         early is destroyed by that assignment and the round simply ends with no run on it:
+         nothing overlaps, nothing runs off screen, every geometric assertion above still
+         passes, and the feature is gone. So: still in the document, first child of the foot,
+         and ahead of the flip button that used to prepend itself into that slot. */
+      docked: pill.parentElement && pill.parentElement.id === 'chFoot',
+      first: pill.parentElement && pill.parentElement.firstElementChild === pill,
+      aboveCard: (() => { const c = document.querySelector('#chFoot .chCard');
+        return !!c && !!(pill.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); })(),
     };
   });
   await page.close();
@@ -121,6 +145,10 @@ for (const width of [390, 320]) {
             : ok(`${width}px: pill and headline share no pixels`);
   r.offscreen ? bad(`${width}px: the pill runs off the screen`) : ok(`${width}px: the pill fits its viewport`);
   r.wrapped ? bad(`${width}px: the sentence wrapped inside the pill`) : ok(`${width}px: one line`);
+  (r.docked && r.first && r.aboveCard)
+    ? ok(`${width}px: the run docks at the head of #chFoot, above the flip and the card`)
+    : bad(`${width}px: the run is not first in #chFoot above the card `
+          + JSON.stringify({ docked: r.docked, first: r.first, aboveCard: r.aboveCard }));
 }
 
 console.log('\nAND STAYS QUIET WHEN THE RUN THAT DIED WAS THE RECORD');
