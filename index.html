@@ -554,11 +554,13 @@
      with the tools pinned to its right, which pushed a visible gap between them and made
      the strip read as two separate clusters — and at four colours it could still scroll,
      so a control could hide off-screen.
-     At three colours the whole row is 7 controls / ~292px and fits any phone outright, so
+     At three colours the whole row was 7 controls / ~292px and fit any phone outright, so
      the scroller stops stretching (flex:0 1 auto) and the row centres as a single unit.
-     Reading order is now exactly: eyedropper · three colours · all-colours · undo · clear.
-     That order is not set here — it falls out of buildSwatches() filling #swatches and the
-     picker being inserted at the head of #swatchTools. */
+     Reading order is now: eyedropper · three colours · all-colours · move · undo · clear —
+     8 controls / ~335px, which is what the narrow-phone media query below was already
+     sized to absorb ("the safety net if a control is ever added back"). That order is not
+     set here — it falls out of buildSwatches() filling #swatches, the picker being inserted
+     at the head of #swatchTools, and #btnMove sitting first inside it in markup. */
   #swatchRow{display:flex;align-items:center;justify-content:center;gap:9px;}
   /* Same gap and no left padding, so the two containers are invisible as containers — the
      seam between colours and tools was the padding-left:8px plus a wider gap, on top of the
@@ -607,6 +609,11 @@
     background:rgba(95,230,164,.16);}
   #eyedrop svg{stroke:var(--accent);}
   #eyedrop.active{background:rgba(95,230,164,.34);}
+  /* Same tint, same reason — #btnMove is a tool sitting in a row of icon buttons, not a
+     colour, and .active (toggled in JS) is the "you are in this mode now" state. */
+  #btnMove{background:rgba(95,230,164,.16);}
+  #btnMove svg{stroke:var(--accent);}
+  #btnMove.active{background:rgba(95,230,164,.34);}
   /* #autoSw is gone with the Auto camo chip (buildSwatches() no longer creates it), so its
      rules went with it — a selector for an element that is never built is a trap for the
      next person reading this row. The autoCamo FLAG is still there, permanently false; see
@@ -1469,6 +1476,11 @@
      and scrolled on, which is the majority of the feed, met no way to respond at all. And
      reacting is not a verdict on a round: "😂" is about the photograph, and the photograph is
      on screen from the first frame.
+     ══ GATED BEHIND THE FIRST TAP, founder's call 2026-08-18, reversing the "pas besoin de
+     tapper d'abord" above. The rail still lives here, mid-right, for the whole rest of the
+     round — this only moves WHEN it appears, not where. See chRxMount()'s call site in
+     chSeek() for the mechanics: the rail is built empty on load same as before, and now fills
+     in on the stage's first pointerdown instead of before the photo has even decoded. */
      A RAIL, ON THE RIGHT, mid-height. Not the top (the KAMO wordmark is hit-tested at the
      document by coordinates — anything up there inherits the 2026-08-15 collision) and not
      the bottom, which is where the ending card arrives. Mid-right is the one edge that is
@@ -1977,6 +1989,22 @@
   .ssGrab{display:none;width:100%;padding:2px 0 12px;touch-action:none;cursor:pointer;}
   .ssGrab::before{content:"";display:block;width:38px;height:4px;margin:0 auto;border-radius:99px;background:rgba(255,255,255,.3);}
   #shareSheet.peek .ssGrab,#shareSheet.show .ssGrab,#shareSheet.ssMini .ssGrab{display:block;}
+  /* Same circle as the feed's own close button (.kfClose) — same size, same border, same
+     blur — so a close reads the same wherever it appears in the app. */
+  .ssX{position:absolute;top:14px;right:16px;z-index:2;width:38px;height:38px;border-radius:50%;
+    border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+    display:flex;align-items:center;justify-content:center;padding:0;}
+  .ssX svg{width:15px;height:15px;stroke:#fff;stroke-width:2;stroke-linecap:round;fill:none;}
+  .ssX:active{transform:scale(.92);}
+  #shareSheet.ssMini .ssX{display:none;}
+  /* THE STREAK, WHERE THE VISIBILITY TOGGLE USED TO BE — the same pill the seeker screen
+     uses for a live run (.chRun), just laid out inline instead of absolutely positioned,
+     since here it sits in the card's own flow rather than floating over a photo. */
+  .ssStreakSlot{align-items:center;gap:8px;width:100%;margin:2px 0 9px;padding:10px 14px;border-radius:15px;
+    background:rgba(255,212,138,.1);border:1px solid rgba(255,212,138,.3);color:#ffd48a;font-family:var(--display);}
+  .ssStreakSlot .ssStreakIco{font-size:17px;line-height:1;}
+  .ssStreakSlot b{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .ssStreakSlot i{font-style:normal;font-size:13px;opacity:.85;}
   /* THE SHARE SHEET IS THE SAME OBJECT AS THE PAYWALL. It carries .pwCard now — same green
      gradient, same 26px corners, same rise, same breathing mint glow — because the two are
      the only full-width sheets in the app and they were speaking in different voices: the
@@ -2438,6 +2466,11 @@
       <div id="swatchRow">
         <div id="swatches"></div>
         <div id="swatchTools">
+          <!-- MOVE: the figure's pose is flat pixels the instant capture() runs (see the note
+               above composeInto()), so this is the only way left to reposition it once
+               painting can start. A toggle, not a one-shot like the eyedropper below — see
+               `moving` in the JS — because one nudge is rarely the last one. -->
+          <button class="b icon" id="btnMove" title="Move the figure"><svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg></button>
           <!-- viewBox origin nudged, not the paths. The undo arrow spans y 7-22, so its optical
                centre sits 2.5 units BELOW the 24x24 centre and the glyph rode low in the circle.
                Same trick the eyedropper already uses. -->
@@ -2751,6 +2784,17 @@
          The .pwKick class stays — the paywall and the preview overlay both use it, and there
          it is the only statement of the terms on the screen. -->
     <div class="ssGrab" id="ssGrab"></div>
+    <!-- A REAL CLOSE, kfClose's own circle — the sheet always had a dismiss ("Not now" at the
+         bottom, the grab handle, tap-outside), just never one that reads as a close button at
+         a glance. -->
+    <button class="ssX" id="ssX" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <!-- STREAK, RIGHT BELOW #ssX — not in #ssVis's old slot after all: test-peek-dom.mjs's
+         "IT READS TOP TO BOTTOM" suite pins vis strictly under sign (title→sub→sign→vis→cta→
+         live is a deliberate sentence, see its own comment) and moving vis above sign broke
+         that reading order for real, not just the test. This is the more prominent spot
+         anyway — first thing seen, not one row among several. #ssVis stays where it always
+         was, right before #ssInvite. -->
+    <div class="ssStreakSlot" id="ssStreakSlot" style="display:none"></div>
     <!-- A QUESTION, NOT A CLAIM. "Bet they can't spot it" was the app asserting something on
          the user's behalf about a friend who does not exist yet — and it closed the subject.
          A question opens it, and the button directly below is the answer. It is also the only
@@ -4254,6 +4298,7 @@ function enterCompose(){
    session that follows. capture() rebuilds every one of them. */
 function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   undoStack.length=0;
+  moving=false; movingDrag=false; moveDX=0; moveDY=0; $("#btnMove")?.classList.remove("active");   // a retake starts a fresh mask — nothing left to nudge
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
   mode="compose"; $("#paintUI").style.display="none"; board.style.display="none";
@@ -4662,6 +4707,7 @@ function capture(){
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null;
   paintLayer=null; pctx=null; figLayer=null; figctx=null; shadeSrc=null;
+  moving=false; movingDrag=false; moveDX=0; moveDY=0; $("#btnMove")?.classList.remove("active");   // new mask, nothing to nudge yet
   stopCamView();   // the preview canvas is another full-size backing store — drop it BEFORE the six below, not after (suspendCamera() further down would be too late to matter)
   /* Cap the paint resolution at the width everything is EXPORTED at.
      Every share path renders 1080 wide — composeShare(1080), composeBeforeAfter(1080) and
@@ -4840,6 +4886,25 @@ function paintStyle(){
    paint path, and a bad edit there breaks painting outright for everyone. Deleting four
    provably-dead lines is not worth that risk at this hour. */
 let paintColor="#8a7f6a", brush=20, brushMode="solid", painting=false, eyedrop=false; const undoStack=[];
+/* ===== MOVE (reposition the figure post-capture) =====
+   capture() bakes the figure's 3D pose into maskCanvas as flat pixels — see the note above
+   composeInto() — so there is no transform left to nudge once painting can start. `moving`
+   is a third swatchRow tool, same shape as `eyedrop`: a toggle that repurposes the single-
+   finger drag on #board. Unlike eyedrop it does NOT auto-clear on lift, because one nudge is
+   rarely the last one — the user stays in the mode until they tap the icon again.
+   moveDX/moveDY are a LIVE, unbaked offset: composeInto() draws maskCanvas/shadeSrc/
+   paintLayer shifted by them every frame of the drag, so the preview costs nothing beyond
+   the redraw a brush stroke already pays for. commitMove() (in the paint section below,
+   near composeInto) is what actually rewrites the pixels once a drag ends — see it for why
+   paintLayer moves WITH the mask instead of being left behind. */
+let moving=false, moveDX=0, moveDY=0, movingDrag=false, moveLastX=0, moveLastY=0;
+/* HOLD-TO-MOVE: lets a finger move the figure without ever leaving the paint tool. A quick
+   drag anywhere still paints, byte-for-byte the old behaviour — only a finger that PAUSES
+   (HOLD_MS) before moving arms a move for that one touch, released the moment it lifts.
+   Doesn't touch #btnMove's own persistent toggle or its state at all; see the pointerdown/
+   pointermove/pointerup handlers below for the decision. */
+const HOLD_MS=260, HOLD_MOVE_PX=8;
+let holdTimer=null, holdDownP=null, holdDownCX=0, holdDownCY=0, holdDecided=false;
 /* PENCIL AT ONE END, ROLLER AT THE OTHER. Was 8-46 and linear.
    Linear over a wide range is unusable: at 2-64 the whole pencil zone (2-10) would sit in
    the bottom 13% of the slider, so the fine sizes people actually want for detail work
@@ -5075,7 +5140,7 @@ function composeInto(x,y,w,h){
   figctx.save();
   figctx.beginPath(); figctx.rect(x,y,w,h); figctx.clip();
   figctx.clearRect(x,y,w,h);
-  figctx.drawImage(maskCanvas,0,0);                                  // the lit render
+  figctx.drawImage(maskCanvas,moveDX,moveDY);                        // the lit render
   /* SHADE FIRST, PAINT SECOND — the order is the whole point.
      The shading pass used to run AFTER the paint, so the figure's own body shadows were
      soft-lit back over every stroke. The result: you painted the figure out and its
@@ -5085,16 +5150,56 @@ function composeInto(x,y,w,h){
      lighting that makes the figure sit in the scene. */
   if(shadeSrc&&SHADE_STRENGTH){
     figctx.globalCompositeOperation="soft-light"; figctx.globalAlpha=SHADE_STRENGTH;
-    figctx.drawImage(shadeSrc,0,0,shadeSrc.width,shadeSrc.height,0,0,board.width,board.height);
+    figctx.drawImage(shadeSrc,0,0,shadeSrc.width,shadeSrc.height,moveDX,moveDY,board.width,board.height);
     figctx.globalAlpha=1;
   }
   if(paintLayer){
     figctx.globalCompositeOperation="source-atop";                   // paint keeps the mask's alpha
-    figctx.drawImage(paintLayer,0,0);
+    figctx.drawImage(paintLayer,moveDX,moveDY);
   }
   figctx.restore(); figctx.globalCompositeOperation="source-over";
   ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h);
   ctx.drawImage(figLayer,x,y,w,h,x,y,w,h);
+}
+/* Drag preview: moveDX/moveDY are read by composeInto() above on every drawImage of
+   maskCanvas/shadeSrc/paintLayer, so nudging them and repainting the whole board is the
+   entire live preview — nothing is baked yet. Always the FULL board, not a dirty rect: a
+   moved figure can vacate and re-enter any part of the frame, unlike a single stroke. */
+function previewMove(dx,dy){ moveDX=dx; moveDY=dy; compositeBoard(); }
+/* Lands a drag. maskCanvas is redrawn at the offset — permanently, there is no going back
+   to the 3D scene once capture() has run (see the note above composeInto()) — and
+   paintLayer is shifted BY THE SAME AMOUNT so existing strokes keep tracking the figure
+   instead of being left stranded over its old spot. That is the one property that makes
+   "move after you've started painting" safe rather than punishing: nothing painted is lost,
+   it just moves with what it was covering.
+   pushUndo() at the end folds the move into the ordinary undo stack — same entry point
+   every brush stroke uses — so #btnUndo reverts a bad nudge exactly like a bad stroke. An
+   Undo immediately after a move puts paintLayer back one step BEFORE the shift, which can
+   read as a beat out of sync with the now-moved mask; accepted, because it self-corrects on
+   the very next stroke and a bespoke move-only undo entry is not worth a second code path. */
+function commitMove(){
+  if(!maskCanvas||!paintLayer||(!moveDX&&!moveDY)){ moveDX=0; moveDY=0; return; }
+  const W=board.width,H=board.height,dx=moveDX,dy=moveDY;
+  const nm=document.createElement("canvas"); nm.width=W; nm.height=H;
+  nm.getContext("2d").drawImage(maskCanvas,dx,dy);
+  const np=document.createElement("canvas"); np.width=W; np.height=H;
+  const npx=np.getContext("2d",{willReadFrequently:true}); npx.drawImage(paintLayer,dx,dy);
+  maskCanvas=nm; paintLayer=np; pctx=npx;
+  moveDX=0; moveDY=0;
+  buildShadeSrc();      // derived from maskCanvas — stale after any reposition, see the note above it
+  compositeBoard();
+  try{ pushUndo(); }catch(e){}
+  currentScore=computeScore(); updateCoverageHud();
+}
+/* Shared exit for Move — called both by #btnMove's own toggle and by every OTHER tool
+   (colour swatches, eyedropper) that implicitly means "stop moving, I want to paint now".
+   Bakes an in-flight drag rather than dropping it, same reasoning as the pinch interrupt
+   above: lifting is not the same as undoing. */
+function stopMoving(){
+  if(!moving&&!movingDrag) return;
+  if(movingDrag){ movingDrag=false; commitMove(); }
+  moving=false;
+  const b=$("#btnMove"); if(b) b.classList.remove("active");
 }
 /* paintLayer is no longer pre-clipped to the silhouette — source-atop in composeInto()
    discards anything outside it, and clipping here is what capped the edge alpha and
@@ -5191,15 +5296,27 @@ board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDef
   try{ board.setPointerCapture(e.pointerId); }catch(_){}
   if(zPts.size===2){
     /* Second finger: abandon the stroke in progress. Deliberately NOT endPaint() — that
-       fires paint_completed, the activation event, and a pinch is not a finished stroke. */
+       fires paint_completed, the activation event, and a pinch is not a finished stroke.
+       A move-drag is different: whatever offset it has already reached is baked, not
+       thrown away, the same way a stroke's dabs stay on the board when a pinch cuts it
+       off — commitMove() is a no-op if nothing had moved yet. */
     painting=false; paintAt._l=null;
+    clearTimeout(holdTimer); holdDecided=false; holdDownP=null;   // second finger settles it: this is a pinch, not a paused hold
+    if(movingDrag){ movingDrag=false; commitMove(); }
     const m=zMid(); pinch={d0:zDist(),k0:zoomK,mx:m.x,my:m.y,tx0:zoomTX,ty0:zoomTY};
     return;
   }
   if(zPts.size>1) return;
   const p=pt(e);
+  if(moving){ movingDrag=true; moveLastX=p.x; moveLastY=p.y; return; }
   if(eyedrop){ const c=pick(p); const l=$("#loupe"); l.style.display="block"; l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
-  pushUndo(); painting=true; paintAt._l=null; paintAt(p); haptic(12); });
+  /* Not painted yet — held back until we know this isn't the start of a hold-to-move. If
+     the timer below fires first, nothing here ever reaches the board. */
+  clearTimeout(holdTimer); holdDecided=false; holdDownP=p; holdDownCX=e.clientX; holdDownCY=e.clientY;
+  holdTimer=setTimeout(()=>{
+    if(holdDecided||moving||eyedrop) return;
+    holdDecided=true; movingDrag=true; moveLastX=holdDownP.x; moveLastY=holdDownP.y; haptic(16);
+  }, HOLD_MS); });
 board.addEventListener("pointermove",e=>{ if(mode!=="paint")return;
   if(zPts.has(e.pointerId)) zPts.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pinch && zPts.size>=2){
@@ -5210,7 +5327,18 @@ board.addEventListener("pointermove",e=>{ if(mode!=="paint")return;
   }
   if(zPts.size>1) return;
   const p=pt(e);
+  if(movingDrag){ previewMove(moveDX+(p.x-moveLastX), moveDY+(p.y-moveLastY)); moveLastX=p.x; moveLastY=p.y; return; }
   if(eyedrop&&(e.buttons||e.pressure)){ const c=pick(p); const l=$("#loupe"); l.style.left=e.clientX+"px"; l.style.top=e.clientY+"px"; l.style.background=c; return; }
+  if(!holdDecided&&holdDownP&&!painting){
+    /* Moved far enough, fast enough, to be an ordinary stroke rather than a pause-then-drag
+       — cancel the hold timer and paint from the ORIGINAL down point so there's no gap. */
+    if(Math.hypot(e.clientX-holdDownCX,e.clientY-holdDownCY)>=HOLD_MOVE_PX){
+      clearTimeout(holdTimer); holdDecided=true;
+      pushUndo(); painting=true; paintAt._l=null; paintAt(holdDownP); haptic(12);
+      paintAt(p); paintHaptic();
+    }
+    return;
+  }
   if(painting){ paintAt(p); paintHaptic(); } });
 /* ===== PAINT TIMELAPSE =========================================================
    The shared MP4 was two frames: camouflaged, then wiped to reveal the figure. It showed
@@ -5363,7 +5491,13 @@ function sessionPayload(){
   if(span>SESS_MAX_MS){ const k=SESS_MAX_MS/span; rel=rel.map(v=>Math.round(v*k)); }
   return {frames,times:rel,pre:preFrames.length,span};
 }
-function endPaint(){ if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } updateCoverageHud(); tlCapture(); } }
+function endPaint(){
+  /* Lifted before the hold timer decided anything and before any drag threshold was
+     crossed — a plain tap-dab. Sets `painting` so the block below still runs every usual
+     side effect (score, paint_completed, tlCapture) exactly as a drag-dab always has. */
+  if(!holdDecided&&holdDownP&&!painting&&!movingDrag){ pushUndo(); paintAt(holdDownP); painting=true; haptic(12); }
+  clearTimeout(holdTimer); holdDecided=false; holdDownP=null;
+  if(movingDrag){ movingDrag=false; commitMove(); } if(eyedrop){ eyedrop=false; $("#eyedrop").classList.remove("active"); $("#loupe").style.display="none"; teachHint("Color grabbed — now paint the figure"); } if(painting){ painting=false; paintAt._l=null; currentScore=computeScore(); /* coverage for the native review gate; the chip is the reveal's job now */ if(!endPaint._sent){ endPaint._sent=true; track("paint_completed",{score:Math.round(currentScore||0),timed:timerArmed("paint")}); } updateCoverageHud(); tlCapture(); } }
 /* Lifting a finger has to drop it from the pinch set FIRST, or a two-finger gesture leaves
    a stale pointer behind and the next single-finger touch is read as the second half of a
    pinch — i.e. painting silently stops working. Ending the pinch on the way down to one
@@ -5422,8 +5556,8 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      buttons; putting a free one back here would be worse than a duplicate, it would be the
      free substitute that makes the paid one unsellable. */
   const eye=document.createElement("div"); eye.id="eyedrop"; eye.className="sw"; eye.innerHTML=`<svg viewBox="2.5 -2.25 24 24"><path d="M18 3l3 3-9.5 9.5-3.5 1 1-3.5L18 3z"/><path d="M14 6l4 4"/></svg>`;
-  eye.onclick=()=>{ eyedrop=true; autoCamo=false; mosaic=false; document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); teachHint("Tap the scene to grab its color"); }; w.appendChild(eye);
-  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; mosaic=false; setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; if(c===paintColor) keepSw=s; });
+  eye.onclick=()=>{ eyedrop=true; autoCamo=false; mosaic=false; stopMoving(); document.querySelectorAll(".sw").forEach(s=>s.classList.remove("active")); eye.classList.add("active"); teachHint("Tap the scene to grab its color"); }; w.appendChild(eye);
+  PALETTE.forEach(c=>{ const s=document.createElement("div"); s.className="sw"; s.style.background=c; s.onclick=()=>{ paintColor=c; eyedrop=false; autoCamo=false; mosaic=false; stopMoving(); setAutoChip(); document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); s.classList.add("active"); }; w.appendChild(s); if(!firstColorSw) firstColorSw=s; if(c===paintColor) keepSw=s; });
   /* Auto used to be the selected swatch on every round, so something was always lit. With
      it gone nothing is, while paintColor still holds a colour — the player would paint in
      a shade no swatch shows as chosen. Select the first palette entry and paint with it.
@@ -5460,7 +5594,7 @@ function buildSwatches(colors){ if(colors&&colors.length) PALETTE=colors; const 
      user the input does not exist at all, so there is nothing to tap through to. */
   if(canPro()){
     const inp=document.createElement("input"); inp.type="color"; inp.value="#8a7f6a";
-    inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; autoCamo=false;
+    inp.oninput=e=>{ paintColor=e.target.value; eyedrop=false; autoCamo=false; stopMoving();
       document.querySelectorAll(".sw").forEach(x=>x.classList.remove("active")); mo.classList.add("active"); };
     mo.appendChild(inp);
     mo.onclick=()=>haptic(8);   // the input handles opening; this is just the tick
@@ -8473,7 +8607,7 @@ function openShareSheet(via){
      from the same function that paints the toggle — on every open, because the answer is
      remembered across rounds and the sheet must never arrive claiming the opposite of what
      the row underneath it says. */
-  kfRenderVis(); ssRenderSign();
+  kfRenderVis(); ssRenderSign(); ssRenderStreak();
   /* Moved here from peekShareSheet. #ssInvite ships display:none so a JS failure cannot leave
      a button nothing is listening to, and only updateInviteBtn() un-hides it — so it has to
      run on EVERY path into the open sheet, not just the one that used to go through the peek
@@ -8671,7 +8805,7 @@ function peekShareSheet(){
      state deliberately does not go through it. Costs nothing — it reads one localStorage key
      and writes three strings; no network, no upload, so the short state still publishes
      nothing. */
-  kfRenderVis(); ssRenderSign();
+  kfRenderVis(); ssRenderSign(); ssRenderStreak();
   shareSheetEl.classList.add("peek");
   /* THE SHORT STATE IS WHERE MOST PEOPLE MEET THIS SENTENCE — the sheet presents itself on
      the reveal and `share_opened` fires from the other door — so the sweep belongs here too,
@@ -9090,6 +9224,7 @@ if(window.ReactNativeWebView){
     };
   } }
 $("#ssClose").onclick=()=>dismissShareSheet("cancel");
+$("#ssX").onclick=()=>{ haptic(10); dismissShareSheet("cancel"); };
 shareSheetEl.onclick=e=>{ if(e.target===shareSheetEl) dismissShareSheet("backdrop"); };
 /* [data-target] only — the invite button below is not an image share and must not
    fall through to nativeShare(undefined). */
@@ -9191,9 +9326,14 @@ function ssOfferPub(){
     let id=chId;
     const had=!!id;
     if(!id){
-      /* UNDER THE FLOOR IS NOT A WAIT, IT IS AN ANSWER. Quoting the constant rather than a
-         typed number, and the same sentence the coverage chip uses while it can still be acted
-         on — the two must never disagree about what the floor is. */
+      /* The coverage floor is enforced at Done now too (see its onclick), so this branch
+         should be unreachable on the ordinary path — but Done is not the only door to
+         "finished" (an auto-Done can end a hide mid-paint, see the note on CH_MIN_COVERAGE's
+         other call site), so a bare, never-going-to-publish hide can still land here. Say so
+         rather than spin for 2.5s and then claim it's merely slow — that reads as a dead
+         button, which is the exact defect this branch exists to avoid. This is an ANSWER, not
+         a block: the sheet stays open and the tap costs nothing, same as the in-flight case
+         below. */
       if(Math.round(currentScore||0)<CH_MIN_COVERAGE){
         track("sent_feed_tapped",{own:false,lost:true,bare:true});
         showHint("Paint more of it first — under "+CH_MIN_COVERAGE+"% there's no challenge to look at",3600);
@@ -10178,6 +10318,14 @@ $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
 $("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
 $("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
+/* Toggle, not a modal — see the note above `moving`. Turning it ON cancels the eyedropper
+   the same way picking a colour cancels Move (stopMoving(), called from both directions),
+   so the row never shows two tools active at once. */
+$("#btnMove").onclick=()=>{ const b=$("#btnMove");
+  if(moving){ stopMoving(); return; }
+  moving=true; eyedrop=false; $("#eyedrop")?.classList.remove("active"); $("#loupe").style.display="none";
+  b.classList.add("active"); haptic(10); teachHint("Drag the figure to reposition it");
+};
 $("#btnSave").onclick=saveStatic;
 
 /* ===== brush-size slider (free) + 3 quick-size presets ===== */
@@ -10679,7 +10827,18 @@ function exitFinished(){ finished=false; stage.classList.remove("done");
   const pb=$("#paintBadge"); if(pb) pb.style.display=""; sizeBar.style.display="block"; $("#btnDone").style.display="block"; $("#btnEdit").style.display="none";
   $("#actionRow").style.display="none";  // back to editing → hide Share/Save again
   updateCoverageHud(); }   // ...and back in the editor the floor is actionable again, so it says where the paint stands
-$("#btnDone").onclick=()=>enterFinished(false); $("#btnEdit").onclick=exitFinished;
+$("#btnDone").onclick=()=>{
+  /* The floor belongs here now, not on "See it live". Blocking it three taps later — after
+     the reveal, after opening the share sheet — read as the share button being broken; this
+     is the one place the user is actually looking at the paint they'd be stopping short on. */
+  if(Math.round(currentScore||0)<CH_MIN_COVERAGE){
+    haptic(10);
+    showHint("Paint a bit more first — under "+CH_MIN_COVERAGE+"% there's no challenge to look at",3200);
+    return;
+  }
+  enterFinished(false);
+};
+$("#btnEdit").onclick=exitFinished;
 revealHandle.addEventListener("pointerdown",e=>{ e.preventDefault(); revealHandle.setPointerCapture(e.pointerId); revealHandle._d=true; revealHint.style.display="none"; });
 revealHandle.addEventListener("pointermove",e=>{ if(!revealHandle._d)return; const r=board.getBoundingClientRect(); revealX=Math.max(0.02,Math.min(0.98,(e.clientX-r.left)/r.width)); drawReveal(); });
 revealHandle.addEventListener("pointerup",()=>revealHandle._d=false); revealHandle.addEventListener("pointercancel",()=>revealHandle._d=false);
@@ -11310,6 +11469,18 @@ const VIS_ICO_PRIVATE='<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z
 /* WHOSE NAME IS ON IT. Painted from the same two doors as the visibility row below it
    (openShareSheet + peekShareSheet), because they are the same kind of statement: a fact about
    the hide, stated before the send rather than discovered after it. */
+/* THE STREAK TAKES THE SLOT #ssVis USED TO SIT IN — moved up next to the new #ssX close
+   button so the toggle stays reachable at a glance, and this is the more prominent spot in
+   the sheet. Reads chStreak() the same way the seeker pill does; empty (no run yet) leaves
+   the slot collapsed rather than showing a zero nobody earned. */
+function ssRenderStreak(){
+  const el=$("#ssStreakSlot"); if(!el) return;
+  let s; try{ s=chStreak(); }catch(e){ s=null; }
+  const n=(s&&s.run)|0;
+  if(n<=0){ el.style.display="none"; el.innerHTML=""; return; }
+  el.style.display="flex";
+  el.innerHTML='<span class="ssStreakIco">🔥</span><b>'+n+'</b><i>'+(n===1?"round streak":"round streak")+'</i>';
+}
 function ssRenderSign(){
   const b=$("#ssSign"); if(!b) return;
   const n=$("#ssSignName"), go=$("#ssSignGo"), mine=getHandle();
@@ -13283,6 +13454,12 @@ function chSeek(hideId,opts){
      await, so a cancelled round stops building instead of quietly finishing into a detached
      tree. */
   let killed=false;
+  /* Guards chRxMount(): the rail is built exactly once per round, on the stage's first
+     pointerdown — see that handler, below — never at load. Declared up here rather than
+     inside the async block for the same reason `killed` is: the pointerdown listener is
+     attached from inside that block, well after this line runs, but both close over this
+     same outer scope, so the flag has to already exist by the time either side touches it. */
+  let rxMounted=false;
   /* chLive OFF HERE TOO, and not only in ending(): the feed unmounts a round the moment the
      user swipes past it, so a hide nobody answered would otherwise leave the flag stuck true
      for the rest of the launch — and a stuck flag means the dwell backstop never fires for
@@ -13384,7 +13561,11 @@ function chSeek(hideId,opts){
      STORED AS A LIST, and the old single-value key is read as one: a device that reacted
      under the previous build wrote "1", which is not an emoji and matches nothing, so those
      people get their remaining chips back rather than a corrupted set.
-     MOUNTED WITH THE ROUND (founder, 2026-08-16), not with the card that ends it. */
+     MOUNTED WITH THE ROUND (founder, 2026-08-16) — but not from the moment the round starts
+     any more. As of 2026-08-18 the call is deferred to the stage's first pointerdown (see
+     that handler, below), so the rail is still built once per round and still lives for the
+     rest of it once it appears; only the trigger moved, from "the hide exists" to "the
+     player touched the photo". */
   function chRxMount(){
     const box=$$("chRx"); if(!box) return;
     const EM=["🔥","😂","😱","👏"], KEY="kamo_rx_"+HID;
@@ -13526,12 +13707,21 @@ function chSeek(hideId,opts){
     let h; try{ h=await chRpc("get_hide",{p_id:HID}); }catch(e){}
     if(killed) return;                 // swiped past before the hide arrived — build nothing
     if(!h||!h.img_path){ track("seek_missing",TP()); ending("This hide is gone.","Expired, or taken down.",{}); return; }
-    /* THE RAIL GOES UP HERE, and the position in this function is the whole of its contract:
-       after the existence check, so nothing offers to react to a hide that is gone, and
-       before the photo finishes decoding, so it is on screen for the entire time the player
-       is looking. That span — from first paint to the buzz — is the one the old placement
-       had no control in at all. */
-    chRxMount();
+    /* THE RAIL NO LONGER GOES UP HERE FOR A STRANGER'S HIDE. It used to mount on this exact
+       line for everyone — right after the existence check, before the photo even decoded —
+       so it was on screen for the entire time the player was looking. Founder's call
+       2026-08-18: show it only once the player has actually tapped the photo, so somebody
+       who is just scrolling past never sees it at all. The existence check still guards it
+       — chRxMount() only ever runs from the stage's pointerdown handler below, which cannot
+       fire on a round that returned early right above this line.
+       MINE IS THE ONE EXCEPTION, and stays eager. The tap-gate exists to protect a stranger's
+       round from showing anything before it's earned attention; your own photo is a readout,
+       not a round to play, and nothing there is gated on a buzz that may never come — a
+       creator reviewing their own hide via "See it live" has no reason to touch the photo at
+       all, so gating on that touch would mean the counts (the one thing this screen tells a
+       creator) never appear in practice. rxMounted=true here makes the pointerdown handler's
+       own call a no-op, same as any later touch on a round already mounted. */
+    if(MINE){ rxMounted=true; chRxMount(); }
     /* Read, not incremented: `round` is which round THIS is, so a seeker's second hide
        reports 2 at the moment it opens. Grouping seek_opened by it answers the question
        directly — no funnel, no joins. 0 inside the app, where the counter is not kept. */
@@ -13943,6 +14133,14 @@ function chSeek(hideId,opts){
           aimRec.p.push([t,Math.round((cx-r.left)/r.width*1000)/1000,Math.round((cy-r.top)/r.height*1000)/1000]); } } };
 
     stage.addEventListener("pointerdown",e=>{
+      /* THE RAIL'S TRIGGER, not the aim's. This has to sit above every branch below —
+         including the pinch one — because "tapped the photo" is true the instant a finger
+         lands on it, whether that finger goes on to arm a shot, start a zoom, or turn out to
+         be the second finger of a pinch. rxMounted makes it one-shot; chRxMount() itself is a
+         no-op past the first call for a MINE round (its own effects are idempotent), but
+         there is no reason to rebuild the rail's DOM and re-fire its RPC on every subsequent
+         touch of a round already playing. */
+      if(!rxMounted){ rxMounted=true; chRxMount(); }
       pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
       try{ stage.setPointerCapture(e.pointerId); }catch(_){}
       if(pts.size===2){
@@ -14899,7 +15097,7 @@ const KF_CSS=
      arrives on top of it a beat later — the same file, already in cache. */
   +".kfPrev{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:.5;}"
   +".kfHost{position:absolute;inset:0;}"
-  +".kfBar{position:absolute;left:0;right:0;top:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(8px + var(--safe-t)) 12px 22px;background:linear-gradient(180deg,rgba(4,6,10,.72),rgba(4,6,10,0));pointer-events:none;}"
+  +".kfBar{position:absolute;left:0;right:0;top:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(8px + var(--safe-t)) 12px 22px;pointer-events:none;}"
   +".kfBar>*{pointer-events:auto;}"
   +".kfClose{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(4,6,10,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;}"
   +".kfClose:active{transform:scale(.92);}"
