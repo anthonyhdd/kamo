@@ -13577,6 +13577,19 @@ function chSeek(hideId,opts){
     const HINTS_LIVE=true;
     const HINT_PACK_ID="com.blisscoach.kamo.hints5";
     let hintZone=null, hintBusy=false, hintPending=false;
+    /* THE THREE THINGS THE CREDIT POLL NEEDS, and none of them existed while the poll was
+       deciding success from the wrong signal.
+       `hintBuyStarted` is set on the tap that opens Apple's sheet and is NEVER cleared for
+       the life of this screen. It is what makes a late callback safe to honour: hintPending
+       is cleared by the 45s cancel timer, so a sheet that took longer than that — a password,
+       an SCA step, a slow store — used to land on a `return` with the money taken and the
+       screen saying nothing, one tap away from buying the pack again. A hide swiped to in the
+       meantime has its own closure with this false, so a stray callback still cannot spend a
+       hint on a hide nobody bought one for.
+       `hintBalAtBuy` is the balance at the moment of that tap: the number the credit has to
+       BEAT before the poll may call itself done.
+       `hintKnownBal` is the last balance the server stated, on any answer. */
+    let hintBuyStarted=false, hintBalAtBuy=0, hintKnownBal=0;
     const hintsOn=()=>{ try{ return !!(HINTS_LIVE&&nativeCaps&&nativeCaps.hints&&chUserId&&HID&&!REPLAY); }catch(_){ return false; } };
     const hintBtn=document.createElement("button");
     hintBtn.className="chHint"; hintBtn.id="chHint"; hintBtn.textContent="Hint";
@@ -13607,6 +13620,7 @@ function chSeek(hideId,opts){
       try{ r=await chRpc("hint_spend",{p_owner:chUserId,p_hide_id:HID}); }catch(_){}
       hintBusy=false; hintBtn.disabled=false;
       if(!r){ hintBtn.disabled=false; return; }            // network blip: let them try again
+      if(typeof r.balance==="number") hintKnownBal=r.balance;
       if(r.region){
         drawHintZone(r.region);
         track("hint_used",TP({via:r.used,balance:r.balance|0}));
@@ -13667,7 +13681,8 @@ function chSeek(hideId,opts){
         retireHint("Get the app");
         return;
       }
-      hintPending=true; hintBtn.disabled=true; hintBtn.textContent="…";
+      hintPending=true; hintBuyStarted=true; hintBalAtBuy=hintKnownBal;
+      hintBtn.disabled=true; hintBtn.textContent="…";
       /* Apple's sheet can be cancelled, and nothing tells us so on this path. Hand the button
          back after a while rather than leaving a permanent "…". */
       /* GUARDED ON hintPending ALONE. It used to also require `!hintZone`, which was true
@@ -13682,33 +13697,63 @@ function chSeek(hideId,opts){
        the callback's timing: the credit does not come from the app, it comes from the
        RevenueCat webhook hitting the edge function, which is a round trip through two
        servers. Purchasing and being credited are therefore ordered but not simultaneous, and
-       a single immediate read would usually find the old balance. Six tries over ~9s. */
-    window.__kamoHintsBought=async()=>{
-      if(!hintPending) return;
-      for(let i=0;i<6;i++){
-        let r=null;
-        try{ r=await chRpc("hint_spend",{p_owner:chUserId,p_hide_id:HID}); }catch(_){}
-        if(r&&r.region){
-          hintPending=false;
-          drawHintZone(r.region);
-          hintBtn.textContent=r.balance>0?(r.balance+" left"):"Hint used";
-          hintBtn.disabled=true;
-          /* NOT COUNTED WHEN THE SERVER SAYS `already`. Bought from the post-use offer, this
-             hide's hint was spent a moment ago and hint_spend returns the same zone without
-             touching the wallet — so the pack lands intact, and a second hint_used here would
-             be the same reveal counted twice, inflating exactly the number the free-vs-paid
-             split exists to keep honest. */
-          if(r.used!=="already") track("hint_used",TP({via:"purchased",balance:r.balance|0}));
-          return;
+       a single immediate read would usually find the old balance. Six tries over ~9s.
+
+       WHAT IT WAITS FOR IS THE CREDIT, NOT THE ZONE, and getting that wrong broke the ONE
+       door this product actually sells through. Bought from the post-use offer, the hint on
+       this hide is already spent: hint_spend answers `already` WITH the region on the first
+       poll, ~2s before the webhook lands. Exiting there — which is what "r.region" alone
+       does — locked the button on "Hint used" with a balance of zero for somebody who had
+       just paid. The pack was in the wallet a second later and nothing on screen ever said
+       so. That is the "paid and got nothing" screen, reached on the happy path, and it is
+       what an App Review tester following our own review notes would have been looking at.
+       So on `already` the poll keeps going until the wallet actually GROWS past what it held
+       when the sheet opened. The other door — an empty wallet on a fresh hide — is unchanged:
+       there is no region to return until the credit lands, so the first true answer is the
+       credited one. */
+    let hintPolling=false;
+    const pollHintCredit=async()=>{
+      /* hintBuyStarted, NOT hintPending: see the declaration. The second half of this guard is
+         plain re-entrancy — the slow-credit button below calls this too. */
+      if(!hintBuyStarted||hintPolling) return;
+      hintPolling=true;
+      hintPending=true; hintBtn.disabled=true; hintBtn.textContent="…";
+      try{
+        for(let i=0;i<6;i++){
+          let r=null;
+          try{ r=await chRpc("hint_spend",{p_owner:chUserId,p_hide_id:HID}); }catch(_){}
+          if(r&&typeof r.balance==="number") hintKnownBal=r.balance;
+          if(r&&r.region&&(r.used!=="already"||r.balance>hintBalAtBuy)){
+            hintPending=false;
+            drawHintZone(r.region);
+            hintBtn.textContent=r.balance>0?(r.balance+" left"):"Hint used";
+            hintBtn.disabled=true;
+            /* NOT COUNTED WHEN THE SERVER SAYS `already`. Bought from the post-use offer, this
+               hide's hint was spent a moment ago and hint_spend returns the same zone without
+               touching the wallet — so the pack lands intact, and a second hint_used here would
+               be the same reveal counted twice, inflating exactly the number the free-vs-paid
+               split exists to keep honest. */
+            if(r.used!=="already") track("hint_used",TP({via:"purchased",balance:r.balance|0}));
+            return;
+          }
+          await new Promise(res=>setTimeout(res,1500));
         }
-        await new Promise(res=>setTimeout(res,1500));
-      }
-      /* Paid and still not credited. The hints are NOT lost — they are in the wallet the
-         moment the webhook lands — so say the true thing rather than "failed". */
-      hintPending=false; hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel;
-      track("hint_credit_slow",TP({}));
-      showHint("Your hints are on the way — try again in a moment",3200);
+        /* Paid and still not credited. The hints are NOT lost — they are in the wallet the
+           moment the webhook lands — so say the true thing rather than "failed".
+           AND THE BUTTON MUST NOT BE A SECOND PURCHASE. It used to go back to hintIdleLabel,
+           which on this path reads "Get 5 more" with offerHintPack still wired to it — so the
+           one gesture the copy invites, tap again in a moment, opened Apple's sheet and charged
+           for a pack already bought. It re-checks the wallet instead; nothing on this screen
+           can open StoreKit a second time for a purchase that has already gone through. */
+        hintPending=false;
+        hintBtn.disabled=false;
+        hintBtn.textContent="Check again";
+        hintBtn.onclick=()=>{ haptic(8); pollHintCredit(); };
+        track("hint_credit_slow",TP({}));
+        showHint("Your hints are on the way — tap Check again in a moment",3200);
+      } finally { hintPolling=false; }
     };
+    window.__kamoHintsBought=pollHintCredit;
 
     hintBtn.onclick=()=>{ haptic(8); takeHint(); };
     if(hintsOn()){ w.appendChild(hintBtn); track("hint_offered",TP({})); }
