@@ -8005,6 +8005,12 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    somebody finished; `feed_blocked_empty` is the way out of the blocked state. Splitting them
    from `feed_opened` would put a lap and its own denominator on two users. */
 "feed_blocked_empty","feed_second_lap",
+/* THE WEB INSTALL WALL, and it is direct for the same reason the rest of this family is:
+   it only ever fires where there is no wrapper, so postNative would return false anyway —
+   but naming it here makes that a decision instead of an accident, and keeps the wall on
+   the same Amplitude user as the feed_opened it replaces. Backticks in prose above, never
+   double quotes — check.mjs parses names out of this literal by regex. */
+"feed_gated","feed_gate_dismissed",
 /* The consent sheet, and it only means anything as a pair: the sheet SHOWN is the
    denominator, the answer is the numerator, and the whole reason the sheet exists is the
    rate between them. `hide_reacted` travels with them because a reaction is a feed round's
@@ -14957,8 +14963,98 @@ let kfState=null;
 /* opts.first = a hide id to put in front of the public page, used by the post-send offer
    so somebody who has just published sees THEIR OWN photo in the feed's own frame —
    proof, in the place strangers will meet it, rather than a thumbnail in a grid. */
+/* ===== THE FEED IS THE PART OF KAMO THAT REPLACES KAMO =====================================
+   MEASURED 2026-08-17, August 1-17, unique users, split on `host` (the property chWebTrack
+   stamps from window.ReactNativeWebView — NOT `surface`, which says "web" for the main page
+   inside the wrapper too and reads the opposite way round):
+
+                    app     browser
+     plays a round  3,261    19,388
+     publishes      2,877       176
+     sends          1,697       217
+
+   A browser player publishes at 0.9%. An app player publishes at 88%. The browser is not a
+   smaller version of the app, it is a different product: 19,388 people playing an unlimited
+   feed of other people's hides and putting 176 back. Meanwhile 8,926 arrive on a challenge
+   link and 506 ever tap the install CTA — 5.7%, the only install pressure that exists.
+
+   SO THE WALL GOES ON THE PART THAT SUBSTITUTES, AND NOWHERE ELSE. Three doors, and only one
+   of them closes:
+     - answering the challenge you were sent   — free, always, no counter. It is the hook, and
+       it is what a stranger came here to do.
+     - capturing and publishing your own       — free. Only 176 browser users a month get this
+       far; walling them would cost the supply side its entire browser contribution to buy
+       nothing, and it is the one path that turns a consumer into a contributor.
+     - "show me more strangers' hides"         — THIS. Unlimited free rounds, no reason to
+       install, and 99.1% of the people taking it never put anything back.
+
+   `first` OR `mine` MEANS THE FEED WAS SEEDED, and a seeded feed is never the substitute: it
+   is "See it live" after a publish, the automatic return after a challenge-back, or your own
+   kamos panel. Every one of those belongs to somebody who just contributed. They go through
+   untouched — including onward swipes, deliberately, because the alternative is walling the
+   0.9% at the exact moment they earned the opposite.
+   ONE ROUND FIRST, so the wall can never be the first thing a stranger meets. */
+const KF_WALL_ROUNDS=1;
+/* CH_ROUNDS_KEY BY VALUE, because the original is scoped inside chSeek() and this runs from
+   chFeed(). Kept as its own name rather than hoisting the constant: the seeker owns that
+   counter's meaning (browser-only, bumped on rehide), and this only ever reads it. */
+const KF_ROUNDS_KEY="kamo_rounds";
+function kfRoundsSeen(){ try{ return parseInt(localStorage.getItem(KF_ROUNDS_KEY)||"0",10)||0; }catch(_){ return 0; } }
+/* window.ReactNativeWebView AND NOT nativeCaps — same reasoning as `host` on chWebTrack and as
+   the Instagram button: the question is "is there a wrapper at all", and it is true in every
+   binary ever shipped. A capability test would wall the oldest builds, which are users who
+   ALREADY installed. */
+function kfWebWalled(opts){
+  try{ if(window.ReactNativeWebView) return false; }catch(_){ return false; }
+  if(opts&&(opts.first||opts.mine)) return false;
+  return kfRoundsSeen()>=KF_WALL_ROUNDS;
+}
+function kfWebWall(){
+  if(document.getElementById("kfWall")) return;
+  /* chFeed() injects KF_CSS on its way in and this returns before that happens, so the card
+     would mount unstyled — .kfGate lives in that sheet. Same guard, same id. */
+  if(!document.getElementById("kfCSS")){
+    const st=document.createElement("style"); st.id="kfCSS"; st.textContent=KF_CSS; document.head.appendChild(st);
+  }
+  const r=document.createElement("div"); r.id="kfWall";
+  r.style.cssText="position:fixed;inset:0;z-index:60;background:rgba(4,6,10,.92);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center;padding:24px;";
+  /* .kfGate is anchored to the bottom of the feed; here it is the only thing on screen, so
+     its position is overridden and nothing else about it is. Reused rather than restyled: the
+     slide-4 card already taught this shape, and a second dialect of the same ask is a second
+     thing to keep in sync. */
+  const w=document.createElement("div"); w.className="kfGate";
+  w.style.cssText="position:static;left:auto;bottom:auto;transform:none;";
+  w.innerHTML='<b></b><span></span><button type="button"></button>';
+  /* NOT "you have hit a limit". The sentence has to be true and it has to be about the thing
+     they were reaching for: there IS more, and it is in the app. Written with textContent —
+     no user data here today, but this card is exactly where a handle would end up next. */
+  w.querySelector("b").textContent="The rest is in the app";
+  w.querySelector("span").textContent="You have played your round. Every other hide people are posting right now is in KAMO — free.";
+  const b=w.querySelector("button");
+  b.textContent="Get KAMO — free";
+  /* pwWebInstall RATHER THAN A BARE location.href: it files paywall_install_tapped with a
+     source, so this wall lands in the same denominator as the locked-control pill and the
+     seeker CTA and the three can finally be compared. */
+  b.onclick=(e)=>{ e.stopPropagation(); pwWebInstall("feed_wall"); };
+  /* A WALL WITH NO DOOR IS A BUG REPORT. Dismissing does not open the feed — it returns to
+     whatever they were on, which is the gate working. What it must never do is strand
+     somebody on a screen whose only control sends them to the App Store. */
+  const x=document.createElement("button");
+  x.type="button"; x.textContent="Not now";
+  x.style.cssText="margin-top:10px;height:40px;border:0;background:none;color:rgba(255,255,255,.6);font-size:14px;font-weight:700;";
+  x.onclick=(e)=>{ e.stopPropagation(); track("feed_gate_dismissed",{}); r.remove(); };
+  w.appendChild(x);
+  r.appendChild(w); document.body.appendChild(r);
+  /* THE DENOMINATOR, filed on mount and not on the tap. paywall_install_tapped{source:"feed_wall"}
+     is the numerator; without this the wall's conversion would be a number with nothing under it,
+     which is the failure the paywall pill was built to stop repeating. */
+  track("feed_gated",{rounds:kfRoundsSeen()});
+}
 function chFeed(opts){
   if(kfState) return;
+  /* BEFORE ANYTHING ELSE, including the CSS injection and the overlay build: the wall is a
+     refusal to open this screen, not a layer on top of an opened one. */
+  if(kfWebWalled(opts)){ kfWebWall(); return; }
   const FIRST=(opts&&opts.first)||"";
   /* WHERE CLOSING THIS PUTS YOU. The feed is an overlay, so ✕ has always just uncovered
      whatever was underneath — which is right when it was opened from the camera, and wrong
