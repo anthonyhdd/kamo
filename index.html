@@ -4276,58 +4276,6 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   teachHint("Reposition, then recapture");
 }
 
-/* ===== SESSION RECAP TOAST =====
-   Lands on the camera the moment a feed session that actually played something ends —
-   close() calls this after root.remove(), so it never depends on FROM_REVEAL's
-   backToCompose() branch and shows up whichever way the feed was covering the camera.
-   BOTH NUMBERS ALREADY EXISTED. `found`/`played` are new (S.found, wired through
-   chSeek's onEnded(won) — see the feed's S.round=chSeek(...) call), but the lifetime
-   line is chSeekRecord() (kamo_seeks / kamo_seek_hits), which has been written on every
-   real round since the streak shipped and has never been shown anywhere — window.KAMOSEEK
-   exists for exactly this. CH_MIN_SEEKS still gates it: under 5 lifetime rounds the second
-   line is silent rather than printing a false 0% or 100%, same rule the counter was built
-   under.
-   NON-BLOCKING, ON PURPOSE. The feed's whole exit is "the swipe IS the exit" — no confirm,
-   no gate. This cannot become a second one bolted onto the camera: it fades in, holds, fades
-   out on its own, and the first tap anywhere on the camera dismisses it early. pointer-events
-   stays off the toast itself; the dismiss listener sits on the document instead so a tap
-   through it still reaches the shutter underneath. */
-let chToastEl=null, chToastT=null;
-function chSessionToast(played,found){
-  if(!played) return;
-  try{
-    if(!document.getElementById("chToastCss")){
-      const st=document.createElement("style"); st.id="chToastCss";
-      st.textContent=
-        "#chToast{position:fixed;left:50%;bottom:calc(126px + var(--safe-b));transform:translateX(-50%) translateY(10px);z-index:70;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 18px;border-radius:14px;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font-family:var(--display);pointer-events:none;opacity:0;transition:opacity .38s cubic-bezier(.22,1,.36,1),transform .38s cubic-bezier(.22,1,.36,1);}"
-        +"#chToast.on{opacity:1;transform:translateX(-50%) translateY(0);}"
-        +"#chToast b{font-size:14.5px;font-weight:700;color:#fff;letter-spacing:-.2px;}"
-        +"#chToast span{font-size:12px;font-weight:600;color:var(--mint);}";
-      document.head.appendChild(st);
-    }
-    if(chToastEl){ try{ chToastEl.remove(); }catch(_){} clearTimeout(chToastT); document.removeEventListener("pointerdown",chToastTap,true); }
-    const rec=(window.KAMOSEEK&&window.KAMOSEEK.record)?window.KAMOSEEK.record():{n:0,hit:0};
-    const min=(window.KAMOSEEK&&window.KAMOSEEK.min)||5;
-    const pct=rec.n>=min ? Math.round(100*rec.hit/rec.n) : null;
-    const el=document.createElement("div"); el.id="chToast";
-    el.innerHTML="<b></b>"+(pct!==null?"<span></span>":"");
-    el.querySelector("b").textContent=found+" found · "+played+" played";
-    if(pct!==null) el.querySelector("span").textContent=pct+"% lifetime · "+rec.hit+" found";
-    document.body.appendChild(el); chToastEl=el;
-    requestAnimationFrame(()=>el.classList.add("on"));
-    chToastT=setTimeout(chToastDismiss,3400);
-    document.addEventListener("pointerdown",chToastTap,true);
-  }catch(_){}
-}
-function chToastTap(){ chToastDismiss(); }
-function chToastDismiss(){
-  const el=chToastEl; if(!el) return;
-  clearTimeout(chToastT);
-  document.removeEventListener("pointerdown",chToastTap,true);
-  el.classList.remove("on");
-  setTimeout(()=>{ try{ el.remove(); }catch(_){} if(chToastEl===el) chToastEl=null; },380);
-}
-
 /* ===== GESTURES ===== */
 const pointers=new Map();
 let downT=0, downX=0, downY=0, downHit=-1, moved=false, dragging=false, pinchStart=0, scaleStart=1, rotStart=0, rotBaseY=0, lpTimer=null;
@@ -14465,7 +14413,7 @@ function chSeek(hideId,opts){
         location.href=u; };
       /* The feed is told the moment this card exists, so it can drop the swipe hint before
          the pill and the card's own buttons occupy the same 40 pixels. */
-      if(OPT.onEnded) try{ OPT.onEnded(won); }catch(_){}
+      if(OPT.onEnded) try{ OPT.onEnded(); }catch(_){}
       /* ③ BEAT ONE, AND THE BIGGEST: 63% of everybody who opens KAMO opens it on a challenge
          link, plays exactly this round, and meets no locked control in their entire visit.
          This is the moment the round is OVER — the answer is revealed, the card is up — so
@@ -15293,7 +15241,7 @@ function chFeed(opts){
      key is least(n_attempts,3) and the untouched band is about one page deep, so one person
      playing one hide re-numbers everything under it. See the rung in load(). */
   const S={cursor:null,served:new Set(),
-           loading:false,done:false,slides:[],active:-1,round:null,played:0,found:0,hinted:false,lap:0};
+           loading:false,done:false,slides:[],active:-1,round:null,played:0,hinted:false,lap:0};
   kfState=S;
   /* THE CLOCK STARTS HERE, and it exists because the last change to this screen could not be
      judged. The feed was made to open on a page fetched at launch instead of one fetched at
@@ -15339,7 +15287,6 @@ function chFeed(opts){
     try{ io.disconnect(); }catch(_){}
     try{ root.remove(); }catch(_){}
     if(!silent) track("feed_closed",{played:S.played,slides:S.slides.length,from:FROM_REVEAL?"reveal":"camera"});
-    if(!silent) try{ chSessionToast(S.played,S.found); }catch(_){}
     /* THE SAME PAIR RETAKE USES (#cfYes): exitFinished() takes the reveal down, backToCompose()
        puts the camera back and — the part that matters beyond the navigation — releases the
        round's full-retina canvases, ~100MB of them. Reaching the camera by any other route
@@ -15563,7 +15510,7 @@ function chFeed(opts){
       /* AND THE BELL GOES WITH IT. A finished round draws its card over this slide, and a
          chip floating on top of somebody's ending is furniture in the way of the one screen
          that matters. Hidden rather than removed: the round can be replayed from here. */
-      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; },
+      onEnded:()=>{ S.answered=true; if(s.bell) s.bell.style.display="none"; },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       /* "Hide another one", on your own hide only. The non-silent close is the point: it is
          the exit that actually puts the camera back (see close()), which is what the button
