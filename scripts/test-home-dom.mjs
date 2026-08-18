@@ -52,7 +52,7 @@ const html = real.slice(0, at)
      be read — #khTitle is always on screen. `edit` is therefore gone from this snapshot, and
      what replaces it is the assertion that tapping the headline actually brings the field
      back, which is the behaviour the pencil used to provide. */
-  + 'restore:g("#khRestore"),field:g("#khName"),'
+  + 'restore:g("#khRestore"),field:g("#khName"),titleShown:g("#khTitle"),'
   + 'score:g("#khScore"),scoreText:(document.getElementById("khScore")||{}).textContent||""};},'
   /* Tapping the headline, through its OWN click handler rather than by calling khShowField()
      directly — the guard that makes it a no-op when no handle is set lives in that handler,
@@ -95,7 +95,8 @@ const html = real.slice(0, at)
   + 'news(o){chNewsReplies=o.replies||[];chNewsRx=o.rx||[];'
   + 'try{localStorage.setItem("kamo_seen_tries",String(o.seenTries|0));'
   + 'localStorage.setItem("kamo_rx_seen",String(o.rxSeen|0));'
-  + 'o.replySeen?localStorage.setItem(REPLY_SEEN_KEY,o.replySeen):localStorage.removeItem(REPLY_SEEN_KEY);}catch(e){}'
+  + 'o.replySeen?localStorage.setItem(REPLY_SEEN_KEY,o.replySeen):localStorage.removeItem(REPLY_SEEN_KEY);'
+  + 'localStorage.setItem(KF_SEEN_KEY,JSON.stringify(o.played||[]));}catch(e){}'
   + 'khTray({rows:o.rows||[],tried:o.tried|0,found:o.found|0,hides:(o.rows||[]).length});'
   + 'const el=document.getElementById("khTray");'
   + 'return{shown:el.style.display!=="none",n:el.children.length,'
@@ -288,6 +289,13 @@ console.log('\nIT SWITCHES OVER AS SOON AS YOU ARE DONE');
   reopened.field !== 'none'
     ? ok('tapping the name reopens the field — the headline is the edit control')
     : bad('tapping the headline did not bring the field back; the name cannot be changed');
+  /* NEVER BOTH AT ONCE. The field was hidden behind the headline precisely so the name is not
+     printed twice, and reopening it put the pair back on screen together — "@tony" over
+     "@tony" with a caret in it (founder, 2026-08-18). The field takes the headline's place
+     now; it does not stack under it. */
+  reopened.titleShown === 'none'
+    ? ok('and the headline stands down while it does — the name is on screen once, not twice')
+    : bad(`the headline is still up (display:${reopened.titleShown}) while the field shows the same name`);
 
   /* Clearing it must NOT collapse to a headline offering to change nothing. */
   await page.evaluate(() => { const i = document.getElementById('khHandle'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); });
@@ -501,6 +509,26 @@ console.log('\nTHE NEWS TRAY SHOWS WHAT THE DOT WAS POINTING AT');
   /@mira/.test(full.metas[0] || '') && /Someone/.test(full.metas[1] || '')
     ? ok('an answer is named, and an unsigned one says Someone')
     : bad(`the answer tiles are not naming their sender: ${JSON.stringify(full.metas.slice(0, 2))}`);
+  /* AN ANSWER WAITS UNTIL IT IS PLAYED, NOT UNTIL IT IS GLIMPSED. The first cut filtered on
+     replySeenAt() — the wordmark dot's mark, which khResults() stamps on every open of this
+     card. One look without a tap and the round vanished while it was still unplayed. The
+     feed's own record of what has been played is the honest test, and it is the one the
+     Challenges panel already uses. */
+  const stale = await page.evaluate((o) => window.__h.news(o), {
+    replies: [R('r1', '2026-08-18T10:00:00Z', 'mira'), R('r2', '2026-08-18T09:00:00Z', 'zed')],
+    rows: [{ id: 'h1', img_path: 'h1.jpg', n_attempts: 2, n_found: 0 }],
+    tried: 2, seenTries: 2, rxSeen: 0, replySeen: '2026-08-19T00:00:00Z' });
+  stale.n === 2
+    ? ok('an answer older than the last glance is still waiting — the card does not spend it by being opened')
+    : bad(`the tray dropped unplayed answers because the card had been opened: ${stale.n} tile(s)`);
+  const done = await page.evaluate((o) => window.__h.news(o), {
+    replies: [R('r1', '2026-08-18T10:00:00Z', 'mira'), R('r2', '2026-08-18T09:00:00Z', 'zed')],
+    rows: [{ id: 'h1', img_path: 'h1.jpg', n_attempts: 2, n_found: 0 }],
+    tried: 2, seenTries: 2, rxSeen: 0, played: ['r1'] });
+  done.n === 1 && /@zed/.test(done.metas[0] || '')
+    ? ok('and one that HAS been played drops out, leaving the one that has not')
+    : bad(`playing an answer did not clear its tile: ${done.n} tile(s) ${JSON.stringify(done.metas)}`);
+
   /* The mark is stamped on delivery, exactly as the grid stamps it — otherwise the reactions
      tile returns on every single open until the reader happens to visit the grid. */
   full.rxSeen === '15'
@@ -510,6 +538,15 @@ console.log('\nTHE NEWS TRAY SHOWS WHAT THE DOT WAS POINTING AT');
   /* NAVIGATION. An answer opens ON that hide (chFeed seeds it as slide 0 by id); the reader's
      own numbers open the grid, where every hide and every count lives. Both close the card
      first — leaving it up would put the sheet over the thing it just opened. */
+  /* Re-seeded: the two cases above left their own, shorter rows on screen, and the taps
+     below address tiles by index. */
+  await page.evaluate((o) => window.__h.news(o), {
+    replies: [R('r1', '2026-08-18T10:00:00Z', 'mira'), R('r2', '2026-08-18T09:00:00Z', null),
+              R('r3', '2026-08-18T08:00:00Z', 'zed')],
+    rx: [{ hide_id: 'h1', n: 3 }, { hide_id: 'h2', n: 12 }],
+    rows: [{ id: 'h1', img_path: 'h1.jpg', n_attempts: 4, n_found: 1 },
+           { id: 'h2', img_path: 'h2.jpg', n_attempts: 20, n_found: 5 }],
+    tried: 24, seenTries: 19, rxSeen: 2 });
   const tapReply = await page.evaluate(() => window.__h.tapNews(0));
   tapReply.nav && tapReply.nav.first === 'r1' && !tapReply.open
     ? ok('tapping an answer opens the feed on that exact hide, and the card gets out of the way')
