@@ -1007,7 +1007,12 @@
   #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
-  #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar{visibility:hidden!important;}
+  #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar,
+  /* #covHud is the pill that replaced #scoreChip in this same slot (see the note above) — it
+     was never added here, so a paywall opened mid-paint (Pro upsell chips, the brush-size
+     lock) showed "N% hidden · ready to challenge" floating over the sales card. Same rule,
+     same reason: the round underneath is chrome the paywall has to own the screen from. */
+  #stage.pwCover #covHud{visibility:hidden!important;}
   /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
      #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
      descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
@@ -4223,7 +4228,12 @@ function enterCompose(){
   sessReset();   // the pre-roll belongs to the hide about to be shot — a Retake starts aiming again, and the old seconds are not that round's
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
   shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none";
-  ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
+  /* covHud belongs in this list. It predates the pill (added 2026-08-15, after this array was
+     last written) and updateCoverageHud() only ever turns it off from inside paint mode itself
+     (mode!=="paint") — this is the ONE path back to compose that never runs through there, so
+     without it the last round's "N% hidden · ready to challenge" stayed on screen, floating
+     over the fresh aim/compose UI, reading like the new figure it was hiding. */
+  ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet","covHud"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   btnFrame.style.display=(bgKind==="photo")?"flex":"none"; setFraming(false);   // one slot, one source: see #btnFrame
@@ -4247,7 +4257,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
   mode="compose"; $("#paintUI").style.display="none"; board.style.display="none";
-  ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });
+  ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet","covHud"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });   // covHud too — see the note in enterCompose()
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
   glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   btnFrame.style.display=(bgKind==="photo")?"flex":"none"; setFraming(false);
@@ -6991,6 +7001,22 @@ function openKamoHome(){
      reopens the card must get the field back, not a button offering to change nothing. */
   khShowField(!h);
   khSetPlus();
+  /* TEMP DIAGNOSTIC, FOUNDER-VISIBLE ONLY BY TIMING — remove once the missing Hint button on
+     1.1.4 is explained. The web has no bridge field for the native version string (App.js
+     never sends one), so this cannot print "1.1.4" — what it CAN print is the two booleans
+     that actually gate the Hint button, which is the more useful read anyway: nativeCaps.hints
+     only turns true on a binary that ran the 1.1.4 inject at App.js:685, and chUserId only
+     turns non-empty once RevenueCat has configured. Six seconds, then #khSub reverts to its
+     normal empty/hidden state exactly as khRenderName() left it — nothing else on this card
+     changes. */
+  try{
+    const dbgSub=$("#khSub");
+    if(dbgSub){
+      dbgSub.textContent="hints="+(nativeCaps&&!!nativeCaps.hints)+" uid="+(!!chUserId);
+      dbgSub.style.display="";
+      setTimeout(()=>{ dbgSub.textContent=""; dbgSub.style.display="none"; },6000);
+    }
+  }catch(_){}
   /* Not awaited: the card must open at once. The row's COUNT is on screen in the same frame
      — khResults() paints it from the local ids before its first await — and the outcomes
      replace it when the fetch lands, never moving anything the user is already reaching for:
