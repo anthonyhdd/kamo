@@ -319,6 +319,33 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
   await p.close();
 }
 
+/* THE CANCEL, WHICH IS THE COMMONEST OUTCOME OF ANY PURCHASE SHEET. Native answers a
+   userCancelled with buyDone() and every failure with a toast through window.KAMO.hint —
+   both of which used to clear the paywall's spinner and nothing else, leaving the hint
+   button dead on "…" for the full 45s of its own timer. */
+{
+  for (const [name, fire] of [
+    ['buyDone() after a StoreKit cancel', () => window.KAMO.buyDone()],
+    ['an error toast from native', () => window.KAMO.hint('Purchase failed — please try again')],
+  ]) {
+    const p = await hunt({ caps: { hints: true }, uid: 'user-1',
+                           spend: { used: 'free', region: REG, balance: 0, free_available: false } });
+    await p.click('#chHint');
+    await p.waitForTimeout(400);
+    await p.click('#chHint');                     // "Get 5 more" → the sheet, button on "…"
+    await p.waitForTimeout(200);
+    const during = await btn(p);
+    if (!during || during.text !== '…') bad(`button did not go to … before the cancel: ${JSON.stringify(during)}`);
+    await p.evaluate(fire);
+    await p.waitForTimeout(200);
+    const after = await btn(p);
+    after && after.text === 'Get 5 more' && !after.disabled
+      ? ok(`${name} hands the offer back at once`)
+      : bad(`after ${name} the button is ${JSON.stringify(after)} — it will sit there for 45s`);
+    await p.close();
+  }
+}
+
 console.log('\n⑥ THE ROUND IS OVER — THE HINT GOES WITH IT');
 {
   const p = await hunt({ caps: { hints: true }, uid: 'user-1',
