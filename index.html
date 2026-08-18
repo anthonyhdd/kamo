@@ -1008,6 +1008,20 @@
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
   #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar{visibility:hidden!important;}
+  /* AND THE THREE THAT WERE BORN AFTER THIS RULE WAS WRITTEN. This is an ALLOW-LIST OF IDS,
+     which means it silently stops covering the screen every time a new piece of chrome is
+     added and nobody remembers to come back here. Three had accumulated since 2026-08-12:
+       #covHud   — the coverage pill, born 08-15 in the slot #scoreChip had just left. The
+                   old chip WAS in this list; its replacement never was, so "85% hidden ·
+                   ready to challenge" sat lit on top of the hero for three days. Founder
+                   screenshot, 2026-08-18.
+       #btnFeed  — born 08-13, one day after this rule, and a sibling of #btnPhoto which is
+                   already here: the paywall left one lone mint button floating on the
+                   camera screen.
+       #sizeStar — the Pro star beside the size bar. #sizeBar is hidden, the star is not.
+     The DOM probe in test-pwfull-dom now reads all three, so the next one to be forgotten
+     fails a test instead of shipping. */
+  #stage.pwCover #covHud,#stage.pwCover #btnFeed,#stage.pwCover #sizeStar{visibility:hidden!important;}
   /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
      #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
      descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
