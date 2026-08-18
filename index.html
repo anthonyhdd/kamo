@@ -13339,6 +13339,13 @@ function chSeek(hideId,opts){
        no longer the loudest thing above the card. */
     +".chFlipB{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(4,6,10,.4);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:rgba(255,255,255,.62);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;}"
     +".chFlipB:active{transform:scale(.92);}"
+    /* IN THE FEED, PINNED UNDER THE CLOSE BUTTON, not parked over the ending card with the
+       CTAs — founder's call. .kfClose sits at 12px/(8px+safe-t), 38px tall; this is fixed
+       (escapes #chFoot's own bottom-anchored box, which #chFlipB is still prepended into,
+       so it stays reachable the instant the reveal exists) rather than sized off #chFoot's
+       height, which changes with the card's content. Link-path rounds (no .chIn, no close
+       button to sit under) keep the original inline position, above the card. */
+    +".chS.chIn .chFlipB{position:fixed;left:12px;top:calc(8px + var(--safe-t) + 48px);z-index:31;}"
     +".chCard{width:min(92vw,420px);background:linear-gradient(180deg,rgba(15,42,34,.94),rgba(10,21,18,.96) 60%,rgba(7,13,11,.97));border:1px solid rgba(255,255,255,.22);"
       +"border-radius:26px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:16px 18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;animation:chUp .45s cubic-bezier(.2,.9,.3,1);}"
     +"@keyframes chUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}"
