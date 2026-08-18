@@ -1468,19 +1468,14 @@
   /* REACTIONS. The feed gave a player exactly two things to do with somebody else's photo —
      find it, or leave — and nothing to say back. Four emoji, no keyboard, no thread: the
      cheapest possible signal.
-     ══ MOVED OUT OF THE ENDING CARD, founder's call 2026-08-16: "ajoute les emoji react
-     direct sur le feed, pas besoin de tapper d'abord."
-     He is right, and the old placement was costing most of them. Reactions lived on the card,
-     which only exists AFTER the round resolves — so the only people who could ever say
-     anything were the ones who had already spent their buzz. Everybody who looked at a photo
-     and scrolled on, which is the majority of the feed, met no way to respond at all. And
-     reacting is not a verdict on a round: "😂" is about the photograph, and the photograph is
-     on screen from the first frame.
-     ══ GATED BEHIND THE FIRST TAP, founder's call 2026-08-18, reversing the "pas besoin de
-     tapper d'abord" above. The rail still lives here, mid-right, for the whole rest of the
-     round — this only moves WHEN it appears, not where. See chRxMount()'s call site in
-     chSeek() for the mechanics: the rail is built empty on load same as before, and now fills
-     in on the stage's first pointerdown instead of before the photo has even decoded. */
+     ══ TWO EARLIER PLACEMENTS DIDN'T SURVIVE CONTACT WITH THE LAYOUT. 2026-08-16 moved it out
+     of the ending card to the live round, so it was on screen while the photo was still a
+     puzzle rather than only after the buzz. 2026-08-18 gated that behind the stage's first
+     tap — but a MINE round has no reason to ever touch its own photo, so the rail simply
+     never appeared there, and mounting it eagerly instead rendered against a stage that
+     hadn't settled yet (top-left, not mid-right). It mounts with the ENDING CARD now — see
+     ending() in chSeek() — the one moment both a played round and a MINE review reach the
+     same way, after layout has settled. */
      A RAIL, ON THE RIGHT, mid-height. Not the top (the KAMO wordmark is hit-tested at the
      document by coordinates — anything up there inherits the 2026-08-15 collision) and not
      the bottom, which is where the ending card arrives. Mid-right is the one edge that is
@@ -13561,11 +13556,9 @@ function chSeek(hideId,opts){
      STORED AS A LIST, and the old single-value key is read as one: a device that reacted
      under the previous build wrote "1", which is not an emoji and matches nothing, so those
      people get their remaining chips back rather than a corrupted set.
-     MOUNTED WITH THE ROUND (founder, 2026-08-16) — but not from the moment the round starts
-     any more. As of 2026-08-18 the call is deferred to the stage's first pointerdown (see
-     that handler, below), so the rail is still built once per round and still lives for the
-     rest of it once it appears; only the trigger moved, from "the hide exists" to "the
-     player touched the photo". */
+     MOUNTS FROM ending() (see the call site there), not with the live round any more — two
+     earlier placements (with the round, then gated on the stage's first tap) both broke
+     against the same layout in different ways. Called once per round; rxMounted guards it. */
   function chRxMount(){
     const box=$$("chRx"); if(!box) return;
     const EM=["🔥","😂","😱","👏"], KEY="kamo_rx_"+HID;
@@ -13707,21 +13700,13 @@ function chSeek(hideId,opts){
     let h; try{ h=await chRpc("get_hide",{p_id:HID}); }catch(e){}
     if(killed) return;                 // swiped past before the hide arrived — build nothing
     if(!h||!h.img_path){ track("seek_missing",TP()); ending("This hide is gone.","Expired, or taken down.",{}); return; }
-    /* THE RAIL NO LONGER GOES UP HERE FOR A STRANGER'S HIDE. It used to mount on this exact
-       line for everyone — right after the existence check, before the photo even decoded —
-       so it was on screen for the entire time the player was looking. Founder's call
-       2026-08-18: show it only once the player has actually tapped the photo, so somebody
-       who is just scrolling past never sees it at all. The existence check still guards it
-       — chRxMount() only ever runs from the stage's pointerdown handler below, which cannot
-       fire on a round that returned early right above this line.
-       MINE IS THE ONE EXCEPTION, and stays eager. The tap-gate exists to protect a stranger's
-       round from showing anything before it's earned attention; your own photo is a readout,
-       not a round to play, and nothing there is gated on a buzz that may never come — a
-       creator reviewing their own hide via "See it live" has no reason to touch the photo at
-       all, so gating on that touch would mean the counts (the one thing this screen tells a
-       creator) never appear in practice. rxMounted=true here makes the pointerdown handler's
-       own call a no-op, same as any later touch on a round already mounted. */
-    if(MINE){ rxMounted=true; chRxMount(); }
+    /* THE RAIL NO LONGER GOES UP HERE. It used to mount on this exact line for everyone —
+       right after the existence check, before the photo even decoded. Two placements after
+       that both broke in their own way: mounted on the stage's first tap (2026-08-18), a MINE
+       round skipped it forever since a creator reviewing their own hide never touches the
+       photo; mounted eagerly for MINE only, it rendered against a stage that had not settled
+       yet (top-left instead of mid-right). It mounts from ending() now, with the card — see
+       there — which both rounds reach the same way. */
     /* Read, not incremented: `round` is which round THIS is, so a seeker's second hide
        reports 2 at the moment it opens. Grouping seek_opened by it answers the question
        directly — no funnel, no joins. 0 inside the app, where the counter is not kept. */
@@ -14133,14 +14118,6 @@ function chSeek(hideId,opts){
           aimRec.p.push([t,Math.round((cx-r.left)/r.width*1000)/1000,Math.round((cy-r.top)/r.height*1000)/1000]); } } };
 
     stage.addEventListener("pointerdown",e=>{
-      /* THE RAIL'S TRIGGER, not the aim's. This has to sit above every branch below —
-         including the pinch one — because "tapped the photo" is true the instant a finger
-         lands on it, whether that finger goes on to arm a shot, start a zoom, or turn out to
-         be the second finger of a pinch. rxMounted makes it one-shot; chRxMount() itself is a
-         no-op past the first call for a MINE round (its own effects are idempotent), but
-         there is no reason to rebuild the rail's DOM and re-fire its RPC on every subsequent
-         touch of a round already playing. */
-      if(!rxMounted){ rxMounted=true; chRxMount(); }
       pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
       try{ stage.setPointerCapture(e.pointerId); }catch(_){}
       if(pts.size===2){
@@ -14483,6 +14460,15 @@ function chSeek(hideId,opts){
        maintain and diverge. */
     function ending(head,sub,eopts){
       chLive=false;   // the hunt is over — see the declaration for what reads this
+      /* THE RAIL MOUNTS HERE NOW, WITH THE ENDING CARD — founder's call, reversing both the
+         2026-08-16 "with the round" placement AND the 2026-08-18 first-tap gate. Neither
+         survived contact with the layout: mounting before the card exists let the rail render
+         against a stage that had not settled yet (top-left instead of mid-right, on a MINE
+         round that skips the tap entirely), and it does not belong on screen at all before
+         "Challenge back" / "Send to a friend" do. rxMounted still guards it, so a round that
+         already ended once (or a MINE round, which reaches this exact function too) never
+         rebuilds it. */
+      if(!rxMounted){ rxMounted=true; chRxMount(); }
       /* THE ONE PLACE A ROUND ENDS — found, missed, given up — which is exactly why the
          seeker's record is counted here and not in the three branches above. `eopts.rehide`
          is the same guard chBumpRounds uses: it marks a real round, so "this hide is gone"

@@ -684,57 +684,21 @@ console.log('\nTHE FEED CAN SAY SOMETHING BACK');
   const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [{ emoji: '\u{1F525}', n: 4 }],
     submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
     save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
-  /* BEFORE THE BUZZ, not before the touch. Reactions used to be built by ending(), so the
-     only people who could ever say anything were the ones who had already spent their shot
-     (2026-08-16 fix) — that half still holds. What changed on 2026-08-18 is WHEN it mounts
-     within a touch: no longer at load, now on the stage's first pointerdown, so someone
-     scrolling past without ever touching the photo never sees it at all. This first touch is
-     abandoned (pointercancel, not pointerup) so it mounts the rail without spending the round
-     the assertions below still need — same shape as the stageArms control further down. */
-  await page.evaluate(() => {
-    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
-    const o = { bubbles: true, cancelable: true, pointerId: 3, pointerType: 'touch', clientX: 195, clientY: 300 };
-    st.dispatchEvent(new PointerEvent('pointerdown', o));
-    st.dispatchEvent(new PointerEvent('pointercancel', o));
-  });
-  await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
-  const live = await page.evaluate(() => document.querySelectorAll('#chRx .chRxB').length);
-  live === 4 ? ok('four reactions are offered before the round is played') : bad(`live reactions: ${live}`);
-  /* AND THE RAIL MUST NOT COST THE SHOT. It sits on top of the stage, which owns every
-     gesture on this screen — a pointerdown that reached the stage would arm an aim at the
-     emoji and the pointerup would fire the player's single buzz into the margin. */
-  /* CHECKED BETWEEN THE DOWN AND THE UP, and that detail is the test. The reticle is created
-     on pointerdown and REMOVED on pointerup (closeAim), so asserting after a full tap would
-     pass whether or not the event ever reached the stage — a green light for a broken guard.
-     No pointerup on the stage either: that one commits the buzz and would spend the round the
-     assertions below still need. */
-  const armed = await page.evaluate(() => {
-    const b = document.querySelector('#chRx .chRxB');
-    const o = { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', clientX: 360, clientY: 400 };
-    b.dispatchEvent(new PointerEvent('pointerdown', o));
-    const seen = !!document.querySelector('.chRet');
-    b.dispatchEvent(new PointerEvent('pointerup', o));
-    return seen;
-  });
-  armed === false ? ok('and a tap on the rail never arms an aim') : bad('the rail armed the aim reticle');
-  /* THE CONTROL FOR THAT CONTROL: the same gesture on the stage MUST arm it, or the assertion
-     above is measuring a stage that stopped listening rather than a guard that works. */
-  const stageArms = await page.evaluate(() => {
-    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
-    const o = { bubbles: true, cancelable: true, pointerId: 11, pointerType: 'touch', clientX: 195, clientY: 300 };
-    st.dispatchEvent(new PointerEvent('pointerdown', o));
-    const seen = !!document.querySelector('.chRet');
-    st.dispatchEvent(new PointerEvent('pointercancel', o));   // abandoned, never committed
-    return seen;
-  });
-  stageArms === true ? ok('while the stage itself still arms one') : bad('the stage no longer arms an aim — the guard above proves nothing');
+  /* WITH THE ENDING CARD, not before it and not on the first touch — two earlier placements
+     (live with the round, then gated on the stage's first tap) both fought the layout instead
+     of the round: the tap-gate left a MINE round's rail unmounted forever (nothing ever
+     touches your own photo) and eager-mounting it rendered against a stage that had not
+     settled (top-left, not mid-right). ending() is the one moment both a played round and a
+     MINE review reach, after layout has settled — so this is a real buzz, not an abandoned
+     touch: the round has to actually end for the rail to exist at all. */
   await page.evaluate(() => {
     const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
     const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
     st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
   });
+  await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
   const n = await page.evaluate(() => document.querySelectorAll('#chRx .chRxB').length);
-  n === 4 ? ok('and they survive the ending card that used to build them') : bad(`reactions: ${n}`);
+  n === 4 ? ok('four reactions are offered once the round ends') : bad(`reactions: ${n}`);
   await page.waitForTimeout(500);
   const counts = await page.evaluate(() => { const e=document.querySelector('#chRx .chRxN'); return e?e.textContent:''; });
   counts === '4' ? ok("and it shows everybody's count, not this phone's") : bad('count shows ' + JSON.stringify(counts));
