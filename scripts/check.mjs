@@ -1330,6 +1330,19 @@ try {
   bad('THE FEED\'S FIRST ASK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* The opener experiment: the banger's POSITION obeys bangerArm, and nothing else moves. A
+   leaking holdout, a creator shown the opener, two bangers in one session, a seen opener
+   rerunning, or a duplicated slide from the cached first page — every one of these renders a
+   perfectly normal-looking feed and quietly unreads the experiment. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-banger-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-banger-dom.mjs', 'BANGER-OPENER TEST', out)
+    : ok('the proven opener obeys its arm, once per session, position only (node scripts/test-banger-dom.mjs)');
+} catch (e) {
+  bad('THE OPENER EXPERIMENT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
    initThree() runs at module top level; before this guard existed, that throw killed
    everything after it — seeker, feed, tracking — and looked exactly like churn (17 devices
