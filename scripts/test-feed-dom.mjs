@@ -684,11 +684,19 @@ console.log('\nTHE FEED CAN SAY SOMETHING BACK');
   const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [{ emoji: '\u{1F525}', n: 4 }],
     submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
     save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
-  /* BEFORE THE BUZZ — the point of the 2026-08-16 move. Reactions used to be built by
-     ending(), so the only people who could ever say anything were the ones who had already
-     spent their shot; everybody who looked and scrolled on met no control at all. The rail is
-     mounted with the round now, so it must already be there while the photo is still a
-     puzzle. Asserted first, because after the buzz this selector passes either way. */
+  /* BEFORE THE BUZZ, not before the touch. Reactions used to be built by ending(), so the
+     only people who could ever say anything were the ones who had already spent their shot
+     (2026-08-16 fix) — that half still holds. What changed on 2026-08-18 is WHEN it mounts
+     within a touch: no longer at load, now on the stage's first pointerdown, so someone
+     scrolling past without ever touching the photo never sees it at all. This first touch is
+     abandoned (pointercancel, not pointerup) so it mounts the rail without spending the round
+     the assertions below still need — same shape as the stageArms control further down. */
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    const o = { bubbles: true, cancelable: true, pointerId: 3, pointerType: 'touch', clientX: 195, clientY: 300 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o));
+    st.dispatchEvent(new PointerEvent('pointercancel', o));
+  });
   await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
   const live = await page.evaluate(() => document.querySelectorAll('#chRx .chRxB').length);
   live === 4 ? ok('four reactions are offered before the round is played') : bad(`live reactions: ${live}`);
