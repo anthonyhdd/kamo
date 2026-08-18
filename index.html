@@ -1118,7 +1118,10 @@
      edge inside a fixed 86px slot, so the small tile does not ride up when the pair swaps and
      both sets of feet stay on one line — which is what keeps the difference in build visible
      instead of self-cancelling. */
-  .khBodies{display:flex;align-items:flex-start;justify-content:center;gap:14px;margin:10px 0 0;}
+  /* The bottom margin is the swatch strip's room. That strip hangs BELOW the tiles (it is
+     zero-width, so it contributes height and nothing else) and without this it sat a few
+     pixels off the "My kamos" slab — two different things reading as one block. */
+  .khBodies{display:flex;align-items:flex-start;justify-content:center;gap:14px;margin:10px 0 20px;}
   /* Both columns are the WORN tile's width, so the pair stays symmetric whichever one is
      worn and the two tiles do not drift apart as they swap size. */
   .khBodyCol{display:flex;flex-direction:column;align-items:center;width:86px;}
@@ -1167,7 +1170,7 @@
      390px screen with four tiles, which is a photograph nobody can reach or tap. `safe`
      falls back to flex-start the moment the row is wider than the box; the first declaration
      is what browsers without it keep, and starting at the left edge is the safe failure. */
-  .khTray{display:flex;gap:10px;justify-content:flex-start;margin:16px 0 0;max-width:100%;
+  .khTray{display:flex;gap:10px;justify-content:flex-start;margin:0 0 18px;max-width:100%;
     overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
   .khTray{justify-content:safe center;}
   .khTray::-webkit-scrollbar{display:none;}
@@ -1299,8 +1302,11 @@
      on focus, and a card that jumps when you tap its only field reads as broken.
      -webkit-user-select is re-enabled because the global *{user-select:none} in this file
      makes a field untypeable in WKWebView — the same trap the passphrase prompt hit. */
+  /* It sits WHERE THE HEADLINE WAS (khShowField hides that while this is open), so it wears
+     the headline's spacing rather than a form field's: same top of card, nothing below it
+     jumps, and the card does not grow a row the moment somebody taps their own name. */
   .khName{display:flex;align-items:center;justify-content:center;gap:2px;width:100%;
-    margin:0 auto 20px;max-width:320px;padding:12px 14px;border-radius:16px;
+    margin:0 auto 14px;max-width:300px;padding:10px 14px;border-radius:14px;
     background:rgba(255,255,255,.06);border:1px solid var(--stroke);
     transition:border-color .18s,background .18s;}
   .khName:focus-within{border-color:rgba(95,230,164,.55);background:rgba(95,230,164,.09);}
@@ -6827,6 +6833,19 @@ function khSetPlus(){
 function khShowField(on){
   const f=$("#khName");
   if(f) f.style.display = on ? "" : "none";
+  /* AND THE HEADLINE STANDS DOWN WHILE IT IS OPEN. The two say the same word: the title is
+     "@tony" and the field, 40px lower, is "@tony" again with a caret in it — the same value
+     twice in one glance, which is exactly what the field was hidden to avoid in the first
+     place. It only came back because tapping the headline is how you reopen the field, and
+     nobody looked at the state that leaves behind (founder, 2026-08-18: "hyper moche quand on
+     edit l'username").
+     display:none, not visibility:hidden — a blank 28px band where the name used to be is the
+     same ugliness with the word removed. The field takes the headline's place instead, which
+     is what it is: the name, with a caret in it. #khTitle is the tap target that opens the
+     field, and it is only ever hidden while that field is already open, so nothing becomes
+     unreachable. */
+  const t=$("#khTitle");
+  if(t) t.style.display = on ? "none" : "";
 }
 /* The headline and the subline, from whatever the handle is RIGHT NOW. Split out of
    openKamoHome() because it stopped being true only at open time: typing a name has to move it
@@ -12395,9 +12414,17 @@ function khTray(t){
   const ICO_PLAY='<svg class="solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>';
   const ICO_RX='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.9c0 5.4-7.5 10-7.5 10z"/></svg>';
   /* ① THE ANSWERS. Someone else's photograph, so it is named — the one tile on this row that
-     is about a person rather than about a number. */
-  const seenAt=replySeenAt();
-  const fresh=(chNewsReplies||[]).filter(r=>r&&r.id&&r.img_path&&String(r.created_at||"")>seenAt).slice(0,3);
+     is about a person rather than about a number.
+     UNPLAYED, NOT UNSEEN — and that correction is the whole tile. It shipped filtered on
+     replySeenAt(), the same mark the wordmark's dot uses, which khResults() stamps on EVERY
+     open of this card: glance at the card once without tapping and the answer was gone for
+     good, while the round itself sat there unplayed (founder, 2026-08-18: "j'ai vu une slide,
+     j'ai cliqué dessus je crois, puis plus rien quand je reviens"). "Seen" is the right test
+     for news — a play count, a reaction — and the wrong one for an invitation. A challenge
+     waits until it is answered, so the test is the feed's own record of what has been played,
+     which the Challenges panel already reads for exactly this question. */
+  const played=kfSeen();
+  const fresh=(chNewsReplies||[]).filter(r=>r&&r.id&&r.img_path&&played.indexOf(r.id)<0).slice(0,3);
   fresh.forEach(r=>items.push({kind:"reply",id:r.id,img:r.img_path,
     who:r.name?("@"+r.name):"Someone", lbl:"answered you"}));
   /* ② THE PLAYS, one tile: the hide that took the most of them. */
