@@ -1475,7 +1475,7 @@
      never appeared there, and mounting it eagerly instead rendered against a stage that
      hadn't settled yet (top-left, not mid-right). It mounts with the ENDING CARD now — see
      ending() in chSeek() — the one moment both a played round and a MINE review reach the
-     same way, after layout has settled. */
+     same way, after layout has settled.
      A RAIL, ON THE RIGHT, mid-height. Not the top (the KAMO wordmark is hit-tested at the
      document by coordinates — anything up there inherits the 2026-08-15 collision) and not
      the bottom, which is where the ending card arrives. Mid-right is the one edge that is
@@ -2783,13 +2783,16 @@
          bottom, the grab handle, tap-outside), just never one that reads as a close button at
          a glance. -->
     <button class="ssX" id="ssX" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-    <!-- STREAK, RIGHT BELOW #ssX — not in #ssVis's old slot after all: test-peek-dom.mjs's
-         "IT READS TOP TO BOTTOM" suite pins vis strictly under sign (title→sub→sign→vis→cta→
-         live is a deliberate sentence, see its own comment) and moving vis above sign broke
-         that reading order for real, not just the test. This is the more prominent spot
-         anyway — first thing seen, not one row among several. #ssVis stays where it always
-         was, right before #ssInvite. -->
-    <div class="ssStreakSlot" id="ssStreakSlot" style="display:none"></div>
+    <!-- PUBLIC OR NOT, RIGHT BELOW #ssX — founder's call, moved up from its old slot before
+         #ssInvite so it's the first thing seen rather than one row among several. This DOES
+         move it above #ssSign in reading order; test-peek-dom.mjs's "IT READS TOP TO BOTTOM"
+         suite is updated to match (vis now checked under ssX, not under sign) rather than
+         pinning the old order. -->
+    <button class="ssVis" id="ssVis" aria-pressed="true">
+      <span class="ssVisIco" id="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
+      <span class="ssVisTxt"><b id="ssVisT">Public</b><i id="ssVisS">Anyone can play it in the KAMO feed</i></span>
+      <span class="ssVisSw"><i></i></span>
+    </button>
     <!-- A QUESTION, NOT A CLAIM. "Bet they can't spot it" was the app asserting something on
          the user's behalf about a friend who does not exist yet — and it closed the subject.
          A question opens it, and the button directly below is the answer. It is also the only
@@ -2865,16 +2868,7 @@
          reveals direct children — a control nested inside another row becomes a squeezed cell
          AND disappears from the short sheet, which is where most sends actually happen.
          check.mjs asserts it, because it is invisible in a diff and obvious on a phone. -->
-    <!-- PUBLIC OR NOT, decided here, in front of the send. Declared in markup rather than
-         built in JS so check.mjs can see its ids, and so a JS failure leaves a row that says
-         nothing rather than a hide that has quietly gone public with no row to say so. Free
-         either way — nothing about this is behind KAMO+, because charging somebody to NOT be
-         published is a toll on a default they did not choose. -->
-    <button class="ssVis" id="ssVis" aria-pressed="true">
-      <span class="ssVisIco" id="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
-      <span class="ssVisTxt"><b id="ssVisT">Public</b><i id="ssVisS">Anyone can play it in the KAMO feed</i></span>
-      <span class="ssVisSw"><i></i></span>
-    </button>
+    <div class="ssStreakSlot" id="ssStreakSlot" style="display:none"></div>
     <button class="ssBtn ssInvite" id="ssInvite" style="display:none">Send to a friend</button>
     <!-- THE SECOND ASK, EARNED BY THE FIRST. Hidden until chMarkSent() reveals it, and only
          when the visibility row above says Private: the hide just went out to somebody, so
