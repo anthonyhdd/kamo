@@ -1224,6 +1224,21 @@ try {
   bad('THE INSTAGRAM TARGET IS UNREACHABLE OR IT IS EATING THE ROW:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
 }
 
+/* ---- 12b-quater. The feed is walled in a browser, and NOTHING else is --------------------
+   19,388 browser players put back 176 hides (0.9%); in the app 3,261 put back 2,877 (88%). So
+   the unlimited feed is what the wall is for. Every risk in this change is a wall one door too
+   far left — on a stranger's first visit, on somebody who just published, or inside the app —
+   and none of those is visible in a diff: they are a localStorage counter, an opts flag and a
+   wrapper test. The suite drives all three from the real controls. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-feedwall-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-feedwall-dom.mjs', 'FEED-WALL TEST', out)
+    : ok('the wall is on the feed, and only on the feed (node scripts/test-feedwall-dom.mjs)');
+} catch (e) {
+  bad('THE WEB FEED WALL IS IN THE WRONG PLACE:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+}
+
 /* THE POST-SEND INSTALL OFFER, and the two ways it goes wrong are opposites. Shown inside the
    wrapper it sells the app to somebody holding it, on the most-seen surface in the product,
    after every send. Shown before anything is sent it is an advert on a sheet nobody has used.
