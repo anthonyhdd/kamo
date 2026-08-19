@@ -285,10 +285,11 @@ onCollapse.length === 0
   ? ok('long → short restarts nothing — it is a resize, not a re-entry')
   : bad(`${onCollapse.join(', ')} restarted on collapse — the sheet bounces when it gets smaller`);
 
-/* READ TOP TO BOTTOM IT HAS TO BE ONE SENTENCE, and the sentence changed: who can see it now
-   leads (founder's call — #ssVis moved up next to the close button, the first thing seen
-   rather than one row among several), then what happened, then whose challenge this is, then
-   the send. Get the order wrong and the sheet answers a question before it has been asked —
+/* READ TOP TO BOTTOM IT HAS TO BE ONE SENTENCE, and the sentence has been rewritten twice.
+   #ssVis led for three days (founder's call, right under the close button), which put a
+   SETTING above the news — the first thing on a sheet announcing "your kamo is live" was a
+   switch about who may see it, and the sentence it qualifies came after it. It now reads:
+   what happened, its second half, who can see it, whose challenge this is, then the send. Get the order wrong and the sheet answers a question before it has been asked —
    "See it live" above the send leads with the detour. */
 console.log('\nIT READS TOP TO BOTTOM, AND BOTH BUTTONS ARE FULL WIDTH');
 const below = (a, b, what) => {
@@ -299,9 +300,9 @@ const below = (a, b, what) => {
         + `${y && Math.round(y.top)}) — overlapping boxes mean one is nested INSIDE the other's `
         + 'flex row rather than being its sibling in the card');
 };
-below('vis', 'title', 'who can see it leads, right under the close button');
 below('title', 'sub', 'the grey line sits under the headline, as its second half');
-below('sub', 'sign', 'the signature row comes next — whose challenge this is');
+below('sub', 'vis', 'who can see it comes after the news it qualifies, not before it');
+below('vis', 'sign', 'the signature row comes next — whose challenge this is');
 below('sign', 'cta', 'then the send');
 below('cta', 'live', '"See it live" follows the send rather than leading it');
 

@@ -2790,16 +2790,6 @@
          bottom, the grab handle, tap-outside), just never one that reads as a close button at
          a glance. -->
     <button class="ssX" id="ssX" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-    <!-- PUBLIC OR NOT, RIGHT BELOW #ssX — founder's call, moved up from its old slot before
-         #ssInvite so it's the first thing seen rather than one row among several. This DOES
-         move it above #ssSign in reading order; test-peek-dom.mjs's "IT READS TOP TO BOTTOM"
-         suite is updated to match (vis now checked under ssX, not under sign) rather than
-         pinning the old order. -->
-    <button class="ssVis" id="ssVis" aria-pressed="true">
-      <span class="ssVisIco" id="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
-      <span class="ssVisTxt"><b id="ssVisT">Public</b><i id="ssVisS">Anyone can play it in the KAMO feed</i></span>
-      <span class="ssVisSw"><i></i></span>
-    </button>
     <!-- A QUESTION, NOT A CLAIM. "Bet they can't spot it" was the app asserting something on
          the user's behalf about a friend who does not exist yet — and it closed the subject.
          A question opens it, and the button directly below is the answer. It is also the only
@@ -2831,6 +2821,17 @@
          notify you. A browser tab can't."); promising a notification here would be the sheet
          arguing with itself two rows apart. kfRenderVis() picks. -->
     <div class="ssSub" id="ssSub">We'll tell you when someone taps.</div>
+    <!-- PUBLIC OR NOT, UNDER THE HEADLINE — founder's call, 2026-08-19. It sat directly
+         below #ssX for three days, which put a SETTING above the news: the first thing on a
+         sheet that exists to say "your kamo is live" was a switch about who may see it, and
+         the sentence it qualifies came after it. Reading order now matches what the sheet is
+         for — what happened, then what it means, then the one control that changes it.
+         test-peek-dom.mjs's "IT READS TOP TO BOTTOM" suite is updated to match. -->
+    <button class="ssVis" id="ssVis" aria-pressed="true">
+      <span class="ssVisIco" id="ssVisIco"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
+      <span class="ssVisTxt"><b id="ssVisT">Public</b><i id="ssVisS">Anyone can play it in the KAMO feed</i></span>
+      <span class="ssVisSw"><i></i></span>
+    </button>
     <!-- THE TABS ARE GONE — CHALLENGE IS THE ONLY FORMAT (founder, 2026-08-12). ~93% never
          switched, and the challenge link is a playable game where Before/After was a
          caption; a selector between the product and a lesser copy of it was one more
@@ -13296,8 +13297,22 @@ function chSeek(hideId,opts){
     +".chQuit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--safe-b));z-index:5;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.72);font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
     /* Same pill as the give-up button, opposite corner, mint because it is the only control
        on this screen that helps rather than ends. */
-    +".chHint{position:absolute;right:12px;bottom:calc(16px + var(--safe-b));z-index:5;background:rgba(4,6,10,.55);border:1px solid rgba(95,230,164,.35);color:var(--mint);font-family:var(--font);font-size:13px;font-weight:800;padding:9px 14px;border-radius:999px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
+    /* KAMO'S TITLE FACE, NOT THE BODY ONE. Every control the player is meant to reach for —
+       the hero CTA, the plan rows, the buttons on the reveal — is set in var(--display) at
+       700 with the same tight tracking; this was the one paid door still typeset like body
+       copy, which read as a caption in the corner rather than a thing to press. */
+    +".chHint{position:absolute;right:12px;bottom:calc(16px + var(--safe-b));z-index:5;min-width:88px;text-align:center;background:rgba(4,6,10,.62);border:1px solid rgba(95,230,164,.42);color:var(--mint);font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.2px;padding:10px 16px;border-radius:999px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s ease;}"
+    +".chHint:active{transform:scale(.96);}"
     +".chHint[disabled]{opacity:.45;}"
+    /* THE WAIT IS A SPINNER, NOT AN ELLIPSIS. Three dots that never move are indistinguishable
+       from a button that has died, and this one can be waiting on Apple's sheet or on the
+       RevenueCat webhook — up to nine seconds on the credit poll. min-width above keeps the
+       pill from collapsing when the label goes transparent, so nothing resizes under the thumb
+       still resting on it. The disabled dimming is lifted on purpose: a spinner at 45% reads
+       as broken, and the button IS working — it is simply not tappable yet. */
+    +".chHint.chLoad{color:transparent;}"
+    +".chHint.chLoad[disabled]{opacity:.9;}"
+    +".chHint.chLoad::after{content:\"\";position:absolute;left:50%;top:50%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;border:2px solid rgba(95,230,164,.25);border-top-color:var(--mint);animation:spin .7s linear infinite;}"
     /* AN ELLIPSE, NOT A CIRCLE, and that is a correctness point rather than a style one.
        submit_attempt tests sqrt((x-cx)^2+(y-cy)^2) <= r on coordinates normalised PER AXIS,
        so the server's "circle" is an ellipse in pixels on any non-square frame. Drawing a
@@ -13963,10 +13978,10 @@ function chSeek(hideId,opts){
 
     async function takeHint(){
       if(hintBusy||done||hintZone) return;
-      hintBusy=true; hintBtn.disabled=true;
+      hintBusy=true; hintBtn.disabled=true; hintWait(true);
       let r=null;
       try{ r=await chRpc("hint_spend",{p_owner:hintOwner(),p_hide_id:HID}); }catch(_){}
-      hintBusy=false; hintBtn.disabled=false;
+      hintBusy=false; hintWait(false); hintBtn.disabled=false;
       if(!r){ hintBtn.disabled=false; return; }            // network blip: let them try again
       if(typeof r.balance==="number") hintKnownBal=r.balance;
       if(r.region){
@@ -14016,6 +14031,12 @@ function chSeek(hideId,opts){
       hintBtn.onclick=()=>{ haptic(8); offerHintPack(); };
     }
 
+    /* THE ONE PLACE THE WAIT IS EXPRESSED. Both slow paths — Apple's sheet and the credit
+       poll — used to write an ellipsis into the label and then have to remember which label
+       to put back. The spinner is a class instead, so the text underneath is never lost and
+       restoring it is one call rather than a guess about what the button said before. */
+    const hintWait=(on)=>{ hintBtn.classList.toggle("chLoad",!!on); };
+
     /* The only paid door. postNative returns false in a browser, where StoreKit does not
        exist — and a browser cannot buy this any more than it can buy KAMO+, so say so
        instead of opening a dead sheet. */
@@ -14032,10 +14053,10 @@ function chSeek(hideId,opts){
          migration not applied, the network gone — nothing is sold, because a purchase with
          no route to a credit is the worst outcome on this screen. */
       if(!chUserId){
-        hintBtn.disabled=true;
+        hintBtn.disabled=true; hintWait(true);
         let ready=false;
         try{ const r=await chRpc("hint_intent",{p_dev:hintOwner()}); ready=!!(r&&r.ok); }catch(_){ ready=false; }
-        hintBtn.disabled=false;
+        hintWait(false); hintBtn.disabled=false;
         if(!ready){ track("hint_blocked",TP({reason:"no_claim_path"})); retireHint("Hint used"); return; }
       }
       /* `source:"hint"` for the same reason the paywall now sends one, plus a second: this
@@ -14047,7 +14068,7 @@ function chSeek(hideId,opts){
         return;
       }
       hintPending=true; hintBuyStarted=true; hintBalAtBuy=hintKnownBal;
-      hintBtn.disabled=true; hintBtn.textContent="…";
+      hintBtn.disabled=true; hintWait(true);
       /* Apple's sheet can be cancelled, and nothing tells us so on this path. Hand the button
          back after a while rather than leaving a permanent "…". */
       /* GUARDED ON hintPending ALONE. It used to also require `!hintZone`, which was true
@@ -14055,7 +14076,7 @@ function chSeek(hideId,opts){
          opens it on a hide whose zone is already drawn, and that spelling would have left the
          button stuck on "…" forever for anyone who cancelled Apple's sheet there. hintPending
          is the real condition anyway: the success path clears it before it draws. */
-      setTimeout(()=>{ if(hintPending){ hintPending=false; hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel; } },45000);
+      setTimeout(()=>{ if(hintPending){ hintPending=false; hintWait(false); hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel; } },45000);
     }
 
     /* CALLED BY NATIVE AFTER A SUCCESSFUL PACK PURCHASE, and it polls rather than trusting
@@ -14082,7 +14103,7 @@ function chSeek(hideId,opts){
          plain re-entrancy — the slow-credit button below calls this too. */
       if(!hintBuyStarted||hintPolling) return;
       hintPolling=true;
-      hintPending=true; hintBtn.disabled=true; hintBtn.textContent="…";
+      hintPending=true; hintBtn.disabled=true; hintWait(true);
       try{
         for(let i=0;i<6;i++){
           /* THE CLAIM COMES FIRST ON AN UNIDENTIFIED DEVICE, because the grant the webhook
@@ -14093,7 +14114,7 @@ function chSeek(hideId,opts){
           try{ r=await chRpc("hint_spend",{p_owner:hintOwner(),p_hide_id:HID}); }catch(_){}
           if(r&&typeof r.balance==="number") hintKnownBal=r.balance;
           if(r&&r.region&&(r.used!=="already"||r.balance>hintBalAtBuy)){
-            hintPending=false;
+            hintPending=false; hintWait(false);
             drawHintZone(r.region);
             hintBtn.textContent=r.balance>0?(r.balance+" left"):"Hint used";
             hintBtn.disabled=true;
@@ -14114,7 +14135,7 @@ function chSeek(hideId,opts){
            one gesture the copy invites, tap again in a moment, opened Apple's sheet and charged
            for a pack already bought. It re-checks the wallet instead; nothing on this screen
            can open StoreKit a second time for a purchase that has already gone through. */
-        hintPending=false;
+        hintPending=false; hintWait(false);
         hintBtn.disabled=false;
         hintBtn.textContent="Check again";
         hintBtn.onclick=()=>{ haptic(8); pollHintCredit(); };
@@ -14133,7 +14154,7 @@ function chSeek(hideId,opts){
        mid-poll must not hand back a control that is about to say "5 left". */
     window.__kamoHintBuyEnded=()=>{
       if(!hintPending||hintPolling) return;
-      hintPending=false; hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel;
+      hintPending=false; hintWait(false); hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel;
     };
 
     hintBtn.onclick=()=>{ haptic(8); takeHint(); };
