@@ -660,6 +660,12 @@
   @keyframes sheen{0%{left:-70%}55%,100%{left:175%}}
   .badge{font-size:11px;opacity:.55;text-align:center;margin-top:7px;}
   #loupe{position:absolute;width:64px;height:64px;border-radius:50%;border:3px solid #fff;z-index:22;box-shadow:0 4px 16px rgba(0,0,0,.6);display:none;pointer-events:none;transform:translate(-50%,-140%);}
+  /* Same coordinate convention as #loupe (raw clientX/clientY as left/top, centred by the
+     transform) — a thin ring the size of the actual brush, centred on the finger, while a
+     stroke is actually landing. Not the eyedropper's loupe treatment (no shadow, no fill,
+     no offset above the touch point): this sits exactly where the paint is going down, and
+     a shadow or an opaque ring would hide the very stroke it's tracking. */
+  #brushRing{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.85);z-index:21;display:none;pointer-events:none;transform:translate(-50%,-50%);}
   /* Done/Edit nav */
   /* Raised INTO the safe inset: the native shell hides the status bar
      (<StatusBar hidden/> in App.js), so nothing is drawn up there, and both buttons
@@ -2419,6 +2425,7 @@
 
     <div id="wheel"><div id="wheelCenter"></div></div>
     <div id="loupe"></div>
+    <div id="brushRing"></div>
 
         <div id="shutterWrap">
       <button id="shutter" class="shutter" aria-label="Capture"><div class="spin"></div><div class="ring"></div><div class="core"></div></button>
@@ -5210,6 +5217,13 @@ const UNDO_BUDGET=36*1024*1024;   // lowered: the shading scratch canvas now tak
 function undoCap(){ const per=Math.max(1,board.width*board.height*4); return Math.max(3,Math.min(12,Math.floor(UNDO_BUDGET/per))); }
 function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); const cap=undoCap(); while(undoStack.length>cap) undoStack.shift(); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
+/* `brush` is already in the same CSS-pixel units #brushRing lives in (see the note on
+   paintDpr above) — no conversion needed, unlike paintAt's canvas-space math. */
+const brushRingEl=$("#brushRing");
+function showBrushRing(cx,cy){ if(!brushRingEl) return;
+  brushRingEl.style.width=brush+"px"; brushRingEl.style.height=brush+"px";
+  brushRingEl.style.left=cx+"px"; brushRingEl.style.top=cy+"px"; brushRingEl.style.display="block"; }
+function hideBrushRing(){ if(brushRingEl) brushRingEl.style.display="none"; }
 function _toRGB(col){ if(col[0]==="#"){ let h=col.slice(1); if(h.length===3) h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; } const m=col.match(/\d+/g); return m?[+m[0],+m[1],+m[2]]:[138,127,106]; }
 function _shade(rgb,amt){ const f=amt<0?0:255,t=Math.abs(amt); return `rgb(${Math.round(rgb[0]+(f-rgb[0])*t)},${Math.round(rgb[1]+(f-rgb[1])*t)},${Math.round(rgb[2]+(f-rgb[2])*t)})`; }
 // Pro pattern brushes — all derive their tones from the picked scene color so they still camouflage.
@@ -5289,7 +5303,7 @@ board.addEventListener("pointerdown",e=>{ if(mode!=="paint")return; e.preventDef
        A move-drag is different: whatever offset it has already reached is baked, not
        thrown away, the same way a stroke's dabs stay on the board when a pinch cuts it
        off — commitMove() is a no-op if nothing had moved yet. */
-    painting=false; paintAt._l=null;
+    painting=false; paintAt._l=null; hideBrushRing();
     clearTimeout(holdTimer); holdDecided=false; holdDownP=null;   // second finger settles it: this is a pinch, not a paused hold
     if(movingDrag){ movingDrag=false; commitMove(); }
     const m=zMid(); pinch={d0:zDist(),k0:zoomK,mx:m.x,my:m.y,tx0:zoomTX,ty0:zoomTY};
@@ -5324,11 +5338,11 @@ board.addEventListener("pointermove",e=>{ if(mode!=="paint")return;
     if(Math.hypot(e.clientX-holdDownCX,e.clientY-holdDownCY)>=HOLD_MOVE_PX){
       clearTimeout(holdTimer); holdDecided=true;
       pushUndo(); painting=true; paintAt._l=null; paintAt(holdDownP); haptic(12);
-      paintAt(p); paintHaptic();
+      paintAt(p); paintHaptic(); showBrushRing(e.clientX,e.clientY);
     }
     return;
   }
-  if(painting){ paintAt(p); paintHaptic(); } });
+  if(painting){ paintAt(p); paintHaptic(); showBrushRing(e.clientX,e.clientY); } });
 /* ===== PAINT TIMELAPSE =========================================================
    The shared MP4 was two frames: camouflaged, then wiped to reveal the figure. It showed
    the RESULT and hid the thing that is actually interesting to watch — someone picking a
@@ -5481,6 +5495,7 @@ function sessionPayload(){
   return {frames,times:rel,pre:preFrames.length,span};
 }
 function endPaint(){
+  hideBrushRing();
   /* Lifted before the hold timer decided anything and before any drag threshold was
      crossed — a plain tap-dab. Sets `painting` so the block below still runs every usual
      side effect (score, paint_completed, tlCapture) exactly as a drag-dab always has. */
