@@ -7631,7 +7631,7 @@ function applyPerDay(weeklyPrice){
   el.textContent = per ? ("less than "+per+" a day") : "";
   el.style.display = per ? "block" : "none";
 }
-window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; storeTrial=!!p.trial; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; applyPerDay(p.weekly); } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
+window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; if(p.hints) hintPackPrice=p.hints; storeTrial=!!p.trial; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; applyPerDay(p.weekly); } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
 /* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
    sets prices.weekly / prices.lifetime when RevenueCat resolved that product).
    A plan we can't sell must never be shown: tapping it opens a purchase that
@@ -7684,6 +7684,14 @@ window.KAMO.setReferral=(code)=>{ referralCode=(code||"").toString().trim(); };
  * NO EFFECT IN A BROWSER, and that is not a gap this can close: a stranger opening a
  * challenge link has no app and therefore no RevenueCat id. Seeker-to-install stays a
  * question for AppsFlyer and the referral link, which is what refLink() is for. */
+/* THE PACK'S LOCALIZED PRICE, THE DAY A BUILD SENDS IT. setPrices() carries `weekly` and
+   `lifetime` and nothing else — App.js caches the hints package but never publishes its
+   priceString — so this stays "" on every binary shipped so far and the button says what it
+   sells without naming a price. It is NOT guessed from the weekly's currency: App Store price
+   tiers are not linear across storefronts, so 0.99 USD is 1,19 € and inventing that number
+   would be the same pricing misstatement the paywall's per-day line is hidden to avoid.
+   Apple's sheet always states the real one. One line in App.js fills this in. */
+let hintPackPrice="";
 let chUserId="";
 window.KAMO.setAnalyticsUserId=(id)=>{ chUserId=(id||"").toString().trim(); };
 /* NATIVE SAYS THE PACK IS BOUGHT. Deliberately a thin forwarder to whatever hunt is on
@@ -13301,7 +13309,7 @@ function chSeek(hideId,opts){
        the hero CTA, the plan rows, the buttons on the reveal — is set in var(--display) at
        700 with the same tight tracking; this was the one paid door still typeset like body
        copy, which read as a caption in the corner rather than a thing to press. */
-    +".chHint{position:absolute;right:12px;bottom:calc(16px + var(--safe-b));z-index:5;min-width:88px;text-align:center;background:rgba(4,6,10,.62);border:1px solid rgba(95,230,164,.42);color:var(--mint);font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.2px;padding:10px 16px;border-radius:999px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s ease;}"
+    +".chHint{position:absolute;right:12px;bottom:calc(16px + var(--safe-b));z-index:5;min-width:88px;max-width:calc(100% - 24px);text-align:center;line-height:1.25;background:rgba(4,6,10,.62);border:1px solid rgba(95,230,164,.42);color:var(--mint);font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.2px;padding:10px 16px;border-radius:999px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s ease;}"
     +".chHint:active{transform:scale(.96);}"
     +".chHint[disabled]{opacity:.45;}"
     /* THE WAIT IS A SPINNER, NOT AN ELLIPSIS. Three dots that never move are indistinguishable
@@ -13995,7 +14003,7 @@ function chSeek(hideId,opts){
            Hint once sees the zone appear for nothing and never meets the sheet at all.
            This is also the only moment the pack is worth anything to a real player — the hint
            they just spent has proved on this very screen what it buys. */
-        if(r.balance>0){ hintBtn.textContent=r.balance+" left"; hintBtn.disabled=true; }
+        if(r.balance>0){ hintBtn.textContent=hintLabelFor(r.balance,false); hintBtn.disabled=true; }
         else offerPackAfterUse();
         return;
       }
@@ -14023,13 +14031,36 @@ function chSeek(hideId,opts){
        Sending the pack price through setPrices() needs App.js, i.e. a build and a review; when
        that ships, this label is where it goes. */
     function offerPackAfterUse(){
-      hintIdleLabel="Get 5 more";
+      hintEmpty=true;
+      hintIdleLabel=hintLabelFor(0,false);
       hintBtn.textContent=hintIdleLabel;
       hintBtn.disabled=false;
       /* Rewired, not re-entrant: takeHint() would bail on `hintZone` anyway, and what this
          button means has genuinely changed. */
       hintBtn.onclick=()=>{ haptic(8); offerHintPack(); };
     }
+
+    /* WHAT THE BUTTON SELLS, SAID ON THE BUTTON. It read a flat "Hint" in every state — the
+       same word whether the tap was about to be free, about to spend one of four already
+       paid for, or about to open Apple's sheet. The third case is the one that matters: a
+       player tapped a button that said "Hint" and got a purchase sheet, having never been
+       told a pack existed, what was in it or what it cost. Three states, three sentences,
+       and the price appears the moment a build sends it (see hintPackPrice). */
+    const HINT_PACK_SIZE=5;
+    const hintLabelFor=(bal,free)=>{
+      if(free) return "1 Hint";
+      if(bal>0) return bal+(bal===1?" Hint":" Hints")+" available";
+      return "No more hints. Get "+HINT_PACK_SIZE+" Hints"+(hintPackPrice?" for "+hintPackPrice:"");
+    };
+    /* Set whenever the label above says the wallet is empty, and read by the tap handler:
+       in that state the button IS the offer, so it must not spend a round trip asking the
+       server for a hint it already knows is not there. */
+    let hintEmpty=false;
+    const setHintLabel=(bal,free)=>{
+      hintEmpty=!free&&!(bal>0);
+      hintIdleLabel=hintLabelFor(bal,free);
+      if(!hintZone&&!hintPending&&!hintBusy) hintBtn.textContent=hintIdleLabel;
+    };
 
     /* THE ONE PLACE THE WAIT IS EXPRESSED. Both slow paths — Apple's sheet and the credit
        poll — used to write an ellipsis into the label and then have to remember which label
@@ -14121,7 +14152,7 @@ function chSeek(hideId,opts){
           if(r&&r.region&&(r.used!=="already"||r.balance>hintBalAtBuy)){
             hintPending=false; hintWait(false);
             drawHintZone(r.region);
-            hintBtn.textContent=r.balance>0?(r.balance+" left"):"Hint used";
+            hintBtn.textContent=r.balance>0?hintLabelFor(r.balance,false):"Hint used";
             hintBtn.disabled=true;
             /* NOT COUNTED WHEN THE SERVER SAYS `already`. Bought from the post-use offer, this
                hide's hint was spent a moment ago and hint_spend returns the same zone without
@@ -14162,7 +14193,7 @@ function chSeek(hideId,opts){
       hintPending=false; hintWait(false); hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel;
     };
 
-    hintBtn.onclick=()=>{ haptic(8); takeHint(); };
+    hintBtn.onclick=()=>{ haptic(8); if(hintEmpty) offerHintPack(); else takeHint(); };
     if(hintsOn()){
       w.appendChild(hintBtn); track("hint_offered",TP({}));
       /* WHAT THEY BOUGHT, ON THE BUTTON THAT SOLD IT. A pack is five hints spread over five
@@ -14177,10 +14208,7 @@ function chSeek(hideId,opts){
           const st=await chRpc("hint_state",{p_owner:hintOwner()});
           if(!st||typeof st.balance!=="number") return;
           hintKnownBal=st.balance;
-          if(st.balance>0&&!hintZone&&!hintPending&&!hintBusy&&!done){
-            hintIdleLabel="Hint · "+st.balance;
-            hintBtn.textContent=hintIdleLabel;
-          }
+          if(!done) setHintLabel(st.balance,!!st.free_available);
         }catch(_){}
       })();
     }
