@@ -92,7 +92,12 @@ async function hunt({ caps = {}, uid = '', spend = undefined } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript(([h, c, u, s]) => {
     window.__hintsLive = true;          // on, unless a case below turns it off
-    window.__seed = { get_hide: h, save_seek_trace: null };
+    /* hint_state is read on mount by every hunt now (the balance decorates the idle label),
+       and hint_intent/hint_claim are on the unidentified-device purchase path. Seeded flat so
+       no case reaches the network; individual cases override what they are about. */
+    window.__seed = { get_hide: h, save_seek_trace: null,
+                      hint_state: { balance: 0, free_available: true },
+                      hint_intent: { ok: true }, hint_claim: { claimed: false, reason: 'no_grant' } };
     if (s !== undefined) window.__seed.hint_spend = s;
     window.__caps = c; window.__uid = u;
     /* postNative's only real job in this suite is answering "did the purchase leave the
@@ -125,28 +130,42 @@ console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARA
   await p.close();
 }
 {
-  /* NO RevenueCat ID: THE BUTTON STILL COMES, THE SHEET NEVER DOES.
-     This used to assert the opposite — no id, no button — and that assertion was protecting
-     a wallet at the cost of the whole feature. App.js sets chUserId from ONE unretried
-     getAppUserID() at launch, so a device that loses that race is unidentified for the rest
-     of the session and the button could never appear on it. It never appeared on the
-     founder's phone, on 1.1.4 or 1.1.5, for exactly that reason.
-     So the free daily hint now runs on a device-keyed wallet, and the money door is what
-     stays shut: no id means the RevenueCat webhook has nothing to credit, so a purchase here
-     would be taken for hints that can never be spent. Both halves are asserted. */
+  /* NO RevenueCat ID: THE BUTTON COMES, AND SO DOES THE SHEET — ONCE THE CREDIT HAS A ROUTE.
+     This assertion has now been written three ways, and the middle one was wrong in a way
+     worth recording. It first said "no id, no button", which protected the wallet by deleting
+     the feature: App.js sets chUserId from ONE unretried getAppUserID(), so a device that
+     loses that race could never see Hint again — which is exactly what happened on the
+     founder's phone across 1.1.4 and 1.1.5. It then said "button yes, sheet never", which
+     protected the money by making the only consumable this app sells unbuyable on those same
+     devices. Both halves are recoverable: hint_intent() stamps the sheet opening and
+     hint_claim() hands the grant to the device key, so the sheet may open — but ONLY if that
+     stamp answers. A purchase with no route to a credit is the one outcome worth refusing. */
   const p = await hunt({ caps: { hints: true }, uid: '',
-                         spend: { used: 'free', region: { cx: 0.5, cy: 0.4, r: 0.2 }, balance: 0, free_available: false } });
+                         spend: { used: 'none', reason: 'empty', balance: 0, free_available: false } });
   const b0 = await btn(p);
   b0 && b0.text === 'Hint'
     ? ok('the free hint is offered with no RevenueCat id — the wallet falls back to the device')
     : bad(`no button without a user id: ${JSON.stringify(b0)} — the unidentified device is the bug, not the guard`);
   await p.click('#chHint');
-  await p.waitForTimeout(400);
-  await p.evaluate(() => { window.__seed.hint_spend = { used: 'none', reason: 'empty', balance: 0, free_available: false }; });
+  await p.waitForTimeout(600);
+  const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 1 && posted[0].product === 'com.blisscoach.kamo.hints5'
+    ? ok('and the pack can be bought once the intent is stamped — the claim brings the credit back')
+    : bad(`no purchase left the page with the intent stamped: ${JSON.stringify(posted)}`);
+  await p.close();
+}
+{
+  /* THE STAMP IS THE SWITCH. Migration not applied, network gone — either way the credit has
+     no route home, so nothing is sold. */
+  const p = await hunt({ caps: { hints: true }, uid: '',
+                         spend: { used: 'none', reason: 'empty', balance: 0, free_available: false } });
+  await p.evaluate(() => { window.__seed.hint_intent = { ok: false }; });
+  await p.click('#chHint');
+  await p.waitForTimeout(600);
   const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
   posted.length === 0
-    ? ok('and nothing can open StoreKit on that path — the credit would have no owner')
-    : bad(`a purchase was posted with no user id: ${JSON.stringify(posted)}`);
+    ? ok('and nothing is sold when the intent cannot be stamped — a credit with no route home')
+    : bad(`a purchase left the page with no claim path: ${JSON.stringify(posted)}`);
   await p.close();
 }
 
