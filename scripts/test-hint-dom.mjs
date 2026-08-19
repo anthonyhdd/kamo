@@ -113,7 +113,7 @@ async function hunt({ caps = {}, uid = '', spend = undefined } = {}) {
 
 const btn = (page) => page.evaluate(() => {
   const b = document.getElementById('chHint');
-  return b ? { text: b.textContent, disabled: b.disabled } : null;
+  return b ? { text: b.textContent, disabled: b.disabled, loading: b.classList.contains('chLoad') } : null;
 });
 
 console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARANTEE');
@@ -314,7 +314,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
   await p.evaluate(() => window.KAMO.hintsPurchased());
   await p.waitForTimeout(700);
   const mid = await btn(p);
-  mid && mid.text === '…'
+  mid && mid.loading
     ? ok('and the button holds while the webhook is still in flight')
     : bad(`the poll gave up before the credit — the button reads ${JSON.stringify(mid)}, which `
         + 'is what somebody who has just paid would be looking at');
@@ -359,7 +359,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
 /* THE CANCEL, WHICH IS THE COMMONEST OUTCOME OF ANY PURCHASE SHEET. Native answers a
    userCancelled with buyDone() and every failure with a toast through window.KAMO.hint —
    both of which used to clear the paywall's spinner and nothing else, leaving the hint
-   button dead on "…" for the full 45s of its own timer. */
+   button spinning for the full 45s of its own timer. */
 {
   for (const [name, fire] of [
     ['buyDone() after a StoreKit cancel', () => window.KAMO.buyDone()],
@@ -369,10 +369,10 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
                            spend: { used: 'free', region: REG, balance: 0, free_available: false } });
     await p.click('#chHint');
     await p.waitForTimeout(400);
-    await p.click('#chHint');                     // "Get 5 more" → the sheet, button on "…"
+    await p.click('#chHint');                     // "Get 5 more" → the sheet, button spinning
     await p.waitForTimeout(200);
     const during = await btn(p);
-    if (!during || during.text !== '…') bad(`button did not go to … before the cancel: ${JSON.stringify(during)}`);
+    if (!during || !during.loading) bad(`button did not show the spinner before the cancel: ${JSON.stringify(during)}`);
     await p.evaluate(fire);
     await p.waitForTimeout(200);
     const after = await btn(p);
