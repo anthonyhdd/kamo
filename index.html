@@ -13922,7 +13922,23 @@ function chSeek(hideId,opts){
        BEAT before the poll may call itself done.
        `hintKnownBal` is the last balance the server stated, on any answer. */
     let hintBuyStarted=false, hintBalAtBuy=0, hintKnownBal=0;
-    const hintsOn=()=>{ try{ return !!(HINTS_LIVE&&nativeCaps&&nativeCaps.hints&&chUserId&&HID&&!REPLAY); }catch(_){ return false; } };
+    /* ⚠️ THE OWNER KEY IS NO LONGER chUserId, AND THAT IS A BUG FIX, NOT A DESIGN CHANGE.
+       chUserId is the RevenueCat app user id, injected once per launch by App.js from a
+       single `await Purchases.getAppUserID()` inside a silent catch. When that one call
+       loses the cold-start race — a slow network, a keychain not yet warm — nothing ever
+       asks again, so the page stays unidentified for the whole session and hintsOn() is
+       false FOREVER on that device. Confirmed on the founder's own phone across 1.1.4 and
+       1.1.5: nativeCaps.hints=true, chUserId="". The retry that fixes it (kamo-app 2f8d6f9)
+       needs a build and a review; this file needs two minutes. So the button stops depending
+       on an id that may never arrive.
+       THE WALLET TOLERATES THIS BECAUSE `owner` IS JUST TEXT. A device that never got its
+       RevenueCat id gets a wallet keyed on its own device id instead, which is enough for
+       the FREE daily hint — the whole of what an unidentified device can be sold anyway.
+       WHAT IT MUST NEVER DO IS TAKE MONEY UNDER THAT KEY: the RevenueCat webhook credits
+       by app user id, so a pack bought without one would land in a wallet this screen can
+       never spend from. offerHintPack() refuses on exactly that condition — see there. */
+    const hintOwner=()=>{ try{ return chUserId || ("dev:"+chDeviceId()); }catch(_){ return ""; } };
+    const hintsOn=()=>{ try{ return !!(HINTS_LIVE&&nativeCaps&&nativeCaps.hints&&hintOwner()&&HID&&!REPLAY); }catch(_){ return false; } };
     const hintBtn=document.createElement("button");
     hintBtn.className="chHint"; hintBtn.id="chHint"; hintBtn.textContent="Hint";
 
@@ -13949,7 +13965,7 @@ function chSeek(hideId,opts){
       if(hintBusy||done||hintZone) return;
       hintBusy=true; hintBtn.disabled=true;
       let r=null;
-      try{ r=await chRpc("hint_spend",{p_owner:chUserId,p_hide_id:HID}); }catch(_){}
+      try{ r=await chRpc("hint_spend",{p_owner:hintOwner(),p_hide_id:HID}); }catch(_){}
       hintBusy=false; hintBtn.disabled=false;
       if(!r){ hintBtn.disabled=false; return; }            // network blip: let them try again
       if(typeof r.balance==="number") hintKnownBal=r.balance;
@@ -14004,6 +14020,11 @@ function chSeek(hideId,opts){
        exist — and a browser cannot buy this any more than it can buy KAMO+, so say so
        instead of opening a dead sheet. */
     function offerHintPack(){
+      /* NO RevenueCat ID, NO SALE. The webhook credits the wallet by app user id; without one
+         this screen is spending a device-keyed wallet the credit can never reach, so a pack
+         bought here would be money taken for hints that never arrive. The free daily still
+         worked and that is what this device gets. */
+      if(!chUserId){ retireHint("Hint used"); return; }
       track("hint_purchase_initiated",TP({}));
       /* `source:"hint"` for the same reason the paywall now sends one, plus a second: this
          is the only purchase that never touches the paywall, so without it the hint pack's
@@ -14053,7 +14074,7 @@ function chSeek(hideId,opts){
       try{
         for(let i=0;i<6;i++){
           let r=null;
-          try{ r=await chRpc("hint_spend",{p_owner:chUserId,p_hide_id:HID}); }catch(_){}
+          try{ r=await chRpc("hint_spend",{p_owner:hintOwner(),p_hide_id:HID}); }catch(_){}
           if(r&&typeof r.balance==="number") hintKnownBal=r.balance;
           if(r&&r.region&&(r.used!=="already"||r.balance>hintBalAtBuy)){
             hintPending=false;
