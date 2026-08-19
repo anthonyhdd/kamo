@@ -143,7 +143,7 @@ console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARA
   const p = await hunt({ caps: { hints: true }, uid: '',
                          spend: { used: 'none', reason: 'empty', balance: 0, free_available: false } });
   const b0 = await btn(p);
-  b0 && b0.text === 'Hint'
+  b0 && b0.text === '1 Hint'
     ? ok('the free hint is offered with no RevenueCat id — the wallet falls back to the device')
     : bad(`no button without a user id: ${JSON.stringify(b0)} — the unidentified device is the bug, not the guard`);
   await p.click('#chHint');
@@ -175,7 +175,7 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   const p = await hunt({ caps: { hints: true }, uid: 'user-1',
                          spend: { used: 'free', region: REG, balance: 0, free_available: false } });
   const b = await btn(p);
-  b && b.text === 'Hint' && !b.disabled ? ok('the hint button is rendered and tappable') : bad(`button is ${JSON.stringify(b)}`);
+  b && b.text === '1 Hint' && !b.disabled ? ok('the hint button is rendered and tappable') : bad(`button is ${JSON.stringify(b)}`);
 
   await p.click('#chHint');
   await p.waitForTimeout(400);
@@ -211,7 +211,7 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
      all, since hint_spend spends the free daily first: one tap reveals the zone for nothing
      and the sheet is never reached at all. PR #295. */
   const b2 = await btn(p);
-  b2 && b2.text === 'Get 5 more' && !b2.disabled
+  b2 && b2.text === 'No more hints. Get 5 Hints' && !b2.disabled
     ? ok('the spent button becomes the pack offer, still tappable')
     : bad(`button after use: ${JSON.stringify(b2)}`);
   /* AND IT QUOTES NO PRICE. setPrices() carries `weekly` and `lifetime` and nothing else, so
@@ -239,7 +239,7 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   await p.click('#chHint');
   await p.waitForTimeout(400);
   const b = await btn(p);
-  b && b.text === '3 left' && b.disabled
+  b && b.text === '3 Hints available' && b.disabled
     ? ok('a spend off a stocked wallet locks the button and states the balance')
     : bad(`button after a stocked spend: ${JSON.stringify(b)}`);
   const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
@@ -283,7 +283,7 @@ console.log('\n④ AN EMPTY WALLET IS THE ONLY THING THAT OPENS STOREKIT');
   await p.waitForTimeout(600);
   const after = await btn(p);
   const zone = await p.evaluate(() => !!document.querySelector('.chHintZone'));
-  zone && after && after.text === '4 left'
+  zone && after && after.text === '4 Hints available'
     ? ok('hintsPurchased() polls the wallet, draws the zone and shows what is left')
     : bad(`after purchase: zone=${zone} button=${JSON.stringify(after)}`);
   await p.close();
@@ -306,7 +306,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
      back under `already` and the wallet is untouched — 0 until the webhook lands. */
   const ALREADY = { used: 'already', via: 'free', region: REG, balance: 0, free_available: false };
   await p.evaluate((s) => { window.__seed.hint_spend = s; }, ALREADY);
-  await p.click('#chHint');                       // "Get 5 more" → StoreKit
+  await p.click('#chHint');                       // the empty-wallet offer → StoreKit
   await p.waitForTimeout(200);
   const bought = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
   bought.length === 1 ? ok('the offer opens StoreKit once') : bad(`posted ${JSON.stringify(bought)}`);
@@ -323,7 +323,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
                    { used: 'already', via: 'free', region: REG, balance: 5, free_available: false });
   await p.waitForTimeout(2200);
   const after = await btn(p);
-  after && after.text === '5 left'
+  after && after.text === '5 Hints available'
     ? ok('and states the pack the moment the wallet grows')
     : bad(`after the credit the button reads ${JSON.stringify(after)}`);
   await p.close();
@@ -369,14 +369,14 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
                            spend: { used: 'free', region: REG, balance: 0, free_available: false } });
     await p.click('#chHint');
     await p.waitForTimeout(400);
-    await p.click('#chHint');                     // "Get 5 more" → the sheet, button spinning
+    await p.click('#chHint');                     // the empty-wallet offer → the sheet, button spinning
     await p.waitForTimeout(200);
     const during = await btn(p);
     if (!during || !during.loading) bad(`button did not show the spinner before the cancel: ${JSON.stringify(during)}`);
     await p.evaluate(fire);
     await p.waitForTimeout(200);
     const after = await btn(p);
-    after && after.text === 'Get 5 more' && !after.disabled
+    after && after.text === 'No more hints. Get 5 Hints' && !after.disabled
       ? ok(`${name} hands the offer back at once`)
       : bad(`after ${name} the button is ${JSON.stringify(after)} — it will sit there for 45s`);
     await p.close();
