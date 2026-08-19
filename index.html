@@ -14041,7 +14041,6 @@ function chSeek(hideId,opts){
        exist — and a browser cannot buy this any more than it can buy KAMO+, so say so
        instead of opening a dead sheet. */
     async function offerHintPack(){
-      track("hint_purchase_initiated",TP({}));
       /* NO RevenueCat ID: THE SHEET STILL OPENS, BUT ONLY ONCE THE CREDIT HAS A WAY BACK.
          The webhook credits hint_wallet by app user id, so on a device that never received
          one the pack lands in a wallet this screen cannot spend from — money taken, no
@@ -14059,6 +14058,12 @@ function chSeek(hideId,opts){
         hintWait(false); hintBtn.disabled=false;
         if(!ready){ track("hint_blocked",TP({reason:"no_claim_path"})); retireHint("Hint used"); return; }
       }
+      /* AFTER THE STAMP, NOT BEFORE IT. Fired first, this counted a tap that was about to be
+         REFUSED as an intent to buy — so the one funnel that says whether the pack sells
+         (hint_purchase_initiated → purchase_completed) would have carried, in its numerator,
+         taps that never reached Apple's sheet. It now fires on the taps that actually open a
+         sheet; the refusals are hint_blocked{reason:"no_claim_path"} and belong there. */
+      track("hint_purchase_initiated",TP({}));
       /* `source:"hint"` for the same reason the paywall now sends one, plus a second: this
          is the only purchase that never touches the paywall, so without it the hint pack's
          `purchase_completed` would land in the same unattributed bucket as a subscription
