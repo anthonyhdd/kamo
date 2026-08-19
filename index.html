@@ -14019,13 +14019,25 @@ function chSeek(hideId,opts){
     /* The only paid door. postNative returns false in a browser, where StoreKit does not
        exist — and a browser cannot buy this any more than it can buy KAMO+, so say so
        instead of opening a dead sheet. */
-    function offerHintPack(){
-      /* NO RevenueCat ID, NO SALE. The webhook credits the wallet by app user id; without one
-         this screen is spending a device-keyed wallet the credit can never reach, so a pack
-         bought here would be money taken for hints that never arrive. The free daily still
-         worked and that is what this device gets. */
-      if(!chUserId){ retireHint("Hint used"); return; }
+    async function offerHintPack(){
       track("hint_purchase_initiated",TP({}));
+      /* NO RevenueCat ID: THE SHEET STILL OPENS, BUT ONLY ONCE THE CREDIT HAS A WAY BACK.
+         The webhook credits hint_wallet by app user id, so on a device that never received
+         one the pack lands in a wallet this screen cannot spend from — money taken, no
+         hints. That is why this door was shut, and shutting it meant the one consumable
+         this app sells could not be bought at all on those devices.
+         hint_intent() stamps the sheet opening; hint_claim(), polled after the purchase,
+         hands that single grant to this device key under four conditions (see
+         infra/2026-08-19-hint-device-claim.sql). If the stamp does not answer — the
+         migration not applied, the network gone — nothing is sold, because a purchase with
+         no route to a credit is the worst outcome on this screen. */
+      if(!chUserId){
+        hintBtn.disabled=true;
+        let ready=false;
+        try{ const r=await chRpc("hint_intent",{p_dev:hintOwner()}); ready=!!(r&&r.ok); }catch(_){ ready=false; }
+        hintBtn.disabled=false;
+        if(!ready){ track("hint_blocked",TP({reason:"no_claim_path"})); retireHint("Hint used"); return; }
+      }
       /* `source:"hint"` for the same reason the paywall now sends one, plus a second: this
          is the only purchase that never touches the paywall, so without it the hint pack's
          `purchase_completed` would land in the same unattributed bucket as a subscription
@@ -14073,6 +14085,10 @@ function chSeek(hideId,opts){
       hintPending=true; hintBtn.disabled=true; hintBtn.textContent="…";
       try{
         for(let i=0;i<6;i++){
+          /* THE CLAIM COMES FIRST ON AN UNIDENTIFIED DEVICE, because the grant the webhook
+             just wrote is under the RevenueCat id and this wallet is under the device key.
+             Idempotent and fail-closed server-side, so polling it six times is harmless. */
+          if(!chUserId){ try{ await chRpc("hint_claim",{p_dev:hintOwner()}); }catch(_){} }
           let r=null;
           try{ r=await chRpc("hint_spend",{p_owner:hintOwner(),p_hide_id:HID}); }catch(_){}
           if(r&&typeof r.balance==="number") hintKnownBal=r.balance;
@@ -14121,7 +14137,27 @@ function chSeek(hideId,opts){
     };
 
     hintBtn.onclick=()=>{ haptic(8); takeHint(); };
-    if(hintsOn()){ w.appendChild(hintBtn); track("hint_offered",TP({})); }
+    if(hintsOn()){
+      w.appendChild(hintBtn); track("hint_offered",TP({}));
+      /* WHAT THEY BOUGHT, ON THE BUTTON THAT SOLD IT. A pack is five hints spread over five
+         different hides, so the four that are left are spent on screens that never saw the
+         purchase — and until now every one of those screens said a flat "Hint", which is the
+         same word an empty wallet shows. Somebody who has paid should never have to tap to
+         find out whether they still have anything. The balance is read once, on mount, and
+         only ever decorates the idle label: a spend, a purchase in flight and a drawn zone
+         all own the button already and must not be overwritten by a late read. */
+      (async()=>{
+        try{
+          const st=await chRpc("hint_state",{p_owner:hintOwner()});
+          if(!st||typeof st.balance!=="number") return;
+          hintKnownBal=st.balance;
+          if(st.balance>0&&!hintZone&&!hintPending&&!hintBusy&&!done){
+            hintIdleLabel="Hint · "+st.balance;
+            hintBtn.textContent=hintIdleLabel;
+          }
+        }catch(_){}
+      })();
+    }
 
     /* ===== zoom + pan (free, unpenalised, scoped to this stage) ======================== */
     const stage=$$("chStage"), zoomEl=$$("chZoom");
