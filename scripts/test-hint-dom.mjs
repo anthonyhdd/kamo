@@ -175,6 +175,31 @@ console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARA
   posted.length === 0
     ? ok('and nothing is sold when the intent cannot be stamped — a credit with no route home')
     : bad(`a purchase left the page with no claim path: ${JSON.stringify(posted)}`);
+  /* ⚠️ AND WHAT IT SAYS WHILE REFUSING, WHICH WAS A LIE ON THE TAP THAT MATTERS MOST.
+     This retired the button reading "Hint used" — on a wallet that was EMPTY, i.e. after a
+     button that read "No more hints. Get 5 Hints". The player accepted an offer to buy and
+     was told they had already spent something they never had, on the only paid door in this
+     app, which then greyed out and vanished. Refusing the sale is right; describing it as a
+     spend is not, and there is no way back from it.
+     The refusal has two causes and this side cannot tell them apart, so the first one is
+     treated as the blink it usually is — button alive, real sentence, offer intact. */
+  const b1 = await btn(p);
+  b1 && !b1.disabled && /store/i.test(b1.text) && !/used/i.test(b1.text)
+    ? ok(`a refused stamp says what actually went wrong and keeps the offer ("${b1.text}")`)
+    : bad(`the refusal reads ${JSON.stringify(b1)} — "Hint used" is a spend that never happened`);
+  /* Twice on one screen is a wall, not a blink, and a control that cannot succeed should not
+     sit there looking tappable — the same rule retireHint() was written under, now applied to
+     a sentence that is true. */
+  await p.click('#chHint');
+  await p.waitForTimeout(600);
+  const b2 = await btn(p);
+  b2 && b2.disabled && /unavailable/i.test(b2.text)
+    ? ok(`and a second refusal retires it honestly ("${b2.text}")`)
+    : bad(`the second refusal reads ${JSON.stringify(b2)}`);
+  const posted2 = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted2.length === 0
+    ? ok('and still nothing was sold across either tap')
+    : bad(`a purchase left the page on retry: ${JSON.stringify(posted2)}`);
   await p.close();
 }
 
