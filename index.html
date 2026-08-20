@@ -14068,6 +14068,12 @@ function chSeek(hideId,opts){
     const HINTS_LIVE=true;
     const HINT_PACK_ID="com.blisscoach.kamo.hints5";
     let hintZone=null, hintBusy=false, hintPending=false;
+    /* How many times the claim stamp has refused on THIS screen. The refusal is two different
+       situations wearing one answer — a network that blinked, or a device that genuinely has
+       no route to a credit — and there is no way to tell them apart from here. So the first
+       one is treated as the blink it usually is and the second as the wall it probably is.
+       See offerHintPack(). */
+    let hintClaimTries=0;
     /* THE THREE THINGS THE CREDIT POLL NEEDS, and none of them existed while the poll was
        deciding success from the wrong signal.
        `hintBuyStarted` is set on the tap that opens Apple's sheet and is NEVER cleared for
@@ -14223,7 +14229,31 @@ function chSeek(hideId,opts){
         let ready=false;
         try{ const r=await chRpc("hint_intent",{p_dev:hintOwner()}); ready=!!(r&&r.ok); }catch(_){ ready=false; }
         hintWait(false); hintBtn.disabled=false;
-        if(!ready){ track("hint_blocked",TP({reason:"no_claim_path"})); retireHint("Hint used"); return; }
+        /* A retry that works must not carry the last failure's label under the spinner for the
+           45 seconds it takes the cancel timer to put the real one back. */
+        if(ready&&hintClaimTries) hintBtn.textContent=hintIdleLabel;
+        /* ⚠️ IT SAID "Hint used", AND ON THE TAP THAT MATTERS THAT IS A LIE.
+           Most taps that reach this branch come from an EMPTY wallet — a button reading "No
+           more hints. Get 5 Hints", which is an offer to BUY. The player accepted the offer
+           and was told they had already spent something they never had, on the only paid door
+           in this app, which then greyed out and disappeared. Wrong on the facts, and it ends
+           the sale with no way back. That is the same defect the three-state label shipped to
+           fix; this was the fourth state nobody counted.
+           TWO ANSWERS, BECAUSE THE REFUSAL HAS TWO CAUSES. hint_intent not answering is either
+           a network blink or a device with no route to a credit at all, and this side cannot
+           tell which. So the first refusal keeps the button — the label under the spinner was
+           never overwritten, so it still says what it was selling — and states the real
+           problem. A second refusal on the same screen is a wall, and retiring on it is the
+           existing rule about controls that cannot succeed, now applied to a true sentence.
+           WHAT IT MUST NEVER DO IS OPEN APPLE'S SHEET ANYWAY: a purchase with no route to a
+           credit is money taken for nothing, which is what the stamp is here to prevent. */
+        if(!ready){
+          hintClaimTries++;
+          track("hint_blocked",TP({reason:"no_claim_path",attempt:hintClaimTries}));
+          if(hintClaimTries<2){ hintBtn.textContent="Couldn't reach the store — tap to retry"; return; }
+          retireHint("Hints unavailable");
+          return;
+        }
       }
       /* AFTER THE STAMP, NOT BEFORE IT. Fired first, this counted a tap that was about to be
          REFUSED as an intent to buy — so the one funnel that says whether the pack sells
