@@ -41,6 +41,9 @@ const real=readFileSync(join(ROOT,'index.html'),'utf8');
    late. NAME is what the whole change is about. */
 const anchor='async function chRpc(fn,body){';
 const html=real.replace(anchor, anchor +
+  /* Every call is recorded, not just answered: the drift case below asserts on the ARGUMENTS
+     of submit_attempt, which is the only place the committed point is observable. */
+  '(window.__calls=window.__calls||[]).push([fn,body]);' +
   'if(window.__seed&&window.__seed[fn]) return window.__seed[fn];');
 const MIME={'.js':'text/javascript','.mjs':'text/javascript','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.css':'text/css'};
 const server=createServer((rq,rs)=>{const p=decodeURIComponent(rq.url.split('?')[0]);
@@ -144,6 +147,71 @@ console.log('\nAND IT IS READABLE — CLEAR OF THE CLOCK, AND ON THE SCREEN');
   }
 }
 
+/* THE SHOT DOES NOT MOVE WHEN THE PICTURE DOES.
+   .chRet is position:fixed, so the reticle sits at a SCREEN coordinate while the photo under
+   it is free to slide: in the feed the round lives in a .kfSlide inside a scroll-snap
+   scroller, and a snap still settling keeps moving for a few hundred ms after the thumb has
+   gone. A plain tap places the reticle once, at pointerdown — and the commit used to convert
+   it through a rect read at POINTERUP, so every pixel travelled in between was added to the
+   shot. The mark landed off the tap and the hit test judged that same wrong place.
+   ASSERTED AS AN EQUALITY BETWEEN TWO RUNS rather than against a computed expectation: the
+   reticle sits RET_OFF above the finger and is clamped to the frame, so any arithmetic here
+   would be a second copy of the code under test. What must be true is simply that the picture
+   moving afterwards changes nothing. */
+console.log('\nTHE TAP LANDS WHERE IT WAS AIMED, EVEN IF THE PICTURE SLIDES');
+{
+  const shot = async (moveBy) => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    await servePhoto(page);
+    await page.addInitScript(() => {
+      window.__seed = { get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 20, max_taps: 5, name: 'tony' },
+                        submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 } };
+    });
+    await page.goto(base + '?h=abc123', { waitUntil: 'load' });
+    await page.waitForTimeout(900);
+    const out = await page.evaluate((by) => {
+      const stage = document.getElementById('chStage');
+      const img = document.querySelector('.chFrame img');
+      if (!stage || !img) return null;
+      /* THE FIXTURE'S PHOTO IS ONE TRANSPARENT PIXEL, and a 1x1 rect makes this case vacuous:
+         the reticle sits RET_OFF above the finger, so both runs clamp to the frame's edge and
+         two identical zeros would pass whatever the code did. A real box is given here so the
+         aim lands in the MIDDLE of a picture, where a 40px slide is a difference. */
+      img.style.width = '300px'; img.style.height = '500px';
+      const r = img.getBoundingClientRect();
+      const x = r.left + r.width * 0.5, y = r.top + r.height * 0.62;
+      const ev = (t) => stage.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 1,
+        pointerType: 'touch', clientX: x, clientY: y }));
+      ev('pointerdown');
+      /* THE SNAP, SIMULATED ON THE PICTURE ALONE. Transforming the photo is what a settling
+         scroller does to it from this code's point of view: getBoundingClientRect moves and
+         nothing else about the round changes. */
+      if (by) img.style.transform = 'translateY(' + by + 'px)';
+      ev('pointerup');
+      return true;
+    }, moveBy);
+    await page.waitForTimeout(400);
+    const calls = await page.evaluate(() => (window.__calls || []).filter(c => c[0] === 'submit_attempt'));
+    await page.close();
+    return { fired: !!out, calls };
+  };
+
+  const still = await shot(0);
+  const slid = await shot(-40);
+  const a = still.calls[0] && still.calls[0][1], b = slid.calls[0] && slid.calls[0][1];
+  a ? ok(`a tap on a still picture is committed (${a.p_x.toFixed(3)}, ${a.p_y.toFixed(3)})`)
+    : bad('the tap never reached submit_attempt — the fixture is not driving a live round');
+  b ? ok('and a tap during a slide is committed too')
+    : bad('a tap during a slide never reached submit_attempt');
+  if (a && b) {
+    Math.abs(a.p_x - b.p_x) < 1e-6 && Math.abs(a.p_y - b.p_y) < 1e-6
+      ? ok('and they are the same point — the photo moving underneath costs nothing')
+      : bad(`the picture sliding 40px moved the shot from (${a.p_x.toFixed(3)}, ${a.p_y.toFixed(3)}) `
+          + `to (${b.p_x.toFixed(3)}, ${b.p_y.toFixed(3)}) — the mark and the hit test both `
+          + 'judge a place the player never tapped');
+  }
+}
+
 await browser.close(); server.close();
-console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the seeker screen names the sender, readably');
+console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the seeker screen names the sender, readably, and the tap lands where it was aimed');
 process.exit(failed?1:0);
