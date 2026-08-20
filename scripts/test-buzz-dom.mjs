@@ -70,11 +70,14 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
-async function boot({ hit, pct, others, frames, name = 'tony' }) {
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
     const u = route.request().url();
+    /* `deadPhoto` kills the camo image itself, not just the reveal frames: a dead storage
+       path, an object still replicating, a tunnel. See the block at the end of this file. */
+    if (deadPhoto) return route.fulfill({ status: 404, body: 'x' });
     if (!frames && (u.includes('_b.jpg') || u.includes('_w.jpg'))) return route.fulfill({ status: 404, body: 'x' });
     route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
   });
@@ -327,6 +330,49 @@ console.log('\nSEND ONE BACK — drops into compose with the same photo, no came
     : bad('the photo taints the canvas — every publish from this round would die at toBlob');
   const composing = await page.evaluate(() => document.getElementById('start') ? document.getElementById('start').style.display === 'none' : true);
   composing ? ok('compose flow entered (splash gone)') : bad('splash still up');
+  await page.close();
+}
+
+/* ⚠️ A PHOTO THAT NEVER ARRIVES IS NOT A ROUND — AND IT USED TO BE PLAYED ANYWAY.
+   There was no img.onerror on the seeker at all. With storage answering 404 the screen kept
+   its headline ("@tony hid a kamo here / One tap to find") over a black rectangle wearing the
+   alt text of a broken <img>, and the round underneath was completely live: the buzz still
+   committed and submit_attempt still filed an attempt. The clock, which hangs off img.onload
+   alone, never started — so what it filed was p_ms 0, and that number goes into the percentile
+   every other player on that hide is scored against. A round nobody could see, timed at 0.0s,
+   counted for everyone.
+   THE THREE THINGS THAT HAVE TO HOLD, and each of them failed on its own before: the screen
+   says so, the round refuses the tap, and nothing is filed. */
+console.log('\nA PHOTO THAT NEVER ARRIVES SAYS SO, AND FILES NOTHING');
+{
+  const page = await boot({ hit: false, deadPhoto: true });
+  /* One retry is built in, so the failure state lands a beat after the first 404. */
+  await page.waitForFunction(() => /didn't load/.test(document.getElementById('chHead')?.textContent || ''), null, { timeout: 6000 }).catch(() => {});
+  const head = await txt(page, 'chHead');
+  /didn't load/.test(head || '')
+    ? ok(`the screen says the photo failed ("${head}")`)
+    : bad(`a dead photo still reads "${head}" — a live round on a black rectangle`);
+  const sub = await txt(page, 'chSub');
+  /didn't come through/.test(sub || '')
+    ? ok('and the sub says what to do about it')
+    : bad(`sub reads "${sub}"`);
+  const clock = await page.evaluate(() => document.getElementById('chClock').style.display);
+  clock === 'none' ? ok('the clock never started, and is not shown pretending to') : bad(`clock display: ${clock}`);
+  /* The buzz, driven exactly as a thumb drives it in the cases above. */
+  await page.mouse.move(190, 420);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+  const filed = await calls(page);
+  filed.includes('submit_attempt')
+    ? bad(`an attempt was filed on a photo that never loaded: ${JSON.stringify(filed)} — this is the 0.0s round`)
+    : ok('and the buzz commits nothing — no attempt, no 0.0s in anybody else\'s percentile');
+  /* On a link there is nowhere to go but the same URL, so the card offers exactly that. */
+  const retry = await page.evaluate(() => [...document.querySelectorAll('#chFoot button')].map(b => b.textContent.trim()));
+  retry.includes('Try again')
+    ? ok('and a link round is offered the one thing that can still work')
+    : bad(`no way out of a dead link round: ${JSON.stringify(retry)}`);
   await page.close();
 }
 

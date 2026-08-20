@@ -13918,6 +13918,55 @@ function chSeek(hideId,opts){
        "first tap" to start from, and every player must be measured from the same moment
        or the percentile lies. The deal line is two words; nobody is punished for reading. */
     img.onload=()=>{ startClock(); requestAnimationFrame(()=>{ trace.img={w:img.offsetWidth,h:img.offsetHeight}; }); };
+    /* ⚠️ AND IT HAS TO ANSWER THE OTHER OUTCOME, BECAUSE THE PHOTO *IS* THE ROUND.
+       There was no img.onerror at all. A camo image that never arrives — a dead storage path,
+       an object still replicating, a tunnel, an offline second — left the seeker on a black
+       screen wearing the alt text of a broken <img>, under "@tony hid a kamo here / One tap to
+       find", with a completely live round underneath it.
+       Reproduced with storage answering 404: the clock never started (it hangs off onload
+       alone, so t0 stayed 0 and elapsed() returned 0 forever), the buzz still committed, and
+       submit_attempt filed a REAL attempt with p_ms 0. That number is not only wrong for the
+       player who could not see anything — it is in the percentile every other player on that
+       hide is scored against. A round nobody could look at, timed at 0.0s, counted.
+       ONE RETRY FIRST, cache-busted. The common case here is a transient fetch, and a second
+       request costs nothing next to ending a round that was about to work; the negative is
+       often the thing that got cached, so the same URL would only reproduce it. */
+    let imgTries=0;
+    img.onerror=()=>{
+      if(killed||done) return;
+      if(imgTries++<1){ img.src=camoSrc+(camoSrc.indexOf("?")<0?"?":"&")+"rt="+imgTries; return; }
+      chPhotoDead();
+    };
+    /* Hoisted, and the two removals are wrapped rather than trusted: this is wired above the
+       lines that declare `quit` and `hintBtn`, and although an error event is always dispatched
+       in a later task, this file has been bitten by TDZ often enough (chReplyTo, KF_AUTHOR_KEY)
+       to pay the two try blocks. */
+    function chPhotoDead(){
+      if(done) return; done=true; chLive=false;
+      try{ clearInterval(clock); }catch(_){}
+      clockEl.style.display="none";
+      try{ quit.remove(); }catch(_){}
+      try{ hintBtn.remove(); }catch(_){}
+      track("seek_photo_failed",TP({tries:imgTries}));
+      /* Scoped to this round's own container, NOT $$(): in the feed several rounds are mounted
+         at once and every one of them mints an id="chHead" — see the note on the second
+         id="chRx" in ending() for what a document-wide lookup does to that. */
+      const hd=w.querySelector(".chHead"), sb=w.querySelector(".chSub");
+      if(hd) hd.textContent="This one didn't load";
+      /* The way out is a different thing on the two surfaces, so the sentence names the real
+         one: in the feed the swipe is the exit and always was, and on a link there is nowhere
+         to go but the same URL again. */
+      if(sb) sb.textContent = FEED ? "The photo didn't come through. Swipe up for the next hide."
+                                   : "The photo didn't come through — check your connection and try again.";
+      if(!FEED){
+        const foot=w.querySelector("#chFoot");
+        if(foot&&!foot.querySelector(".chCta")){
+          const b=document.createElement("button"); b.className="chCta"; b.textContent="Try again";
+          b.onclick=()=>{ try{ location.reload(); }catch(_){} };
+          foot.appendChild(b);
+        }
+      }
+    }
     img.src=camoSrc;
     $$("chFrame").appendChild(img);
     if(img.complete&&img.naturalWidth) img.onload();
