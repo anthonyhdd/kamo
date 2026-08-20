@@ -94,6 +94,34 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
+/* ⚠️ A SWIPE COSTS A ROUND NOW, SO A TEST THAT SWIPES HAS TO PLAY ONE.
+   The feed locks the slide under the thumb until its round is answered (FEED_LOCK in chFeed),
+   which is what stopped the run being farmable by scrolling. Every case below that scrolls to
+   prove something about the SLIDE LIFECYCLE — teardown, timing properties, block filtering —
+   used to set scrollTop straight past a live round, and the clamp now pulls it back.
+   Answering first is the faithful fix rather than switching the lock off for the suite: it is
+   what a player does, and it keeps these cases running against the shipped configuration. One
+   tap on the stage is the whole game, so it ends the round whatever the answer is. */
+const answerAndScroll = async (page) => {
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    if (!st) return;
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o));
+    st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  /* ⚠️ WAITED FOR, NEVER SLEPT ON — the rule this file already writes down further below, and
+     the lock is a new way to get it wrong. A fixed 600ms passed alone and failed inside the
+     full gate, where a dozen Chromes share the machine: the ending had not landed, the slide
+     was still locked, the clamp pulled the scroll back and the failure read as "the round did
+     not follow the scroll" — a sentence about the feed, produced by a sleep in the harness. */
+  await page.waitForFunction(
+    () => ![...document.querySelectorAll('.kfSlide')].some(x => x.classList.contains('kfLock')),
+    { timeout: 9000 }).catch(() => {});
+  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+};
+
+
 const ROWS = n => Array.from({ length: n }, (_, i) => ({
   id: 'hide' + i, img_path: 'p' + i + '.jpg', name: i ? null : 'tony',
   n_attempts: i, n_found: 0, created_at: '2026-08-1' + (2 - (i % 3)) + 'T10:0' + i + ':00Z',
@@ -146,8 +174,9 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
   const one = await page.evaluate(() => document.querySelectorAll('.chS').length);
   one === 1 ? ok('exactly one round is alive') : bad(`expected 1 round, got ${one}`);
 
-  /* The scroll drives the IntersectionObserver, which is what a swipe does on a phone. */
-  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  /* The scroll drives the IntersectionObserver, which is what a swipe does on a phone — and it
+     has to be earned now, see answerAndScroll. */
+  await answerAndScroll(page);
   await page.waitForTimeout(900);
   const still = await page.evaluate(() => document.querySelectorAll('.chS').length);
   still === 1 ? ok('scrolling to the next hide destroys the previous round (still 1)') : bad(`after a scroll there are ${still} rounds`);
@@ -266,7 +295,7 @@ console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
   await page.waitForTimeout(1200);
   /* A real second slide, so "later slides carry no timing" is an assertion and not a vacuous
      pass over an empty list. */
-  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  await answerAndScroll(page);
   await page.waitForTimeout(900);
 
   const paint = sent.find(e => e.event_type === 'feed_first_paint');
@@ -942,12 +971,13 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
     submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
     save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
 
-  /* Down one slide first, so there is something above the block as well as below it. */
-  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  /* Down one slide first, so there is something above the block as well as below it — and the
+     round on the way has to be answered before the feed will let go of it. */
+  await answerAndScroll(page);
   await page.waitForTimeout(900);
-  /* THE ONLY WAY OUT OF A FEED ROUND IS NOW THE TAP. "I give up" was removed from the feed
-     — the swipe is the exit there — so this ends the round the way a player does: press and
-     release on the stage, which commits the aim. */
+  /* THE TAP IS STILL THE ORDINARY WAY OUT OF A FEED ROUND. "I give up" is back on this surface
+     too (it is what keeps the lock from being a trap), but the buzz is what a player reaches
+     for: press and release on the stage, which commits the aim. */
   await page.evaluate(() => {
     const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
     if (!st) return;
