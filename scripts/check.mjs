@@ -1127,7 +1127,7 @@ try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-hint-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
     ? skipped('test-hint-dom.mjs', 'HINT TEST', out)
-    : ok('the hint is gated on the native capability and drawn where the server put it (node scripts/test-hint-dom.mjs)');
+    : ok('the hint is gated, drawn where the server put it, and still there when the round ends (node scripts/test-hint-dom.mjs)');
 } catch (e) {
   /* BOTH STREAMS, because the \u2717 lines are on NEITHER the one this used to read. test-hint-dom
      prints its passes with console.log and its failures with console.error, so filtering
