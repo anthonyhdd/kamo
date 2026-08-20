@@ -252,7 +252,33 @@
      Final stack: bar 0-5, wordmark 14-37 and buttons 10-54 (centred vs edges, no clash),
      pill 58-86, hint from 92. Constant offsets are safe — both clocks arm on every hide, so
      the pill is present whenever a hint is. */
-  .hint{position:absolute;top:calc(92px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
+  /* ⚠️ THIS IS THE APP'S ONLY ONE-LINE FEEDBACK CHANNEL, AND AT z-index 12 IT WAS UNDER
+     EVERYTHING. showHint() is what every "Reported. Thank you.", "Link copied", "Couldn't
+     load the replay", "Still going up — give it a second" and "That one is in the app" is
+     said with — and #hint sat below #revealC (14), #start (30), #shareSheet (58), #paywall
+     (60), the seek round (9000), the feed (9400) and the player card (9450). It was painted,
+     with the right text, underneath all of them. The one surface it worked on was the camera.
+     THE FILE ALREADY KNEW, FOR ONE CASE. camFail() routes camera errors into #heroMsg with
+     the note "#hint lives under the opaque #start overlay (z-index 30) → invisible on the
+     hero" — a workaround written for the hero and never generalised as five more full-screen
+     surfaces landed on top of it. Every message fired from any of them has been going into a
+     void, including the receipt on the moderation path and the upsell on the locked replay.
+     Verified by screenshot rather than by z-order arithmetic: the pill renders on the paint
+     screen and is absent, with the same text set and opacity 1, on the reveal, on a seek
+     round and on the feed.
+     9800 clears the player card and stays under the update banner (9990), which is a
+     persistent bar rather than a transient line. `fixed`, not `absolute`, because the feed
+     scrolls underneath it now.
+     ⚠️ AND THE z-index ALONE IS NOT ENOUGH, which is the part that makes this a two-line fix
+     instead of a one-line one. #hint ships inside #app, and #app is position:fixed — which in
+     WebKit and Blink creates a stacking context whatever its z-index is. So every z-index
+     inside #app is resolved WITHIN #app's layer, and the feed, the seek round and the player
+     card are appended to <body>, outside it: no number written here could ever have lifted
+     the pill above them. Raising it to 9800 fixed the reveal and the share sheet (both are
+     inside #app) and changed nothing on the three that matter most. The element is moved to
+     <body> at boot — see the appendChild beside hintEl — and the pwCover rule below follows
+     it there. Measured, not reasoned: the pill is screenshotted on each surface. */
+  .hint{position:fixed;top:calc(92px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:9800;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);
     padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
     box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:none;opacity:0;transition:opacity .3s;}
@@ -1017,7 +1043,12 @@
      rule put together. On the reveal the sheet is auto-presented, so this is not an edge case:
      it is what every single paywall opened from a finished round looked like. */
   #stage.pwCover .brand,#stage.pwCover #btnBack,#stage.pwCover #btnDone,#stage.pwCover #btnEdit,
-  #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
+  /* #hint IS ON <body> NOW (see .hint), so it is no longer a descendant of #stage and this
+     selector stopped reaching it. body.pwCover is set by the same line of openPaywall() that
+     sets the one on #stage — it already carries the share sheet's hide — so the pill goes
+     quiet under the full-bleed arm exactly as it did. */
+  body.pwCover #hint,
+  #stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
   #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar,
@@ -3077,6 +3108,18 @@ import * as THREE from './vendor/three.module.js';
 const $=s=>document.querySelector(s);
 const stage=$("#stage"), cam=$("#cam"), camView=$("#camView"), photo=$("#photo"), glCanvas=$("#gl"), board=$("#board");
 const startEl=$("#start"), hintEl=$("#hint"), shutterWrap=$("#shutterWrap"), flipBtn=$("#flip");
+/* OUT OF #app, ONTO <body> — the second half of the .hint fix, and the half without which the
+   z-index is decoration. #app is position:fixed, which creates a stacking context in every
+   engine this ships on, so anything inside it is painted as one layer beneath the surfaces
+   that append themselves to <body>: the seek round, the feed and the player card. showHint()
+   is the only channel those three have, and every line they sent through it — the report
+   receipt, the locked-replay upsell, "your hints are on the way" to somebody who had just
+   paid — was rendered underneath them.
+   Moved once at boot rather than re-parented per call: the element is a singleton, nothing
+   else reads it by position, and the markup keeps it next to the controls it belongs with.
+   Wrapped because a missing #hint must never be the thing that stops this module evaluating —
+   that is the whole app, for everyone, over a toast. */
+try{ if(hintEl && hintEl.parentElement!==document.body) document.body.appendChild(hintEl); }catch(e){}
 const wheelEl=$("#wheel"), wheelCenter=$("#wheelCenter"), flashEl=$("#flash"), busyEl=$("#busy");
 const ctx=board.getContext("2d",{willReadFrequently:true});
 let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
@@ -4197,8 +4240,23 @@ async function startCamera(auto){
   // whole funnel dies here and nothing downstream will explain why.
   track("camera_denied",{auto:!!auto,reason:n0||"unknown"});
   const n=lastErr&&lastErr.name;
-  // inside the native app the camera setting lives under Settings › KAMO, not Safari
-  const where = window.ReactNativeWebView ? "Settings › KAMO › Camera" : "Settings › Safari › Camera";
+  /* WHERE THE SWITCH ACTUALLY IS, FOR THE PERSON READING IT.
+     This was two branches: inside the app, "Settings › KAMO › Camera"; everywhere else,
+     "Settings › Safari › Camera". The second one is right for iOS Safari and wrong for every
+     other browser that reaches this file — and the mirror exists precisely so that a friend
+     WITHOUT the app can open a challenge link, which means Android Chrome, desktop Chrome and
+     Firefox all land here. Telling them to open Settings › Safari is directions to an app
+     they do not have, on the one screen whose entire job is to unblock them. Same family as
+     the hero note that said "iOS will ask for camera access" to everybody.
+     Named only where it can be named truthfully. Every other browser keeps its own words for
+     this and there is no way to name them all, so the sentence says the true general thing
+     instead of a specific false one — and the photo path, which always works, is one line
+     below it either way. CriOS/FxiOS/EdgiOS are Chrome, Firefox and Edge on iOS: WebKit
+     underneath, but their permission lives under their own name in Settings, not Safari's. */
+  const isSafari = IS_IOS && !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Android/i.test(navigator.userAgent||"");
+  const where = window.ReactNativeWebView ? "Settings › KAMO › Camera"
+              : isSafari ? "Settings › Safari › Camera"
+              : "your browser's site settings";
   // a hang (TimeoutError) on iOS almost always means the permission was denied
   const blocked = (n==="NotAllowedError"||n==="TimeoutError");
   /* One line each. These sit under two buttons that already say what to do, so the old
@@ -8083,6 +8141,27 @@ function trackCarried(kind,props){
   /* eventsV2 (1.0.9+): the wrapper allow-lists the real names, so send them. Everything else
      — with or without caps — is a build that filters them, and takes the dedicated carrier. */
   const name = caps && caps.eventsV2 ? kind : CARRIER_102[kind];
+  /* TWO GUARDS, AND BOTH ARE THE SAME BUG: one action must produce one event NAME.
+     Every call site of this function fires `track(kind)` on the line above it — that is the
+     whole point, the direct name for anyone who can receive it and a carrier for anyone who
+     cannot. So this function must send only what that line could NOT deliver.
+
+     ① eventsV2 resolves `name` back to `kind`, and then this line sent the same name a
+     second time. Not theory: on 2026-08-19 `purchase_initiated` split EXACTLY 38 without
+     `carrier_for` and 38 with, every day for a week — 90 buy taps on 08-17 were read as 180,
+     and `round_finished` was 4 311 for ~2 200 rounds. A factor of two on the numerator of
+     every checkout rate, on the fleet that is now 99% of users. 5c-bis did not catch it: it
+     forbids a CARRIER name from doubling as a real event, and this doubles the REAL name.
+
+     ② No wrapper at all means no allow-list to dodge — `track(kind)` already went straight to
+     Amplitude through chWebTrack. Sending the carrier too put browser rounds inside
+     `reveal_previewed`, which is supposed to mean "a round from a build that cannot say
+     round_finished". ReactNativeWebView rather than nativeCaps on purpose, and against the
+     rule in CLAUDE.md: that rule is about gating FEATURES, where a wrapper being present says
+     nothing about whether it implements one. The question here is "is there a wrapper at
+     all", which is the same question `host` answers two hundred lines below, the same way. */
+  if(name===kind) return;
+  if(!window.ReactNativeWebView) return;
   track(name, Object.assign({carrier_for:kind},props||{}));
 }
 /* EVENTS THE WRAPPER CANNOT CARRY, SENT THE OTHER WAY INSTEAD OF BEING DROPPED.
@@ -11993,6 +12072,21 @@ function chRemember(id,drop){
    nothing on screen is waiting. The offers below still fire on the tap, because they are about
    the person in front of you rather than about the row in the database. */
 async function chMarkSent(){
+  /* ⚠️ ONCE PER HIDE, NOT ONCE PER TAP — and the difference lands in the one number the loop
+     is judged by. Nothing guarded this, so a second tap on "Send to a friend" fired a second
+     mark_hide_sent, a second `hide_sent`, a second pwFirstOffer and a second armResultsPing.
+     Measured with three fast taps: one create_hide, three mark_hide_sent.
+     A second tap is not a mistake and must still SEND — sending the same hide to two people
+     is the loop working, and share_target_tapped still counts every tap, which is what that
+     event is for. What must not double is the claim that a hide was sent, because
+     hide_published → hide_sent is the conversion this product steers by and it is already
+     over-counted by the share of people who open iOS's sheet and back out (see the note at
+     the call site). Adding an unbounded second source of inflation on top of a known bounded
+     one is how a rate stops meaning anything.
+     KEYED ON THE ROUND, not on the id: a bare invite has no id at all and would otherwise
+     re-stamp forever. chResetRound() bumps chRound, so the next hide starts sendable. */
+  if(chMarkSent._round===chRound) return;
+  chMarkSent._round=chRound;
   let id=chId;
   chMarkSent._had=!!id;
   if(!id){ try{ id=await chAwaitId(4000); }catch(e){} }
@@ -13420,7 +13514,16 @@ function chSeek(hideId,opts){
        same frame would compete with it. */
     +".chRun.pb{animation:chRunPb .6s ease-out;}"
     +"@keyframes chRunPb{0%{transform:scale(1)}40%{transform:scale(1.16)}100%{transform:scale(1)}}"
-    +".chQuit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--safe-b));z-index:5;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.72);font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
+    /* ⚠️ LEFT, NOT CENTRED, AND THAT IS THE HINT PILL'S DOING. Both live on the same row —
+       bottom 16px + safe-area — and the hint's widest state is the OFFER, which is the longest
+       sentence the button ever holds. Measured at 390px: the offer occupied x 162-378 and this
+       button 151-239, a 77px overlap, with the hint painting on top because it is appended
+       second at the same z-index. So the one screen where the pack is sold is also the one
+       screen where the way out is buried under the thing selling it.
+       Shortening the label alone would have left this one bad storefront away from breaking
+       again — a localized price is appended to that label the moment a build sends one. Opposite
+       corners cannot collide however long either label grows, and the suite asserts the gap. */
+    +".chQuit{position:absolute;left:12px;bottom:calc(16px + var(--safe-b));z-index:5;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.72);font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
     /* Same pill as the give-up button, opposite corner, mint because it is the only control
        on this screen that helps rather than ends. */
     /* KAMO'S TITLE FACE, NOT THE BODY ONE. Every control the player is meant to reach for —
@@ -13430,6 +13533,15 @@ function chSeek(hideId,opts){
     +".chHint{position:absolute;right:12px;bottom:calc(16px + var(--safe-b));z-index:5;min-width:88px;max-width:calc(100% - 24px);text-align:center;line-height:1.25;background:rgba(4,6,10,.62);border:1px solid rgba(95,230,164,.42);color:var(--mint);font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.2px;padding:10px 16px;border-radius:999px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s ease;}"
     +".chHint:active{transform:scale(.96);}"
     +".chHint[disabled]{opacity:.45;}"
+    /* ⚠️ 45% IS FOR A CONTROL THAT DIED, NOT FOR THE RECEIPT OF SOMETHING BOUGHT. A spend off a
+       stocked wallet left this button disabled and dimmed while reading "3 Hints available" —
+       the only place in the app that states what a purchase is still worth, rendered as the
+       greyed-out husk of a broken control. Somebody who has paid should never have to wonder
+       whether their hints survived; that reading is the exact opposite of wanting another.
+       It IS untappable — one hint per hide, and the server answers `already` to a second ask —
+       so `disabled` stays, and only the dimming goes. Three classes so it beats the attribute
+       rule above whatever the source order. */
+    +".chHint.spent,.chHint.spent[disabled]{opacity:1;font-size:13.5px;background:rgba(4,6,10,.5);border-color:rgba(95,230,164,.3);color:rgba(95,230,164,.88);box-shadow:0 4px 14px rgba(0,0,0,.28);}"
     /* THE WAIT IS A SPINNER, NOT AN ELLIPSIS. Three dots that never move are indistinguishable
        from a button that has died, and this one can be waiting on Apple's sheet or on the
        RevenueCat webhook — up to nine seconds on the credit poll. min-width above keeps the
@@ -13447,7 +13559,43 @@ function chSeek(hideId,opts){
        itself. Sized off the frame's own width and height for exactly that reason.
        Lives in FRAME coordinates like .chMark, so it rides the zoom instead of sliding off
        the picture the moment the player pinches in to look closer. */
-    +".chHintZone{position:absolute;border-radius:50%;border:2px dashed var(--mint);background:rgba(95,230,164,.10);pointer-events:none;transform:translate(-50%,-50%);animation:chPop .45s ease-out forwards;}"
+    /* ⚠️ IT RAN chPop, WHICH ENDS AT opacity:0 — SO THE HINT WAS VISIBLE FOR 0.45s AND GONE.
+       chPop is the flash the buzz mark uses on its way to .stay; borrowing it here meant the
+       one thing a player pays for erased itself half a second after it arrived, on a hide they
+       then had to search without it. Measured, not read off the stylesheet: computed opacity
+       0.61 at 100ms, 0.10 at 300ms, 0 from 450ms and 0 for the rest of the round.
+       AND IT POINTED AT THE WRONG PLACE WHILE IT LASTED. chPop animates `transform`, which
+       erases the `translate(-50%,-50%)` that centres this element on the region — so for its
+       whole life the ellipse hung down and right of the answer by half its own size. Every
+       keyframe below therefore repeats the translate, which is the same lesson chHold already
+       carries about box-shadow: an animated property wins over the rule it animates.
+       THE ENTRY IS THE LOCK. Scaling in from 2.1 through a slight undershoot reads as a sight
+       closing on the region rather than a decoration appearing — the beat that says the search
+       area just collapsed. Then .set takes over and the ring breathes for the rest of the
+       round, which is what keeps it findable in peripheral vision while the eyes are on the
+       photo, and .calm freezes it once the buzz is spent so the celebration owns the motion. */
+    +".chHintZone{position:absolute;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);"
+    /* Legibility is not the colour, it is the two dark hairlines around it — .chMark learned
+       this from a founder screenshot of a mint ring dissolving into a pale wall, and a hint
+       drawn over an unknown photograph has exactly the same problem. */
+    +"border:2px dashed var(--mint);background:rgba(95,230,164,.10);"
+    +"box-shadow:0 0 0 1.5px rgba(4,6,10,.5),inset 0 0 0 1.5px rgba(4,6,10,.42),0 0 24px rgba(95,230,164,.26);"
+    +"animation:chZoneIn .52s cubic-bezier(.2,.75,.3,1) both;}"
+    +"@keyframes chZoneIn{0%{transform:translate(-50%,-50%) scale(2.1);opacity:0}"
+    +"58%{transform:translate(-50%,-50%) scale(.95);opacity:1}"
+    +"100%{transform:translate(-50%,-50%) scale(1);opacity:1}}"
+    +".chHintZone.set{animation:chZoneHold 2.6s ease-in-out infinite;}"
+    +"@keyframes chZoneHold{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.95}"
+    +"50%{transform:translate(-50%,-50%) scale(1.035);opacity:.72}}"
+    /* Last of the three on purpose: .set and .calm are both two classes, so source order is
+       what makes the freeze win on an element carrying both. */
+    +".chHintZone.calm{animation:none;opacity:.8;}"
+    /* THE ONE SECOND THAT PROVES WHAT WAS BOUGHT. Everything outside the region darkens, then
+       lifts — so the player SEES the search collapse instead of being handed a ring and left
+       to infer it. Self-removing, pointer-events:none: the buzz must stay live through it, and
+       nothing about a round may depend on this element existing. */
+    +".chZoneDim{position:absolute;inset:0;pointer-events:none;opacity:0;animation:chZoneDim 1.15s ease-out forwards;}"
+    +"@keyframes chZoneDim{0%{opacity:0}20%{opacity:1}62%{opacity:1}100%{opacity:0}}"
     /* The reticle: a ring with a mint centre, held ABOVE the finger so the aim point is
        always visible. pointer-events:none — it is a sight, not a control. */
     +".chRet{position:fixed;z-index:6;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);pointer-events:none;}"
@@ -14142,10 +14290,36 @@ function chSeek(hideId,opts){
     function drawHintZone(reg){
       if(!reg||hintZone) return;
       const w2=img.offsetWidth, h2=img.offsetHeight;
+      /* THE PHOTO'S OWN FRAME, not the first one in the document. $$() is document-wide and the
+         feed mounts several rounds at once, so on any slide but the first it would hang the
+         answer to THIS hide over somebody else's picture. `img` is this round's closure. */
+      const fr=img.parentElement||$$("chFrame");
+      const rx=reg.r*w2, ry=reg.r*h2, cx=reg.cx*w2, cy=reg.cy*h2;
       hintZone=document.createElement("div"); hintZone.className="chHintZone";
-      hintZone.style.left=(reg.cx*w2)+"px";  hintZone.style.top=(reg.cy*h2)+"px";
-      hintZone.style.width=(2*reg.r*w2)+"px"; hintZone.style.height=(2*reg.r*h2)+"px";
-      $$("chFrame").appendChild(hintZone);
+      hintZone.style.left=cx+"px";  hintZone.style.top=cy+"px";
+      hintZone.style.width=(2*rx)+"px"; hintZone.style.height=(2*ry)+"px";
+      fr.appendChild(hintZone);
+      /* Handed to .set once the entry has landed, because the two animations write the same
+         two properties and a `both` fill plus an infinite loop on one element is a fight over
+         which one is filling at any instant. Sequenced instead of layered: one owner at a
+         time, which is also why the freeze below is a third class rather than a cancel. */
+      setTimeout(()=>{ try{ if(hintZone&&!hintZone.classList.contains("calm")) hintZone.classList.add("set"); }catch(_){} },560);
+      /* WHAT THE HINT ACTUALLY DID, SHOWN RATHER THAN IMPLIED. A ring appearing on a photograph
+         is a small event; the whole rest of the photograph going dark around it is the size of
+         what was just bought. It lasts about a second and lifts on its own — a permanent mask
+         would be a different game, and would hide the half of the frame the player still wants
+         to sweep before committing their one tap.
+         An ELLIPSE, for the same reason the ring is one: the server's region is normalised per
+         axis, so a round hole would darken ground the answer can legally sit on. */
+      const dim=document.createElement("div"); dim.className="chZoneDim";
+      dim.style.background="radial-gradient(ellipse "+Math.round(rx*1.06)+"px "+Math.round(ry*1.06)+"px at "+Math.round(cx)+"px "+Math.round(cy)+"px,rgba(4,6,10,0) 62%,rgba(4,6,10,.66) 100%)";
+      /* UNDER THE RING, not over it. Appended after, the mask washes over the one mint edge
+         the player is meant to read and the ring comes back grey for the second the beat
+         lasts — the ring sits exactly on the gradient's falloff, which is the darkest part of
+         the mask. In front of it instead, mint sits on near-black and is at its most legible
+         precisely while the photo is at its least. */
+      fr.insertBefore(dim,hintZone);
+      setTimeout(()=>{ try{ dim.remove(); }catch(_){} },1250);
       buzzHaptic(10);
     }
 
@@ -14176,7 +14350,7 @@ function chSeek(hideId,opts){
            Hint once sees the zone appear for nothing and never meets the sheet at all.
            This is also the only moment the pack is worth anything to a real player — the hint
            they just spent has proved on this very screen what it buys. */
-        if(r.balance>0){ hintBtn.textContent=hintLabelFor(r.balance,false); hintBtn.disabled=true; }
+        if(r.balance>0) markSpent(r.balance);
         else offerPackAfterUse();
         return;
       }
@@ -14194,6 +14368,10 @@ function chSeek(hideId,opts){
        already spent, "Hint" is a lie: the zone is on screen and another tap could only redraw
        it. Both cancel paths read this instead of assuming. */
     let hintIdleLabel="Hint";
+    /* Every path that hands the button back goes through here, so the receipt styling can
+       never survive onto a live offer — a mint "✓ … left" wired to Apple's sheet would be the
+       worst sentence on this screen. */
+    const hintIdle=()=>{ hintBtn.classList.remove("spent"); hintBtn.textContent=hintIdleLabel; };
 
     /* NO PRICE ON THIS LABEL, AND THAT IS DELIBERATE. The page can only state a price that
        came from StoreKit — setPrices() carries `weekly` and `lifetime` and nothing else, so
@@ -14206,7 +14384,7 @@ function chSeek(hideId,opts){
     function offerPackAfterUse(){
       hintEmpty=true;
       hintIdleLabel=hintLabelFor(0,false);
-      hintBtn.textContent=hintIdleLabel;
+      hintIdle();
       hintBtn.disabled=false;
       /* Rewired, not re-entrant: takeHint() would bail on `hintZone` anyway, and what this
          button means has genuinely changed. */
@@ -14220,10 +14398,31 @@ function chSeek(hideId,opts){
        told a pack existed, what was in it or what it cost. Three states, three sentences,
        and the price appears the moment a build sends it (see hintPackPrice). */
     const HINT_PACK_SIZE=5;
+    /* THE FREE ONE IS NAMED, and that is the whole first tap. It read "1 Hint", which is a
+       quantity and says nothing about cost — so the only thing this product gives away for
+       nothing was indistinguishable, on the button, from the thing it charges for. It is also
+       the reason to come back tomorrow, and a daily allowance nobody is told about is a daily
+       allowance nobody returns for.
+       A PLAYER WHO OWNS A PACK STILL SEES THAT THEY OWN IT. free wins the verb — it is the
+       next unit that will actually be spent — and the balance rides along after it, because
+       "Free hint" alone on a wallet of four is the same silence the flat "Hint" was.
+       SHORT, and that is structural rather than taste: this pill and the give-up button share
+       the bottom row, and the offer state grows again the moment a build sends a localized
+       price. See the note on .chQuit for the 77px overlap the old sentence produced. */
+    const hintLeftLabel=(bal)=>bal+(bal===1?" hint":" hints")+" left";
     const hintLabelFor=(bal,free)=>{
-      if(free) return "1 Hint";
-      if(bal>0) return bal+(bal===1?" Hint":" Hints")+" available";
-      return "No more hints. Get "+HINT_PACK_SIZE+" Hints"+(hintPackPrice?" for "+hintPackPrice:"");
+      if(free) return bal>0 ? "Free hint · "+bal+" left" : "Free hint";
+      if(bal>0) return "Hint · "+bal+" left";
+      return "Get "+HINT_PACK_SIZE+" hints"+(hintPackPrice?" · "+hintPackPrice:"");
+    };
+    /* THE RECEIPT, NOT A CONTROL. Once this hide's hint is drawn the button can never do
+       anything again — the server answers `already` to a second ask — so it stops being
+       phrased as an offer and starts being phrased as what is left in the wallet. Paired with
+       .chHint.spent, which is what stops a paid balance from being rendered at 45% opacity. */
+    const markSpent=(bal)=>{
+      hintBtn.textContent="✓ "+hintLeftLabel(bal);
+      hintBtn.classList.add("spent");
+      hintBtn.disabled=true;
     };
     /* Set whenever the label above says the wallet is empty, and read by the tap handler:
        in that state the button IS the offer, so it must not spend a round trip asking the
@@ -14232,7 +14431,7 @@ function chSeek(hideId,opts){
     const setHintLabel=(bal,free)=>{
       hintEmpty=!free&&!(bal>0);
       hintIdleLabel=hintLabelFor(bal,free);
-      if(!hintZone&&!hintPending&&!hintBusy) hintBtn.textContent=hintIdleLabel;
+      if(!hintZone&&!hintPending&&!hintBusy) hintIdle();
     };
 
     /* THE ONE PLACE THE WAIT IS EXPRESSED. Both slow paths — Apple's sheet and the credit
@@ -14262,7 +14461,7 @@ function chSeek(hideId,opts){
         hintWait(false); hintBtn.disabled=false;
         /* A retry that works must not carry the last failure's label under the spinner for the
            45 seconds it takes the cancel timer to put the real one back. */
-        if(ready&&hintClaimTries) hintBtn.textContent=hintIdleLabel;
+        if(ready&&hintClaimTries) hintIdle();
         /* ⚠️ IT SAID "Hint used", AND ON THE TAP THAT MATTERS THAT IS A LIE.
            Most taps that reach this branch come from an EMPTY wallet — a button reading "No
            more hints. Get 5 Hints", which is an offer to BUY. The player accepted the offer
@@ -14309,7 +14508,7 @@ function chSeek(hideId,opts){
          opens it on a hide whose zone is already drawn, and that spelling would have left the
          button stuck on "…" forever for anyone who cancelled Apple's sheet there. hintPending
          is the real condition anyway: the success path clears it before it draws. */
-      setTimeout(()=>{ if(hintPending){ hintPending=false; hintWait(false); hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel; } },45000);
+      setTimeout(()=>{ if(hintPending){ hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle(); } },45000);
     }
 
     /* CALLED BY NATIVE AFTER A SUCCESSFUL PACK PURCHASE, and it polls rather than trusting
@@ -14349,8 +14548,11 @@ function chSeek(hideId,opts){
           if(r&&r.region&&(r.used!=="already"||r.balance>hintBalAtBuy)){
             hintPending=false; hintWait(false);
             drawHintZone(r.region);
-            hintBtn.textContent=r.balance>0?hintLabelFor(r.balance,false):"Hint used";
-            hintBtn.disabled=true;
+            /* "Hint used" was the fourth state nobody counted, and it is wrong here for the
+               same reason it was wrong on a refused stamp: this branch is reached by somebody
+               who has just PAID, and the balance is what they are owed a sight of. A credit
+               that lands at zero is a webhook that has not finished, not a spend. */
+            if(r.balance>0) markSpent(r.balance); else { hintBtn.textContent="✓ Hint revealed"; hintBtn.classList.add("spent"); hintBtn.disabled=true; }
             /* NOT COUNTED WHEN THE SERVER SAYS `already`. Bought from the post-use offer, this
                hide's hint was spent a moment ago and hint_spend returns the same zone without
                touching the wallet — so the pack lands intact, and a second hint_used here would
@@ -14387,7 +14589,7 @@ function chSeek(hideId,opts){
        mid-poll must not hand back a control that is about to say "5 left". */
     window.__kamoHintBuyEnded=()=>{
       if(!hintPending||hintPolling) return;
-      hintPending=false; hintWait(false); hintBtn.disabled=false; hintBtn.textContent=hintIdleLabel;
+      hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle();
     };
 
     hintBtn.onclick=()=>{ haptic(8); if(hintEmpty) offerHintPack(); else takeHint(); };
@@ -14508,6 +14710,14 @@ function chSeek(hideId,opts){
       quit.remove();
       /* The round is decided; a hint now would sell help for a shot already spent. */
       try{ hintBtn.remove(); }catch(_){}
+      /* AND THE ZONE STOPS BREATHING, BUT STAYS DRAWN. Motion here would compete with the
+         celebration on a find — chCelebrate, the confetti and the held mark all land on this
+         frame — so the pulse is frozen rather than the ring removed.
+         IT STAYS BECAUSE OF THE MISS. The flip against the revealed frame is where a player
+         sees that the kamo was inside the ring they paid for and their one tap was not, which
+         is the most persuasive thing this product ever says about hints. Deleting it here
+         would delete exactly that. */
+      try{ if(hintZone) hintZone.classList.add("calm"); }catch(_){}
       const r=img.getBoundingClientRect();
       const x=Math.max(0,Math.min(1,(sx-r.left)/r.width)), y=Math.max(0,Math.min(1,(sy-r.top)/r.height));
       trace.end={ms:ms,x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000};
@@ -15079,12 +15289,30 @@ function chSeek(hideId,opts){
            said out loud. */
         const who=(h&&h.name)?String(h.name):"";
         if(who) $$("chReh").textContent="Challenge @"+who+" back"; }
-      if($$("chRep")) $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
+      /* ⚠️ THE RECEIPT WAITS FOR THE ANSWER NOW — see the feed bar's ⚑ for the whole argument.
+         This printed "Reported. Thank you." on the same tick it fired the call, with a
+         swallowed catch, so a report that never left the device read exactly like one that
+         landed. On a link round there is no feed to drop the photo out of, which makes it the
+         easier of the two to get right: the button holds, and if the call fails it comes back
+         so the report can actually be made. */
+      if($$("chRep")) $$("chRep").onclick=async()=>{
+        const rb=$$("chRep"); if(!rb||rb.disabled) return;
+        const label=rb.textContent;
+        rb.disabled=true; rb.textContent="Reporting…";
+        let sent=false;
+        try{ await chRpc("report_hide",{p_id:HID}); sent=true; }catch(e){ sent=false; }
+        track("seek_reported",FEED?{src:"feed",sent:sent}:{sent:sent});
+        if(!sent){
+          rb.disabled=false; rb.textContent=label;
+          showHint("Couldn't send that report — check your connection and try again",4000);
+          return;
+        }
         /* Out of THIS device's feed straight away, not only out of everyone else's on the
            next page. n_reported=1 already excludes it server-side (see feed_page), but the
            page the reporter is holding was fetched before they tapped. */
         if(OPT.onReported) OPT.onReported(HID);
-        $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
+        const f=$$("chFoot");
+        if(f) f.innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
       /* THE BLOCK IS THE SERVER'S ANSWER, NOT THIS SCREEN'S GUESS. block_author() turns the
          one thing this device legitimately holds — the id of a hide it was served — into a
          tag for whoever made it. The tag is what gets stored and what every later feed_page
@@ -15096,9 +15324,18 @@ function chSeek(hideId,opts){
       if($$("chBlk")) $$("chBlk").onclick=()=>{
         const b=$$("chBlk"); if(b.disabled) return;
         b.disabled=true; b.textContent="Blocking…";
-        const done=(msg)=>{ const f=$$("chFoot"); if(f) f.innerHTML=
-          '<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px"></div></div>';
-          const d=f&&f.querySelector("div>div"); if(d) d.textContent=msg; };
+        /* ⚠️ THIS WROTE INTO A CARD THAT NO LONGER EXISTED, so neither sentence was ever read.
+           Both branches call OPT.onBlocked first, and in the feed — the only place this button
+           is minted — that is blockDrop(), which destroys the round and removes its slide. The
+           write then landed on whatever $$("chFoot") resolved to next: an empty foot on a
+           freshly mounted round, or nothing at all. Measured after a stored block: every
+           #chFoot on the page empty, no message anywhere. The careful distinction between
+           "Blocked. You won't see their hides again." and "Hidden. This one won't come back."
+           — the entire point of the two branches below — was invisible either way, and the one
+           time it did find a foot it would have stamped a verdict onto a stranger's round.
+           showHint() outlives the slide because it is not on it. It also had to be lifted out
+           of #app before it could be seen over the feed at all — see .hint. */
+        const done=(msg)=>showHint(msg,4000);
         chRpc("block_author",{p_id:HID}).then(tag=>{
           const kept=kfAddBlock(tag);
           track("seek_blocked",TP({tagged:!!tag,stored:kept,n:kfBlocked().length}));
@@ -16959,13 +17196,31 @@ function chFeed(opts){
     if(f) f.style.display=kfOwnSlide()?"none":""; }
   /* Acts on whatever slide is live. Reports and drops in one move — the reporter should not
      have to look at it again while the page they are holding catches up. */
-  root.querySelector("#kfFlag").onclick=()=>{
+  /* ⚠️ "Reported. Thank you." USED TO BE PRINTED WHETHER OR NOT ANYTHING WAS REPORTED.
+     The call was fire-and-forget — `.catch(()=>{})` and then the thank-you on the next line —
+     so an offline moment, an RLS refusal or a server error produced exactly the same screen as
+     a report that landed: the photo left this feed and the viewer was thanked for an action
+     that never happened. Verified by aborting report_hide at the network: slide dropped,
+     "Reported. Thank you.", nothing sent.
+     That is the worst shape a moderation path can have. Apple requires this control to exist
+     (guideline 1.2), the person using it is telling us something is wrong, and a false receipt
+     means they stop looking at the photo AND we never hear about it. The block two hundred
+     lines up already states the rule this was breaking: "That is not an error and must not be
+     dressed as a success — the photo still leaves this feed, and the copy says only what
+     actually happened."
+     So: the photo goes immediately, because the viewer asked for that much and it costs
+     nothing; and the sentence waits for the answer. `sent` rides on the event too — a report
+     path that starts failing should be visible as a number, not as silence. */
+  root.querySelector("#kfFlag").onclick=async()=>{
     const s0=S.slides[S.active]; if(!s0) return;
+    const id=s0.row.id;
     haptic(10);
-    try{ chRpc("report_hide",{p_id:s0.row.id}).catch(()=>{}); }catch(e){}
-    track("seek_reported",{src:"feed_bar"});
-    drop(s0.row.id);
-    showHint("Reported. Thank you.");
+    drop(id);
+    let sent=false;
+    try{ await chRpc("report_hide",{p_id:id}); sent=true; }catch(e){ sent=false; }
+    track("seek_reported",{src:"feed_bar",sent:sent});
+    showHint(sent ? "Reported. Thank you."
+                  : "Hidden here — but the report didn't send. Check your connection.",4000);
   };
 
   function paint(){

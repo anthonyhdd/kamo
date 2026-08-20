@@ -152,7 +152,7 @@ console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARA
   const p = await hunt({ caps: { hints: true }, uid: '',
                          spend: { used: 'none', reason: 'empty', balance: 0, free_available: false } });
   const b0 = await btn(p);
-  b0 && b0.text === '1 Hint'
+  b0 && b0.text === 'Free hint'
     ? ok('the free hint is offered with no RevenueCat id — the wallet falls back to the device')
     : bad(`no button without a user id: ${JSON.stringify(b0)} — the unidentified device is the bug, not the guard`);
   await p.click('#chHint');
@@ -177,7 +177,7 @@ console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARA
     : bad(`a purchase left the page with no claim path: ${JSON.stringify(posted)}`);
   /* ⚠️ AND WHAT IT SAYS WHILE REFUSING, WHICH WAS A LIE ON THE TAP THAT MATTERS MOST.
      This retired the button reading "Hint used" — on a wallet that was EMPTY, i.e. after a
-     button that read "No more hints. Get 5 Hints". The player accepted an offer to buy and
+     button that reads "Get 5 hints". The player accepted an offer to buy and
      was told they had already spent something they never had, on the only paid door in this
      app, which then greyed out and vanished. Refusing the sale is right; describing it as a
      spend is not, and there is no way back from it.
@@ -209,7 +209,7 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   const p = await hunt({ caps: { hints: true }, uid: 'user-1',
                          spend: { used: 'free', region: REG, balance: 0, free_available: false } });
   const b = await btn(p);
-  b && b.text === '1 Hint' && !b.disabled ? ok('the hint button is rendered and tappable') : bad(`button is ${JSON.stringify(b)}`);
+  b && b.text === 'Free hint' && !b.disabled ? ok('the hint button is rendered and tappable') : bad(`button is ${JSON.stringify(b)}`);
 
   await p.click('#chHint');
   await p.waitForTimeout(400);
@@ -245,7 +245,7 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
      all, since hint_spend spends the free daily first: one tap reveals the zone for nothing
      and the sheet is never reached at all. PR #295. */
   const b2 = await btn(p);
-  b2 && b2.text === 'No more hints. Get 5 Hints' && !b2.disabled
+  b2 && b2.text === 'Get 5 hints' && !b2.disabled
     ? ok('the spent button becomes the pack offer, still tappable')
     : bad(`button after use: ${JSON.stringify(b2)}`);
   /* AND IT QUOTES NO PRICE. setPrices() carries `weekly` and `lifetime` and nothing else, so
@@ -273,7 +273,7 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   await p.click('#chHint');
   await p.waitForTimeout(400);
   const b = await btn(p);
-  b && b.text === '3 Hints available' && b.disabled
+  b && b.text === '✓ 3 hints left' && b.disabled
     ? ok('a spend off a stocked wallet locks the button and states the balance')
     : bad(`button after a stocked spend: ${JSON.stringify(b)}`);
   const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
@@ -317,7 +317,7 @@ console.log('\n④ AN EMPTY WALLET IS THE ONLY THING THAT OPENS STOREKIT');
   await p.waitForTimeout(600);
   const after = await btn(p);
   const zone = await p.evaluate(() => !!document.querySelector('.chHintZone'));
-  zone && after && after.text === '4 Hints available'
+  zone && after && after.text === '✓ 4 hints left'
     ? ok('hintsPurchased() polls the wallet, draws the zone and shows what is left')
     : bad(`after purchase: zone=${zone} button=${JSON.stringify(after)}`);
   await p.close();
@@ -357,7 +357,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
                    { used: 'already', via: 'free', region: REG, balance: 5, free_available: false });
   await p.waitForTimeout(2200);
   const after = await btn(p);
-  after && after.text === '5 Hints available'
+  after && after.text === '✓ 5 hints left'
     ? ok('and states the pack the moment the wallet grows')
     : bad(`after the credit the button reads ${JSON.stringify(after)}`);
   await p.close();
@@ -410,7 +410,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
     await p.evaluate(fire);
     await p.waitForTimeout(200);
     const after = await btn(p);
-    after && after.text === 'No more hints. Get 5 Hints' && !after.disabled
+    after && after.text === 'Get 5 hints' && !after.disabled
       ? ok(`${name} hands the offer back at once`)
       : bad(`after ${name} the button is ${JSON.stringify(after)} — it will sit there for 45s`);
     await p.close();
