@@ -252,7 +252,33 @@
      Final stack: bar 0-5, wordmark 14-37 and buttons 10-54 (centred vs edges, no clash),
      pill 58-86, hint from 92. Constant offsets are safe — both clocks arm on every hide, so
      the pill is present whenever a hint is. */
-  .hint{position:absolute;top:calc(92px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:12;
+  /* ⚠️ THIS IS THE APP'S ONLY ONE-LINE FEEDBACK CHANNEL, AND AT z-index 12 IT WAS UNDER
+     EVERYTHING. showHint() is what every "Reported. Thank you.", "Link copied", "Couldn't
+     load the replay", "Still going up — give it a second" and "That one is in the app" is
+     said with — and #hint sat below #revealC (14), #start (30), #shareSheet (58), #paywall
+     (60), the seek round (9000), the feed (9400) and the player card (9450). It was painted,
+     with the right text, underneath all of them. The one surface it worked on was the camera.
+     THE FILE ALREADY KNEW, FOR ONE CASE. camFail() routes camera errors into #heroMsg with
+     the note "#hint lives under the opaque #start overlay (z-index 30) → invisible on the
+     hero" — a workaround written for the hero and never generalised as five more full-screen
+     surfaces landed on top of it. Every message fired from any of them has been going into a
+     void, including the receipt on the moderation path and the upsell on the locked replay.
+     Verified by screenshot rather than by z-order arithmetic: the pill renders on the paint
+     screen and is absent, with the same text set and opacity 1, on the reveal, on a seek
+     round and on the feed.
+     9800 clears the player card and stays under the update banner (9990), which is a
+     persistent bar rather than a transient line. `fixed`, not `absolute`, because the feed
+     scrolls underneath it now.
+     ⚠️ AND THE z-index ALONE IS NOT ENOUGH, which is the part that makes this a two-line fix
+     instead of a one-line one. #hint ships inside #app, and #app is position:fixed — which in
+     WebKit and Blink creates a stacking context whatever its z-index is. So every z-index
+     inside #app is resolved WITHIN #app's layer, and the feed, the seek round and the player
+     card are appended to <body>, outside it: no number written here could ever have lifted
+     the pill above them. Raising it to 9800 fixed the reveal and the share sheet (both are
+     inside #app) and changed nothing on the three that matter most. The element is moved to
+     <body> at boot — see the appendChild beside hintEl — and the pwCover rule below follows
+     it there. Measured, not reasoned: the pill is screenshotted on each surface. */
+  .hint{position:fixed;top:calc(92px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:9800;
     background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--stroke);
     padding:8px 15px;border-radius:999px;font-size:12.5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
     box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:none;opacity:0;transition:opacity .3s;}
@@ -1017,7 +1043,12 @@
      rule put together. On the reveal the sheet is auto-presented, so this is not an edge case:
      it is what every single paywall opened from a finished round looked like. */
   #stage.pwCover .brand,#stage.pwCover #btnBack,#stage.pwCover #btnDone,#stage.pwCover #btnEdit,
-  #stage.pwCover #hint,#stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
+  /* #hint IS ON <body> NOW (see .hint), so it is no longer a descendant of #stage and this
+     selector stopped reaching it. body.pwCover is set by the same line of openPaywall() that
+     sets the one on #stage — it already carries the share sheet's hide — so the pill goes
+     quiet under the full-bleed arm exactly as it did. */
+  body.pwCover #hint,
+  #stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
   #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar,
@@ -3077,6 +3108,18 @@ import * as THREE from './vendor/three.module.js';
 const $=s=>document.querySelector(s);
 const stage=$("#stage"), cam=$("#cam"), camView=$("#camView"), photo=$("#photo"), glCanvas=$("#gl"), board=$("#board");
 const startEl=$("#start"), hintEl=$("#hint"), shutterWrap=$("#shutterWrap"), flipBtn=$("#flip");
+/* OUT OF #app, ONTO <body> — the second half of the .hint fix, and the half without which the
+   z-index is decoration. #app is position:fixed, which creates a stacking context in every
+   engine this ships on, so anything inside it is painted as one layer beneath the surfaces
+   that append themselves to <body>: the seek round, the feed and the player card. showHint()
+   is the only channel those three have, and every line they sent through it — the report
+   receipt, the locked-replay upsell, "your hints are on the way" to somebody who had just
+   paid — was rendered underneath them.
+   Moved once at boot rather than re-parented per call: the element is a singleton, nothing
+   else reads it by position, and the markup keeps it next to the controls it belongs with.
+   Wrapped because a missing #hint must never be the thing that stops this module evaluating —
+   that is the whole app, for everyone, over a toast. */
+try{ if(hintEl && hintEl.parentElement!==document.body) document.body.appendChild(hintEl); }catch(e){}
 const wheelEl=$("#wheel"), wheelCenter=$("#wheelCenter"), flashEl=$("#flash"), busyEl=$("#busy");
 const ctx=board.getContext("2d",{willReadFrequently:true});
 let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
@@ -4197,8 +4240,23 @@ async function startCamera(auto){
   // whole funnel dies here and nothing downstream will explain why.
   track("camera_denied",{auto:!!auto,reason:n0||"unknown"});
   const n=lastErr&&lastErr.name;
-  // inside the native app the camera setting lives under Settings › KAMO, not Safari
-  const where = window.ReactNativeWebView ? "Settings › KAMO › Camera" : "Settings › Safari › Camera";
+  /* WHERE THE SWITCH ACTUALLY IS, FOR THE PERSON READING IT.
+     This was two branches: inside the app, "Settings › KAMO › Camera"; everywhere else,
+     "Settings › Safari › Camera". The second one is right for iOS Safari and wrong for every
+     other browser that reaches this file — and the mirror exists precisely so that a friend
+     WITHOUT the app can open a challenge link, which means Android Chrome, desktop Chrome and
+     Firefox all land here. Telling them to open Settings › Safari is directions to an app
+     they do not have, on the one screen whose entire job is to unblock them. Same family as
+     the hero note that said "iOS will ask for camera access" to everybody.
+     Named only where it can be named truthfully. Every other browser keeps its own words for
+     this and there is no way to name them all, so the sentence says the true general thing
+     instead of a specific false one — and the photo path, which always works, is one line
+     below it either way. CriOS/FxiOS/EdgiOS are Chrome, Firefox and Edge on iOS: WebKit
+     underneath, but their permission lives under their own name in Settings, not Safari's. */
+  const isSafari = IS_IOS && !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Android/i.test(navigator.userAgent||"");
+  const where = window.ReactNativeWebView ? "Settings › KAMO › Camera"
+              : isSafari ? "Settings › Safari › Camera"
+              : "your browser's site settings";
   // a hang (TimeoutError) on iOS almost always means the permission was denied
   const blocked = (n==="NotAllowedError"||n==="TimeoutError");
   /* One line each. These sit under two buttons that already say what to do, so the old
@@ -12014,6 +12072,21 @@ function chRemember(id,drop){
    nothing on screen is waiting. The offers below still fire on the tap, because they are about
    the person in front of you rather than about the row in the database. */
 async function chMarkSent(){
+  /* ⚠️ ONCE PER HIDE, NOT ONCE PER TAP — and the difference lands in the one number the loop
+     is judged by. Nothing guarded this, so a second tap on "Send to a friend" fired a second
+     mark_hide_sent, a second `hide_sent`, a second pwFirstOffer and a second armResultsPing.
+     Measured with three fast taps: one create_hide, three mark_hide_sent.
+     A second tap is not a mistake and must still SEND — sending the same hide to two people
+     is the loop working, and share_target_tapped still counts every tap, which is what that
+     event is for. What must not double is the claim that a hide was sent, because
+     hide_published → hide_sent is the conversion this product steers by and it is already
+     over-counted by the share of people who open iOS's sheet and back out (see the note at
+     the call site). Adding an unbounded second source of inflation on top of a known bounded
+     one is how a rate stops meaning anything.
+     KEYED ON THE ROUND, not on the id: a bare invite has no id at all and would otherwise
+     re-stamp forever. chResetRound() bumps chRound, so the next hide starts sendable. */
+  if(chMarkSent._round===chRound) return;
+  chMarkSent._round=chRound;
   let id=chId;
   chMarkSent._had=!!id;
   if(!id){ try{ id=await chAwaitId(4000); }catch(e){} }
@@ -15216,12 +15289,30 @@ function chSeek(hideId,opts){
            said out loud. */
         const who=(h&&h.name)?String(h.name):"";
         if(who) $$("chReh").textContent="Challenge @"+who+" back"; }
-      if($$("chRep")) $$("chRep").onclick=()=>{ chRpc("report_hide",{p_id:HID}).catch(()=>{}); track("seek_reported",FEED?{src:"feed"}:{});
+      /* ⚠️ THE RECEIPT WAITS FOR THE ANSWER NOW — see the feed bar's ⚑ for the whole argument.
+         This printed "Reported. Thank you." on the same tick it fired the call, with a
+         swallowed catch, so a report that never left the device read exactly like one that
+         landed. On a link round there is no feed to drop the photo out of, which makes it the
+         easier of the two to get right: the button holds, and if the call fails it comes back
+         so the report can actually be made. */
+      if($$("chRep")) $$("chRep").onclick=async()=>{
+        const rb=$$("chRep"); if(!rb||rb.disabled) return;
+        const label=rb.textContent;
+        rb.disabled=true; rb.textContent="Reporting…";
+        let sent=false;
+        try{ await chRpc("report_hide",{p_id:HID}); sent=true; }catch(e){ sent=false; }
+        track("seek_reported",FEED?{src:"feed",sent:sent}:{sent:sent});
+        if(!sent){
+          rb.disabled=false; rb.textContent=label;
+          showHint("Couldn't send that report — check your connection and try again",4000);
+          return;
+        }
         /* Out of THIS device's feed straight away, not only out of everyone else's on the
            next page. n_reported=1 already excludes it server-side (see feed_page), but the
            page the reporter is holding was fetched before they tapped. */
         if(OPT.onReported) OPT.onReported(HID);
-        $$("chFoot").innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
+        const f=$$("chFoot");
+        if(f) f.innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
       /* THE BLOCK IS THE SERVER'S ANSWER, NOT THIS SCREEN'S GUESS. block_author() turns the
          one thing this device legitimately holds — the id of a hide it was served — into a
          tag for whoever made it. The tag is what gets stored and what every later feed_page
@@ -15233,9 +15324,18 @@ function chSeek(hideId,opts){
       if($$("chBlk")) $$("chBlk").onclick=()=>{
         const b=$$("chBlk"); if(b.disabled) return;
         b.disabled=true; b.textContent="Blocking…";
-        const done=(msg)=>{ const f=$$("chFoot"); if(f) f.innerHTML=
-          '<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px"></div></div>';
-          const d=f&&f.querySelector("div>div"); if(d) d.textContent=msg; };
+        /* ⚠️ THIS WROTE INTO A CARD THAT NO LONGER EXISTED, so neither sentence was ever read.
+           Both branches call OPT.onBlocked first, and in the feed — the only place this button
+           is minted — that is blockDrop(), which destroys the round and removes its slide. The
+           write then landed on whatever $$("chFoot") resolved to next: an empty foot on a
+           freshly mounted round, or nothing at all. Measured after a stored block: every
+           #chFoot on the page empty, no message anywhere. The careful distinction between
+           "Blocked. You won't see their hides again." and "Hidden. This one won't come back."
+           — the entire point of the two branches below — was invisible either way, and the one
+           time it did find a foot it would have stamped a verdict onto a stranger's round.
+           showHint() outlives the slide because it is not on it. It also had to be lifted out
+           of #app before it could be seen over the feed at all — see .hint. */
+        const done=(msg)=>showHint(msg,4000);
         chRpc("block_author",{p_id:HID}).then(tag=>{
           const kept=kfAddBlock(tag);
           track("seek_blocked",TP({tagged:!!tag,stored:kept,n:kfBlocked().length}));
@@ -17096,13 +17196,31 @@ function chFeed(opts){
     if(f) f.style.display=kfOwnSlide()?"none":""; }
   /* Acts on whatever slide is live. Reports and drops in one move — the reporter should not
      have to look at it again while the page they are holding catches up. */
-  root.querySelector("#kfFlag").onclick=()=>{
+  /* ⚠️ "Reported. Thank you." USED TO BE PRINTED WHETHER OR NOT ANYTHING WAS REPORTED.
+     The call was fire-and-forget — `.catch(()=>{})` and then the thank-you on the next line —
+     so an offline moment, an RLS refusal or a server error produced exactly the same screen as
+     a report that landed: the photo left this feed and the viewer was thanked for an action
+     that never happened. Verified by aborting report_hide at the network: slide dropped,
+     "Reported. Thank you.", nothing sent.
+     That is the worst shape a moderation path can have. Apple requires this control to exist
+     (guideline 1.2), the person using it is telling us something is wrong, and a false receipt
+     means they stop looking at the photo AND we never hear about it. The block two hundred
+     lines up already states the rule this was breaking: "That is not an error and must not be
+     dressed as a success — the photo still leaves this feed, and the copy says only what
+     actually happened."
+     So: the photo goes immediately, because the viewer asked for that much and it costs
+     nothing; and the sentence waits for the answer. `sent` rides on the event too — a report
+     path that starts failing should be visible as a number, not as silence. */
+  root.querySelector("#kfFlag").onclick=async()=>{
     const s0=S.slides[S.active]; if(!s0) return;
+    const id=s0.row.id;
     haptic(10);
-    try{ chRpc("report_hide",{p_id:s0.row.id}).catch(()=>{}); }catch(e){}
-    track("seek_reported",{src:"feed_bar"});
-    drop(s0.row.id);
-    showHint("Reported. Thank you.");
+    drop(id);
+    let sent=false;
+    try{ await chRpc("report_hide",{p_id:id}); sent=true; }catch(e){ sent=false; }
+    track("seek_reported",{src:"feed_bar",sent:sent});
+    showHint(sent ? "Reported. Thank you."
+                  : "Hidden here — but the report didn't send. Check your connection.",4000);
   };
 
   function paint(){
