@@ -1337,6 +1337,79 @@ console.log('\nTHE SWIPE HINT CLEARS THE ENDING CARD');
   await page.close();
 }
 
+/* ⚠️ THE MODERATION PATH MUST NOT THANK SOMEBODY FOR SOMETHING THAT DID NOT HAPPEN.
+   Both report controls were fire-and-forget — `chRpc(...).catch(()=>{})` and the thank-you on
+   the next line — so an offline moment, an RLS refusal or a server error produced exactly the
+   screen a successful report produced: the photo left this feed and the viewer was thanked.
+   Apple requires this control (guideline 1.2), the person using it is telling us something is
+   wrong, and a false receipt means they stop looking at the photo AND we never hear about it.
+   The block two hundred lines away already stated the rule: "That is not an error and must not
+   be dressed as a success."
+   Driven by killing report_hide at the network, which is the failure a phone actually has. */
+console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
+{
+  const seen = async (page) => page.evaluate(() => {
+    const h = document.getElementById('hint');
+    return { txt: h ? h.textContent : null, op: h ? getComputedStyle(h).opacity : null };
+  });
+  for (const dead of [false, true]) {
+    const page = await open(ROWS(3), { report_hide: { ok: true } });
+    /* THE SEED IS THE NETWORK HERE. chRpc is stubbed at its declaration in this harness, so a
+       page.route() on the rpc endpoint would never be reached — the failure has to be handed
+       back through the same door the answer comes through. A rejected promise is exactly what
+       chRpc does on a dead network; the catch on it only silences Node's unhandled-rejection
+       warning and does not stop the awaiter seeing the rejection. */
+    if (dead) await page.evaluate(() => { const r = Promise.reject(new Error('dead')); r.catch(() => {}); window.__seed.report_hide = r; });
+    const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+    await page.evaluate(() => document.getElementById('kfFlag').click());
+    await page.waitForTimeout(1800);
+    const after = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+    const s = await seen(page);
+    /* The photo goes either way — the viewer asked for that much and it costs nothing. */
+    after === before - 1
+      ? ok(`${dead ? 'a failed' : 'a live'} report still takes the photo out of this feed`)
+      : bad(`slides went ${before} → ${after} on a ${dead ? 'failed' : 'live'} report`);
+    if (dead) {
+      /^Hidden here/.test(s.txt || '') && !/Thank you/.test(s.txt || '')
+        ? ok(`and says so instead of thanking them ("${s.txt}")`)
+        : bad(`a report that never sent reads "${s.txt}"`);
+    } else {
+      /Reported\. Thank you\./.test(s.txt || '')
+        ? ok('and a real one is thanked, once the server has answered')
+        : bad(`a live report reads "${s.txt}"`);
+    }
+    await page.close();
+  }
+}
+
+/* THE BLOCK'S TWO SENTENCES WERE WRITTEN WITH CARE AND SHOWN TO NOBODY. done(msg) wrote into
+   $$("chFoot") AFTER OPT.onBlocked had already destroyed the round and removed its slide, so
+   the write landed on an empty foot belonging to a freshly-mounted round — or on nothing.
+   Measured after a stored block: every #chFoot on the page empty, no message anywhere. The
+   distinction between "Blocked. You won't see their hides again." and "Hidden. This one won't
+   come back." — the entire reason there are two branches — was invisible either way. */
+console.log('\nAND A BLOCK SAYS WHICH OF THE TWO THINGS IT DID');
+{
+  for (const [tag, expect, label] of [['tag-xyz', /^Blocked\./, 'a stored block'], [null, /^Hidden\./, 'a hide with no author on record']]) {
+    const page = await open(ROWS(3), { block_author: tag, save_seek_trace: null,
+      submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+      reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
+    await page.evaluate(() => {
+      const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+      const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+      st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+    });
+    await page.waitForSelector('#chBlk', { timeout: 8000 }).catch(() => {});
+    await page.evaluate(() => { const b = document.getElementById('chBlk'); if (b) b.click(); });
+    await page.waitForTimeout(2200);
+    const txt = await page.evaluate(() => document.getElementById('hint')?.textContent);
+    expect.test(txt || '')
+      ? ok(`${label} says so ("${txt}")`)
+      : bad(`${label} reads ${JSON.stringify(txt)} — the message is going somewhere nobody is looking`);
+    await page.close();
+  }
+}
+
 await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed plays real rounds and the visibility default is honest');
 process.exit(failed ? 1 : 0);

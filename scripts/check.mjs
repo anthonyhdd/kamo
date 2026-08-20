@@ -1426,6 +1426,24 @@ try {
   bad('UNDO OR CLEAR IS BROKEN:\n' + why(e));
 }
 
+/* ---- 13-ter. The only channel this app has for a sentence -------------------------------
+   showHint() is how "Reported. Thank you.", "Link copied", "Couldn't load the replay", "Still
+   going up — give it a second" and "That one is in the app" are all said, and #hint shipped at
+   z-index 12 INSIDE #app — a position:fixed element, so a stacking context. Every one of those
+   lines was painted, with the right text, underneath the surface that sent it: the reveal, the
+   share sheet, a seek round, the feed, My kamos, the player card. The file already worked
+   around the hero case in camFail() and nobody generalised it.
+   Asserted by hit-testing rather than by z-index arithmetic, because the number alone was
+   never the answer — the parent is half of it. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-toast-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-toast-dom.mjs', 'TOAST TEST', out)
+    : ok('every surface that sends a message can show one (node scripts/test-toast-dom.mjs)');
+} catch (e) {
+  bad('THE MESSAGE CHANNEL IS BURIED AGAIN:\n' + why(e));
+}
+
 /* ---- 13a. What the board does with the photo it was given -------------------------------
    The letterbox is for the camera, whose sensor is wider than the board — a picked photo has no
    cropped-away field of view to buy back, and the bars only spend a third of the screen on a
