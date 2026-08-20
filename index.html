@@ -4227,10 +4227,64 @@ function pickPhoto(){
   if(nativeCaps && nativeCaps.photoPicker && postNative({type:"pick-photo"})) return;
   $("#fileInput").click();
 }
+/* ONE BLOB AT A TIME, held for as long as `photo` is showing it. The object URL used to be
+   revoked inside photo.onload; it now has to outlive a decode probe AND the assignment, so
+   it is released when the NEXT pick replaces it or when this one turns out not to decode.
+   That is not a leak: at most one is ever held, and `photo` keeps the decoded bitmap, so
+   revoking has never blanked what is on screen. */
+let pickedURL="";
+function releasePicked(){ try{ if(pickedURL) URL.revokeObjectURL(pickedURL); }catch(e){} pickedURL=""; }
+/* Says it where the user is actually looking. #hint lives under the opaque #start overlay
+   (z-index 30) and is invisible on the hero, which is the same split camFail() makes for the
+   camera — a picked photo can fail from the hero ("Use a photo instead") or from inside
+   compose (the roll button), and only one of those can read #hint. */
+function photoPickFailed(src){
+  if(src&&src===pickedURL) releasePicked();
+  track("photo_pick_failed",{reason:"decode"});
+  const msg="Couldn't read that photo — pick another one";
+  const m=$("#heroMsg");
+  if(startEl && startEl.style.display!=="none" && m){ m.textContent=msg; m.style.display="block"; }
+  else showHint(msg,3600);
+}
 /* The native picker hands back a data URL; the input hands back a File. Same destination,
-   two doors — this is the one usePhoto() reaches through after createObjectURL. */
+   two doors — and THIS is the destination, for both. That is not tidiness: chClearReply()
+   below lived here while usePhoto() went straight to `photo`, and pickPhoto() has no native
+   picker to reach in a browser — so on the web, where the file input is the only door, a
+   player who tapped "Challenge back" and then picked a different photo published it stamped
+   as an answer to a round whose picture they had just thrown away. Two doors, one of them
+   quietly missing half the arrival ritual. There is one arrival now. */
 function usePhotoSrc(src,meta){
   if(!src) return;
+  /* ⚠️ IT HAS TO DECODE BEFORE IT BECOMES THE ROUND. Both doors handed `photo` a src with an
+     onload and no onerror and then entered compose on the next line — so a file the browser
+     cannot read (a HEIC off an iPhone opened anywhere without a decoder for it, a truncated
+     download, an .avif on an old build) dropped the player onto a BLACK BOARD with a running
+     clock and not one word of explanation. coverInto() falls through to its #223 slab from
+     there, extractPalette() reads its four colours out of that slab, and the swatch row fills
+     with four identical dark chips — "les couleurs et le picker ne s'affichent plus",
+     founder, 2026-08-16 — and what gets published is a black rectangle nobody can play.
+     chRehide() was rebuilt around exactly this failure in August and the rebuild stopped at
+     its own door. This is the same fix on the other two. Reproduced before writing it, with a
+     corrupt .jpg through #fileInput: compose, a 40-second clock, and rgb(34,34,51) four times.
+     A PROBE RATHER THAN photo.onerror, because by the time `photo` could report the failure
+     the screen has already changed and there is no honest way back out of a compose the user
+     never asked to enter. Nothing below is touched until the decode has answered. The second
+     load is the same URL and comes off the cache, so this costs a decode, not a fetch. */
+  /* A SEPARATE ELEMENT, NOT `photo` ITSELF, and that is the whole reason this costs a probe.
+     Gating on photo.onload would mean assigning the unverified src to the element that is on
+     screen — and when the pick comes from INSIDE compose, that element is currently showing
+     the previous photo. A file that does not decode would blank it, so a bad pick would
+     destroy a good round. Nothing the user already has is touched until the new one is known
+     to work. The probe is released in both handlers so its bitmap is collectable at once;
+     `photo` then loads the same URL out of the memory cache. */
+  const probe=new Image();
+  const release=()=>{ probe.onload=null; probe.onerror=null; };
+  probe.onload=()=>{ release(); usePhotoReady(src,meta); };
+  probe.onerror=()=>{ release(); photoPickFailed(src); };
+  probe.src=src;
+}
+/* The arrival itself — reached only by a src that has already decoded once. */
+function usePhotoReady(src,meta){
   /* `meta.cam` is the wrapper's reading of the picked asset's EXIF: true when a Make/Model tag
      is present, false when EXIF came back without one. A camera always writes those tags, and
      screenshots, memes, downloaded images and generated ones never do — so the false branch is
@@ -4262,7 +4316,14 @@ window.KAMO=window.KAMO||{};
 window.KAMO.usePickedPhoto=(src,meta)=>{ try{ usePhotoSrc(src,meta); }catch(e){} };
 /* The native sheet never opened. Fall through to the input rather than leaving a dead tap. */
 window.KAMO.pickPhotoFailed=()=>{ try{ $("#fileInput").click(); }catch(e){} };
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; photoSrc="library"; /* the file input cannot read EXIF — unknown, not "no camera" */ torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
+/* THE FILE-INPUT DOOR IS NOW A DOORWAY, not a second room. It had its own copy of the whole
+   arrival — display, stopCamView, the stream teardown, bgKind, photoSrc, torchOn,
+   enterCompose — and copies drift: this one never learned chClearReply(), and it is the only
+   door a browser has. It hands over an object URL and lets usePhotoSrc() do the rest, which
+   also means the decode gate covers it. photoSrc is filed there as `library` with no meta,
+   which is what this path always reported: the file input cannot read EXIF, and unknown is
+   not the same claim as "no camera". */
+function usePhoto(file){ releasePicked(); pickedURL=URL.createObjectURL(file); usePhotoSrc(pickedURL); }
 
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
