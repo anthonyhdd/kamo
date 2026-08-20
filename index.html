@@ -7019,14 +7019,20 @@ const HANDLE_KEY="kamo_handle";
    a person from a board of @Ochre-somethings is whether they ever CHOSE it. Written only by
    the paths where somebody typed — never by ensureHandle(), whose whole contract is that it
    invents one nobody asked for.
-   WRITE-ONLY ON PURPOSE, AND NOTHING MAY GATE UI ON IT YET. It began life on 2026-08-16 as
-   the sign nudge's condition and cost that feature its life the next day: the flag only
-   exists from the day it shipped, so every creator who typed their name BEFORE it — the
-   founder among them, on a grid signed @tony — reads as "never chose" for ever and got told
-   to make the name theirs under a name they had picked. `false` here means UNKNOWN, not
-   "assigned". The write stays because from 2026-08-16 forward it is true of new namings and
-   costs nothing; anything that reads it has to survive being wrong about everyone older. */
+   READ IN EXACTLY ONE PLACE, AND THAT PLACE HAS TO SURVIVE BEING WRONG ABOUT EVERYONE OLDER.
+   It began life on 2026-08-16 as the sign nudge's condition and cost that feature its life
+   the next day: the flag only exists from the day it shipped, so every creator who typed
+   their name BEFORE it — the founder among them, on a grid signed @tony — reads as "never
+   chose" for ever and got told to make the name theirs under a name they had picked.
+   `false` here means UNKNOWN, not "assigned", and that is exactly why its one reader
+   (ssRenderSign) spends it on COPY and never on a gate: the worst it can do to a creator it
+   is wrong about is offer "This is you?" over a name they already picked — a question, one
+   tap to ignore, nothing withheld and nothing hidden. Nothing may go further than that. A
+   nudge, a badge, a board or a paywall standing behind this flag is 2026-08-17 again. */
 const HANDLE_CHOSE_KEY="kamo_handle_chosen";
+/* UNKNOWN AND "ASSIGNED" ANSWER THE SAME HERE, and the note above is the reason that is
+   safe: a false negative costs a question, never a feature. */
+function handleChosen(){ try{ return localStorage.getItem(HANDLE_CHOSE_KEY)==="1"; }catch(e){ return false; } }
 function cleanHandle(v){
   return String(v||"").trim().replace(/^@+/,"").replace(/[^A-Za-z0-9_.]/g,"").slice(0,16);
 }
@@ -11728,8 +11734,16 @@ function ssRenderSign(){
      another one. Same boundary the seeker headline crosses. */
   if(n) n.textContent="@"+ssNameShown();
   /* "Change" once it is theirs, "This is you?" while it is still the app's guess — the second
-     is the whole point of showing it at all, and it asks without blocking. */
-  if(go) go.textContent=mine?"Change":"This is you?";
+     is the whole point of showing it at all, and it asks without blocking.
+     AND `mine` IS NOT THE TEST FOR "THEIRS". It was until now, which made the ask a
+     one-launch event: ensureHandle() commits the invented name at the FIRST publish, so from
+     the second sheet onward this row read "Change" over a name nobody had ever agreed to —
+     the app asserting its own guess back at the person as a settled fact, on every sheet for
+     the rest of their life. The numbers are that shape: 670 taps on 19,299 sheets (3.5%,
+     15–20 Aug) and 53% of those taps went on to type a name. The field converts; the
+     question was simply only ever put once, before anyone knew what the name was for.
+     handleChosen() is the honest test, and its note explains why it may only pick copy. */
+  if(go) go.textContent=(mine&&handleChosen())?"Change":"This is you?";
 }
 {
   const row=$("#ssSign"), inp=$("#ssSignIn");
@@ -11737,7 +11751,11 @@ function ssRenderSign(){
   if(row&&inp){
     row.onclick=(e)=>{
       e.stopPropagation(); haptic(10);
-      track("sign_row_tapped",{had_name:!!getHandle()});
+      /* `chose` SPLITS THE ONE RATE THAT MATTERS. `had_name` has been true for everybody
+         since the day after their first publish, so it separates nothing; this says whether
+         the row was asking "This is you?" or offering "Change", which is the difference the
+         copy change above is betting on. */
+      track("sign_row_tapped",{had_name:!!getHandle(),chose:handleChosen()});
       shareSheetEl.classList.add("ssEditName");
       /* Prefilled with what the row was showing, so this is a correction and not a blank page.
          Selected rather than caret-at-end: the first keystroke of somebody who wants their own
@@ -14876,6 +14894,19 @@ function chSeek(hideId,opts){
       const r=img.getBoundingClientRect();
       const cx=Math.max(r.left,Math.min(r.right,x)), cy=Math.max(r.top,Math.min(r.bottom,y-RET_OFF));
       ret.style.left=cx+"px"; ret.style.top=cy+"px"; ret._x=cx; ret._y=cy;
+      /* THE SHOT IS FIXED TO THE PICTURE HERE, AND NOT RE-DERIVED AT RELEASE.
+         .chRet is position:fixed — it tracks a finger on the SCREEN — so what it sits over is
+         a client coordinate, and the picture underneath it is free to move: in the feed the
+         round is mounted in a .kfSlide inside a scroll-snap scroller, and a snap that is still
+         settling keeps sliding for a few hundred ms after the thumb has left. A plain tap runs
+         retMove ONCE, at pointerdown; buzz() then read a FRESH rect at pointerup, so every
+         pixel the snap travelled in between was silently added to the shot. The mark landed
+         off the spot that was tapped and the hit test judged that same wrong spot — founder,
+         2026-08-21: "le cercle de hit se déplace un peu si on scroll un peu en faisant le tap".
+         So the frame-relative point is taken against the SAME rect that placed the reticle, in
+         the same statement. The two can no longer disagree, whatever moves afterwards. */
+      ret._nx=Math.max(0,Math.min(1,(cx-r.left)/r.width));
+      ret._ny=Math.max(0,Math.min(1,(cy-r.top)/r.height));
       if(aimRec&&aimRec.p.length<160){ const t=elapsed();
         if(!aimRec._l||t-aimRec._l>=80){ aimRec._l=t;
           aimRec.p.push([t,Math.round((cx-r.left)/r.width*1000)/1000,Math.round((cy-r.top)/r.height*1000)/1000]); } } };
@@ -14922,7 +14953,9 @@ function chSeek(hideId,opts){
       pts.delete(e.pointerId);
       if(pinch&&pts.size<2) pinch=null;
       if(ret&&e.pointerId===aimId){
-        const x=ret._x, y=ret._y;
+        /* The FRAME point the reticle was last drawn over, not its screen position — see
+           retMove. closeAim() destroys the element, so it is read first either way. */
+        const x=ret._nx, y=ret._ny;
         const commit=(e.type==="pointerup"&&!done);
         closeAim(commit);
         if(commit) buzz(x,y);
@@ -14939,7 +14972,10 @@ function chSeek(hideId,opts){
       try{ trace.why=why; chRpc("save_seek_trace",{p_id:HID,p_trace:trace}).catch(()=>{}); }catch(_){}
     }
 
-    async function buzz(sx,sy){
+    /* (x,y) ARE ALREADY THE PICTURE'S OWN COORDINATES, 0..1 — retMove computed them at the
+       instant it placed the reticle. This used to take screen pixels and convert them here,
+       one rect read too late; see the note in retMove for what that cost. */
+    async function buzz(x,y){
       if(done) return; done=true;
       clearInterval(clock);
       const ms=elapsed();
@@ -14954,8 +14990,7 @@ function chSeek(hideId,opts){
          sees the kamo was inside the light they paid for and their one tap was not, which is
          the most persuasive thing this product ever says about hints. */
       try{ if(hintZone) hintZone.classList.add("calm"); }catch(_){}
-      const r=img.getBoundingClientRect();
-      const x=Math.max(0,Math.min(1,(sx-r.left)/r.width)), y=Math.max(0,Math.min(1,(sy-r.top)/r.height));
+      x=Math.max(0,Math.min(1,x||0)); y=Math.max(0,Math.min(1,y||0));
       trace.end={ms:ms,x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000};
       /* The mark lives in FRAME coordinates so it rides the zoom — it is the record of
          the buzz, and it stays: on a miss, the flip against the revealed frame shows
