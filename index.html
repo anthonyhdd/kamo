@@ -5169,13 +5169,21 @@ function previewMove(dx,dy){ moveDX=dx; moveDY=dy; compositeBoard(); }
    instead of being left stranded over its old spot. That is the one property that makes
    "move after you've started painting" safe rather than punishing: nothing painted is lost,
    it just moves with what it was covering.
-   pushUndo() at the end folds the move into the ordinary undo stack — same entry point
-   every brush stroke uses — so #btnUndo reverts a bad nudge exactly like a bad stroke. An
-   Undo immediately after a move puts paintLayer back one step BEFORE the shift, which can
-   read as a beat out of sync with the now-moved mask; accepted, because it self-corrects on
-   the very next stroke and a bespoke move-only undo entry is not worth a second code path. */
+   pushUndo() folds the move into the ordinary undo stack — same entry point every brush
+   stroke uses — so #btnUndo reverts a bad nudge exactly like a bad stroke.
+   ⚠️ AT THE TOP, NOT AT THE END, and the difference is a whole step. This called it after the
+   shift, so the entry it filed was the state AFTER the move while every stroke files the one
+   before: one tap of Undo then had to spend that entry before it could reach anything, and
+   it took the previous stroke down with it. It runs here instead, while `pctx` still points
+   at the un-shifted paintLayer — the same "the state this action is about to change"
+   contract pushUndo() documents. After the guard, so a no-op nudge still files nothing.
+   The mask is NOT in the stack, so an Undo after a move puts the paint back where it was and
+   leaves the figure where the drag put it. That asymmetry is real and is not this fix's to
+   solve: it self-corrects on the very next stroke, and a bespoke move-only undo entry is
+   still not worth a second code path. */
 function commitMove(){
   if(!maskCanvas||!paintLayer||(!moveDX&&!moveDY)){ moveDX=0; moveDY=0; return; }
+  try{ pushUndo(); }catch(e){}
   const W=board.width,H=board.height,dx=moveDX,dy=moveDY;
   const nm=document.createElement("canvas"); nm.width=W; nm.height=H;
   nm.getContext("2d").drawImage(maskCanvas,dx,dy);
@@ -5185,7 +5193,6 @@ function commitMove(){
   moveDX=0; moveDY=0;
   buildShadeSrc();      // derived from maskCanvas — stale after any reposition, see the note above it
   compositeBoard();
-  try{ pushUndo(); }catch(e){}
   currentScore=computeScore(); updateCoverageHud();
 }
 /* Shared exit for Move — called both by #btnMove's own toggle and by every OTHER tool
@@ -5216,7 +5223,16 @@ function clipPaintToFigure(x0,y0,x1,y1){
    the whole hide lost. ~48 MB budget, minimum 3 steps so undo stays useful. */
 const UNDO_BUDGET=36*1024*1024;   // lowered: the shading scratch canvas now takes a slice of the same budget
 function undoCap(){ const per=Math.max(1,board.width*board.height*4); return Math.max(3,Math.min(12,Math.floor(UNDO_BUDGET/per))); }
-function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); const cap=undoCap(); while(undoStack.length>cap) undoStack.shift(); }catch(e){} }
+/* EVERY ENTRY IS THE STATE AN ACTION IS ABOUT TO CHANGE — pushUndo() runs at the START of a
+   stroke and at the TOP of commitMove(), never after. #btnUndo pops one and paints it, so
+   "one entry" and "one step back" are the same thing. Keep it that way: an entry pushed
+   after the fact makes the top equal the current board, and the tap that pops it then has to
+   pop twice to do anything, which is exactly the off-by-one this convention replaced.
+   INDEX 0 IS THE BLANK BOARD and it is not history: it is what #btnClear restores. Dropping
+   it from the FRONT when the budget runs out — which is what shift() did — silently disarmed
+   Clear after `cap` strokes, and cap is 6 on a retina 390pt board. So the oldest entry that
+   is actually a step goes instead, and the floor survives the whole round. */
+function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); const cap=undoCap(); while(undoStack.length>cap) undoStack.splice(1,1); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
 /* `brush` is already in the same CSS-pixel units #brushRing lives in (see the note on
    paintDpr above) — no conversion needed, unlike paintAt's canvas-space math. */
@@ -10329,7 +10345,17 @@ function captureShot(){
 }
 $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
-$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
+/* THE POPPED ENTRY IS THE ONE TO PAINT. This popped it and then painted whatever was
+   UNDERNEATH it, which is one step too far on every single tap: pushUndo() stores the state
+   an action is about to change (see its note), so the top of the stack already IS one step
+   back. Measured before the fix — five strokes taking coverage to 9/20/30/37/43%, then five
+   undos: 30 → 20 → 9 → 0 → nothing. The first tap threw away the good stroke as well as the
+   bad one, every later tap was a stroke ahead of itself, and the fifth undo had nothing left
+   to do. Undo is one of exactly two escapes from a bad stroke, on an 89-second clock.
+   `>1` rather than `>0` because index 0 is the blank board, not a step — it is Clear's floor
+   and pushUndo() now protects it from the budget too. The duplicate of it that the first
+   stroke pushes is what lets undo walk all the way back to an empty board. */
+$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ pctx.putImageData(undoStack.pop(),0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
 $("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
 /* Toggle, not a modal — see the note above `moving`. Turning it ON cancels the eyedropper
    the same way picking a colour cancels Move (stopMoving(), called from both directions),

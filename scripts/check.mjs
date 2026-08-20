@@ -1405,7 +1405,25 @@ try {
     ? skipped('test-brush-dom.mjs', 'BRUSH TEST', out)
     : ok('members get the brush range they paid for (node scripts/test-brush-dom.mjs)');
 } catch (e) {
-  bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE BRUSH RANGE IS BROKEN:\n' + why(e));
+}
+
+/* ---- 13-bis. The two escapes from a bad stroke ------------------------------------------
+   Undo and Clear are the only way back out of a stroke that went wrong, on a board with an
+   89-second clock running over it — and both of them were quietly wrong for as long as nothing
+   watched them. Undo popped the top of the stack and then painted what was UNDERNEATH it, so
+   the first tap took the good stroke as well as the bad one and the last tap did nothing;
+   Clear read the blank board off the front of the same stack, which the budget trim had been
+   shifting away since the seventh stroke. Neither throws, neither shows in a diff, and both
+   are perfectly visible in the number on the coverage chip — which is what the suite drives,
+   with real strokes through the real handlers. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-undo-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-undo-dom.mjs', 'UNDO TEST', out)
+    : ok('Undo takes back one stroke and Clear takes back all of them (node scripts/test-undo-dom.mjs)');
+} catch (e) {
+  bad('UNDO OR CLEAR IS BROKEN:\n' + why(e));
 }
 
 /* ---- 13a. What the board does with the photo it was given -------------------------------
