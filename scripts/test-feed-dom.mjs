@@ -196,8 +196,12 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
      how much (p_limit), which slice (p_before / p_offset / p_seen) and who is filtered out
      (p_block_tags) — and nothing else, ever.
      `p_seen` is this device telling the server what it has already been given, which travels the
-     same way round as everything else here: OUT. Nothing on this list can carry an answer back. */
-  const LISTING_ARGS = new Set(['p_before', 'p_limit', 'p_offset', 'p_block_tags', 'p_seen']);
+     same way round as everything else here: OUT. Nothing on this list can carry an answer back.
+     `p_seed` is the same shape of thing and belongs here for the same reason: it names WHICH
+     ORDER this device gets, never which hide or where the kamo is in it. It is a random string
+     minted on this device (kfSeed) and it decides a tiebreak inside the ranking — the server
+     cannot answer anything with it and the page cannot learn anything from having sent it. */
+  const LISTING_ARGS = new Set(['p_before', 'p_limit', 'p_offset', 'p_block_tags', 'p_seen', 'p_seed']);
   const args = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').map(c => Object.keys(c[1]).sort()));
   const leaked = args.flat().filter(k => !LISTING_ARGS.has(k));
   args.length && !leaked.length
