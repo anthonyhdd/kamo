@@ -103,8 +103,15 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
    can plant localStorage the app will read on boot (a legacy reaction key, say). It takes the
    page rather than a value so it can use addInitScript, which is the one hook that survives
    the navigation. */
+/* THE ROUND'S PHOTO HAS TO ARRIVE. chSeek() grew an img.onerror: a camo image that never
+   loads now says so on the headline ("This one didn't load"), stops the clock and refuses the
+   buzz, rather than leaving a live round on a black rectangle filing 0.0s attempts. That is
+   the fix, and it means a harness which lets the photo 404 is asserting against the failure
+   screen instead of against the round. One transparent pixel is all any of these cases need. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 async function open(rows, extra, before) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   if (before) await before(page);
   await page.addInitScript((a) => {
     window.__seed = Object.assign({
@@ -871,8 +878,13 @@ console.log('\nTHE FEED CAN SEND SOMEBODY ELSE\'S HIDE');
      control that no longer exists.
      What survives the removal is the real claim: the share is the SECOND thing on the card,
      directly under the one primary action, and no other button separates them. */
+  /* ⚠️ SCOPED TO .chCard, NOT TO #chFoot. The flip button (⇆) is prepended to the FOOT, not
+     to the card, and it only exists when the reveal frames actually downloaded — so this read
+     the card's order correctly for as long as the harness let those frames 404, and started
+     reporting chFlipB first the moment they were served. The claim was never about the foot's
+     chrome; it is about what the card offers and in which order. */
   const order = await page.evaluate(() => {
-    const f = document.querySelector('#chFoot'); if (!f) return 'no card';
+    const f = document.querySelector('#chFoot .chCard'); if (!f) return 'no card';
     const ids = [...f.querySelectorAll('button')].map(b => b.id).filter(Boolean);
     if (ids.indexOf('chNext') !== -1) return 'chNext is back: ' + ids.join(',');
     return (ids[0] === 'chReh' && ids[1] === 'chSend') ? 'second' : ids.join(',');
@@ -997,6 +1009,10 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
 console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  /* The photo has to arrive here too: a link round whose image 404s now retires itself with
+     "This one didn't load" and takes the give-up button with it, so without this the click
+     below lands on nothing and the card this block is about never exists. */
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   await page.addInitScript(() => {
     window.__seed = {
       get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },

@@ -85,6 +85,14 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
+/* THE ROUND'S PHOTO HAS TO ARRIVE, or this suite asserts against a failure screen.
+   chSeek() grew an img.onerror: a camo image that never loads now says so on the headline
+   ("This one didn't load"), stops the clock and refuses the buzz, instead of leaving a live
+   round on a black rectangle. That is the fix — and it means a harness which never serves the
+   photo is no longer testing the round it thinks it is. One transparent pixel is enough here:
+   these cases are about what is written above the picture, not about the picture. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const servePhoto = (page) => page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 const browser = await chromium.launch({ executablePath: chromeExe(ROOT) || undefined,
   args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 
@@ -106,6 +114,7 @@ const ANSWER = { reveal_hide: { cx: 0.5, cy: 0.5, r: 0.05 }, save_seek_trace: nu
    that survives the navigation, and chMine() is read while the round is being built. */
 async function open({ mine, first, fromReveal, extra }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await servePhoto(page);
   await page.addInitScript((a) => {
     if (a.mine) localStorage.setItem('kamo_hides', JSON.stringify(a.mine));
     /* Spent already, so the swipe hint does not float over the card being read. */
