@@ -484,17 +484,33 @@ console.log('\n⑦ THE ZONE SURVIVES THE ROUND — THIS IS THE THING THAT WAS PA
   const p = await hunt({ caps: { hints: true }, uid: 'user-1', big: true,
                          state: { balance: 3, free_available: true },
                          spend: { used: 'free', region: REG7, balance: 3, free_available: false } });
-  await p.click('#chHint');
-  await p.waitForTimeout(300);
   /* THE BEAT THAT PROVES THE PURCHASE, now carried by the mask's own opacity rather than by a
      second element. The spotlight dips to full strength as it lands and eases back to its
      resting level — so the player SEES the search collapse instead of being handed a shape and
      left to infer it. The mask does NOT lift any more: it is the hint, not an announcement of
-     one, and the old temporary dim left a naked ring behind within the second. */
-  const peak = await p.evaluate(() => { const e = document.querySelector('.chHintZone'); return e && +getComputedStyle(e).opacity; });
+     one, and the old temporary dim left a naked ring behind within the second.
+     ⚠️ SAMPLED OVER THE WINDOW, NOT READ AT AN INSTANT. This first asked for the opacity 300ms
+     after the tap, which is where the 620ms entry peaks — and that passed alone and failed
+     inside the full gate at 0.884, because a dozen Chromes sharing a machine do not run an
+     animation to the same phase at the same wall-clock moment. The assertion is about whether
+     a dip HAPPENS, so it takes the maximum the mask actually reached rather than betting on
+     catching it mid-flight. Started before the tap so nothing can be missed ahead of it. */
+  await p.evaluate(() => {
+    window.__peak = 0;
+    const t0 = performance.now();
+    const tick = () => {
+      const e = document.querySelector('.chHintZone');
+      if (e) window.__peak = Math.max(window.__peak, +getComputedStyle(e).opacity);
+      if (performance.now() - t0 < 1400) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await p.click('#chHint');
+  await p.waitForTimeout(1600);
+  const peak = await p.evaluate(() => window.__peak);
   peak > 0.9
-    ? ok(`the spotlight lands at full strength (opacity ${peak.toFixed(2)})`)
-    : bad(`no beat on the reveal — the mask came in at ${peak}`);
+    ? ok(`the spotlight lands at full strength (peak opacity ${peak.toFixed(2)})`)
+    : bad(`no beat on the reveal — the mask never went past ${peak}`);
 
   const seen = async () => p.evaluate(() => {
     const el = document.querySelector('.chHintZone'), fr = document.getElementById('chFrame');

@@ -35,7 +35,7 @@ PW_CORE=<dir with node_modules> node scripts/check.mjs
 ```
 
 It must be green before every push. It parses every inline script, resolves every unguarded
-element id, and chains **37** browser tests — it was six when this line was written, and naming
+element id, and chains **38** browser tests — it was six when this line was written, and naming
 them here only teaches the next reader a list that is already wrong; `grep 'test-.*\.mjs'
 scripts/check.mjs` is the answer that stays true. `playwright-core` is not a dependency —
 install it anywhere and point `PW_CORE` at it, or the browser tests skip loudly and you are

@@ -1209,6 +1209,24 @@ try {
   bad('THE FEED IS BROKEN:\n' + why(e));
 }
 
+/* ---- 12b-bis. The swipe is not free, and the lock is not a trap ---------------------------
+   chNoteSeek() runs from ending(), and ending() only happens on a buzz — so scrolling past a
+   feed round cost nothing and the run counted only the rounds the player was already sure
+   about. That is the same selection bias `n_attempts` carries (feed 59.2% found in 3.6s
+   against 48.0% in 7.3s on a link), and it made the hint pack insurance against a risk nobody
+   was exposed to. The slide is held until its round is answered.
+   The half that needs a gate is the RELEASE. There is no clock any more, so a slide that locks
+   and never lets go is a dead end with no timer and no gesture out of it — and one release
+   path (a photo that never loads) does not go through ending() at all. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-feedlock-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-feedlock-dom.mjs', 'FEED LOCK TEST', out)
+    : ok('the feed holds a round until it is answered, and always lets go (node scripts/test-feedlock-dom.mjs)');
+} catch (e) {
+  bad('THE FEED LOCK IS A TRAP OR A NO-OP:\n' + why(e));
+}
+
 /* ---- 12b-quater. The reply knows who it answers -------------------------------------------
    iOS never says who a share went to, so the only address KAMO can ever have for a reply is
    the hide it answers — captured on "Send one back" and stamped on the published row. Both
