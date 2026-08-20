@@ -8083,6 +8083,27 @@ function trackCarried(kind,props){
   /* eventsV2 (1.0.9+): the wrapper allow-lists the real names, so send them. Everything else
      — with or without caps — is a build that filters them, and takes the dedicated carrier. */
   const name = caps && caps.eventsV2 ? kind : CARRIER_102[kind];
+  /* TWO GUARDS, AND BOTH ARE THE SAME BUG: one action must produce one event NAME.
+     Every call site of this function fires `track(kind)` on the line above it — that is the
+     whole point, the direct name for anyone who can receive it and a carrier for anyone who
+     cannot. So this function must send only what that line could NOT deliver.
+
+     ① eventsV2 resolves `name` back to `kind`, and then this line sent the same name a
+     second time. Not theory: on 2026-08-19 `purchase_initiated` split EXACTLY 38 without
+     `carrier_for` and 38 with, every day for a week — 90 buy taps on 08-17 were read as 180,
+     and `round_finished` was 4 311 for ~2 200 rounds. A factor of two on the numerator of
+     every checkout rate, on the fleet that is now 99% of users. 5c-bis did not catch it: it
+     forbids a CARRIER name from doubling as a real event, and this doubles the REAL name.
+
+     ② No wrapper at all means no allow-list to dodge — `track(kind)` already went straight to
+     Amplitude through chWebTrack. Sending the carrier too put browser rounds inside
+     `reveal_previewed`, which is supposed to mean "a round from a build that cannot say
+     round_finished". ReactNativeWebView rather than nativeCaps on purpose, and against the
+     rule in CLAUDE.md: that rule is about gating FEATURES, where a wrapper being present says
+     nothing about whether it implements one. The question here is "is there a wrapper at
+     all", which is the same question `host` answers two hundred lines below, the same way. */
+  if(name===kind) return;
+  if(!window.ReactNativeWebView) return;
   track(name, Object.assign({carrier_for:kind},props||{}));
 }
 /* EVENTS THE WRAPPER CANNOT CARRY, SENT THE OTHER WAY INSTEAD OF BEING DROPPED.
