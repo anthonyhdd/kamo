@@ -142,6 +142,30 @@ console.log('\nTHE PAYWALL ONLY PROMISES WHAT THE STORE WILL HONOUR');
         : bad('the badge is hidden before the store has answered — a slow network would silently kill the offer');
 }
 
+/* ⚠️ AND \`trial\` IS READ TWICE, WHICH IS AN INVITATION TO SEND THE WRONG SHAPE.
+   setPrices does storeTrial=!!p.trial one line and applyTrialCopy(p.trial) the next, and the
+   second did String() on whatever arrived. So a build sending `trial:true` — the natural
+   mistake, given the line above reads the same field as a boolean — put the word "true" on
+   the money screen in three places: "Try everything free for true", "Try true free", "true
+   free, then $2.99/week." A number does it without a unit: `trial:7` renders "Try 7 free".
+   App.js sends the human label StoreKit reported ("3 days"), so this has never shipped. It is
+   asserted because the wrapper is always a version behind and this file cannot fix a build
+   after the fact — and because the trial FLAG still has to come off the same field, so the
+   offer must survive the guard even when the label does not. */
+console.log('\nA TRIAL THAT IS NOT A LABEL IS NOT QUOTED AS ONE');
+{
+  for (const [shape, name] of [[true, 'a boolean'], [7, 'a number'], [{ days: 3 }, 'an object']]) {
+    const c = await paywallCopy(CAPS_109, { weekly: '$2.99', lifetime: '$19.99', trial: shape });
+    const quoted = /\btrue\b|\b7 free\b|\[object/.test((c.buy || '') + ' ' + (c.terms || ''));
+    !quoted
+      ? ok(`${name} in \`trial\` is not printed as a length ("${c.buy}")`)
+      : bad(`${name} in \`trial\` reached the paywall: buy="${c.buy}" terms="${c.terms}"`);
+    c.badgeShown
+      ? ok(`  and the free offer itself survives it — the flag is still the flag`)
+      : bad(`  ${name} in \`trial\` withdrew the offer as well as the label`);
+  }
+}
+
 await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the paywall promises only what the store returned');
 process.exit(failed ? 1 : 0);
