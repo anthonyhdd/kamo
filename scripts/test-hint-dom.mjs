@@ -79,6 +79,14 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 
 const exe = chromeExe();
 if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
+/* THE ROUND'S PHOTO HAS TO ARRIVE, or this suite asserts against a failure screen.
+   chSeek() grew an img.onerror: a camo image that never loads now says so on the headline
+   ("This one didn't load"), stops the clock and refuses the buzz, instead of leaving a live
+   round on a black rectangle. That is the fix — and it means a harness which never serves the
+   photo is no longer testing the round it thinks it is. One transparent pixel is enough here:
+   these cases are about what is written above the picture, not about the picture. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const servePhoto = (page) => page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 const browser = await chromium.launch({ executablePath: exe });
 
 let failed = 0;
@@ -90,6 +98,7 @@ const HIDE = { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 2
 /** Boot a hunt with the given capabilities, user id and canned hint_spend answer. */
 async function hunt({ caps = {}, uid = '', spend = undefined } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await servePhoto(page);
   await page.addInitScript(([h, c, u, s]) => {
     window.__hintsLive = true;          // on, unless a case below turns it off
     /* hint_state is read on mount by every hunt now (the balance decorates the idle label),
@@ -166,6 +175,31 @@ console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARA
   posted.length === 0
     ? ok('and nothing is sold when the intent cannot be stamped — a credit with no route home')
     : bad(`a purchase left the page with no claim path: ${JSON.stringify(posted)}`);
+  /* ⚠️ AND WHAT IT SAYS WHILE REFUSING, WHICH WAS A LIE ON THE TAP THAT MATTERS MOST.
+     This retired the button reading "Hint used" — on a wallet that was EMPTY, i.e. after a
+     button that read "No more hints. Get 5 Hints". The player accepted an offer to buy and
+     was told they had already spent something they never had, on the only paid door in this
+     app, which then greyed out and vanished. Refusing the sale is right; describing it as a
+     spend is not, and there is no way back from it.
+     The refusal has two causes and this side cannot tell them apart, so the first one is
+     treated as the blink it usually is — button alive, real sentence, offer intact. */
+  const b1 = await btn(p);
+  b1 && !b1.disabled && /store/i.test(b1.text) && !/used/i.test(b1.text)
+    ? ok(`a refused stamp says what actually went wrong and keeps the offer ("${b1.text}")`)
+    : bad(`the refusal reads ${JSON.stringify(b1)} — "Hint used" is a spend that never happened`);
+  /* Twice on one screen is a wall, not a blink, and a control that cannot succeed should not
+     sit there looking tappable — the same rule retireHint() was written under, now applied to
+     a sentence that is true. */
+  await p.click('#chHint');
+  await p.waitForTimeout(600);
+  const b2 = await btn(p);
+  b2 && b2.disabled && /unavailable/i.test(b2.text)
+    ? ok(`and a second refusal retires it honestly ("${b2.text}")`)
+    : bad(`the second refusal reads ${JSON.stringify(b2)}`);
+  const posted2 = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted2.length === 0
+    ? ok('and still nothing was sold across either tap')
+    : bad(`a purchase left the page on retry: ${JSON.stringify(posted2)}`);
   await p.close();
 }
 
@@ -408,6 +442,7 @@ console.log('\n⑥ THE ROUND IS OVER — THE HINT GOES WITH IT');
 console.log('\nTHE HINT STAYS OFF UNTIL THE PACK IS APPROVED');
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await servePhoto(page);
   await page.addInitScript((h) => {
     window.__hintsLive = false;                     // the flag as it ships
     window.__seed = { get_hide: h, save_seek_trace: null };
