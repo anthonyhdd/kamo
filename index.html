@@ -8637,6 +8637,20 @@ async function buildReveal(){
    video there; share the static challenge image instead (video reveal will be
    done natively later). Desktop/Android keep the animated MP4. */
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+/* THE PRIMING NOTE NAMED THE WRONG OPERATING SYSTEM TO EVERYBODY WHO IS NOT ON IT.
+   #heroNote is baked into the markup as "iOS will ask for camera access", and it is the first
+   sentence on the first screen — including on the MIRROR, which exists precisely so that a
+   friend WITHOUT the app can open a challenge link, and which therefore serves Android and
+   desktop all day. Telling those readers that iOS is about to ask them something is the kind
+   of small wrongness that reads as "this was not built for me" on the one screen that has to
+   earn the next tap. The claim itself is worth keeping: the note is doing permission priming,
+   and the rest of the sentence — nothing is uploaded until you share — is true everywhere.
+   HERE, RATHER THAN AT THE MARKUP, because IS_IOS is a const declared on this line and the
+   note sits ~6000 lines above it: reading it up there is the TDZ this file keeps being bitten
+   by, and duplicating the UA test is how the two copies drift. This runs during module
+   evaluation, before anything can be tapped. */
+{ const hn=document.getElementById("heroNote");
+  if(hn&&!IS_IOS) hn.textContent="Your browser will ask for camera access. Nothing is uploaded until you share — and you choose who sees it."; }
 /* Export a perfect 9:16 Instagram-Stories frame: the captured scene fills the
    frame (cover-cropped top/bottom), caption kept in the safe zone. */
 function composeShare(W,src){ src=src||board; const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
@@ -9395,10 +9409,16 @@ function ssOfferPub(){
    about one in four published hides is ever sent: three quarters of the people who could
    have seen their own photo in the feed were shown nothing at all, on the grounds that they
    had not done the next thing yet.
-   #ssSeeLive is on the sheet from the first frame instead, and it answers to the visibility
-   toggle rather than to the send — see kfRenderVis(), which hides it for a private hide for
-   the same reason ssOfferFeed() used to. Not gated on the wrapper either: chFeed() is this
-   page's own overlay and works exactly as well in a browser tab. */
+   #ssSeeLive is on the sheet from the first frame instead, rather than being handed out as a
+   reward for sending. Not gated on the wrapper either: chFeed() is this page's own overlay
+   and works exactly as well in a browser tab.
+   ⚠️ THIS SAID THE BUTTON "answers to the visibility toggle — see kfRenderVis(), which hides
+   it for a private hide". It does not, and has not since kfRenderVis() was given the opposite
+   rule with its own reasoning attached: chFeed({first}) seeds that exact hide as slide 0 by
+   fetching it BY ID, so a private hide renders there perfectly well and the button is offered
+   in both states. Verified in a browser, toggle flipped to Private, button still there. Left
+   as it was, this paragraph would have somebody "restore" a gate that was deliberately taken
+   out — which is the same trap the og:image note in CLAUDE.md exists to warn about. */
 { const l=$("#ssSeeLive");
   /* Closes the sheet first: the feed is a full-screen overlay and leaving the sheet under it
      is how you end up with two dismissals to get back to the camera.
