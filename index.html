@@ -13642,41 +13642,87 @@ function chSeek(hideId,opts){
        the picture the moment the player pinches in to look closer. */
     /* ⚠️ IT RAN chPop, WHICH ENDS AT opacity:0 — SO THE HINT WAS VISIBLE FOR 0.45s AND GONE.
        chPop is the flash the buzz mark uses on its way to .stay; borrowing it here meant the
-       one thing a player pays for erased itself half a second after it arrived, on a hide they
-       then had to search without it. Measured, not read off the stylesheet: computed opacity
-       0.61 at 100ms, 0.10 at 300ms, 0 from 450ms and 0 for the rest of the round.
-       AND IT POINTED AT THE WRONG PLACE WHILE IT LASTED. chPop animates `transform`, which
-       erases the `translate(-50%,-50%)` that centres this element on the region — so for its
-       whole life the ellipse hung down and right of the answer by half its own size. Every
-       keyframe below therefore repeats the translate, which is the same lesson chHold already
-       carries about box-shadow: an animated property wins over the rule it animates.
-       THE ENTRY IS THE LOCK. Scaling in from 2.1 through a slight undershoot reads as a sight
-       closing on the region rather than a decoration appearing — the beat that says the search
-       area just collapsed. Then .set takes over and the ring breathes for the rest of the
-       round, which is what keeps it findable in peripheral vision while the eyes are on the
-       photo, and .calm freezes it once the buzz is spent so the celebration owns the motion. */
+       one thing a player pays for erased itself half a second after it arrived. Measured, not
+       read off the stylesheet: computed opacity 0.61 at 100ms, 0.10 at 300ms, 0 from 450ms on.
+       It also animated `transform`, erasing the translate(-50%,-50%) that centres this on the
+       region — so while it lasted it pointed half its own size away from the answer. Both are
+       pinned by ⑦ in test-hint-dom.mjs, on rendered pixels rather than on the inline style.
+
+       ⚠️ AND THEN IT WAS A DASHED RING, WHICH IS A MARQUEE, NOT A GAME. Founder verdict on the
+       first version that actually worked: "le design est pas très beau". Seen on the striped
+       test pattern it was fine; seen on a real photograph — a mantelpiece, a doorway — a mint
+       dashed outline reads as a Photoshop selection or a debug overlay laid on somebody's
+       living room, and the app's own accent colour makes it look MORE like tooling, not less.
+       AND THE SHAPE MADE IT WORSE. The region is normalised per axis, so on a 390x700 frame a
+       true region is an ellipse 141 wide and 253 tall — correct, and with a hard 2px edge it
+       reads as a circle somebody squashed by accident. Correctness was not the problem; the
+       hard edge was, because only a hard edge has a shape to look wrong.
+
+       SO THE HINT IS LIGHT NOW, NOT A LINE — and that single change answers both. There is no
+       outline: `box-shadow: 0 0 Npx 9999px` on a border-radius:50% element darkens the ENTIRE
+       rest of the frame in one property, with the blur radius softening the boundary into a
+       falloff. A soft edge has no silhouette to be distorted, so the per-axis stretch stops
+       being visible while staying exactly as correct as before — the element keeps its precise
+       geometry, which is also what keeps ⑦'s assertions meaningful.
+       It is on-brand in a way a wireframe could never be: this is a camera app, and the hint
+       now behaves like a light being pointed rather than a shape being drawn on the photo.
+       9999px of spread rather than a full-frame gradient element so the mask and the region
+       are ONE node — no second element to keep in sync with the zoom, and .chStage's
+       overflow:hidden is what clips it to the picture.
+
+       AND IT NEVER LIFTS, WHICH IS THE POINT. The dim used to be a separate element that faded
+       out after a second, leaving the naked ring behind; the thing bought was a flash. Now the
+       spotlight IS the hint and it stays for the round: the rest of the photo is readable at
+       .44 — de-emphasised, not hidden, so a player who wants to double-check outside still can
+       — and the entry dips to .72 before easing back, which is the beat that says the search
+       just collapsed. One element, one animation, ending on its resting value with `both`.
+       No breathing loop: a mask covering the whole frame is already impossible to lose track
+       of, and a pulse on it would be motion for its own sake. */
     +".chHintZone{position:absolute;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);"
-    /* Legibility is not the colour, it is the two dark hairlines around it — .chMark learned
-       this from a founder screenshot of a mint ring dissolving into a pale wall, and a hint
-       drawn over an unknown photograph has exactly the same problem. */
-    +"border:2px dashed var(--mint);background:rgba(95,230,164,.10);"
-    +"box-shadow:0 0 0 1.5px rgba(4,6,10,.5),inset 0 0 0 1.5px rgba(4,6,10,.42),0 0 24px rgba(95,230,164,.26);"
-    +"animation:chZoneIn .52s cubic-bezier(.2,.75,.3,1) both;}"
-    +"@keyframes chZoneIn{0%{transform:translate(-50%,-50%) scale(2.1);opacity:0}"
-    +"58%{transform:translate(-50%,-50%) scale(.95);opacity:1}"
-    +"100%{transform:translate(-50%,-50%) scale(1);opacity:1}}"
-    +".chHintZone.set{animation:chZoneHold 2.6s ease-in-out infinite;}"
-    +"@keyframes chZoneHold{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.95}"
-    +"50%{transform:translate(-50%,-50%) scale(1.035);opacity:.72}}"
-    /* Last of the three on purpose: .set and .calm are both two classes, so source order is
-       what makes the freeze win on an element carrying both. */
-    +".chHintZone.calm{animation:none;opacity:.8;}"
-    /* THE ONE SECOND THAT PROVES WHAT WAS BOUGHT. Everything outside the region darkens, then
-       lifts — so the player SEES the search collapse instead of being handed a ring and left
-       to infer it. Self-removing, pointer-events:none: the buzz must stay live through it, and
-       nothing about a round may depend on this element existing. */
-    +".chZoneDim{position:absolute;inset:0;pointer-events:none;opacity:0;animation:chZoneDim 1.15s ease-out forwards;}"
-    +"@keyframes chZoneDim{0%{opacity:0}20%{opacity:1}62%{opacity:1}100%{opacity:0}}"
+    /* ⚠️ NO INSET GLOW, AND THE FIRST ATTEMPT HAD ONE. A mint `inset` was meant to sign the
+       shape without stroking it; on a photograph it is a film of haze over the ONE part of the
+       picture the player just paid to see clearly. The sharpest, brightest region on screen
+       has to be the region. The colour is carried by the button and the celebration; the light
+       does not need tinting to belong to this app.
+       ⚠️ AND box-shadow CANNOT BLUR INWARDS, which killed the second attempt. An outer shadow
+       is painted from the border-box outwards and never underneath the element, so the hole is
+       the element's own box, exactly — a hard edge whatever the blur radius. Raising the blur
+       from 34px to 96px softened the far perimeter of a 9999px rectangle, i.e. something a
+       long way off screen, and left the boundary as crisp as the dashed ring it replaced.
+       Screenshotted on a real photo both times; the stylesheet said "blur" and the picture
+       said "cut-out".
+       SO THE FALLOFF IS A GRADIENT AND THE ELEMENT IS FOUR RADII WIDE. The box is 2x the region
+       on each axis, and `closest-side` makes the gradient's own radii the box's half-extents —
+       so 50% along either axis lands exactly on the region, per axis, and the outer half is the
+       falloff. Three radii of falloff was tried first and was prettier in isolation and useless
+       in practice: the lit area spilled past the frame and nothing on screen said where the
+       kamo was, which is the entire thing being sold. Beyond the box a flat spread shadow continues at the SAME alpha the
+       gradient ends on, so the two meet with nothing to see: one node, a soft light in the
+       middle, an even darkness everywhere else.
+       The alphas are baked at their deepest and the resting level is reached with `opacity`,
+       because a gradient cannot be animated but opacity is free and runs on the compositor. */
+        /* The hairline is a STOP IN THE SAME GRADIENT, at exactly 50% — the region's own boundary,
+       per axis. A soft light alone was pretty and vague: you could see the picture was brighter
+       somewhere and not where the region ended, which is the one fact being sold. White at 16%
+       over a 1.4% band is enough to place it and far too faint to read as a marquee; the dashed
+       mint outline this replaced was 2px of full-strength accent, which is why it looked like
+       tooling. Kept white rather than mint on purpose: mint is the brand's SIGNAL colour here —
+       the buzz mark, the find ring, the button — and spending it on a boundary would put the
+       loudest colour on screen everywhere except the thing the player is hunting. */
+    +"background:radial-gradient(closest-side,rgba(4,6,10,0) 0%,rgba(4,6,10,0) 48.6%,rgba(255,255,255,.16) 49.4%,rgba(255,255,255,.16) 50.6%,rgba(4,6,10,.06) 52%,rgba(4,6,10,.30) 64%,rgba(4,6,10,.64) 82%,rgba(4,6,10,.82) 100%);"
+    +"box-shadow:0 0 0 9999px rgba(4,6,10,.82);"
+    +"animation:chZoneIn .62s cubic-bezier(.2,.75,.3,1) both;}"
+    /* Every keyframe repeats the translate: an animated property wins over the rule it
+       animates, which is the lesson chHold already carries about box-shadow. */
+    +"@keyframes chZoneIn{"
+    +"0%{transform:translate(-50%,-50%) scale(1.42);opacity:0}"
+    +"46%{transform:translate(-50%,-50%) scale(.99);opacity:1}"
+    +"100%{transform:translate(-50%,-50%) scale(1);opacity:.76}}"
+    /* Set on the buzz. The round is decided, so the spotlight steps back to let the
+       celebration own the frame — but it does NOT go away: on a miss the flip against the
+       revealed photo is where the player sees the kamo was inside the light they paid for,
+       which is the most persuasive thing this product ever says about hints. */
+    +".chHintZone.calm{animation:none;opacity:.42;transition:opacity .5s ease;}"
     /* The reticle: a ring with a mint centre, held ABOVE the finger so the aim point is
        always visible. pointer-events:none — it is a sight, not a control. */
     +".chRet{position:fixed;z-index:6;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);pointer-events:none;}"
@@ -14378,32 +14424,20 @@ function chSeek(hideId,opts){
          feed mounts several rounds at once, so on any slide but the first it would hang the
          answer to THIS hide over somebody else's picture. `img` is this round's closure. */
       const fr=img.parentElement||$$("chFrame");
-      const rx=reg.r*w2, ry=reg.r*h2, cx=reg.cx*w2, cy=reg.cy*h2;
       hintZone=document.createElement("div"); hintZone.className="chHintZone";
-      hintZone.style.left=cx+"px";  hintZone.style.top=cy+"px";
-      hintZone.style.width=(2*rx)+"px"; hintZone.style.height=(2*ry)+"px";
+      hintZone.style.left=(reg.cx*w2)+"px";  hintZone.style.top=(reg.cy*h2)+"px";
+      /* FOUR RADII, NOT TWO — see .chHintZone. The clear core is the middle HALF of this box on
+         each axis, so the box is 2x the region and the falloff gets exactly one region-radius
+         to fade in. Three radii of falloff was measurably prettier and unusably vague: the lit
+         area spilled past the frame and nothing said where the kamo was. The region is still
+         stated exactly — width/4 is r*frameW, height/4 is r*frameH — which is what ⑦ asserts. */
+      hintZone.style.width=(4*reg.r*w2)+"px"; hintZone.style.height=(4*reg.r*h2)+"px";
+      /* ONE NODE. The mask used to be a second, full-frame element carrying a radial-gradient
+         built here in JS — which meant two things to position, two things to keep on the same
+         zoom, and a gradient whose geometry had to be recomputed to stay honest. The spotlight
+         is now a spread box-shadow on this element (see .chHintZone), so the region and the
+         darkness it casts are the same box and cannot drift apart. */
       fr.appendChild(hintZone);
-      /* Handed to .set once the entry has landed, because the two animations write the same
-         two properties and a `both` fill plus an infinite loop on one element is a fight over
-         which one is filling at any instant. Sequenced instead of layered: one owner at a
-         time, which is also why the freeze below is a third class rather than a cancel. */
-      setTimeout(()=>{ try{ if(hintZone&&!hintZone.classList.contains("calm")) hintZone.classList.add("set"); }catch(_){} },560);
-      /* WHAT THE HINT ACTUALLY DID, SHOWN RATHER THAN IMPLIED. A ring appearing on a photograph
-         is a small event; the whole rest of the photograph going dark around it is the size of
-         what was just bought. It lasts about a second and lifts on its own — a permanent mask
-         would be a different game, and would hide the half of the frame the player still wants
-         to sweep before committing their one tap.
-         An ELLIPSE, for the same reason the ring is one: the server's region is normalised per
-         axis, so a round hole would darken ground the answer can legally sit on. */
-      const dim=document.createElement("div"); dim.className="chZoneDim";
-      dim.style.background="radial-gradient(ellipse "+Math.round(rx*1.06)+"px "+Math.round(ry*1.06)+"px at "+Math.round(cx)+"px "+Math.round(cy)+"px,rgba(4,6,10,0) 62%,rgba(4,6,10,.66) 100%)";
-      /* UNDER THE RING, not over it. Appended after, the mask washes over the one mint edge
-         the player is meant to read and the ring comes back grey for the second the beat
-         lasts — the ring sits exactly on the gradient's falloff, which is the darkest part of
-         the mask. In front of it instead, mint sits on near-black and is at its most legible
-         precisely while the photo is at its least. */
-      fr.insertBefore(dim,hintZone);
-      setTimeout(()=>{ try{ dim.remove(); }catch(_){} },1250);
       buzzHaptic(10);
     }
 
@@ -14794,13 +14828,12 @@ function chSeek(hideId,opts){
       quit.remove();
       /* The round is decided; a hint now would sell help for a shot already spent. */
       try{ hintBtn.remove(); }catch(_){}
-      /* AND THE ZONE STOPS BREATHING, BUT STAYS DRAWN. Motion here would compete with the
-         celebration on a find — chCelebrate, the confetti and the held mark all land on this
-         frame — so the pulse is frozen rather than the ring removed.
-         IT STAYS BECAUSE OF THE MISS. The flip against the revealed frame is where a player
-         sees that the kamo was inside the ring they paid for and their one tap was not, which
-         is the most persuasive thing this product ever says about hints. Deleting it here
-         would delete exactly that. */
+      /* AND THE SPOTLIGHT STEPS BACK, BUT STAYS. The round is decided and the celebration
+         should own the frame — chCelebrate, the confetti and the held mark all land on it — so
+         the mask eases from .44 to .26 rather than being removed.
+         IT STAYS BECAUSE OF THE MISS. The flip against the revealed photo is where a player
+         sees the kamo was inside the light they paid for and their one tap was not, which is
+         the most persuasive thing this product ever says about hints. */
       try{ if(hintZone) hintZone.classList.add("calm"); }catch(_){}
       const r=img.getBoundingClientRect();
       const x=Math.max(0,Math.min(1,(sx-r.left)/r.width)), y=Math.max(0,Math.min(1,(sy-r.top)/r.height));
