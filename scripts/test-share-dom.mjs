@@ -73,7 +73,8 @@ await page.route('**/storage/v1/object/hides/**', async r=>{ await new Promise(x
 await page.addInitScript(()=>{
   localStorage.setItem('kamo_handle','tony');
   let n=0; window.__created=[];
-  window.__rpc=(fn,body)=>{ if(fn==='create_hide'){ n++; const id='hide'+n; window.__created.push(body.p_img_path); return Promise.resolve(id); } return Promise.resolve(null); };
+  window.__calls=[];
+  window.__rpc=(fn,body)=>{ window.__calls.push(fn); if(fn==='create_hide'){ n++; const id='hide'+n; window.__created.push(body.p_img_path); return Promise.resolve(id); } return Promise.resolve(null); };
   window.__msgs=[];
   window.__all=[];
   window.ReactNativeWebView={postMessage:(raw)=>{ try{ const m=JSON.parse(raw); window.__all.push(m.type); if(m.type==='invite') window.__msgs.push(m.message||''); }catch(e){ window.__all.push('unparsed'); } }};
@@ -131,6 +132,36 @@ offered===false ? ok('the Get-KAMO offer stays hidden inside the app') : bad('#s
 
 const r2=await round('ROUND 2 — same session, own hide',1200);
 /hide2/.test(r2.msg) ? ok('round 2 sends its OWN hide (hide2), not round 1\'s') : bad('STALE LINK: '+JSON.stringify(r2.msg.slice(-40)));
+/* ⚠️ A HIDE IS SENT ONCE, HOWEVER MANY TIMES THE BUTTON IS TAPPED.
+   Nothing guarded chMarkSent(), so a second tap fired a second mark_hide_sent, a second
+   `hide_sent`, a second pwFirstOffer and a second armResultsPing. Measured with three fast
+   taps before the fix: one create_hide, three mark_hide_sent.
+   A second tap must still SEND — sending the same hide to two people is the loop working, and
+   share_target_tapped counts every tap, which is what that event is for. What must not double
+   is the CLAIM that a hide was sent: hide_published → hide_sent is the conversion this product
+   steers by, and it already over-counts by the share of people who open iOS's sheet and back
+   out. An unbounded second source of inflation on top of a known bounded one is how a rate
+   stops meaning anything.
+   Asserted across round 2 as well, because the latch is keyed on the round: a per-session
+   guard would pass the first half of this and silently stop counting every later hide. */
+{
+  const before = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
+  const msgs = await page.evaluate(() => window.__msgs.length);
+  await page.evaluate(() => { const b = document.getElementById('ssInvite'); b.click(); b.click(); });
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
+  const msgs2 = await page.evaluate(() => window.__msgs.length);
+  after === before
+    ? ok(`two more taps stamp nothing new (mark_hide_sent stays at ${after})`)
+    : bad(`the stamp fired ${after - before} more time(s) on repeat taps — hide_sent inflates by re-tapping`);
+  msgs2 > msgs
+    ? ok('and the share still goes out on every tap — the same hide can reach two people')
+    : bad('a repeat tap sent nothing at all — the guard is on the share, not on the stamp');
+}
+const sentPerRound = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
+sentPerRound === 2
+  ? ok('and across two rounds the stamp fired exactly twice — once per hide')
+  : bad(`mark_hide_sent fired ${sentPerRound} times over two rounds`);
 const paths=await page.evaluate(()=>window.__created);
 paths.length===2 && paths[0]!==paths[1] ? ok(`two rounds → two distinct images (${paths.length})`) : bad('images: '+JSON.stringify(paths));
 /* The real-world case: the median gap between the reveal and a share is 154 seconds, so
