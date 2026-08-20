@@ -8408,6 +8408,15 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    it appears at volume the RPC is gone or renamed and every device is back on positional
    paging — a duplicate-and-skip regression that would otherwise be completely silent. */
 "feed_page_seen_unavailable",
+/* `feed_page_seed_unavailable` IS EXPECTED TO FIRE, AND ONLY DURING A DEPLOY.
+   The page ships on push and the database does not, so between the two there is a window in
+   which this file asks for the seeded overload and the database has never heard of it. The rung
+   below catches that and the feed is unaffected — every device simply shares one order, which
+   is the behaviour of every build before today.
+   READ IT AS A CLOCK, NOT AS AN ERROR: a burst at deploy time that decays to nothing is the
+   migration landing. A floor that never reaches zero means some devices can never get the
+   shuffle, and the per-device order is not actually shipped however green the migration looked. */
+"feed_page_seed_unavailable",
 /* THE MOMENT THE FLOOR IS CLEARED, and it has to land on the SAME Amplitude user as the two
    names it will be read against. `hide_publish_blocked` and `hide_published` are both direct,
    so a coverage event travelling by the bridge would answer for a different user and no ratio
@@ -15618,6 +15627,11 @@ const KF_PAGE=8;
    very start of a long session; the on-screen guard in load() still refuses to mount it twice,
    so the worst case is a wasted row in a page rather than a duplicate on screen. */
 const KF_SEEN_SEND=300;
+/* HOW FAR paint() WILL PAGE PAST AN EMPTY SCREEN before it accepts the room is spent. Four
+   pages is 32 rows, which clears a page that filtered to nothing on the ordinary reasons —
+   already seen, own hide, a black rectangle — without turning a genuinely exhausted feed into
+   a stack of round trips the player waits through. */
+const KF_MAX_DRY_PAGES=4;
 /* PostgREST returns a SET-returning function as a JSON ARRAY, and chRpc unwraps arrays to
    their first element — correct for every RPC that existed before this one, and silently
    wrong here: the feed would have loaded exactly one hide per page and looked like an empty
@@ -15714,6 +15728,37 @@ function kfMarkSeen(id){
   try{ const a=kfSeen().filter(x=>x!==id); a.unshift(id);
        localStorage.setItem(KF_SEEN_KEY,JSON.stringify(a.slice(0,400))); }catch(e){}
 }
+/* THIS DEVICE'S PLACE IN THE SHUFFLE — the one per-user thing the ranking has ever had.
+ *
+ * feed_page ordered by least(n_attempts,3), then score, then created_at desc, and not one of
+ * those depends on WHO is asking. Every device therefore walked the same list, and the only
+ * thing separating two players was kfSeen(), which lives here and which the server never saw.
+ * So the server kept handing back the same head, the client kept throwing it away, and the
+ * feed read as though it were looping. Founder's report, 2026-08-20, from someone playing a
+ * long session: "elle voit souvent les mêmes images".
+ *
+ * The seed is the tiebreak under the quality keys (see the migration): it reorders hides
+ * WITHIN a score-and-day bucket, and it changes nothing above that. Two devices past the
+ * under-played head share ~30% of a 30-row page instead of 100%. Measured on the live
+ * database, three seeds, 2026-08-21.
+ *
+ * WRITTEN ONCE AND NEVER ROTATED. A seed that changed between sessions would reshuffle the
+ * corpus under a player who is working through it, which is the bug, not the fix.
+ * Held in a module variable as well as localStorage so a device in private mode still gets a
+ * consistent order for the length of its session instead of a fresh shuffle on every page. */
+const KF_SEED_KEY="kamo_feed_seed";
+let kfSeedMem="";
+function kfSeed(){
+  if(kfSeedMem) return kfSeedMem;
+  try{ const s=localStorage.getItem(KF_SEED_KEY);
+       if(s&&typeof s==="string"){ kfSeedMem=s; return s; } }catch(e){}
+  /* Not a secret and never sent anywhere but here — it only has to be different between two
+     devices, so Math.random plus the clock is the right amount of machinery. */
+  kfSeedMem=Math.random().toString(36).slice(2,12)+Date.now().toString(36);
+  try{ localStorage.setItem(KF_SEED_KEY,kfSeedMem); }catch(e){}
+  return kfSeedMem;
+}
+
 /* BLOCKED AUTHORS, AS TAGS RATHER THAN AS PEOPLE.
  *
  * What is stored is sha256(author_key || pepper), handed over by block_author() — never the
@@ -16284,7 +16329,8 @@ function chFeed(opts){
      key is least(n_attempts,3) and the untouched band is about one page deep, so one person
      playing one hide re-numbers everything under it. See the rung in load(). */
   const S={cursor:null,served:new Set(),
-           loading:false,done:false,slides:[],active:-1,round:null,played:0,found:0,hinted:false,lap:0};
+           loading:false,done:false,slides:[],active:-1,round:null,played:0,found:0,hinted:false,lap:0,
+           dryPages:0};
   kfState=S;
   /* THE CLOCK STARTS HERE, and it exists because the last change to this screen could not be
      judged. The feed was made to open on a page fetched at launch instead of one fetched at
@@ -16795,6 +16841,11 @@ function chFeed(opts){
        renumbered against a list that no longer matches the screen. S.active shifts with the
        insertion for the same reason. Every existing caller passes no `at` and appends,
        byte-for-byte the old behaviour. */
+    /* A ROW REACHED THE SCREEN, so the dry stretch paint() was paging through is over and its
+       budget goes back. Without this the cap would be a session-long allowance: four dry pages
+       early on, and a player who scrolled for an hour afterwards would get the lap on the first
+       page that filtered to nothing, which is the behaviour this is here to stop. */
+    S.dryPages=0;
     const s={el,host,row,replay:!!replay};
     if(at>=0&&at<S.slides.length){
       scroll.insertBefore(el,scroll.children[at]||null);
@@ -16872,10 +16923,38 @@ function chFeed(opts){
            construction, and re-ranked live between pages, which is what a quality feed wants.
            Migration `feed_page_exclude_seen`, 2026-08-16: 24 rows over three pages, 24 distinct,
            page 1 still entirely n_attempts=0. */
+        /* AND THE EXCLUSION NOW CARRIES WHAT THIS DEVICE SAW ON OTHER DAYS, not merely what it
+           was handed since the feed opened. That single word — session — was the whole reason
+           the seed below could not reach anybody.
+           The arithmetic: the under-played head (bands 0-2) is 96 rows deep, so a returning
+           player's first TWELVE pages are hides kfSeen() already holds. The server did not know
+           that, kept offering them, and the client dropped all eight of every page — twelve
+           round trips that mount nothing, and, before the fix in paint(), a straight fall into
+           the second lap. Sending kfSeen() skips that head server-side and lands the player in
+           the 8 800 rows below it, which is the only place the per-device shuffle has room to
+           work at all: overlap between two devices falls from 100% to ~30% there, and stays at
+           100% above it no matter what seed is sent.
+           ORDER IS THE CONTRACT: the server keeps the FIRST 300 of this array (`p_seen[1:300]`),
+           so the session's own rows go first — they are the ones that would otherwise come back
+           on screen — and the durable history fills whatever room is left. Dedup because a hide
+           played this session is in both. */
+        const served=[...S.served];
+        const p_seen=served.concat(kfSeen().filter(id=>!S.served.has(id))).slice(0,KF_SEEN_SEND);
         try{
           rows=await kfRpc("feed_page",
-            {p_limit:KF_PAGE,p_block_tags:tags,p_seen:[...S.served].slice(-KF_SEEN_SEND)});
+            {p_limit:KF_PAGE,p_block_tags:tags,p_seen:p_seen,p_seed:kfSeed()});
         }catch(e){
+        try{
+          /* THE SEEDED OVERLOAD IS THE NEWEST THING HERE, so it gets its own rung rather than
+             dragging the exclusion down with it. The database does not deploy when this file
+             does; until the migration lands, this is the call that works, and it is the one
+             that shipped on 2026-08-16. Unseeded, so every device shares an order — today's
+             behaviour, which is worse than the seed and much better than no feed. */
+          track("feed_page_seed_unavailable",{});
+          rows=await kfRpc("feed_page",
+            {p_limit:KF_PAGE,p_block_tags:tags,p_seen:p_seen});
+        }catch(e2){
+
           /* THE CLIMB DOWN, and the block list is what makes it safe. A device that has blocked
              somebody keeps the 3-argument form, which still filters them out — falling all the
              way to the 2-argument call would answer "don't show me this person" with their
@@ -16886,6 +16965,7 @@ function chFeed(opts){
           rows=await kfRpc("feed_page", tags.length
             ? {p_before:S.cursor,p_limit:KF_PAGE,p_block_tags:tags}
             : {p_before:S.cursor,p_limit:KF_PAGE});
+        }
         }
       }
       /* STAMPED ONCE, ON THE LOAD THAT THE USER IS WAITING FOR. load() runs again on every
@@ -17522,6 +17602,27 @@ function chFeed(opts){
   function paint(){
     if(kfState!==S) return;
     if(!S.slides.length){
+      /* AN EMPTY SCREEN IS NOT AN EMPTY SERVER, AND THIS ASKED THE WRONG ONE FIRST.
+         `S.slides` empty means the rows of the LAST page all got filtered — already seen, own
+         hide, black rectangle. With ~9.3k eligible hides behind a page of 8, that says nothing
+         at all about whether the corpus is spent, and the lap below is expensive: it drops the
+         seen list for the whole rest of the session, so one page that happened to filter to
+         nothing re-serves hides the player already spent. Measured 2026-08-20: feed_second_lap
+         fired 140-238×/day and in 88% of them `seen` was 1 or 3 — people were being told they
+         had cleared a room they had barely walked into.
+         dry() already knew this and pages forward before handing over (see its `if(!S.done)`).
+         The path paint() owns — the very first load of a feed session — did not, and went
+         straight to the lap. So it pages forward too, and only the server running out is
+         allowed to mean the room is empty.
+         BOUNDED, because every one of these is a round trip on the critical path and a
+         returning player's seen list can filter several pages in a row. Past the cap the lap
+         is the honest answer again. `S.dryPages` resets in addSlide(): the budget is per dry
+         stretch, not per session, or a long session would spend it and never recover. */
+      if(!S.done&&(S.dryPages||0)<KF_MAX_DRY_PAGES){
+        S.dryPages=(S.dryPages||0)+1;
+        load().then(paint);
+        return;
+      }
       /* EMPTY MEANS TWO DIFFERENT THINGS AND ONLY ONE OF THEM IS A COLD START.
          If this device has played hides before, the room is not empty — it has been cleared,
          and the honest move is to reopen it rather than to tell a regular player that the
@@ -17535,6 +17636,10 @@ function chFeed(opts){
            would exclude, server-side, exactly the hides the lap exists to bring back, and the
            reopened room would come back empty every time. */
         S.lap=1; S.done=false; S.cursor=null; S.served.clear();
+        /* The lap is a fresh pass and gets a fresh budget: it re-asks from the top with the
+           skip list dropped, and a first page that still filters to nothing must be allowed to
+           page on rather than fall straight through to the cold start. */
+        S.dryPages=0;
         track("feed_second_lap",{seen:kfSeen().length});
         load().then(paint);
         return;
