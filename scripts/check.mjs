@@ -509,7 +509,46 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
-/* ---- 5c-ter. WEB_ONLY and the wrapper's allow-list must not overlap -------------------------
+/* ---- 5c-ter. …and a carried event may not double as ITSELF -----------------------------------
+   5c-bis above guards one direction: a CARRIER name must mean one thing. This is the other,
+   and it cost more. Every call site fires `track(kind)` and then `trackCarried(kind)` — the
+   real name for anyone who can receive it, a carrier for the 1.0.2 fleet whose allow-list
+   drops it. The router reads `caps.eventsV2 ? kind : CARRIER_102[kind]`, so the day eventsV2
+   shipped it began resolving back to the name the call site had ALREADY sent, and both events
+   were counted. Amplitude on 2026-08-19: `purchase_initiated` split exactly 38 without
+   `carrier_for` and 38 with, the same 50/50 every day for a week. 90 buy taps on 08-17 read as
+   180; `round_finished` read 4 311 for ~2 200 rounds. A doubled numerator makes a checkout
+   rate look half as good as it is, and nothing anywhere looks broken.
+   The browser guard is the same defect wearing the other hat: with no wrapper there is no
+   allow-list to dodge and chWebTrack already delivered the real name, so the carrier only put
+   plain-browser rounds inside `reveal_previewed` — the number that is supposed to mean "a
+   round from a build that cannot say round_finished".
+   Static because the guards are one keystroke from deletion; test-carrier-dom.mjs then proves
+   at runtime that they actually hold, in all four worlds. */
+{
+  const fn = html.match(/function trackCarried\([\s\S]*?\n\}/);
+  if (!fn) bad('trackCarried not found — the funnel events for the old fleet have lost their router');
+  else {
+    const body = fn[0];
+    /* Only meaningful while the router CAN resolve to the real name. If someone later gives
+       eventsV2 its own dedicated name, the guard stops being load-bearing and this check
+       should stop demanding it rather than becoming a rule nobody remembers the reason for. */
+    const routesToKind = /\?\s*kind\s*:/.test(body);
+    const guards = [
+      [routesToKind && !/\bname\s*===\s*kind\b[^\n]*return/.test(body),
+        'the router can resolve to `kind` itself and nothing stops it re-sending a name the '
+        + 'call site already sent — that is the 90-taps-read-as-180 bug, exactly'],
+      [!/!window\.ReactNativeWebView\s*\)\s*return/.test(body),
+        'a carrier is sent even with no wrapper around the page, where the real name already '
+        + 'reached Amplitude through chWebTrack — browser traffic lands inside a carrier name'],
+    ].filter(([broken]) => broken).map(([, msg]) => msg);
+    guards.length
+      ? bad('ONE ACTION IS BEING COUNTED TWICE — ' + guards.join('; AND '))
+      : ok('a carried event is emitted once (trackCarried refuses the real name and the browser)');
+  }
+}
+
+/* ---- 5c-quater. WEB_ONLY and the wrapper's allow-list must not overlap ----------------------
    WEB_ONLY names bypass postNative() and go straight to Amplitude, because the wrapper drops
    anything not on its compiled WEB_EVENTS set and track() returns the moment postNative
    succeeds. That is only correct while the two lists are disjoint. The day someone adds one
@@ -1516,6 +1555,21 @@ try {
     : ok('the web names its variant to Amplitude as a user property (node scripts/test-variantprop-dom.mjs)');
 } catch (e) {
   bad('THE WEB IS INVISIBLE IN THE VARIANT DASHBOARDS:\n' + why(e));
+}
+
+/* The runtime half of 5c-ter. The static check can see that two guards are written; only a
+   browser can say that the router actually emits one name per action across the four worlds
+   that exist — eventsV2, an old build that announced its caps, a build that announced none,
+   and no wrapper at all. The middle two are the ones a "simplification" would delete, and
+   they are the only reason carriers exist. The Buy tap is then driven for real, because the
+   doubling was found on the path that pays and that is where it must stay found. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-carrier-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-carrier-dom.mjs', 'CARRIER TEST', out)
+    : ok('one action emits one event name, on every build (node scripts/test-carrier-dom.mjs)');
+} catch (e) {
+  bad('AN ACTION IS BEING COUNTED TWICE:\n' + why(e));
 }
 
 /* The regression this change exists to prevent, asserted on the source as well as at runtime:
