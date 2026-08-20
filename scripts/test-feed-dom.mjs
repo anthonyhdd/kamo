@@ -1270,6 +1270,73 @@ console.log('\nTHE ROUND\'S CHROME NEVER COVERS THE FEED\'S CONTROLS');
   await page.close();
 }
 
+/* ⚠️ THE SWIPE HINT AND THE ENDING CARD WERE SHARING A ROW, AND THE CARD WAS UNDERNEATH.
+   killHint() deliberately does not fire when a round ends — the swipe is the only way out of
+   a finished round, so the instruction is load-bearing exactly then. That decision rests on
+   one sentence written when "Next hide ↑" was deleted: "the pill only ever died there because
+   it landed on top of this button; with the button gone the collision is gone." The card grew
+   back around it. .kfHint is pinned at bottom:84px and the card is taller than that: measured
+   on a round lost in 2.3s, the pill occupied 707–759 while "Challenge back" was 684–740 and
+   "Send to a friend" 748–794 — it straddled both, at z-index 25, for the six seconds before it
+   fades. 55% of misses land under four seconds, so that is the ordinary first session, on the
+   two buttons the whole loop runs through.
+   pointer-events:none means the taps still landed, which is why nothing was ever reported as
+   broken — the labels were simply unreadable. A test that asked "is the button clickable"
+   would have passed all along, so this one asks about the pixels. */
+console.log('\nTHE SWIPE HINT CLEARS THE ENDING CARD');
+{
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await page.addInitScript((r) => {
+    window.__seed = {
+      feed_page: r,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
+      /* A MISS, because that is the card with two CTAs on it and the one 54% of finished
+         rounds actually reach. */
+      submit_attempt: { hit: false, tries: 4, missed: 3, secs: 9, pct: 40, others: 0 },
+      reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 },
+      save_seek_trace: null,
+    };
+  }, ROWS(4));
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(800);
+  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.waitForTimeout(1000);
+
+  const pill = await page.evaluate(() => !!document.getElementById('kfHint'));
+  pill ? ok('a first session gets the swipe instruction') : bad('no #kfHint — this block proves nothing');
+
+  /* Buzzed fast on purpose: the pill fades at 6s, so a slow round would pass by outliving
+     nothing. This is the shape of the round that actually collides. */
+  await page.mouse.move(190, 420);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await page.waitForTimeout(1800);
+
+  const geo = await page.evaluate(() => {
+    const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, t: e.textContent.trim().slice(0, 28) }; };
+    return {
+      hint: r(document.getElementById('kfHint')),
+      ctas: [...document.querySelectorAll('.chCta, .chCta2')].map(r).filter(Boolean),
+    };
+  });
+  const hits2 = (a, b) => !!(a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h);
+
+  geo.hint && geo.hint.h > 0 && geo.ctas.length >= 2
+    ? ok(`the pill is still up over a ${geo.ctas.length}-button card — the state that collided`)
+    : bad(`nothing to measure: hint=${JSON.stringify(geo.hint)} ctas=${geo.ctas.length}`);
+
+  const covered = geo.ctas.filter((c) => hits2(geo.hint, c));
+  covered.length === 0
+    ? ok(`and it clears every one of them (${geo.ctas.map(c => `"${c.t}"`).join(', ')})`)
+    : bad('the swipe pill is on top of the loop\'s own buttons again:\n'
+        + `      hint=${JSON.stringify(geo.hint)}\n`
+        + covered.map(c => `      covers=${JSON.stringify(c)}`).join('\n'));
+  await page.close();
+}
+
 await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed plays real rounds and the visibility default is honest');
 process.exit(failed ? 1 : 0);
