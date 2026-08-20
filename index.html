@@ -8285,6 +8285,17 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    rather than of eight rectangles. The page is kept when it fires, so this is a tuning
    signal and not an outage — but at volume it means KF_DARK_MEAN / KF_DARK_SPREAD are
    eating real photographs and have to come down. */
+/* `photo_pick_failed` is the black-hide factory's REMAINING door, and the same shape as
+   reply_photo_failed one line down: a picked file the browser cannot decode used to become a
+   #223 board and then a published rectangle. Web-first — the browser is where the odd codec
+   lands — so it goes direct rather than through an allow-list a build would have to be cut
+   for. It should not carry volume: at volume it means a codec the fleet actually has. */
+"photo_pick_failed",
+/* `seek_photo_failed` is the third place an image reaches this app, and the last one that
+   was failing silently: a round played on a photo that never arrived, which filed a real
+   attempt with a 0.0s clock into everybody else's percentile. At volume this one means
+   storage, not phones — which is why it is worth being able to tell the two apart. */
+"seek_photo_failed",
 "reply_photo_failed","feed_black_dropped","feed_black_all",
 /* `feed_dupe_blocked` is a MEASURE OF A SERVER BUG, not of a client one: feed_page paginates
    on created_at while ordering by score, so it re-serves rows the page above already showed.
