@@ -86,6 +86,64 @@ console.log('\nTHE SEEKER IS TOLD WHO THEY ARE PLAYING');
   const t=await head(null);
   t==='Someone hid a kamo here' ? ok(`an unsigned hide still says what happened ("${t}")`) : bad(`unsigned hide shows ${JSON.stringify(t)}`);
 }
+/* ⚠️ AND THE NAME HAS TO BE READABLE, WHICH IS NOT THE SAME CLAIM.
+   The headline shares its row with the clock pill (top:12px, right:12px, ~35px tall). The note
+   beside .chRun said it could not reach it — ".chHead is max-width:20ch and centred, which
+   caps it around 226px on a 390pt screen — the pill starts at x≈320" — and the arithmetic was
+   wrong: 20ch of clamp(20px,5.8vw,26px) is 293px at 390pt. Measured on the real screen before
+   the fix: at 320pt the ink reached x=267 against a pill starting at 251 for EVERY handle,
+   "@tony" included, and at 390/430 it collided at 16 characters, which is the exact length
+   cleanHandle() allows.
+   THE SECOND HALF IS WORSE AND IS A DIFFERENT BUG. A handle is one unbreakable token, so a
+   16-character one wider than the box does not wrap — it overflows. "@WWWWWWWWWWWWWWWW"
+   painted to x=390 on a 390pt screen and x=430 on a 430pt one: the sender's own name running
+   off the edge of the display, on the screen that exists to say who is challenging you.
+   ASSERTED ON THE INK, NOT THE BOX. A centred element with max-width can have a wide box and
+   narrow glyphs; Range.getClientRects gives the line boxes the text actually paints into,
+   which is the only version of this question a reader would recognise. Three widths, because
+   the collision and the overflow appear at different ones. */
+console.log('\nAND IT IS READABLE — CLEAR OF THE CLOCK, AND ON THE SCREEN');
+{
+  const geo = async (name, W, H) => {
+    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
+    await servePhoto(page);
+    await page.addInitScript((n) => { window.__seed = { get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: n } }; }, name);
+    await page.goto(base + '?h=abc123', { waitUntil: 'load' });
+    await page.waitForTimeout(900);
+    const g = await page.evaluate(() => {
+      const h = document.querySelector('.chHead'), c = document.getElementById('chClock');
+      if (!h || !c) return null;
+      const r = document.createRange(); r.selectNodeContents(h);
+      const L = [...r.getClientRects()]; const cb = c.getBoundingClientRect();
+      return {
+        right: Math.round(Math.max(...L.map(l => l.right))),
+        left: Math.round(Math.min(...L.map(l => l.x))),
+        clash: L.filter(l => l.right > cb.x && l.x < cb.right && l.bottom > cb.y && l.top < cb.bottom).length,
+        clockX: Math.round(cb.x), vw: innerWidth,
+      };
+    });
+    await page.close();
+    return g;
+  };
+  /* 4 characters is the shortest realistic handle and 16 is the longest cleanHandle() permits;
+     the all-caps one is the token that cannot be broken at a space. */
+  for (const [W, H] of [[320, 568], [390, 844], [430, 932]]) {
+    for (const name of ['tony', 'SixteenCharNamee', 'WWWWWWWWWWWWWWWW']) {
+      const g = await geo(name, W, H);
+      if (!g) { bad(`${W}pt / @${name}: no headline or clock to measure`); continue; }
+      /* CLEAR, not "to the left of". What separates them is vertical — the stack starts below
+         the chips — so a headline whose ink passes x=361 is fine as long as no LINE shares a
+         row with the pill. The test is the intersection, which is the thing a reader sees. */
+      g.clash === 0
+        ? ok(`${W}pt · @${name} shares no row with the clock`)
+        : bad(`${W}pt · @${name}: ${g.clash} line(s) of the headline are painted under the clock (ink ends ${g.right}, pill starts ${g.clockX})`);
+      (g.right <= W && g.left >= 0)
+        ? ok(`${W}pt · @${name} stays on the screen`)
+        : bad(`${W}pt · @${name} runs off the display: ink spans ${g.left}..${g.right} on a ${W}pt screen`);
+    }
+  }
+}
+
 await browser.close(); server.close();
-console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the seeker screen names the sender');
+console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the seeker screen names the sender, readably');
 process.exit(failed?1:0);
