@@ -13590,6 +13590,18 @@ function chSeek(hideId,opts){
     /* THE COUNT TICKING UP IS THE REWARD, so it is animated where it happens rather than only
        when it ends. One pop per increment, not a loop: a number that pulses forever is
        decoration, and this screen already spends its motion on the reticle and the celebration. */
+    /* NOWRAP ON ALL OF THEM. The live label carries the record now ("4 · best 6"), so the one
+       state that used to be a single glyph can be eight characters wide — and a pill that wraps
+       inside itself is the shape of a mistake, which is the lesson the two end states already
+       learned at 17px. */
+    +".chRun{white-space:nowrap;}"
+    /* THE ZERO STATE. Quieter than a live run on purpose: it is a target, not a stake, and
+       giving it the same weight would tell somebody at 0 that they are mid-something. */
+    +".chRun.rest{font-size:14px;padding:8px 13px;color:#c9a97a;background:#1b1409;border-color:#4a3616;box-shadow:none;}"
+    /* AND THE STAKE ONCE IT IS WORTH SOMETHING — see RUN_HOT. Brighter, heavier, and lit from
+       behind: at this point the player has something a careless tap destroys, and that is the
+       whole argument the hint pack makes. */
+    +".chRun.hot{font-size:19px;padding:10px 17px;color:#fff0d0;background:#3a2205;border-color:#c98b2a;box-shadow:0 0 22px rgba(201,139,42,.45),0 4px 18px rgba(0,0,0,.5);}"
     +".chRun.up{animation:chRunUp .52s cubic-bezier(.2,.75,.3,1);}"
     +"@keyframes chRunUp{0%{transform:scale(1)}30%{transform:scale(1.22)}62%{transform:scale(.97)}100%{transform:scale(1)}}"
     /* fill:currentColor is what makes the break free: the figure turns red with the pill on
@@ -14124,20 +14136,59 @@ function chSeek(hideId,opts){
      number twice and reads like a bug. Silence there also means the sentence appears exactly
      when it motivates: somebody who has just set their record is told so by "best yet" on the
      win, not by an epitaph. */
+  const RUN_HOT=5;
   const chRunShow=(n,mode,best)=>{ if(!runEl||REPLAY) return;
     const v=n|0, b=best|0;
-    if(v<=0&&mode!=="dead"){ runEl.style.display="none"; return; }
+    /* ⚠️ IT WAS A SCOREBOARD FOR THE PEOPLE ALREADY WINNING. Hidden at 0, and `best` passed
+       only on the break — so it appeared when you succeeded, vanished when you failed, and
+       showed your record exactly once: in its own epitaph. The median best run in the whole
+       base is 3, which means most people are at 0 most of the time, which means the centre of
+       this game was invisible to most of them, permanently.
+       THE ZERO STATE NAMES THE TARGET INSTEAD OF THE VOID. The rule this replaces was right
+       about the number and wrong about the silence: "a pill reading 0 in front of somebody's
+       first round is a scoreboard telling them they have nothing" — true, so it does not print
+       0. It prints what there is to beat. Already stored (kamo_seek_best), already personal,
+       and at this size of base a personal record beats a board by a distance.
+       NOTHING AT ALL FOR A GENUINELY NEW PLAYER (b<=0), because there is nothing true to say
+       yet. The alternative is teaching copy, and the two biggest teaching pills on this screen
+       were deleted for spending 7.2 seconds of a round on text. */
+    if(v<=0&&mode!=="dead"){
+      if(b<=0){ runEl.style.display="none"; return; }
+      runEl.innerHTML=RUN_MARK;
+      runEl.appendChild(document.createTextNode("Best "+b));
+      runEl.className="chRun rest";
+      runEl._n=v;
+      { const top=runEl.parentNode&&runEl.parentNode.querySelector(".chTop");
+        if(top&&runEl.parentNode!==top) top.appendChild(runEl); }
+      runEl.style.display="block";
+      return;
+    }
     runEl.innerHTML=(mode==="dead"?RUN_MARK_OUT:RUN_MARK);
+    /* AND THE RECORD RIDES ALONG WHILE THE RUN IS LIVE. Chasing a number you cannot see is not
+       chasing. Only while it is still ahead: at b<=v the record IS this run, and "6 · best 6"
+       prints one number twice — the same rule the break line already follows. */
     runEl.appendChild(document.createTextNode(
         mode==="dead" ? ("Run of "+v+" broken"+(b>v?" · best "+b:""))
       : mode==="pb"   ? (v+" best yet")
-                      : String(v)));
+                      : (String(v)+(b>v?" · best "+b:""))));
     /* THE POP GOES ON A LIVE COUNT THAT ACTUALLY WENT UP, and on nothing else. Re-showing the
        same number on a re-render would otherwise pulse for no event, which is how an animation
        stops meaning "you just won one". The end states carry their own (chRunDie, chRunPb). */
-    const grew=!mode&&v>(runEl._n|0);
+    /* ⚠️ NOT ON THE FIRST RENDER. `_n` starts undefined, so a mount carrying an existing run of
+       4 read as "it grew from 0 to 4" and popped — once per slide, which in a feed is a pulse
+       on every swipe for a number that did not move. An animation that fires when nothing
+       happened stops meaning "you just won one", which is the whole reason it exists. The win
+       still pops: it renders onto the same pill this round already mounted, so `_n` is set. */
+    const first=runEl._n===undefined;
+    const grew=!mode&&!first&&v>(runEl._n|0);
     runEl._n=v;
-    runEl.className="chRun"+(mode?" "+mode:"")+(grew?" up":"");
+    /* THE STAKE, MADE VISIBLE. The pill was identical at 1 and at 7, and those are not the same
+       situation: p90 of the best run anyone has ever had is 8 and p99 is 18, so a live 7 is
+       rare air — the tap is expensive and a hint is worth its price for the first time. RUN_HOT
+       is where the pill starts to weigh something. One tier, not a ladder: two thresholds on a
+       distribution whose median is 3 would be inventing granularity the data does not have. */
+    const hot=!mode&&v>=RUN_HOT;
+    runEl.className="chRun"+(mode?" "+mode:"")+(grew?" up":"")+(hot?" hot":"");
     /* A SENTENCE LEAVES THE CHIP COLUMN; A CHIP STAYS IN IT. Live, the run is "2" beside the
        clock. At the end it turns into prose — "Run of 2 broken", "7 best yet" — three to four
        times as wide, and lands on the ending headline. The rule above reasons that the two can
@@ -14252,7 +14303,10 @@ function chSeek(hideId,opts){
     /* PAINTED AT MOUNT, NOT AT THE FIRST TAP: the number has to be on screen while the shot
        is still unspent, or it is a scoreboard instead of a stake. chRunShow itself is
        declared above the async block — see the note there for why. */
-    if(!REPLAY){ const s0=chStreak(); if(s0.run>0) chRunShow(s0.run); }
+    /* UNCONDITIONAL NOW — the zero state is a state. chRunShow decides what there is to say;
+       a caller that filters on run>0 is what kept the record invisible to everybody who was
+       not already mid-run. */
+    if(!REPLAY){ const s0=chStreak(); chRunShow(s0.run,"",s0.best); }
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
       clock=setInterval(()=>{ syncPause(); clockEl.textContent=(elapsed()/1000).toFixed(1)+"s"; },100);
       ctl._clock=clock; };   // the handle destroy() clears — see `killed` above
@@ -15213,7 +15267,7 @@ function chSeek(hideId,opts){
          A win is not buzzed here — chCelebrate already did it. `sk` is null for "This hide
          is gone", which is neither, so it stays silent. */
       if(sk){
-        if(sk.run>0)          chRunShow(sk.run, sk.record?"pb":"");
+        if(sk.run>0)          chRunShow(sk.run, sk.record?"pb":"", sk.best);
         else if(sk.broke>=2){ chRunShow(sk.broke,"dead",sk.best);
           /* A broken run is the one loss with something behind it, and it gets the error
              buzz — the stake has to be FELT, which is exactly what run_broken's `at`
