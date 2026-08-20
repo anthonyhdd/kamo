@@ -14861,10 +14861,17 @@ function chSeek(hideId,opts){
            second way to do the same thing, sitting under the two controls that are about
            THIS photo, and it turned the end of a round into a choice between three things
            when only two of them go anywhere new.
-           WHAT REPLACES IT IS THE HINT, not nothing — see killHint below, which no longer
-           fires when the card appears. The pill only ever died there because it landed on
-           top of this button; with the button gone the collision is gone, and the one
-           instruction a first-round player needs stays on screen until they obey it. */
+           WHAT REPLACES IT IS THE HINT, not nothing — see killHint, which no longer fires
+           when the card appears, and the one instruction a first-round player needs stays on
+           screen until they obey it.
+           ⚠️ "WITH THE BUTTON GONE THE COLLISION IS GONE" IS WHAT THIS SAID, AND IT STOPPED
+           BEING TRUE. The pill is pinned at bottom:84px and this card is taller than that
+           again: measured on a round lost in 2.3s, "Swipe up for the next hide ↑" sat across
+           BOTH "Challenge back" and "Send to a friend", unreadable for six seconds on the two
+           controls the loop runs through. Deleting one button did not move the pill; the card
+           just grew back around it. kfLiftHint() now measures #chFoot on onEnded and puts the
+           pill above it, so anything added here stays clear of it by construction — but if
+           this card ever stops being bottom-anchored, that is the thing to re-check. */
         +(FEED
             ? ''
             /* THE LOSS SELLS THE APP — see the note on chReh above for why this stopped being
@@ -16010,7 +16017,8 @@ function chFeed(opts){
       /* AND THE BELL GOES WITH IT. A finished round draws its card over this slide, and a
          chip floating on top of somebody's ending is furniture in the way of the one screen
          that matters. Hidden rather than removed: the round can be replayed from here. */
-      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; },
+      /* AND THE HINT PILL GETS OUT OF THE CARD'S WAY — see kfLiftHint. */
+      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; kfLiftHint(s); },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       /* "Hide another one", on your own hide only. The non-silent close is the point: it is
          the exit that actually puts the camera back (see close()), which is what the button
@@ -16453,6 +16461,32 @@ function chFeed(opts){
      player on a card with nowhere to go.
      So it dies on the SCROLL and on nothing else — the moment the instruction is obeyed,
      which is the only moment it stops being true. */
+  /* ⚠️ THE PILL AND THE ENDING CARD WERE SHARING A ROW, AND THE CARD WON.
+     Letting the hint live through the end of a round (see killHint below) rests on one claim,
+     written when "Next hide ↑" was deleted on 2026-08-14: "the pill only ever died there
+     because it landed on top of this button; with the button gone the collision is gone."
+     That was true for about a day. The card grew back — "Challenge back", "Send to a friend",
+     "Don't show me this person" — and .kfHint is pinned at bottom:84px, which is inside it.
+     Measured on a 390×844 round lost in 2.3s: the pill occupied 707–759 and the two CTAs
+     684–740 and 748–794, so it straddled BOTH of them at z-index 25 over auto. It is
+     pointer-events:none, so the buttons still worked — they were just unreadable, for the
+     six seconds before the pill fades. 55% of misses land under four seconds, so that is the
+     ordinary case for a first-session player, on the two buttons the whole loop runs through.
+     THE FIX IS THE GEOMETRY, NOT THE PILL. The instruction is genuinely load-bearing once the
+     card is up (the swipe is the only way out of a finished round), so it stays and moves
+     above the card instead. Measured rather than guessed at: the card is two or three buttons
+     plus an optional link and its height is not a constant. Double rAF because ending() calls
+     onEnded in the same tick it writes the markup, so the first frame has no layout yet. */
+  function kfLiftHint(s){
+    const h=root.querySelector("#kfHint"); if(!h) return;
+    const foot=s&&s.host&&s.host.querySelector("#chFoot"); if(!foot) return;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const r=foot.getBoundingClientRect();
+      /* #chFoot's own padding already carries var(--safe-b), so the bar this clears includes
+         the home indicator and adding it again would push the pill into the headline. */
+      if(r.height>0) h.style.bottom=Math.round(r.height+10)+"px";
+    }));
+  }
   const killHint=()=>{ S.hinted=true; const h=root.querySelector("#kfHint"); if(h) h.remove(); };
   S.killHint=killHint;
   scroll.addEventListener("scroll",()=>{
