@@ -242,7 +242,10 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   if (!z) bad('no hint zone was drawn');
   else {
     /* THE ASSERTION THIS FILE WAS WRITTEN FOR. */
-    const wantW = Math.round(2 * REG.r * z.iw), wantH = Math.round(2 * REG.r * z.ih);
+    /* FOUR radii, not two: the element is the mask, 2x the region on each axis, with the clear
+       core at the gradient's 50% — see .chHintZone and ⑦. The per-axis scaling is the point
+       and is unchanged; only the multiple moved. */
+    const wantW = Math.round(4 * REG.r * z.iw), wantH = Math.round(4 * REG.r * z.ih);
     z.w === wantW && z.h === wantH
       ? ok(`the zone is an ellipse scaled per axis (${z.w}×${z.h} on a ${z.iw}×${z.ih} frame)`)
       : bad(`zone is ${z.w}×${z.h}, expected ${wantW}×${wantH} — a circle here would mis-state the server's region`);
@@ -483,19 +486,21 @@ console.log('\n⑦ THE ZONE SURVIVES THE ROUND — THIS IS THE THING THAT WAS PA
                          spend: { used: 'free', region: REG7, balance: 3, free_available: false } });
   await p.click('#chHint');
   await p.waitForTimeout(300);
-  /* THE BEAT THAT PROVES THE PURCHASE. A ring appearing on a photograph is a small event; the
-     rest of the photograph going dark around it is the size of what was just bought. It has to
-     lift on its own — a permanent mask hides the ground the player still wants to sweep before
-     spending their one tap — so it is asserted both present and gone. */
-  (await p.evaluate(() => !!document.querySelector('.chZoneDim')))
-    ? ok('everything outside the region darkens on the reveal')
-    : bad('no dim beat — the hint arrives with nothing to show for it');
+  /* THE BEAT THAT PROVES THE PURCHASE, now carried by the mask's own opacity rather than by a
+     second element. The spotlight dips to full strength as it lands and eases back to its
+     resting level — so the player SEES the search collapse instead of being handed a shape and
+     left to infer it. The mask does NOT lift any more: it is the hint, not an announcement of
+     one, and the old temporary dim left a naked ring behind within the second. */
+  const peak = await p.evaluate(() => { const e = document.querySelector('.chHintZone'); return e && +getComputedStyle(e).opacity; });
+  peak > 0.9
+    ? ok(`the spotlight lands at full strength (opacity ${peak.toFixed(2)})`)
+    : bad(`no beat on the reveal — the mask came in at ${peak}`);
 
   const seen = async () => p.evaluate(() => {
     const el = document.querySelector('.chHintZone'), fr = document.getElementById('chFrame');
     if (!el || !fr) return null;
     const r = el.getBoundingClientRect(), f = fr.getBoundingClientRect();
-    return { op: +getComputedStyle(el).opacity, dim: !!document.querySelector('.chZoneDim'),
+    return { op: +getComputedStyle(el).opacity,
              cx: r.left + r.width / 2 - f.left, cy: r.top + r.height / 2 - f.top,
              w: r.width, h: r.height, fw: f.width, fh: f.height };
   });
@@ -506,15 +511,19 @@ console.log('\n⑦ THE ZONE SURVIVES THE ROUND — THIS IS THE THING THAT WAS PA
     z.op > 0.6
       ? ok(`the zone is still painted 2.7s in (opacity ${z.op.toFixed(2)})`)
       : bad(`the zone is at opacity ${z.op} — the hint erased itself and the round goes on without it`);
-    !z.dim ? ok('and the dim has lifted, leaving the photo searchable') : bad('the dim never lifted — half the frame stays hidden');
+    z.op < 0.95
+      ? ok('and it has eased back off the beat, so the rest of the photo stays readable')
+      : bad(`the mask stayed at ${z.op} — the frame outside the region is too dark to sweep`);
     /* Centred, in pixels, on the region the server named — not on the inline style that says so. */
     const wantX = REG7.cx * z.fw, wantY = REG7.cy * z.fh;
     Math.abs(z.cx - wantX) < 2 && Math.abs(z.cy - wantY) < 2
       ? ok(`and centred on the answer (${Math.round(z.cx)},${Math.round(z.cy)} of ${Math.round(wantX)},${Math.round(wantY)})`)
       : bad(`the zone renders at ${Math.round(z.cx)},${Math.round(z.cy)} but the region is at ${Math.round(wantX)},${Math.round(wantY)} — it points where the kamo is not`);
-    /* Still the ellipse ② was written for, now measured on the rendered box. The resting state
-       breathes by 3.5%, so the tolerance is that and not a pixel. */
-    const wantW = 2 * REG7.r * z.fw, wantH = 2 * REG7.r * z.fh;
+    /* Still the ellipse ② was written for, now measured on the rendered box — but the box is
+       FOUR radii across, not two. The mask is 2x the region so the gradient's outer half is the
+       falloff, and `closest-side` puts the clear core at exactly 50%, i.e. exactly the region
+       (see .chHintZone). So the region is still stated exactly: width/4 is r*frameW. */
+    const wantW = 4 * REG7.r * z.fw, wantH = 4 * REG7.r * z.fh;
     Math.abs(z.w - wantW) / wantW < 0.06 && Math.abs(z.h - wantH) / wantH < 0.06
       ? ok(`and still an ellipse scaled per axis (${Math.round(z.w)}×${Math.round(z.h)} on ${Math.round(z.fw)}×${Math.round(z.fh)})`)
       : bad(`rendered ${Math.round(z.w)}×${Math.round(z.h)}, expected about ${Math.round(wantW)}×${Math.round(wantH)}`);
@@ -528,7 +537,7 @@ console.log('\n⑦ THE ZONE SURVIVES THE ROUND — THIS IS THE THING THAT WAS PA
     const el = document.querySelector('.chHintZone');
     return el && { calm: el.classList.contains('calm'), op: +getComputedStyle(el).opacity };
   });
-  after && after.calm && after.op > 0.6
+  after && after.calm && after.op > 0.3
     ? ok('and it stays, frozen, once the buzz is spent — the miss is where the hint argues for itself')
     : bad(`after the buzz the zone is ${JSON.stringify(after)}`);
   await p.close();
