@@ -4227,10 +4227,64 @@ function pickPhoto(){
   if(nativeCaps && nativeCaps.photoPicker && postNative({type:"pick-photo"})) return;
   $("#fileInput").click();
 }
+/* ONE BLOB AT A TIME, held for as long as `photo` is showing it. The object URL used to be
+   revoked inside photo.onload; it now has to outlive a decode probe AND the assignment, so
+   it is released when the NEXT pick replaces it or when this one turns out not to decode.
+   That is not a leak: at most one is ever held, and `photo` keeps the decoded bitmap, so
+   revoking has never blanked what is on screen. */
+let pickedURL="";
+function releasePicked(){ try{ if(pickedURL) URL.revokeObjectURL(pickedURL); }catch(e){} pickedURL=""; }
+/* Says it where the user is actually looking. #hint lives under the opaque #start overlay
+   (z-index 30) and is invisible on the hero, which is the same split camFail() makes for the
+   camera — a picked photo can fail from the hero ("Use a photo instead") or from inside
+   compose (the roll button), and only one of those can read #hint. */
+function photoPickFailed(src){
+  if(src&&src===pickedURL) releasePicked();
+  track("photo_pick_failed",{reason:"decode"});
+  const msg="Couldn't read that photo — pick another one";
+  const m=$("#heroMsg");
+  if(startEl && startEl.style.display!=="none" && m){ m.textContent=msg; m.style.display="block"; }
+  else showHint(msg,3600);
+}
 /* The native picker hands back a data URL; the input hands back a File. Same destination,
-   two doors — this is the one usePhoto() reaches through after createObjectURL. */
+   two doors — and THIS is the destination, for both. That is not tidiness: chClearReply()
+   below lived here while usePhoto() went straight to `photo`, and pickPhoto() has no native
+   picker to reach in a browser — so on the web, where the file input is the only door, a
+   player who tapped "Challenge back" and then picked a different photo published it stamped
+   as an answer to a round whose picture they had just thrown away. Two doors, one of them
+   quietly missing half the arrival ritual. There is one arrival now. */
 function usePhotoSrc(src,meta){
   if(!src) return;
+  /* ⚠️ IT HAS TO DECODE BEFORE IT BECOMES THE ROUND. Both doors handed `photo` a src with an
+     onload and no onerror and then entered compose on the next line — so a file the browser
+     cannot read (a HEIC off an iPhone opened anywhere without a decoder for it, a truncated
+     download, an .avif on an old build) dropped the player onto a BLACK BOARD with a running
+     clock and not one word of explanation. coverInto() falls through to its #223 slab from
+     there, extractPalette() reads its four colours out of that slab, and the swatch row fills
+     with four identical dark chips — "les couleurs et le picker ne s'affichent plus",
+     founder, 2026-08-16 — and what gets published is a black rectangle nobody can play.
+     chRehide() was rebuilt around exactly this failure in August and the rebuild stopped at
+     its own door. This is the same fix on the other two. Reproduced before writing it, with a
+     corrupt .jpg through #fileInput: compose, a 40-second clock, and rgb(34,34,51) four times.
+     A PROBE RATHER THAN photo.onerror, because by the time `photo` could report the failure
+     the screen has already changed and there is no honest way back out of a compose the user
+     never asked to enter. Nothing below is touched until the decode has answered. The second
+     load is the same URL and comes off the cache, so this costs a decode, not a fetch. */
+  /* A SEPARATE ELEMENT, NOT `photo` ITSELF, and that is the whole reason this costs a probe.
+     Gating on photo.onload would mean assigning the unverified src to the element that is on
+     screen — and when the pick comes from INSIDE compose, that element is currently showing
+     the previous photo. A file that does not decode would blank it, so a bad pick would
+     destroy a good round. Nothing the user already has is touched until the new one is known
+     to work. The probe is released in both handlers so its bitmap is collectable at once;
+     `photo` then loads the same URL out of the memory cache. */
+  const probe=new Image();
+  const release=()=>{ probe.onload=null; probe.onerror=null; };
+  probe.onload=()=>{ release(); usePhotoReady(src,meta); };
+  probe.onerror=()=>{ release(); photoPickFailed(src); };
+  probe.src=src;
+}
+/* The arrival itself — reached only by a src that has already decoded once. */
+function usePhotoReady(src,meta){
   /* `meta.cam` is the wrapper's reading of the picked asset's EXIF: true when a Make/Model tag
      is present, false when EXIF came back without one. A camera always writes those tags, and
      screenshots, memes, downloaded images and generated ones never do — so the false branch is
@@ -4262,7 +4316,14 @@ window.KAMO=window.KAMO||{};
 window.KAMO.usePickedPhoto=(src,meta)=>{ try{ usePhotoSrc(src,meta); }catch(e){} };
 /* The native sheet never opened. Fall through to the input rather than leaving a dead tap. */
 window.KAMO.pickPhotoFailed=()=>{ try{ $("#fileInput").click(); }catch(e){} };
-function usePhoto(file){ const url=URL.createObjectURL(file); photo.onload=()=>{ URL.revokeObjectURL(url); syncPreviewFit(); }; photo.src=url; photo.style.display="block"; stopCamView(); cam.style.display="none"; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} bgKind="photo"; photoSrc="library"; /* the file input cannot read EXIF — unknown, not "no camera" */ torchOn=false; /* camera gone → torch dies with it */ enterCompose(); }
+/* THE FILE-INPUT DOOR IS NOW A DOORWAY, not a second room. It had its own copy of the whole
+   arrival — display, stopCamView, the stream teardown, bgKind, photoSrc, torchOn,
+   enterCompose — and copies drift: this one never learned chClearReply(), and it is the only
+   door a browser has. It hands over an object URL and lets usePhotoSrc() do the rest, which
+   also means the decode gate covers it. photoSrc is filed there as `library` with no meta,
+   which is what this path always reported: the file input cannot read EXIF, and unknown is
+   not the same claim as "no camera". */
+function usePhoto(file){ releasePicked(); pickedURL=URL.createObjectURL(file); usePhotoSrc(pickedURL); }
 
 function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
@@ -5169,13 +5230,21 @@ function previewMove(dx,dy){ moveDX=dx; moveDY=dy; compositeBoard(); }
    instead of being left stranded over its old spot. That is the one property that makes
    "move after you've started painting" safe rather than punishing: nothing painted is lost,
    it just moves with what it was covering.
-   pushUndo() at the end folds the move into the ordinary undo stack — same entry point
-   every brush stroke uses — so #btnUndo reverts a bad nudge exactly like a bad stroke. An
-   Undo immediately after a move puts paintLayer back one step BEFORE the shift, which can
-   read as a beat out of sync with the now-moved mask; accepted, because it self-corrects on
-   the very next stroke and a bespoke move-only undo entry is not worth a second code path. */
+   pushUndo() folds the move into the ordinary undo stack — same entry point every brush
+   stroke uses — so #btnUndo reverts a bad nudge exactly like a bad stroke.
+   ⚠️ AT THE TOP, NOT AT THE END, and the difference is a whole step. This called it after the
+   shift, so the entry it filed was the state AFTER the move while every stroke files the one
+   before: one tap of Undo then had to spend that entry before it could reach anything, and
+   it took the previous stroke down with it. It runs here instead, while `pctx` still points
+   at the un-shifted paintLayer — the same "the state this action is about to change"
+   contract pushUndo() documents. After the guard, so a no-op nudge still files nothing.
+   The mask is NOT in the stack, so an Undo after a move puts the paint back where it was and
+   leaves the figure where the drag put it. That asymmetry is real and is not this fix's to
+   solve: it self-corrects on the very next stroke, and a bespoke move-only undo entry is
+   still not worth a second code path. */
 function commitMove(){
   if(!maskCanvas||!paintLayer||(!moveDX&&!moveDY)){ moveDX=0; moveDY=0; return; }
+  try{ pushUndo(); }catch(e){}
   const W=board.width,H=board.height,dx=moveDX,dy=moveDY;
   const nm=document.createElement("canvas"); nm.width=W; nm.height=H;
   nm.getContext("2d").drawImage(maskCanvas,dx,dy);
@@ -5185,7 +5254,6 @@ function commitMove(){
   moveDX=0; moveDY=0;
   buildShadeSrc();      // derived from maskCanvas — stale after any reposition, see the note above it
   compositeBoard();
-  try{ pushUndo(); }catch(e){}
   currentScore=computeScore(); updateCoverageHud();
 }
 /* Shared exit for Move — called both by #btnMove's own toggle and by every OTHER tool
@@ -5216,7 +5284,16 @@ function clipPaintToFigure(x0,y0,x1,y1){
    the whole hide lost. ~48 MB budget, minimum 3 steps so undo stays useful. */
 const UNDO_BUDGET=36*1024*1024;   // lowered: the shading scratch canvas now takes a slice of the same budget
 function undoCap(){ const per=Math.max(1,board.width*board.height*4); return Math.max(3,Math.min(12,Math.floor(UNDO_BUDGET/per))); }
-function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); const cap=undoCap(); while(undoStack.length>cap) undoStack.shift(); }catch(e){} }
+/* EVERY ENTRY IS THE STATE AN ACTION IS ABOUT TO CHANGE — pushUndo() runs at the START of a
+   stroke and at the TOP of commitMove(), never after. #btnUndo pops one and paints it, so
+   "one entry" and "one step back" are the same thing. Keep it that way: an entry pushed
+   after the fact makes the top equal the current board, and the tap that pops it then has to
+   pop twice to do anything, which is exactly the off-by-one this convention replaced.
+   INDEX 0 IS THE BLANK BOARD and it is not history: it is what #btnClear restores. Dropping
+   it from the FRONT when the budget runs out — which is what shift() did — silently disarmed
+   Clear after `cap` strokes, and cap is 6 on a retina 390pt board. So the oldest entry that
+   is actually a step goes instead, and the floor survives the whole round. */
+function pushUndo(){ try{ if(!pctx) return; undoStack.push(pctx.getImageData(0,0,board.width,board.height)); const cap=undoCap(); while(undoStack.length>cap) undoStack.splice(1,1); }catch(e){} }
 function pt(e){ const r=board.getBoundingClientRect(); return {x:(e.clientX-r.left)*(board.width/r.width), y:(e.clientY-r.top)*(board.height/r.height)}; }
 /* `brush` is already in the same CSS-pixel units #brushRing lives in (see the note on
    paintDpr above) — no conversion needed, unlike paintAt's canvas-space math. */
@@ -8208,6 +8285,17 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    rather than of eight rectangles. The page is kept when it fires, so this is a tuning
    signal and not an outage — but at volume it means KF_DARK_MEAN / KF_DARK_SPREAD are
    eating real photographs and have to come down. */
+/* `photo_pick_failed` is the black-hide factory's REMAINING door, and the same shape as
+   reply_photo_failed one line down: a picked file the browser cannot decode used to become a
+   #223 board and then a published rectangle. Web-first — the browser is where the odd codec
+   lands — so it goes direct rather than through an allow-list a build would have to be cut
+   for. It should not carry volume: at volume it means a codec the fleet actually has. */
+"photo_pick_failed",
+/* `seek_photo_failed` is the third place an image reaches this app, and the last one that
+   was failing silently: a round played on a photo that never arrived, which filed a real
+   attempt with a 0.0s clock into everybody else's percentile. At volume this one means
+   storage, not phones — which is why it is worth being able to tell the two apart. */
+"seek_photo_failed",
 "reply_photo_failed","feed_black_dropped","feed_black_all",
 /* `feed_dupe_blocked` is a MEASURE OF A SERVER BUG, not of a client one: feed_page paginates
    on created_at while ordering by score, so it re-serves rows the page above already showed.
@@ -8549,6 +8637,20 @@ async function buildReveal(){
    video there; share the static challenge image instead (video reveal will be
    done natively later). Desktop/Android keep the animated MP4. */
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent||"") || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+/* THE PRIMING NOTE NAMED THE WRONG OPERATING SYSTEM TO EVERYBODY WHO IS NOT ON IT.
+   #heroNote is baked into the markup as "iOS will ask for camera access", and it is the first
+   sentence on the first screen — including on the MIRROR, which exists precisely so that a
+   friend WITHOUT the app can open a challenge link, and which therefore serves Android and
+   desktop all day. Telling those readers that iOS is about to ask them something is the kind
+   of small wrongness that reads as "this was not built for me" on the one screen that has to
+   earn the next tap. The claim itself is worth keeping: the note is doing permission priming,
+   and the rest of the sentence — nothing is uploaded until you share — is true everywhere.
+   HERE, RATHER THAN AT THE MARKUP, because IS_IOS is a const declared on this line and the
+   note sits ~6000 lines above it: reading it up there is the TDZ this file keeps being bitten
+   by, and duplicating the UA test is how the two copies drift. This runs during module
+   evaluation, before anything can be tapped. */
+{ const hn=document.getElementById("heroNote");
+  if(hn&&!IS_IOS) hn.textContent="Your browser will ask for camera access. Nothing is uploaded until you share — and you choose who sees it."; }
 /* Export a perfect 9:16 Instagram-Stories frame: the captured scene fills the
    frame (cover-cropped top/bottom), caption kept in the safe zone. */
 function composeShare(W,src){ src=src||board; const H=Math.round(W*16/9); const o=document.createElement("canvas"); o.width=W; o.height=H; const c=o.getContext("2d"); c.imageSmoothingQuality="high";
@@ -9307,10 +9409,16 @@ function ssOfferPub(){
    about one in four published hides is ever sent: three quarters of the people who could
    have seen their own photo in the feed were shown nothing at all, on the grounds that they
    had not done the next thing yet.
-   #ssSeeLive is on the sheet from the first frame instead, and it answers to the visibility
-   toggle rather than to the send — see kfRenderVis(), which hides it for a private hide for
-   the same reason ssOfferFeed() used to. Not gated on the wrapper either: chFeed() is this
-   page's own overlay and works exactly as well in a browser tab. */
+   #ssSeeLive is on the sheet from the first frame instead, rather than being handed out as a
+   reward for sending. Not gated on the wrapper either: chFeed() is this page's own overlay
+   and works exactly as well in a browser tab.
+   ⚠️ THIS SAID THE BUTTON "answers to the visibility toggle — see kfRenderVis(), which hides
+   it for a private hide". It does not, and has not since kfRenderVis() was given the opposite
+   rule with its own reasoning attached: chFeed({first}) seeds that exact hide as slide 0 by
+   fetching it BY ID, so a private hide renders there perfectly well and the button is offered
+   in both states. Verified in a browser, toggle flipped to Private, button still there. Left
+   as it was, this paragraph would have somebody "restore" a gate that was deliberately taken
+   out — which is the same trap the og:image note in CLAUDE.md exists to warn about. */
 { const l=$("#ssSeeLive");
   /* Closes the sheet first: the feed is a full-screen overlay and leaving the sheet under it
      is how you end up with two dismissals to get back to the camera.
@@ -10329,7 +10437,17 @@ function captureShot(){
 }
 $("#shutter").onclick=captureShot;
 $("#fileInput").onchange=e=>{ if(e.target.files[0]) usePhoto(e.target.files[0]); e.target.value=""; };
-$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ undoStack.pop(); pctx.putImageData(undoStack[undoStack.length-1],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
+/* THE POPPED ENTRY IS THE ONE TO PAINT. This popped it and then painted whatever was
+   UNDERNEATH it, which is one step too far on every single tap: pushUndo() stores the state
+   an action is about to change (see its note), so the top of the stack already IS one step
+   back. Measured before the fix — five strokes taking coverage to 9/20/30/37/43%, then five
+   undos: 30 → 20 → 9 → 0 → nothing. The first tap threw away the good stroke as well as the
+   bad one, every later tap was a stroke ahead of itself, and the fifth undo had nothing left
+   to do. Undo is one of exactly two escapes from a bad stroke, on an 89-second clock.
+   `>1` rather than `>0` because index 0 is the blank board, not a step — it is Clear's floor
+   and pushUndo() now protects it from the budget too. The duplicate of it that the first
+   stroke pushes is what lets undo walk all the way back to an empty board. */
+$("#btnUndo").onclick=()=>{ if(undoStack.length>1&&pctx){ pctx.putImageData(undoStack.pop(),0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
 $("#btnClear").onclick=()=>{ if(undoStack.length&&pctx){ pctx.putImageData(undoStack[0],0,0); compositeBoard(); currentScore=computeScore(); updateCoverageHud(); } };
 /* Toggle, not a modal — see the note above `moving`. Turning it ON cancels the eyedropper
    the same way picking a colour cancels Move (stopMoving(), called from both directions),
@@ -13831,6 +13949,55 @@ function chSeek(hideId,opts){
        "first tap" to start from, and every player must be measured from the same moment
        or the percentile lies. The deal line is two words; nobody is punished for reading. */
     img.onload=()=>{ startClock(); requestAnimationFrame(()=>{ trace.img={w:img.offsetWidth,h:img.offsetHeight}; }); };
+    /* ⚠️ AND IT HAS TO ANSWER THE OTHER OUTCOME, BECAUSE THE PHOTO *IS* THE ROUND.
+       There was no img.onerror at all. A camo image that never arrives — a dead storage path,
+       an object still replicating, a tunnel, an offline second — left the seeker on a black
+       screen wearing the alt text of a broken <img>, under "@tony hid a kamo here / One tap to
+       find", with a completely live round underneath it.
+       Reproduced with storage answering 404: the clock never started (it hangs off onload
+       alone, so t0 stayed 0 and elapsed() returned 0 forever), the buzz still committed, and
+       submit_attempt filed a REAL attempt with p_ms 0. That number is not only wrong for the
+       player who could not see anything — it is in the percentile every other player on that
+       hide is scored against. A round nobody could look at, timed at 0.0s, counted.
+       ONE RETRY FIRST, cache-busted. The common case here is a transient fetch, and a second
+       request costs nothing next to ending a round that was about to work; the negative is
+       often the thing that got cached, so the same URL would only reproduce it. */
+    let imgTries=0;
+    img.onerror=()=>{
+      if(killed||done) return;
+      if(imgTries++<1){ img.src=camoSrc+(camoSrc.indexOf("?")<0?"?":"&")+"rt="+imgTries; return; }
+      chPhotoDead();
+    };
+    /* Hoisted, and the two removals are wrapped rather than trusted: this is wired above the
+       lines that declare `quit` and `hintBtn`, and although an error event is always dispatched
+       in a later task, this file has been bitten by TDZ often enough (chReplyTo, KF_AUTHOR_KEY)
+       to pay the two try blocks. */
+    function chPhotoDead(){
+      if(done) return; done=true; chLive=false;
+      try{ clearInterval(clock); }catch(_){}
+      clockEl.style.display="none";
+      try{ quit.remove(); }catch(_){}
+      try{ hintBtn.remove(); }catch(_){}
+      track("seek_photo_failed",TP({tries:imgTries}));
+      /* Scoped to this round's own container, NOT $$(): in the feed several rounds are mounted
+         at once and every one of them mints an id="chHead" — see the note on the second
+         id="chRx" in ending() for what a document-wide lookup does to that. */
+      const hd=w.querySelector(".chHead"), sb=w.querySelector(".chSub");
+      if(hd) hd.textContent="This one didn't load";
+      /* The way out is a different thing on the two surfaces, so the sentence names the real
+         one: in the feed the swipe is the exit and always was, and on a link there is nowhere
+         to go but the same URL again. */
+      if(sb) sb.textContent = FEED ? "The photo didn't come through. Swipe up for the next hide."
+                                   : "The photo didn't come through — check your connection and try again.";
+      if(!FEED){
+        const foot=w.querySelector("#chFoot");
+        if(foot&&!foot.querySelector(".chCta")){
+          const b=document.createElement("button"); b.className="chCta"; b.textContent="Try again";
+          b.onclick=()=>{ try{ location.reload(); }catch(_){} };
+          foot.appendChild(b);
+        }
+      }
+    }
     img.src=camoSrc;
     $$("chFrame").appendChild(img);
     if(img.complete&&img.naturalWidth) img.onload();
@@ -13932,6 +14099,12 @@ function chSeek(hideId,opts){
     const HINTS_LIVE=true;
     const HINT_PACK_ID="com.blisscoach.kamo.hints5";
     let hintZone=null, hintBusy=false, hintPending=false;
+    /* How many times the claim stamp has refused on THIS screen. The refusal is two different
+       situations wearing one answer — a network that blinked, or a device that genuinely has
+       no route to a credit — and there is no way to tell them apart from here. So the first
+       one is treated as the blink it usually is and the second as the wall it probably is.
+       See offerHintPack(). */
+    let hintClaimTries=0;
     /* THE THREE THINGS THE CREDIT POLL NEEDS, and none of them existed while the poll was
        deciding success from the wrong signal.
        `hintBuyStarted` is set on the tap that opens Apple's sheet and is NEVER cleared for
@@ -14087,7 +14260,31 @@ function chSeek(hideId,opts){
         let ready=false;
         try{ const r=await chRpc("hint_intent",{p_dev:hintOwner()}); ready=!!(r&&r.ok); }catch(_){ ready=false; }
         hintWait(false); hintBtn.disabled=false;
-        if(!ready){ track("hint_blocked",TP({reason:"no_claim_path"})); retireHint("Hint used"); return; }
+        /* A retry that works must not carry the last failure's label under the spinner for the
+           45 seconds it takes the cancel timer to put the real one back. */
+        if(ready&&hintClaimTries) hintBtn.textContent=hintIdleLabel;
+        /* ⚠️ IT SAID "Hint used", AND ON THE TAP THAT MATTERS THAT IS A LIE.
+           Most taps that reach this branch come from an EMPTY wallet — a button reading "No
+           more hints. Get 5 Hints", which is an offer to BUY. The player accepted the offer
+           and was told they had already spent something they never had, on the only paid door
+           in this app, which then greyed out and disappeared. Wrong on the facts, and it ends
+           the sale with no way back. That is the same defect the three-state label shipped to
+           fix; this was the fourth state nobody counted.
+           TWO ANSWERS, BECAUSE THE REFUSAL HAS TWO CAUSES. hint_intent not answering is either
+           a network blink or a device with no route to a credit at all, and this side cannot
+           tell which. So the first refusal keeps the button — the label under the spinner was
+           never overwritten, so it still says what it was selling — and states the real
+           problem. A second refusal on the same screen is a wall, and retiring on it is the
+           existing rule about controls that cannot succeed, now applied to a true sentence.
+           WHAT IT MUST NEVER DO IS OPEN APPLE'S SHEET ANYWAY: a purchase with no route to a
+           credit is money taken for nothing, which is what the stamp is here to prevent. */
+        if(!ready){
+          hintClaimTries++;
+          track("hint_blocked",TP({reason:"no_claim_path",attempt:hintClaimTries}));
+          if(hintClaimTries<2){ hintBtn.textContent="Couldn't reach the store — tap to retry"; return; }
+          retireHint("Hints unavailable");
+          return;
+        }
       }
       /* AFTER THE STAMP, NOT BEFORE IT. Fired first, this counted a tap that was about to be
          REFUSED as an intent to buy — so the one funnel that says whether the pack sells
@@ -14725,10 +14922,17 @@ function chSeek(hideId,opts){
            second way to do the same thing, sitting under the two controls that are about
            THIS photo, and it turned the end of a round into a choice between three things
            when only two of them go anywhere new.
-           WHAT REPLACES IT IS THE HINT, not nothing — see killHint below, which no longer
-           fires when the card appears. The pill only ever died there because it landed on
-           top of this button; with the button gone the collision is gone, and the one
-           instruction a first-round player needs stays on screen until they obey it. */
+           WHAT REPLACES IT IS THE HINT, not nothing — see killHint, which no longer fires
+           when the card appears, and the one instruction a first-round player needs stays on
+           screen until they obey it.
+           ⚠️ "WITH THE BUTTON GONE THE COLLISION IS GONE" IS WHAT THIS SAID, AND IT STOPPED
+           BEING TRUE. The pill is pinned at bottom:84px and this card is taller than that
+           again: measured on a round lost in 2.3s, "Swipe up for the next hide ↑" sat across
+           BOTH "Challenge back" and "Send to a friend", unreadable for six seconds on the two
+           controls the loop runs through. Deleting one button did not move the pill; the card
+           just grew back around it. kfLiftHint() now measures #chFoot on onEnded and puts the
+           pill above it, so anything added here stays clear of it by construction — but if
+           this card ever stops being bottom-anchored, that is the thing to re-check. */
         +(FEED
             ? ''
             /* THE LOSS SELLS THE APP — see the note on chReh above for why this stopped being
@@ -15874,7 +16078,8 @@ function chFeed(opts){
       /* AND THE BELL GOES WITH IT. A finished round draws its card over this slide, and a
          chip floating on top of somebody's ending is furniture in the way of the one screen
          that matters. Hidden rather than removed: the round can be replayed from here. */
-      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; },
+      /* AND THE HINT PILL GETS OUT OF THE CARD'S WAY — see kfLiftHint. */
+      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; kfLiftHint(s); },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       /* "Hide another one", on your own hide only. The non-silent close is the point: it is
          the exit that actually puts the camera back (see close()), which is what the button
@@ -16317,6 +16522,32 @@ function chFeed(opts){
      player on a card with nowhere to go.
      So it dies on the SCROLL and on nothing else — the moment the instruction is obeyed,
      which is the only moment it stops being true. */
+  /* ⚠️ THE PILL AND THE ENDING CARD WERE SHARING A ROW, AND THE CARD WON.
+     Letting the hint live through the end of a round (see killHint below) rests on one claim,
+     written when "Next hide ↑" was deleted on 2026-08-14: "the pill only ever died there
+     because it landed on top of this button; with the button gone the collision is gone."
+     That was true for about a day. The card grew back — "Challenge back", "Send to a friend",
+     "Don't show me this person" — and .kfHint is pinned at bottom:84px, which is inside it.
+     Measured on a 390×844 round lost in 2.3s: the pill occupied 707–759 and the two CTAs
+     684–740 and 748–794, so it straddled BOTH of them at z-index 25 over auto. It is
+     pointer-events:none, so the buttons still worked — they were just unreadable, for the
+     six seconds before the pill fades. 55% of misses land under four seconds, so that is the
+     ordinary case for a first-session player, on the two buttons the whole loop runs through.
+     THE FIX IS THE GEOMETRY, NOT THE PILL. The instruction is genuinely load-bearing once the
+     card is up (the swipe is the only way out of a finished round), so it stays and moves
+     above the card instead. Measured rather than guessed at: the card is two or three buttons
+     plus an optional link and its height is not a constant. Double rAF because ending() calls
+     onEnded in the same tick it writes the markup, so the first frame has no layout yet. */
+  function kfLiftHint(s){
+    const h=root.querySelector("#kfHint"); if(!h) return;
+    const foot=s&&s.host&&s.host.querySelector("#chFoot"); if(!foot) return;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const r=foot.getBoundingClientRect();
+      /* #chFoot's own padding already carries var(--safe-b), so the bar this clears includes
+         the home indicator and adding it again would push the pill into the headline. */
+      if(r.height>0) h.style.bottom=Math.round(r.height+10)+"px";
+    }));
+  }
   const killHint=()=>{ S.hinted=true; const h=root.querySelector("#kfHint"); if(h) h.remove(); };
   S.killHint=killHint;
   scroll.addEventListener("scroll",()=>{

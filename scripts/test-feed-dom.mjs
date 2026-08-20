@@ -103,8 +103,15 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
    can plant localStorage the app will read on boot (a legacy reaction key, say). It takes the
    page rather than a value so it can use addInitScript, which is the one hook that survives
    the navigation. */
+/* THE ROUND'S PHOTO HAS TO ARRIVE. chSeek() grew an img.onerror: a camo image that never
+   loads now says so on the headline ("This one didn't load"), stops the clock and refuses the
+   buzz, rather than leaving a live round on a black rectangle filing 0.0s attempts. That is
+   the fix, and it means a harness which lets the photo 404 is asserting against the failure
+   screen instead of against the round. One transparent pixel is all any of these cases need. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 async function open(rows, extra, before) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   if (before) await before(page);
   await page.addInitScript((a) => {
     window.__seed = Object.assign({
@@ -871,8 +878,13 @@ console.log('\nTHE FEED CAN SEND SOMEBODY ELSE\'S HIDE');
      control that no longer exists.
      What survives the removal is the real claim: the share is the SECOND thing on the card,
      directly under the one primary action, and no other button separates them. */
+  /* ⚠️ SCOPED TO .chCard, NOT TO #chFoot. The flip button (⇆) is prepended to the FOOT, not
+     to the card, and it only exists when the reveal frames actually downloaded — so this read
+     the card's order correctly for as long as the harness let those frames 404, and started
+     reporting chFlipB first the moment they were served. The claim was never about the foot's
+     chrome; it is about what the card offers and in which order. */
   const order = await page.evaluate(() => {
-    const f = document.querySelector('#chFoot'); if (!f) return 'no card';
+    const f = document.querySelector('#chFoot .chCard'); if (!f) return 'no card';
     const ids = [...f.querySelectorAll('button')].map(b => b.id).filter(Boolean);
     if (ids.indexOf('chNext') !== -1) return 'chNext is back: ' + ids.join(',');
     return (ids[0] === 'chReh' && ids[1] === 'chSend') ? 'second' : ids.join(',');
@@ -997,6 +1009,10 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
 console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  /* The photo has to arrive here too: a link round whose image 404s now retires itself with
+     "This one didn't load" and takes the give-up button with it, so without this the click
+     below lands on nothing and the card this block is about never exists. */
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   await page.addInitScript(() => {
     window.__seed = {
       get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
@@ -1251,6 +1267,73 @@ console.log('\nTHE ROUND\'S CHROME NEVER COVERS THE FEED\'S CONTROLS');
   !hits(geo.run, geo.head)
     ? ok('and the headline still clears it')
     : bad(`the run pill overlaps the headline: run=${JSON.stringify(geo.run)} head=${JSON.stringify(geo.head)}`);
+  await page.close();
+}
+
+/* ⚠️ THE SWIPE HINT AND THE ENDING CARD WERE SHARING A ROW, AND THE CARD WAS UNDERNEATH.
+   killHint() deliberately does not fire when a round ends — the swipe is the only way out of
+   a finished round, so the instruction is load-bearing exactly then. That decision rests on
+   one sentence written when "Next hide ↑" was deleted: "the pill only ever died there because
+   it landed on top of this button; with the button gone the collision is gone." The card grew
+   back around it. .kfHint is pinned at bottom:84px and the card is taller than that: measured
+   on a round lost in 2.3s, the pill occupied 707–759 while "Challenge back" was 684–740 and
+   "Send to a friend" 748–794 — it straddled both, at z-index 25, for the six seconds before it
+   fades. 55% of misses land under four seconds, so that is the ordinary first session, on the
+   two buttons the whole loop runs through.
+   pointer-events:none means the taps still landed, which is why nothing was ever reported as
+   broken — the labels were simply unreadable. A test that asked "is the button clickable"
+   would have passed all along, so this one asks about the pixels. */
+console.log('\nTHE SWIPE HINT CLEARS THE ENDING CARD');
+{
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await page.addInitScript((r) => {
+    window.__seed = {
+      feed_page: r,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
+      /* A MISS, because that is the card with two CTAs on it and the one 54% of finished
+         rounds actually reach. */
+      submit_attempt: { hit: false, tries: 4, missed: 3, secs: 9, pct: 40, others: 0 },
+      reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 },
+      save_seek_trace: null,
+    };
+  }, ROWS(4));
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(800);
+  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.waitForTimeout(1000);
+
+  const pill = await page.evaluate(() => !!document.getElementById('kfHint'));
+  pill ? ok('a first session gets the swipe instruction') : bad('no #kfHint — this block proves nothing');
+
+  /* Buzzed fast on purpose: the pill fades at 6s, so a slow round would pass by outliving
+     nothing. This is the shape of the round that actually collides. */
+  await page.mouse.move(190, 420);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await page.waitForTimeout(1800);
+
+  const geo = await page.evaluate(() => {
+    const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, t: e.textContent.trim().slice(0, 28) }; };
+    return {
+      hint: r(document.getElementById('kfHint')),
+      ctas: [...document.querySelectorAll('.chCta, .chCta2')].map(r).filter(Boolean),
+    };
+  });
+  const hits2 = (a, b) => !!(a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h);
+
+  geo.hint && geo.hint.h > 0 && geo.ctas.length >= 2
+    ? ok(`the pill is still up over a ${geo.ctas.length}-button card — the state that collided`)
+    : bad(`nothing to measure: hint=${JSON.stringify(geo.hint)} ctas=${geo.ctas.length}`);
+
+  const covered = geo.ctas.filter((c) => hits2(geo.hint, c));
+  covered.length === 0
+    ? ok(`and it clears every one of them (${geo.ctas.map(c => `"${c.t}"`).join(', ')})`)
+    : bad('the swipe pill is on top of the loop\'s own buttons again:\n'
+        + `      hint=${JSON.stringify(geo.hint)}\n`
+        + covered.map(c => `      covers=${JSON.stringify(c)}`).join('\n'));
   await page.close();
 }
 

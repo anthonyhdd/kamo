@@ -25,6 +25,26 @@ const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
 let failed = 0;
 const ok = (m) => console.log('  ✓ ' + m);
 const bad = (m) => { failed++; console.error('  ✗ ' + m); };
+/* ⚠️ WHY A SUITE WENT RED, AND NEVER AN EMPTY RED.
+   Every block below catches its suite's non-zero exit and prints the ✗ lines out of its
+   stdout. That works when an assertion failed and it produces NOTHING when the process died
+   some other way — a waitForSelector timeout throwing, a browser that would not launch, a
+   syntax error in the suite itself. On 2026-08-20 this printed exactly
+   "✗ THE WEB FEED WALL IS IN THE WRONG PLACE:" and then a blank line, on a run whose very
+   next attempt was green and whose suite passed three times standing alone.
+   A gate that says DO NOT PUSH and cannot say why teaches the reader to run it again until it
+   agrees with them, which is the one habit this file exists to prevent. So when there are no
+   ✗ lines to show, what the process actually printed goes out instead. */
+function why(e) {
+  const out = ((e && e.stdout) || '').toString() + '\n' + ((e && e.stderr) || '').toString();
+  const hits = out.split('\n').filter((l) => l.includes('\u2717'));
+  if (hits.length) return hits.join('\n');
+  const tail = out.split('\n').filter((l) => l.trim()).slice(-8).join('\n');
+  return tail
+    ? '    NO ASSERTION FAILED — THE SUITE DIED. Its last output:\n' + tail
+    : '    it printed nothing at all (exit ' + ((e && e.status) != null ? e.status : '?') + ')';
+}
+
 /* ===== QUARANTINE, AND WHY THERE IS ONE =====================================================
    Until 2026-08-13 every DOM suite here globbed one hard-coded Linux path for its browser, so
    on the Mac where the work happens they ALL printed "skipping" and this script still ended
@@ -927,7 +947,7 @@ try {
   execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-share.mjs')], { stdio: 'pipe' });
   ok('share paths behave (node scripts/test-share.mjs for the detail)');
 } catch (e) {
-  bad('SHARE PATHS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('SHARE PATHS BROKEN:\n' + why(e));
 }
 
 /* ---- 7. The challenge link's head ----------------------------------------------------------
@@ -939,7 +959,7 @@ try {
   execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edge-h.mjs')], { stdio: 'pipe' });
   ok('the challenge link unfurls and keeps its domain (node scripts/test-edge-h.mjs for the detail)');
 } catch (e) {
-  bad('CHALLENGE LINK HEAD BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('CHALLENGE LINK HEAD BROKEN:\n' + why(e));
 }
 
 /* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
@@ -968,7 +988,7 @@ try {
      under it: the preview card, the rehearsal overlay, the Instagram slab.
      It now asserts the sheet that ships, and the paywall-copy block it carries earned its
      place on the way out — it caught three live strings calling the figurine a "body". */
-  bad('THE SHORT SHEET IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SHORT SHEET IS BROKEN:\n' + why(e));
 }
 
 /* ---- 9. The results chip ---------------------------------------------------------------
@@ -984,7 +1004,7 @@ try {
      settings are retired and the seeker plays one buzz on no clock, so the assertion was
      inverted rather than deleted — neither a hide storing those values nor one storing none
      may quote them, and both must state the deal actually on offer. */
-  bad('THE RESULTS CHIP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE RESULTS CHIP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 10. The creator pass --------------------------------------------------------------
@@ -998,7 +1018,7 @@ try {
     ? skipped('test-pass-dom.mjs', 'CREATOR-PASS TEST', out)
     : ok('the creator pass unlocks, persists and can be revoked (node scripts/test-pass-dom.mjs)');
 } catch (e) {
-  bad('THE CREATOR PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE CREATOR PASS IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11. The player card ---------------------------------------------------------------
@@ -1015,7 +1035,7 @@ try {
      headline itself became the way back into the field. The assertion it carried is the one
      that matters (there has to be a way to fix a typo after the field collapses), so it moved
      onto #khTitle rather than being dropped. */
-  bad('THE PLAYER CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE PLAYER CARD IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11b. The name has to survive the next launch ---------------------------------------
@@ -1030,7 +1050,7 @@ try {
     ? skipped('test-handle-dom.mjs', 'HANDLE TEST', out)
     : ok('the name is typed once and survives the next launch (node scripts/test-handle-dom.mjs)');
 } catch (e) {
-  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + why(e));
 }
 
 /* ---- 11c. The full-bleed paywall arm ---------------------------------------------------- */
@@ -1042,7 +1062,7 @@ try {
     ? skipped('test-pwfull-dom.mjs', 'FULL-ARM PAYWALL TEST', out)
     : ok('the full-bleed paywall arm renders and sells only real prices (node scripts/test-pwfull-dom.mjs)');
 } catch (e) {
-  bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11d. Which plan the CTA sells ------------------------------------------------------ */
@@ -1055,7 +1075,7 @@ try {
     ? skipped('test-planarm-dom.mjs', 'PLAN-ARM TEST', out)
     : ok('the hero-plan arm sells the plan it selected, and falls back when it cannot (node scripts/test-planarm-dom.mjs)');
 } catch (e) {
-  bad('THE HERO-PLAN ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE HERO-PLAN ARM IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11e. The hint on the seek screen --------------------------------------------------- */
@@ -1092,7 +1112,7 @@ try {
     ? skipped('test-ownpost-dom.mjs', 'OWN-POST TEST', out)
     : ok('your own hide gets its own card, and its exit reaches the camera (node scripts/test-ownpost-dom.mjs)');
 } catch (e) {
-  bad('THE OWN-HIDE CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE OWN-HIDE CARD IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11f. What the sheet claims, and to whom --------------------------------------------- */
@@ -1107,7 +1127,7 @@ try {
     ? skipped('test-sheetlive-dom.mjs', 'SHEET-LIVE TEST', out)
     : ok('the sheet claims only what the toggle allows, and opens the feed on that hide (node scripts/test-sheetlive-dom.mjs)');
 } catch (e) {
-  bad('THE SHEET IS CLAIMING THE WRONG THING:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE SHEET IS CLAIMING THE WRONG THING:\n' + why(e));
 }
 
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
@@ -1117,7 +1137,7 @@ try {
     ? skipped('test-seek-dom.mjs', 'SEEKER TEST', out)
     : ok('the seeker screen names the sender (node scripts/test-seek-dom.mjs)');
 } catch (e) {
-  bad('THE SEEKER SCREEN IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SEEKER SCREEN IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b. The one-buzz round, end to end -------------------------------------------------
@@ -1131,7 +1151,7 @@ try {
     ? skipped('test-buzz-dom.mjs', 'BUZZ TEST', out)
     : ok('the one-buzz round behaves end to end (node scripts/test-buzz-dom.mjs)');
 } catch (e) {
-  bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-ter. The feed ---------------------------------------------------------------------
@@ -1147,7 +1167,7 @@ try {
     ? console.log('  · FEED TEST SKIPPED — ' + out.trim().split('\n').pop())
     : ok('the feed plays real rounds and states where a photo goes (node scripts/test-feed-dom.mjs)');
 } catch (e) {
-  bad('THE FEED IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FEED IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-quater. The reply knows who it answers -------------------------------------------
@@ -1162,7 +1182,7 @@ try {
     ? console.log('  · REPLY TEST SKIPPED — ' + out.trim().split('\n').pop())
     : ok('a reply knows who it answers (node scripts/test-reply-dom.mjs)');
 } catch (e) {
-  bad('THE REPLY LOOP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE REPLY LOOP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-sexies. The feed's quality pass ----------------------------------------------------
@@ -1174,7 +1194,7 @@ try {
     ? skipped('test-feedq-dom.mjs', 'FEED-QUALITY TEST', out)
     : ok('the lqip paints (and only the real shape), the banger inserts fourth (node scripts/test-feedq-dom.mjs)');
 } catch (e) {
-  bad('THE FEED QUALITY PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FEED QUALITY PASS IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-quinquies. The challenges panel ---------------------------------------------------
@@ -1189,7 +1209,7 @@ try {
     ? skipped('test-chal-dom.mjs', 'CHALLENGES TEST', out)
     : ok('the challenges panel behaves (node scripts/test-chal-dom.mjs)');
 } catch (e) {
-  bad('THE CHALLENGES PANEL IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE CHALLENGES PANEL IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-bis. The share sends THIS round's hide, and sends it now -------------------------
@@ -1204,7 +1224,7 @@ try {
     ? skipped('test-share-dom.mjs', 'SHARE-TIMING TEST', out)
     : ok('the share is instant and always its own hide (node scripts/test-share-dom.mjs)');
 } catch (e) {
-  bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + why(e));
 }
 
 /* ---- 12b-ter. Instagram is reachable, native-only, and it does not out-rank the send ------
@@ -1221,7 +1241,7 @@ try {
     ? skipped('test-igbtn-dom.mjs', 'INSTAGRAM BUTTON TEST', out)
     : ok('Instagram is reachable, native-only, and does not out-rank the send (node scripts/test-igbtn-dom.mjs)');
 } catch (e) {
-  bad('THE INSTAGRAM TARGET IS UNREACHABLE OR IT IS EATING THE ROW:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE INSTAGRAM TARGET IS UNREACHABLE OR IT IS EATING THE ROW:\n' + why(e));
 }
 
 /* ---- 12b-quater. The feed is walled in a browser, and NOTHING else is --------------------
@@ -1236,7 +1256,7 @@ try {
     ? skipped('test-feedwall-dom.mjs', 'FEED-WALL TEST', out)
     : ok('the wall is on the feed, and only on the feed (node scripts/test-feedwall-dom.mjs)');
 } catch (e) {
-  bad('THE WEB FEED WALL IS IN THE WRONG PLACE:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE WEB FEED WALL IS IN THE WRONG PLACE:\n' + why(e));
 }
 
 /* THE POST-SEND INSTALL OFFER, and the two ways it goes wrong are opposites. Shown inside the
@@ -1251,7 +1271,7 @@ try {
     ? skipped('test-sentcta-dom.mjs', 'SENT-CTA TEST', out)
     : ok('the app is offered after the send, and only in a browser (node scripts/test-sentcta-dom.mjs)');
 } catch (e) {
-  bad('THE POST-SEND OFFER IS WRONG:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE POST-SEND OFFER IS WRONG:\n' + why(e));
 }
 
 /* WHICH IMPRESSION THE PAYWALL SPENDS, AND WHERE IT STOPS. The nth split says the first
@@ -1266,7 +1286,7 @@ try {
     ? skipped('test-pwgate-dom.mjs', 'PAYWALL-GATE TEST', out)
     : ok('every install is offered once and the tail stays capped (node scripts/test-pwgate-dom.mjs)');
 } catch (e) {
-  bad('THE FIRST-OFFER GUARANTEE OR THE TAIL CAP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FIRST-OFFER GUARANTEE OR THE TAIL CAP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-septies. The record the broken run names ------------------------------------------
@@ -1281,7 +1301,7 @@ try {
     ? skipped('test-runrec-dom.mjs', 'RUN-RECORD TEST', out)
     : ok('the record speaks on the break and stays off the title (node scripts/test-runrec-dom.mjs)');
 } catch (e) {
-  bad('THE BROKEN RUN IS LANDING ON THE HEADLINE OR MISSTATING THE RECORD:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE BROKEN RUN IS LANDING ON THE HEADLINE OR MISSTATING THE RECORD:\n' + why(e));
 }
 
 /* ---- 12c. The spectator seat ------------------------------------------------------------
@@ -1296,7 +1316,7 @@ try {
     ? skipped('test-replay-dom.mjs', 'REPLAY TEST', out)
     : ok('the replay plays and never leaks the winning spot (node scripts/test-replay-dom.mjs)');
 } catch (e) {
-  bad('THE REPLAY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE REPLAY IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12d. The bell on your own hide ------------------------------------------------------
@@ -1310,7 +1330,7 @@ try {
     ? skipped('test-bell-dom.mjs', 'BELL TEST', out)
     : ok('the notification bell is offered where it is true, and answers honestly (node scripts/test-bell-dom.mjs)');
 } catch (e) {
-  bad('THE NOTIFICATION BELL IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE NOTIFICATION BELL IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12e. The card on slide 4 ------------------------------------------------------------
@@ -1327,7 +1347,7 @@ try {
     ? skipped('test-feedgate-dom.mjs', 'FEED GATE TEST', out)
     : ok('the feed asks once, of the right person, and counts it once (node scripts/test-feedgate-dom.mjs)');
 } catch (e) {
-  bad('THE FEED\'S FIRST ASK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FEED\'S FIRST ASK IS BROKEN:\n' + why(e));
 }
 
 /* The opener experiment: the banger's POSITION obeys bangerArm, and nothing else moves. A
@@ -1340,7 +1360,7 @@ try {
     ? skipped('test-banger-dom.mjs', 'BANGER-OPENER TEST', out)
     : ok('the proven opener obeys its arm, once per session, position only (node scripts/test-banger-dom.mjs)');
 } catch (e) {
-  bad('THE OPENER EXPERIMENT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE OPENER EXPERIMENT IS BROKEN:\n' + why(e));
 }
 
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
@@ -1353,7 +1373,7 @@ try {
     ? skipped('test-webgl-dead.mjs', 'WEBGL-DEAD TEST', out)
     : ok('a GL-less phone gets hunt-only mode, not a black screen (node scripts/test-webgl-dead.mjs)');
 } catch (e) {
-  bad('HUNT-ONLY MODE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('HUNT-ONLY MODE IS BROKEN:\n' + why(e));
 }
 
 /* The handle crosses a trust boundary: one user types it, another user's phone renders it.
@@ -1385,7 +1405,25 @@ try {
     ? skipped('test-brush-dom.mjs', 'BRUSH TEST', out)
     : ok('members get the brush range they paid for (node scripts/test-brush-dom.mjs)');
 } catch (e) {
-  bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE BRUSH RANGE IS BROKEN:\n' + why(e));
+}
+
+/* ---- 13-bis. The two escapes from a bad stroke ------------------------------------------
+   Undo and Clear are the only way back out of a stroke that went wrong, on a board with an
+   89-second clock running over it — and both of them were quietly wrong for as long as nothing
+   watched them. Undo popped the top of the stack and then painted what was UNDERNEATH it, so
+   the first tap took the good stroke as well as the bad one and the last tap did nothing;
+   Clear read the blank board off the front of the same stack, which the budget trim had been
+   shifting away since the seventh stroke. Neither throws, neither shows in a diff, and both
+   are perfectly visible in the number on the coverage chip — which is what the suite drives,
+   with real strokes through the real handlers. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-undo-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-undo-dom.mjs', 'UNDO TEST', out)
+    : ok('Undo takes back one stroke and Clear takes back all of them (node scripts/test-undo-dom.mjs)');
+} catch (e) {
+  bad('UNDO OR CLEAR IS BROKEN:\n' + why(e));
 }
 
 /* ---- 13a. What the board does with the photo it was given -------------------------------
@@ -1400,7 +1438,7 @@ try {
     ? skipped('test-fit-dom.mjs', 'FRAMING TEST', out)
     : ok('a picked photo fills the board, the camera keeps its bars (node scripts/test-fit-dom.mjs)');
 } catch (e) {
-  bad('THE FRAMING IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FRAMING IS BROKEN:\n' + why(e));
 }
 
 /* ---- 13a-bis. The crop the user drags ----------------------------------------------------
@@ -1414,7 +1452,7 @@ try {
     ? skipped('test-reframe-dom.mjs', 'REFRAME TEST', out)
     : ok('the crop the user drags is the crop that gets painted (node scripts/test-reframe-dom.mjs)');
 } catch (e) {
-  bad('THE PHOTO CROP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE PHOTO CROP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 13b. The clock the session clip runs on --------------------------------------------
@@ -1428,7 +1466,7 @@ try {
     ? skipped('test-session-dom.mjs', 'SESSION TEST', out)
     : ok('the session clip runs at the length of the round (node scripts/test-session-dom.mjs)');
 } catch (e) {
-  bad('THE SESSION CLIP\'S TIMELINE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SESSION CLIP\'S TIMELINE IS BROKEN:\n' + why(e));
 }
 
 /* ---- 14. The end of the viral loop ------------------------------------------------------
@@ -1443,7 +1481,7 @@ try {
     ? skipped('test-reflink-dom.mjs', 'REFERRAL-LINK TEST', out)
     : ok('the seeker CTA is attributed (node scripts/test-reflink-dom.mjs)');
 } catch (e) {
-  bad('THE REFERRAL LINK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE REFERRAL LINK IS BROKEN:\n' + why(e));
 }
 
 /* The other silent measurement failure, and the reason it needs a wire-level test rather than
@@ -1459,7 +1497,7 @@ try {
     ? skipped('test-variantprop-dom.mjs', 'VARIANT-PROPERTY TEST', out)
     : ok('the web names its variant to Amplitude as a user property (node scripts/test-variantprop-dom.mjs)');
 } catch (e) {
-  bad('THE WEB IS INVISIBLE IN THE VARIANT DASHBOARDS:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE WEB IS INVISIBLE IN THE VARIANT DASHBOARDS:\n' + why(e));
 }
 
 /* The regression this change exists to prevent, asserted on the source as well as at runtime:
@@ -1519,7 +1557,7 @@ try {
     ? skipped('test-trial-copy-dom.mjs', 'TRIAL-COPY TEST', out)
     : ok('the paywall promises only what the store returned (node scripts/test-trial-copy-dom.mjs)');
 } catch (e) {
-  bad('THE TRIAL COPY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE TRIAL COPY IS BROKEN:\n' + why(e));
 }
 
 /* THE FEED'S load() MUST HAND A JOINER THE PAGE IT IS ALREADY FETCHING.

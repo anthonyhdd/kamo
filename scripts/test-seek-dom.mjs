@@ -51,11 +51,20 @@ const base=`http://127.0.0.1:${server.address().port}/`;
 const { globSync }=await import('node:fs');
 const exe = chromeExe();
 if(!exe){ console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
+/* THE ROUND'S PHOTO HAS TO ARRIVE, or this suite asserts against a failure screen.
+   chSeek() grew an img.onerror: a camo image that never loads now says so on the headline
+   ("This one didn't load"), stops the clock and refuses the buzz, instead of leaving a live
+   round on a black rectangle. That is the fix — and it means a harness which never serves the
+   photo is no longer testing the round it thinks it is. One transparent pixel is enough here:
+   these cases are about what is written above the picture, not about the picture. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const servePhoto = (page) => page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 const browser=await chromium.launch({executablePath:exe});
 let failed=0;
 const ok=m=>console.log('  ✓ '+m), bad=m=>{failed++;console.error('  ✗ '+m);};
 async function head(name){
   const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2});
+  await servePhoto(page);
   await page.addInitScript((n)=>{ window.__seed={get_hide:{img_path:'x.jpg',secs:9,n_attempts:0,n_found:0,limit_s:20,max_taps:5,name:n}}; }, name);
   await page.goto(base+'?h=abc123',{waitUntil:'load'});
   await page.waitForTimeout(900);
