@@ -13567,7 +13567,31 @@ function chSeek(hideId,opts){
        centred pill opened the name modal instead of its own menu. Anything that lands in the
        top middle of a KAMO screen inherits that bug.
        Same shell as the clock (radius, blur, backdrop) so the two read as one instrument. */
-    +".chRun{position:absolute;top:calc(12px + var(--safe-t));left:12px;z-index:5;font-family:var(--display);font-weight:700;font-size:15px;color:#ffd48a;padding:7px 12px;border-radius:999px;background:rgba(4,6,10,.55);border:1px solid rgba(255,212,138,.34);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);pointer-events:none;font-variant-numeric:tabular-nums;display:none;}"
+    /* ⚠️ IT WAS A CORNER CHIP, AND A CORNER CHIP IS NOT A STAKE. Absolutely positioned top-left
+       on a link and top-RIGHT in the feed (a second override, now gone), translucent at 55%
+       background over a 34% border, it read as a status badge — the same visual weight as the
+       clock beside it. Founder, 2026-08-20: "il faudrait qu'il ait une position bien visible,
+       qu'il n'ait pas d'opacite, soit plus anime."
+       Right, and the reason is structural rather than decorative: the run is the thing the feed
+       lock and the hint pack both exist to protect, so it has to be the number the player is
+       looking AT when they decide whether to tap now or to buy help. Something dimmed in a
+       corner cannot carry that.
+       STATIC, IN .chTop'S COLUMN — which is where the run ALREADY went the moment it broke or
+       set a record (see chRunShow). Those two states were moved there on 2026-08-16 because
+       prose in the corner landed on the headline; the live state stayed behind, so the number
+       jumped across the screen at exactly the moment it mattered most. One home for all three:
+       it grows the centred message column instead of colliding with anything, at any string
+       length and any screen width, and there is nothing left to override per surface. */
+    +".chRun{position:static;margin-top:10px;z-index:5;font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.2px;color:#ffd9a0;padding:9px 15px;border-radius:999px;background:#231708;border:1px solid #6b4a1c;box-shadow:0 4px 18px rgba(0,0,0,.45);pointer-events:none;font-variant-numeric:tabular-nums;display:none;}"
+    /* Opaque on purpose. The translucent fill it replaces sat over an unknown photograph, so
+       its contrast was whatever the picture underneath happened to be — legible on a dark room,
+       washed out on a bright wall, which is the lesson .chMark already carries. A solid chip is
+       the same chip on every hide. */
+    /* THE COUNT TICKING UP IS THE REWARD, so it is animated where it happens rather than only
+       when it ends. One pop per increment, not a loop: a number that pulses forever is
+       decoration, and this screen already spends its motion on the reticle and the celebration. */
+    +".chRun.up{animation:chRunUp .52s cubic-bezier(.2,.75,.3,1);}"
+    +"@keyframes chRunUp{0%{transform:scale(1)}30%{transform:scale(1.22)}62%{transform:scale(.97)}100%{transform:scale(1)}}"
     /* fill:currentColor is what makes the break free: the figure turns red with the pill on
        .dead rather than needing a rule of its own. The gold is a solid shape now, so it is
        held just under full opacity — this sits over a live viewfinder. */
@@ -13580,15 +13604,16 @@ function chSeek(hideId,opts){
        is over. A run that simply disappears teaches nothing — the player has to watch it die.
        forwards, so it does not snap back to gold on the last frame. */
     +".chRun.dead{color:#ff8f8f;border-color:rgba(255,143,143,.5);animation:chRunDie .5s cubic-bezier(.36,.07,.19,.97) forwards;}"
-    /* Static, because both end states move into .chTop's flow (see chRunShow): the absolute
-       top / left / right above — and the .chIn override of them — go inert, and the flex
-       column centres them under the subtitle. margin-top rather than the column's 3px gap:
-       this is a new thought, not a third line of the same one.
-       MEASURED, NOT ESTIMATED. In the feed the headline sits at padding-top 56px + safe-area
-       and the chip at top 52px + safe-area — the same row, by construction — so anything that
-       outgrows the chip's width lands on the title. At 390px: the break overlaps it by 44px,
-       the record by 12-22px depending on the string. The live chip clears it and stays put. */
-    +".chRun.dead,.chRun.pb{position:static;margin-top:9px;}"
+    /* Kept as the record of why the end states moved first — and now the whole pill lives here.
+       In the feed the headline sat at padding-top 56px + safe-area and the chip at top 52px +
+       safe-area, the same row by construction, so anything outgrowing the chip's width landed
+       on the title: at 390px the break overlapped it by 44px, the record by 12-22px. The base
+       rule is static now, so these two only carry their own spacing — and their own SIZE.
+       The live chip went to 17px to be the number a player decides against; the end states are
+       prose ("Run of 4 broken · best 6"), and at 17px that sentence wrapped inside its own pill
+       at 390px and 320px both. A wrapped pill is the shape of a mistake, so the two that carry
+       sentences stay at 14px and refuse to wrap outright. test-runrec-dom.mjs measures it. */
+    +".chRun.dead,.chRun.pb{margin-top:9px;font-size:14px;padding:8px 13px;white-space:nowrap;}"
     +"@keyframes chRunDie{0%{transform:scale(1)}18%{transform:scale(1.14) translateX(-3px)}38%{transform:scale(1.02) translateX(3px)}60%{transform:scale(1) translateX(-2px)}100%{transform:scale(.96);opacity:.72}}"
     /* A new personal record is the only good news this pill ever carries, and it gets one
        pulse — not a burst. confettiBurst() already owns the find; a second celebration on the
@@ -13836,7 +13861,6 @@ function chSeek(hideId,opts){
        FEED ONLY. A link round has no bar and no ✕, so its top-left is free and .chRun keeps
        the corner it was designed for; this override is scoped to .chIn like every other
        difference between the two surfaces. */
-    +".chS.chIn .chRun{top:calc(52px + var(--safe-t));left:auto;right:12px;}"
     +".chS.chIn .chBrand{display:none;}"
     /* THE ONE GESTURE THAT HAD TO BE GIVEN BACK. The stage owns every touch on the link
        screen (touch-action:none) because there is nothing to scroll. In the feed there is,
@@ -14108,7 +14132,12 @@ function chSeek(hideId,opts){
         mode==="dead" ? ("Run of "+v+" broken"+(b>v?" · best "+b:""))
       : mode==="pb"   ? (v+" best yet")
                       : String(v)));
-    runEl.className="chRun"+(mode?" "+mode:"");
+    /* THE POP GOES ON A LIVE COUNT THAT ACTUALLY WENT UP, and on nothing else. Re-showing the
+       same number on a re-render would otherwise pulse for no event, which is how an animation
+       stops meaning "you just won one". The end states carry their own (chRunDie, chRunPb). */
+    const grew=!mode&&v>(runEl._n|0);
+    runEl._n=v;
+    runEl.className="chRun"+(mode?" "+mode:"")+(grew?" up":"");
     /* A SENTENCE LEAVES THE CHIP COLUMN; A CHIP STAYS IN IT. Live, the run is "2" beside the
        clock. At the end it turns into prose — "Run of 2 broken", "7 best yet" — three to four
        times as wide, and lands on the ending headline. The rule above reasons that the two can
@@ -14124,7 +14153,11 @@ function chSeek(hideId,opts){
        count ticking up in place is the reward.
        One-way: nothing returns it to the corner, because a round that has ended never goes
        back to having a live run. */
-    if(mode==="dead"||mode==="pb"){
+    /* EVERY STATE, NOT JUST THE TWO THAT OUTGREW THE CORNER. .chRun is static now (see its
+       rule), so being inside .chTop is what puts it in the centred column at all rather than in
+       the round's own flow behind the photo. The two end states already did this; the live one
+       joining them is the whole point of the move. */
+    {
       const top=runEl.parentNode&&runEl.parentNode.querySelector(".chTop");
       if(top&&runEl.parentNode!==top) top.appendChild(runEl);
     }
@@ -14257,6 +14290,15 @@ function chSeek(hideId,opts){
       try{ quit.remove(); }catch(_){}
       try{ hintBtn.remove(); }catch(_){}
       track("seek_photo_failed",TP({tries:imgTries}));
+      /* ⚠️ AND THE SLIDE HAS TO BE RELEASED, or this is the feed lock's trap by another door.
+         onEnded is the feed's only "this round is over" signal and it is fired from ending(),
+         which this path deliberately does not call — there is no round to end, only a photo
+         that never arrived. Without this the slide stays locked on a black rectangle with a
+         give-up button as the only way forward, and giving up would break a run over a failed
+         fetch. Reported as a loss to the feed (`won` false) but never as a skip: onEnded sets
+         S.answered, which is exactly what stops kfNoteSkip crediting the author with a
+         camouflage win for a photo nobody could see. */
+      if(OPT.onEnded) try{ OPT.onEnded(false); }catch(_){}
       /* Scoped to this round's own container, NOT $$(): in the feed several rounds are mounted
          at once and every one of them mints an id="chHead" — see the note on the second
          id="chRx" in ending() for what a document-wide lookup does to that. */
@@ -14318,11 +14360,25 @@ function chSeek(hideId,opts){
       : "One tap to find";
     $$("chSub").textContent=(rnd?"Round "+rnd+" · ":"")+stat;
 
-    /* NO GIVE-UP IN THE FEED. On a link there is nowhere else to go, so quitting has to be a
-       button. In a feed the exit already exists and is the gesture the whole surface is built
-       on — swipe to the next hide — and a second way outes with it for the same thumb. */
+    /* ⚠️ THE FEED HAS A GIVE-UP NOW, AND IT IS NOT A PREFERENCE — IT IS WHAT MAKES THE LOCK
+       SAFE. This said: "In a feed the exit already exists and is the gesture the whole surface
+       is built on — swipe to the next hide — and a second way out competes with it for the same
+       thumb." Both halves stopped being true on 2026-08-20, when the swipe stopped being free
+       (see FEED_LOCK in chFeed).
+       WHY THE SWIPE HAD TO STOP BEING FREE. chNoteSeek() runs from ending(), and ending() only
+       happens on a buzz — so scrolling past cost nothing and the run counted ONLY the rounds
+       the player was already sure about. That is the same selection bias `n_attempts` carries:
+       feed rounds read 59.2% found in 3.6s against 48.0% in 7.3s on a link, not because the
+       feed is easier but because it silently discarded every round where the camouflage worked.
+       A streak you can keep by scrolling is not a streak, and a hint has nothing to protect.
+       AND THERE IS NO CLOCK ANY MORE. limit_s stopped being sent when the chrono was found to
+       be amputating 41% of rounds, so a locked slide with no button is a permanent trap: no
+       timer ends it and no gesture leaves it. This button is the exit, and it costs the run —
+       which is the point. It already does the right thing on a link (seek_failed{giveup}, the
+       trace, and ending({rehide:true}) which breaks the run), so the feed gets the same one
+       rather than a second implementation of the same idea. */
     const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit"; quit.textContent="I give up";
-    if(!FEED) w.appendChild(quit);
+    w.appendChild(quit);
 
     /* ===== THE HINT — one free a day, then a pack ====================================
        WHY IT LIVES HERE AND NOT ON THE LOSS SCREEN. The obvious place for "want a hint?" is
@@ -15763,6 +15819,18 @@ const KF_CSS=
      photo that will now never be looked at. */
   +".kfScroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;}"
   +".kfSlide{position:relative;height:100dvh;scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;background:#04060a;}"
+  /* THE LOCK, AND IT IS THE EXACT COUNTERPART OF THE LINE THAT GRANTED THE SWIPE.
+     A live round sets `touch-action:pan-y` on its own stage so the feed can still be scrolled
+     with the round mounted (.chS.chIn .chStage). That grant is what made the run free: a
+     player could look, find nothing and scroll on, and nothing was written — not an attempt,
+     not a trace, and above all not a broken run. So the grant is withdrawn while the round is
+     unplayed, on the slide AND on the stage, because touch-action is resolved where the
+     gesture starts and the stage is what fills the slide.
+     touch-action rather than overflow:hidden on the scroller: hiding the overflow would also
+     forbid scrolling BACK to a hide already played, and would drop the scroll position of a
+     surface somebody is halfway through. This forbids exactly one thing — starting a pan on a
+     round you have not answered — and leaves every other gesture alone. */
+  +".kfSlide.kfLock,.kfSlide.kfLock .chStage{touch-action:none;}"
   /* The slide paints its own photo before the round mounts, so a swipe lands on a picture
      instead of on black. Dimmed, because it is a placeholder and the round's own <img>
      arrives on top of it a beat later — the same file, already in cache. */
@@ -16244,6 +16312,41 @@ function chFeed(opts){
      round, so it sits in a gap rather than on a distribution.
      FIRE AND FORGET, ALWAYS. It is telemetry on the swipe path: it must never block the next
      slide, never surface an error, and never be awaited. */
+  /* ══ THE SWIPE IS NOT FREE ANY MORE ═════════════════════════════════════════════════════
+     A slide stays under the thumb until its round has been answered — found, missed, given up,
+     or unplayable. Until then the pan is refused (see .kfSlide.kfLock).
+     WHY. chNoteSeek() runs from ending(), and ending() only happens on a buzz. So scrolling
+     past cost nothing, and the run counted only the rounds the player was already sure about —
+     the same selection bias `n_attempts` carries, which is why feed rounds read 59.2% found in
+     3.6s against 48.0% in 7.3s on a link. A streak kept by scrolling is not a streak, and a
+     hint pack that protects it is selling insurance against a risk that does not exist.
+     THE EXIT IS A BUTTON AND IT COSTS THE RUN. There is no clock any more (limit_s stopped
+     being sent when the chrono was found to amputate 41% of rounds), so a locked slide with no
+     control is a permanent trap. chSeek mounts "I give up" on every surface now; see the note
+     there. Giving up is a loss, which is the whole stake.
+     ⚠️ THIS IS THE SWITCH. It hardens the core loop on an audience that retains 2.5% on web,
+     and it is one constant: set it false, push, and the feed is back to a free swipe fleet-wide
+     in about two minutes — no build, no review. Do not bury this behind anything. */
+  const FEED_LOCK=true;
+  /* Locked only when there is genuinely something to answer. `answered` is pre-set true for a
+     replay (your own hide — see activate) and set by drop()/blockDrop() for a photo that is
+     leaving on an objection, so all three fall through here without a special case. */
+  function kfLockSync(){
+    try{
+      const s=S.slides[S.active];
+      const on=!!(FEED_LOCK && s && !S.answered);
+      S.slides.forEach((x,i)=>{ if(x&&x.el) x.el.classList.toggle("kfLock", on && i===S.active); });
+      /* AND THE INSTRUCTION MUST NOT LIE WHILE IT IS REFUSED. "Swipe up for the next hide ↑"
+         over a locked slide is a promise the surface is actively breaking, and it is the first
+         sentence a first-round player reads. Hidden, not killed: killHint() spends it forever,
+         and this one comes back the moment the swipe is real again — which also turns it into
+         the signal that the round is over and the way out is open. */
+      const h=root.querySelector("#kfHint");
+      if(h) h.style.visibility = on ? "hidden" : "";
+    }catch(_){}
+  }
+  S.lockSync=kfLockSync;
+
   const KF_SKIP_MS=1500;
   function kfNoteSkip(){
     try{
@@ -16388,6 +16491,7 @@ function chFeed(opts){
        their painting works. `answered` pre-set rather than skipId left empty, so the flush
        is a single rule with a single exception instead of two ways of not counting. */
     S.skipId=s.row.id; S.skipT=kfNow(); S.answered=!!s.replay;
+    kfLockSync();
     /* THE FIRST SLIDE CARRIES THE WAIT, and only the first: every later one is a swipe the
        user chose to make, and stamping those would bury the one number that is about the
        app being slow under a pile of numbers that are about somebody scrolling.
@@ -16433,7 +16537,9 @@ function chFeed(opts){
          chip floating on top of somebody's ending is furniture in the way of the one screen
          that matters. Hidden rather than removed: the round can be replayed from here. */
       /* AND THE HINT PILL GETS OUT OF THE CARD'S WAY — see kfLiftHint. */
-      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; kfLiftHint(s); },
+      /* AND THE SLIDE IS RELEASED HERE — the one callback every ending goes through, which is
+         why the lock hangs off `answered` rather than off any particular outcome. */
+      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; kfLiftHint(s); kfLockSync(); },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       /* "Hide another one", on your own hide only. The non-silent close is the point: it is
          the exit that actually puts the camera back (see close()), which is what the button
@@ -16455,7 +16561,7 @@ function chFeed(opts){
     /* A REPORT IS NOT A SKIP. The photo is leaving because somebody objected to it, and
        filing that as "seen and given up on" would credit its author with a camouflage win
        for content that is about to be pulled. Same for a block, which routes through here. */
-    if(S.skipId===id) S.answered=true;
+    if(S.skipId===id){ S.answered=true; kfLockSync(); }
     const wasActive=(i===S.active);
     try{ S.slides[i].el.remove(); }catch(_){}
     S.slides.splice(i,1);
@@ -16504,7 +16610,7 @@ function chFeed(opts){
     if(i<0) return;
     /* Same rule as drop(): a block is an objection, never a camouflage win. Set before the
        early return so the short path (which delegates to drop) and the long one agree. */
-    if(S.skipId===id) S.answered=true;
+    if(S.skipId===id){ S.answered=true; kfLockSync(); }
     if(!stored){ drop(id); return; }   // nothing durable to re-filter on — just this photo
     if(S.round){ try{ S.round.destroy(); }catch(_){} S.round=null; }
     S.slides.slice(i).forEach(s=>{ try{ s.el.remove(); }catch(_){} });
@@ -16940,6 +17046,25 @@ function chFeed(opts){
   scopeBtn.onclick=()=>{ haptic(8); menuShow(menuEl.style.display!=="block"); };
   /* A scroll is an answer: whatever the menu offered, the user chose the feed. */
   scroll.addEventListener("scroll",()=>menuShow(false),{passive:true});
+
+  /* THE BACKSTOP FOR EVERY WAY OF SCROLLING THAT IS NOT A THUMB. touch-action refuses the pan
+     and that is the whole story on a phone, which is the only place this app really runs — but
+     a wheel, a trackpad, Page Down, a scrollbar drag and a fling's leftover momentum all reach
+     the scroller without ever being a touch, and any of them would carry a locked round away.
+     FORWARD ONLY. Scrolling BACK to a hide already played stays free: that is somebody
+     rereading their own ending, and it is none of this feature's business. A scrollTop below
+     the locked slide returns before anything is written.
+     Throttled, because assigning scrollTop fires `scroll` again and an unguarded clamp is a
+     loop with the compositor. */
+  let lockFix=0;
+  scroll.addEventListener("scroll",()=>{
+    if(!FEED_LOCK||S.answered||kfState!==S) return;
+    const sl=S.slides[S.active]; if(!sl||!sl.el) return;
+    const top=sl.el.offsetTop;
+    if(scroll.scrollTop<=top+2) return;
+    const t=kfNow(); if(t-lockFix<90) return; lockFix=t;
+    try{ scroll.scrollTop=top; }catch(_){}
+  },{passive:true});
 
   /* ONE CELL PER HIDE, THE PHOTO AS THE IDENTIFIER — same doctrine as the card rows, same
      data (chTally -> get_hide), same three actions. The round under this panel stays
