@@ -42,6 +42,11 @@ const MIME={'.js':'text/javascript','.glb':'model/gltf-binary','.woff2':'font/wo
 const real=readFileSync(join(ROOT,'index.html'),'utf8');
 // Stub the RPC layer, and make the storage POST take a REALISTIC 3s so the race is real.
 const html=real.replace('async function chRpc(fn,body){','async function chRpc(fn,body){ if(window.__rpc) return window.__rpc(fn,body);')
+  /* WHAT WAS FILED, not what was intended. The publish path's two outcomes are told apart by
+     the event they emit — hide_published against hide_publish_failed — and reading them off
+     the wire would mean waiting on Amplitude's own flush. Recorded at the declaration, the
+     same door test-feed-dom uses. */
+  .replace('function track(event,props){','function track(event,props){window.__tr=window.__tr||[];window.__tr.push([event,props]);')
   // module scope is sealed: expose the id the share actually reads
   .replace('let chId="";','let chId=""; window.__peek=()=>({chId,prep:!!chPrep});')
   /* THE ROUTING HOOK, and it fabricates only what a finished round would have left behind: a
@@ -158,6 +163,87 @@ const r2=await round('ROUND 2 — same session, own hide',1200);
     ? ok('and the share still goes out on every tap — the same hide can reach two people')
     : bad('a repeat tap sent nothing at all — the guard is on the share, not on the stamp');
 }
+/* ⚠️ A NULL ANSWER IS NOT A ROW, AND THE SHEET MUST NOT SAY IT IS.
+   chCreateForms() hands chUpload a widest-to-narrowest ladder of create_hide payloads and the
+   loop walks down it until one lands — except it only walked on a THROW. A 200 carrying `null`
+   (a server-side guard, an RLS-filtered RETURNING, an overload resolving to void mid-deploy)
+   ended the walk on the first rung with chId empty, and the code fell through to
+   track("hide_published"). Measured before the fix: one form tried, no row, counted as a
+   publish, and "Your kamo is live! / Come back to see who tried." on screen over nothing.
+   Three failures in one and all three silent — the rescue ladder never ran, the denominator
+   the send rate is read against counted a round that produced nothing, and the creator was
+   told to come back for results that will never exist.
+   Driven by answering the create_hide endpoint directly rather than through window.__rpc: the
+   distinction being tested is between a rejection and a resolved-but-empty answer, which is a
+   property of the transport, not of the stub. */
+console.log('\nA PUBLISH THAT PRODUCED NO ROW IS NOT A PUBLISH');
+{
+  const walk = async (answer) => {
+    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const tried = [];
+    await p2.route('**/rest/v1/rpc/create_hide', async r => {
+      const n = tried.length; tried.push(1);
+      const a = answer(n);
+      if (a === 'THROW') return r.fulfill({ status: 500, body: 'boom' });
+      r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(a) });
+    });
+    await p2.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"Key":"hides/x.jpg"}' }));
+    await p2.addInitScript(() => { window.__msgs = []; window.ReactNativeWebView = { postMessage() {} }; });
+    await p2.goto(base, { waitUntil: 'load' });
+    await p2.waitForTimeout(700);
+    await p2.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 800;
+      const g = c.getContext('2d'); g.fillStyle = '#7a8a6a'; g.fillRect(0, 0, 600, 800);
+      for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(${90 + i},120,${70 + i},.6)`; g.beginPath(); g.arc((i * 97) % 600, (i * 61) % 800, 30, 0, 7); g.fill(); }
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'r.jpg', { type: 'image/jpeg' }));
+      const inp = document.getElementById('fileInput'); inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await p2.waitForTimeout(800);
+    await p2.evaluate(() => document.getElementById('shutter').click());
+    await p2.waitForTimeout(1200);
+    await p2.evaluate(() => {
+      const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+      const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+      for (let y = r.top + r.height * 0.25; y < r.top + r.height * 0.62; y += 6) {
+        ev('pointerdown', r.left + r.width / 2 - 40, y);
+        for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+        ev('pointerup', r.left + r.width / 2 + 40, y);
+      }
+    });
+    await p2.evaluate(() => document.getElementById('btnDone').click());
+    await p2.waitForTimeout(2400);
+    await p2.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+    await p2.waitForTimeout(5000);
+    const out = await p2.evaluate(() => ({
+      title: document.getElementById('ssTitle')?.textContent,
+      events: (window.__tr || []).map(t => t[0]).filter(e => /^hide_publish/.test(e)),
+    }));
+    await p2.close();
+    return { tried: tried.length, ...out };
+  };
+
+  const nulled = await walk(() => null);
+  nulled.tried > 1
+    ? ok(`a null answer is a rung, not an exit — the ladder walked all ${nulled.tried} forms`)
+    : bad(`the ladder stopped after ${nulled.tried} form on a null answer — the fallback never runs`);
+  nulled.events.includes('hide_publish_failed') && !nulled.events.includes('hide_published')
+    ? ok('and a round that ended with no row is filed as a failure, not as a publish')
+    : bad(`a publish with no row reported ${JSON.stringify(nulled.events)}`);
+  !/is live/.test(nulled.title || '')
+    ? ok(`and the sheet stops claiming it ("${nulled.title}")`)
+    : bad(`the sheet still reads "${nulled.title}" over a hide that does not exist`);
+
+  const rescued = await walk((n) => (n === 0 ? null : 'realid1'));
+  rescued.tried === 2 && rescued.events.includes('hide_published')
+    ? ok('and a narrower form still rescues it — two tried, one row, one publish')
+    : bad(`the rescue path reports tried=${rescued.tried} events=${JSON.stringify(rescued.events)}`);
+  /is live/.test(rescued.title || '')
+    ? ok(`and the headline is back to the true one ("${rescued.title}")`)
+    : bad(`a successful publish reads "${rescued.title}"`);
+}
+
 const sentPerRound = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
 sentPerRound === 2
   ? ok('and across two rounds the stamp fired exactly twice — once per hide')

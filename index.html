@@ -7169,6 +7169,13 @@ window.KAMO.notifAskResult=function(outcome){
 };
 window.KAMO.setStoredHandle=function(h){
   try{
+    /* A STRING, OR NOTHING. cleanHandle() stringifies whatever it is given, so an object
+       arriving here became "[object Object]" and then, narrowed to alphanumerics, the handle
+       "objectObject" — written to localStorage, shown on the player card and stamped onto
+       every challenge that device published from then on. The wrapper is the only caller and
+       it is always a version behind, so the shape it sends is not something this file can fix
+       later; refusing the wrong one is. */
+    if(typeof h!=="string") return;
     const inc=cleanHandle(h); if(!inc) return;
     if(getHandle()) return;
     localStorage.setItem(HANDLE_KEY,inc);
@@ -7766,7 +7773,17 @@ function applyPerDay(weeklyPrice){
   el.textContent = per ? ("less than "+per+" a day") : "";
   el.style.display = per ? "block" : "none";
 }
-window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; if(p.hints) hintPackPrice=p.hints; storeTrial=!!p.trial; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; applyPerDay(p.weekly); } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(p.trial); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
+/* ⚠️ `trial` IS READ TWICE AND ONLY ONE OF THE TWO READINGS SURVIVES A WRONG SHAPE.
+   storeTrial=!!p.trial treats it as a flag; applyTrialCopy(p.trial) treats it as the LABEL and
+   does String() on whatever arrives. So a build that sent `trial:true` — the natural mistake,
+   given the line right here reads it as a boolean — would put the word "true" on the paywall
+   in three places: "Try everything free for true", "Try true free", "true free, then
+   $2.99/week." A number does the same thing without a unit: `trial:7` renders "Try 7 free".
+   Not happening today: App.js sends the human label StoreKit reported ("3 days"). But this is
+   the money screen, the wrapper is always a version behind, and the guard is one typeof. The
+   flag still comes off the same field, so an unlabelled trial is advertised exactly as it was
+   before — it just is not quoted with a length nobody wrote. */
+window.KAMO.setPrices=(p)=>{ if(!p) return; storeAnswered=true; if(typeof p.hints==="string") hintPackPrice=p.hints; storeTrial=!!p.trial; storeReady=Object.keys(p).length>0; if(p.weekly){ const e=$("#pwWeeklyPrice"); if(e) e.textContent=p.weekly; applyPerDay(p.weekly); } if(p.lifetime){ const e=$("#pwLifetimePrice"); if(e) e.textContent=p.lifetime; } applyTrialCopy(typeof p.trial==="string"?p.trial:""); applyPlanAvailability(p); updatePwBuy&&updatePwBuy(); };
 /* Native only reports a price for a plan the STORE ACTUALLY RETURNS (App.js only
    sets prices.weekly / prices.lifetime when RevenueCat resolved that product).
    A plan we can't sell must never be shown: tapping it opens a purchase that
@@ -11488,7 +11505,11 @@ window.KAMOREPLY={
      find out. Same function the publish path calls — not a copy of it. */
   forms:()=>chCreateForms({p_img_path:"x.jpg",p_cx:0.5,p_cy:0.5,p_r:0.1,p_secs:9,p_coverage:80},getHandle()),
 };
-function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chRound++; }
+/* WHETHER THIS ROUND'S PUBLISH HAS FAILED, read by the share sheet's headline. It is round
+   state and it is cleared with the round: a new hide starts as unpublished-but-fine, not as
+   the failure of the one before it. Set in chUpload's catch, cleared the moment a row lands. */
+let chPubFailed=false;
+function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chPubFailed=false; chRound++; }
 
 /* WHO MADE IT — a random per-device string, so a viewer can say "not this person again".
  *
@@ -11774,7 +11795,16 @@ function kfRenderVis(){
      keeps it out of the public feed. Live and public are two different claims, and only the
      first one belongs in a headline about what just happened. The second is the row below. */
   const h=$("#ssTitle");
-  if(h) h.textContent="Your kamo is live!";
+  /* ⚠️ AND IT ONLY SAYS SO WHILE IT IS TRUE. The headline is written once when the sheet
+     opens and nothing retracted it, so a publish that failed left a creator reading "Your
+     kamo is live! / Come back to see who tried." over a hide that does not exist — no row to
+     come back to, and no way of ever finding out. The paragraph above argues the sentence is
+     true in both visibility states because the hide "is uploaded and playable by anyone
+     holding the link from the moment this sheet opens"; chUpload's catch is the case where
+     that premise is false, and this is the line that answers it. Repainted through this
+     function like everything else on the sheet, so toggling the visibility row cannot put the
+     claim back. */
+  if(h) h.textContent = chPubFailed ? "That one didn't go up." : "Your kamo is live!";
   /* WHOEVER IS GOING TO TELL THEM. Inside the wrapper armResultsPing() schedules the local
      nudge and attach_push_token buys the real one, so the promise is kept. In a browser
      neither exists — and #ssGet three rows down is selling exactly that gap, so promising a
@@ -11856,13 +11886,27 @@ async function chUpload(){
        a playable hide, and an unsigned hide is still a hide. Nothing here may end with no row
        at all — that is the only outcome the sender would actually notice. */
     const forms=chCreateForms(base,who);
+    /* ⚠️ A NULL ANSWER IS NOT A ROW, AND IT USED TO END THE LADDER AS IF IT WERE ONE.
+       This assigned chId and broke on the first call that did not THROW — so a 200 carrying
+       `null` (a server-side guard, an RLS-filtered RETURNING, an overload that resolves to
+       void during a deploy) stopped the walk on the widest form, left chId empty, and fell
+       straight through to track("hide_published"). Measured with the first form answering
+       null and the second answering an id: one form tried, no row, counted as a publish.
+       Three failures in one, and every one of them silent — the ladder that exists to rescue
+       exactly this never ran, the sender was told their kamo was live, and hide_published
+       (the denominator the send rate is read against) counted a round that produced nothing.
+       The note above says it plainly: "Nothing here may end with no row at all — that is the
+       only outcome the sender would actually notice." So an empty answer is a rung, not an
+       exit, and running out of rungs is a failure rather than a success. */
     for(let i=0;i<forms.length;i++){
-      try{ chId=await chRpc("create_hide",forms[i]); break; }
+      try{ const id=await chRpc("create_hide",forms[i]); if(id){ chId=id; break; } }
       catch(e){ if(i===forms.length-1) throw e; }
     }
+    if(!chId) throw new Error("create_hide answered no id on any form");
     /* The row exists on the server either way — abandoning it here costs one hide nobody
        will ever open, which is strictly cheaper than sending a friend the wrong picture. */
     if(myRound!==chRound){ chId=""; track("hide_published_stale",{}); return; }
+    chPubFailed=false; try{ kfRenderVis(); }catch(_){}   // a retry that lands takes the headline back
     chRemember(chId);
     /* THE FEED WAITS FOR THE PICTURE; THE LINK DOES NOT.
        This is the one place the split above has to be paid for. A row now exists before its
@@ -11915,7 +11959,23 @@ async function chUpload(){
     try{ chRpc("set_hide_lang",{p_id:chId,p_lang:(navigator.language||"")}).catch(()=>{}); }catch(e){}
     armResultsPing(false);   // published, not sent — see the note on armResultsPing
     /* chUploadReveal now hangs off the upload above rather than off this line. */
-  }catch(e){ track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)}); }
+  }catch(e){
+    track("hide_publish_failed",{reason:String((e&&e.message)||e).slice(0,120)});
+    /* ⚠️ AND THE SHEET STOPS CLAIMING A HIDE THAT IS NOT THERE. "Your kamo is live!" is
+       written once, when the sheet opens, and nothing ever retracted it — so a publish that
+       failed left a creator reading "Your kamo is live! / Come back to see who tried." over a
+       hide that does not exist, with no row to come back to and no way of ever finding out.
+       The headline's own note argues it is true in both visibility states because "the hide is
+       uploaded and playable by anyone holding the link from the moment this sheet opens". That
+       is the premise this branch is the failure of.
+       A LINE RATHER THAN A REWRITTEN SHEET, because the next touch genuinely retries: chId is
+       still empty and _busy is cleared in the finally below, so chUpload runs again on the
+       following pointerdown. Saying so is the whole fix. It is also only visible at all since
+       #hint left #app — see .hint. */
+    chPubFailed=true;
+    try{ kfRenderVis(); }catch(_){}
+    showHint("Touch the card again to try — nothing was lost, the paint is still here",4600);
+  }
   finally{ chUpload._busy=false; }
 }
 /* THE OTHER HALF OF armResultsPing, and the half that is actually about something.
@@ -13471,9 +13531,30 @@ function chSeek(hideId,opts){
     /* Words float OVER the photo now, on a scrim that dies before mid-screen — the image
        is the interface and everything else is a guest on it. pointer-events:none all the
        way down so a hunt can start on the first pixel of the screen. */
-    +".chTop{position:absolute;top:0;left:0;right:0;z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;padding:calc(10px + var(--safe-t)) 14px 30px;background:linear-gradient(180deg,rgba(4,6,10,.68),rgba(4,6,10,0));pointer-events:none;}"
+    /* ⚠️ 28px, NOT 10px — THE HEADLINE WAS RUNNING UNDER THE CLOCK.
+       The pill sits at top:12px and is ~35px tall, so it occupies y 12-47; this stack started
+       its first line at y≈30. Measured on the real screen: at 320pt the headline's ink reached
+       x=267 against a pill starting at 251, for EVERY handle including "@tony" — and at 390pt
+       and 430pt it collided at 16 characters, which is exactly what cleanHandle() allows.
+       The note beside .chRun said this could not happen: ".chHead is max-width:20ch and
+       centred, which caps it around 226px on a 390pt screen — the pill starts at x≈320." The
+       arithmetic is wrong. 20ch of clamp(20px,5.8vw,26px) is 293px at 390pt, not 226, so the
+       box reaches 341 and the last word of the dare is painted under the timer.
+       PUSHED DOWN RATHER THAN NARROWED, deliberately: capping the width to clear the corner
+       costs every headline an extra line — "@tony hid a kamo here" goes from one to two at
+       every width — while 18px of offset costs nothing but 18px and leaves the wrapping
+       exactly as designed. Verified at 320/390/430 with 4- and 16-character handles. */
+    +".chTop{position:absolute;top:0;left:0;right:0;z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;padding:calc(28px + var(--safe-t)) 14px 30px;background:linear-gradient(180deg,rgba(4,6,10,.68),rgba(4,6,10,0));pointer-events:none;}"
     +".chBrand{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:-.4px;color:#fff;opacity:.85;}"
-    +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(20px,5.8vw,26px);letter-spacing:-.4px;line-height:1.16;text-align:center;margin:0;max-width:20ch;text-shadow:0 2px 12px rgba(0,0,0,.7);}"
+    /* ⚠️ overflow-wrap, BECAUSE A HANDLE IS ONE WORD AND max-width DOES NOT CLIP ONE WORD.
+       cleanHandle() narrows a name to alphanumerics and 16 characters, so "@WWWWWWWWWWWWWWWW"
+       is a single unbreakable token — and a token wider than the box simply overflows it.
+       Measured: that handle painted to x=390 on a 390pt screen and x=430 on a 430pt one, i.e.
+       the sender's own name ran off the edge of the display on the one screen that exists to
+       say who is challenging you. It is not a pathological input: all-caps handles are
+       ordinary and the cap is the app's own. `anywhere` rather than break-word so the break is
+       taken before the line overflows rather than only when nothing else fits. */
+    +".chHead{font-family:var(--display);font-weight:700;font-size:clamp(20px,5.8vw,26px);letter-spacing:-.4px;line-height:1.16;text-align:center;margin:0;max-width:20ch;overflow-wrap:anywhere;text-shadow:0 2px 12px rgba(0,0,0,.7);}"
     +".chSub{font-size:13.5px;opacity:.8;text-align:center;margin:0;text-shadow:0 2px 8px rgba(0,0,0,.7);}"
     /* The clock is a floating pill, mint like every score in the app, and it only ever
        counts UP — urgency colours belonged to a clock that could kill the round. */
@@ -13701,8 +13782,11 @@ function chSeek(hideId,opts){
        status chips (clock, run) — same shell, same size, same pointer-events:none, stacked
        6px apart so they read as one instrument. Top-centre stays forbidden for the reason
        written on .chRun itself (the wordmark's coordinate hit-test).
-       The headline cannot reach them: .chHead is max-width:20ch and centred, which caps it
-       around 226px on a 390pt screen — the pill starts at x≈320.
+       ⚠️ THIS SAID "The headline cannot reach them: .chHead is max-width:20ch and centred,
+       which caps it around 226px on a 390pt screen — the pill starts at x≈320." It reaches
+       them. 20ch of clamp(20px,5.8vw,26px) is 293px at 390pt, so the box ends at 341 and the
+       ink at 335 on a 16-character handle; at 320pt it collided for every handle there is.
+       What keeps them apart now is vertical, not horizontal — see the padding on .chTop.
        FEED ONLY. A link round has no bar and no ✕, so its top-left is free and .chRun keeps
        the corner it was designed for; this override is scoped to .chIn like every other
        difference between the two surfaces. */
