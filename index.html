@@ -9742,7 +9742,7 @@ function ssOfferPub(){
        an argument. Safe means the hide stays out of the feed; it does not mean the button may
        keep saying it is in one. A creator who reads "In the feed ✓" has no reason to look
        again, which is exactly why the offer has to come back when the write did not land. */
-    const ok = id ? await kfApplyVisibility(id,true) : false;
+    const ok = id ? await kfPublishByHand(id) : false;
     if(!ok){ g.classList.remove("on"); g.textContent="Put it in the feed too"; }
     track("sent_public_accepted",{published:!!id,applied:ok});
   };
@@ -12047,8 +12047,38 @@ async function kfApplyVisibility(id,pub){
   if(ok){ chVisServer=!!pub; chVisUnsaved=null; }
   else if(changes){ chVisUnsaved=!!pub; }
   try{ kfRenderVis(); }catch(_){}
-  if(!ok&&changes) track("hide_visibility_failed",{wanted:!!pub});
+  if(!ok&&changes) track("hide_visibility_failed",{wanted:!!pub,reason:"write"});
   return ok;
+}
+
+/* ⚠️ ASKING FOR THE FEED BY HAND NEEDS A PICTURE TO PUT IN IT.
+   chUpload publishes from inside bytes.then(up => { if(!up) return; ... }) — deliberately, and
+   its note says why: "an upload that never lands can never reach it: the hide stays private,
+   which is the direction this file already fails in everywhere else." The .ssVis toggle and
+   "Put it in the feed too" had no such gate, so a creator whose photo failed to upload could
+   put the row in the public feed by hand, and every seeker served it meets "This one didn't
+   load". Not hypothetical: 473 rows in seven days have no object in the bucket, and 5 of those
+   were public — three inside one hour from a single device.
+   HERE AND NOT INSIDE kfApplyVisibility(), which is the write primitive: the publish path is
+   already gated by the bytes it is chained to, and KAMOFEED.setVisibility is a door that
+   exists to set a row's visibility without republishing it. What needs the gate is a PERSON
+   asking for the feed, which is these two buttons.
+   chPrepare() is the upload itself: it returns the flight already in progress, resolves to the
+   slot once the bytes are in the bucket and to null when they are not, and starts one if
+   nothing has — so the tap that is refused is also the tap that retries. Private is ungated:
+   it is the safe direction and it means something whether or not a photo exists. */
+async function kfPublishByHand(id){
+  if(!id) return false;
+  let up=null;
+  try{ up=await chPrepare(); }catch(_){ up=null; }
+  if(!up){
+    /* Only claim it is unsaved if the server is not already holding it public — otherwise this
+       would put "Not in the feed yet" on a hide that is demonstrably in it. */
+    if(!chVisServer){ chVisUnsaved=true; try{ kfRenderVis(); }catch(_){} }
+    track("hide_visibility_failed",{wanted:true,reason:"no_photo"});
+    return false;
+  }
+  return await kfApplyVisibility(id,true);
 }
 
 /* THE ICON HAS TO CHANGE WITH THE ANSWER, not just its tint. A globe means "the world sees
@@ -12227,7 +12257,7 @@ try{
     /* Retroactive within the round: the sheet is often already open (and the hide already
        published) when this is tapped, and a switch that only applied to the NEXT hide would
        be a switch that does nothing at the moment it is used. */
-    if(chId) await kfApplyVisibility(chId,on);
+    if(chId) await (on ? kfPublishByHand(chId) : kfApplyVisibility(chId,false));
   };
   kfRenderVis();
 }catch(e){}
