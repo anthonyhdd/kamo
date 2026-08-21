@@ -783,6 +783,38 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5d-octies. Nothing leaves the device over the bucket's ceiling ----------------------
+   The `hides` bucket has file_size_limit = 400000 and answers an oversized POST with HTTP 400
+   carrying {"statusCode":"413","code":"EntityTooLarge"}. Over seven days that refused 1054
+   uploads — roughly half of every upload failure, and the deterministic half: a busy photograph
+   encodes over the line every single time, which is why 131 devices had EVERY hide they ever
+   made fail. And because chUpload writes the ROW before it writes the photo, the user-visible
+   cost is not a publish that failed. It is a hide that exists, gets sent, gets tapped, and has
+   no kamo in it.
+   chBlob is the only place a board becomes bytes, so chFitBudget has to be on its way out —
+   not called somewhere near it, but the last thing that happens to the blob. The realistic
+   regression is somebody editing the encoder and dropping the .then(), which restores the bug
+   in full and silently: every board still encodes, and only the big ones stop existing. */
+{
+  const at = html.indexOf('c.toBlob(b=>res(b),"image/jpeg"');
+  if (at < 0) bad('chBlob no longer encodes through c.toBlob — the board-to-bytes path moved and '
+      + "the upload ceiling's only guard is anchored to nothing");
+  else {
+    const seg = html.slice(at, at + 400).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+CH_BLOB_BUDGET\s*=\s*(\d+)/);
+    const budget = m ? Number(m[1]) : NaN;
+    !seg.includes('.then(chFitBudget)')
+      ? bad('chBlob no longer ends .then(chFitBudget) — boards go to storage unmeasured again, '
+          + 'and the big ones come back 400 EntityTooLarge with the row already written')
+      : !m
+        ? bad('CH_BLOB_BUDGET is gone — the ladder has no line to bring a board under')
+        : budget > 400000
+          ? bad(`CH_BLOB_BUDGET is ${budget}, at or over the bucket's 400000-byte limit — the `
+              + 'ladder now stops shrinking while the upload still fails')
+          : ok(`every board leaves through chFitBudget, capped at ${budget} under the bucket's 400000`);
+  }
+}
+
 /* ---- 5d-bis. tlFrames and tlTimes are one array wearing two names -------------------------
  * tlTimes carries the wall-clock mark for tlFrames[i], and sessionPayload() zips them by
  * index to hand native the pace the round actually ran at. So the pairing IS the feature, and
