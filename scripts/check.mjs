@@ -1138,6 +1138,30 @@ try {
   bad('THE HINT IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
 }
 
+/* ---- 11e1. The device id, which is the hint wallet's key --------------------------------
+   hintOwner() keys the wallet on `chUserId || ("dev:"+chDeviceId())`, and chUserId is empty
+   for the whole live population — 152 wallets have spent a hint and ZERO were keyed on one.
+   So chDeviceId() IS the wallet, and it used to live in localStorage alone: 149 of those 152
+   (98%) spent exactly one hint ever, which is the shape of a wallet that is cleared away
+   before it can spend a second. Both halves of that failure are silent — the free daily hint
+   renews for anyone who clears storage, and a bought pack is credited to a key the phone can
+   no longer produce — so nothing but this suite reports it.
+   It also guards the more dangerous half of the fix: the block runs during module
+   evaluation and touches three storage APIs that throw on real devices. A throw there is a
+   blank app for the entire fleet, which is a far worse bug than the one it repairs. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-devid-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-devid-dom.mjs', 'DEVICE-ID TEST', out)
+    : ok('the device id survives a cleared store and an existing one is never minted over (node scripts/test-devid-dom.mjs)');
+} catch (e) {
+  /* Both streams, for the reason the hint block below documents: passes go to stdout and
+     failures to stderr, so filtering one of them finds nothing and names no cause. */
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('✗'));
+  bad('THE DEVICE ID IS NOT SURVIVING:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
+}
+
 /* ---- 11e2. The card on your own photo ----------------------------------------------------
    The one screen where every control pointed backwards: "See it live" seeds the feed with the
    hide you just published, and the round's ending card offered to challenge you back and to
