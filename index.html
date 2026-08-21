@@ -11768,10 +11768,26 @@ function chPrepare(){
        second and the published photo becomes the pre-edit one while the answer key is the
        post-edit one. Its failure is not this upload's problem, hence the swallow. */
     if(chPrevUp){ try{ await chPrevUp; }catch(e){} chPrevUp=null; }
+    /* ⚠️ NO x-upsert HERE, AND IT MUST STAY THAT WAY UNTIL storage.objects HAS AN UPDATE
+       POLICY. It was added on 2026-08-21 for a real reason — a re-freeze POSTs to the object
+       name it supersedes, and a plain POST to an existing object answers 409 — and it took
+       every upload in the app down with it for fifteen hours.
+       WHY IT FAILS FOR EVERYONE AND NOT JUST THE SECOND POST: x-upsert turns the INSERT into
+       an upsert, and the anon role has exactly ONE policy on storage.objects — "anon uploads
+       a hide", INSERT only. An upsert needs UPDATE as well, so Postgres refuses the row
+       before it ever looks at whether the object exists: `new row violates row-level security
+       policy`, 403, wrapped in the 400 the client sees. First upload of a brand-new name
+       included. Measured: 683 of 684 storage failures in one eight-hour window carried that
+       message, against a single EntityTooLarge.
+       THE FIX IS NOT TO GRANT anon UPDATE. The key ships in this file — it is public by
+       design — so an UPDATE policy would let anyone overwrite the photo behind any hide that
+       has already been shared, which is a worse thing to be able to do than to create one.
+       What the 409 costs by comparison is small and survivable: a re-freeze keeps the bytes
+       from the FIRST freeze, so the hide still has a photo, it is just the pre-edit one. A
+       wrong photo beats no photo. The durable fix is a fresh object name for the re-freeze,
+       which needs the row's img_path to move with it — see the note in chUpload. */
     const up=await fetch(CH_URL+"/storage/v1/object/hides/"+slot.name,{method:"POST",
-      /* x-upsert, because the second time round the object already exists and storage
-         answers 409 to a plain POST. */
-      headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg","x-upsert":"true"},body:blob});
+      headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
     if(!up.ok) throw new Error("upload "+up.status);
     return slot;
   })().catch((e)=>{
