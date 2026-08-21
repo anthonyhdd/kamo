@@ -8609,12 +8609,161 @@ function track(event,props){
 }
 /* Survives a reload so a seeker's miss and their eventual find are one user, not two.
    localStorage is wiped on every launch inside 1.0.2 — irrelevant here, because this path
-   only ever runs where there is no wrapper. */
-function chDeviceId(){
-  try{ let d=localStorage.getItem("kamo_did");
-    if(!d){ d="w"+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem("kamo_did",d); }
-    return d; }catch(e){ return "w-nostore"; }
+   only ever runs where there is no wrapper.
+
+   ⚠️ IT IS ALSO THE HINT WALLET'S KEY NOW, AND THAT CHANGED WHAT A LOST ID COSTS.
+   hintOwner() keys the wallet on `chUserId || ("dev:"+chDeviceId())`, and chUserId — the
+   RevenueCat app user id — is empty for everyone: on 2026-08-20, of the 152 wallets that
+   have ever spent a hint, ZERO were keyed on one. So the wallet is this string, for the
+   whole population, and this string lived in exactly one store that browsers throw away.
+   What that looked like in production: 149 of those 152 wallets (98%) spent exactly one
+   hint EVER — the shape of a wallet that is born, spends its free daily hint, and is never
+   seen again — and one phone minted three keys inside a day. Both directions of that hurt.
+   A cleared localStorage renews the free daily hint (reinstall, clear-website-data, or iOS
+   evicting the origin on its own), and a bought pack credited to the old key lands in a
+   wallet the phone can no longer open.
+
+   SO THE ID IS WRITTEN THREE TIMES AND READ FROM WHICHEVER SURVIVED. The three stores fail
+   for different reasons — ITP evicts script-written localStorage and cookies on their own
+   clocks, "Clear website data" takes what the user can see, a reinstall takes the WKWebView
+   container — so a survivor is the common case rather than a lucky one, and the id is only
+   lost when all three go at once.
+
+   THE ORDER OF AUTHORITY IS FIXED, and it has to be, because "restore the id" and "mint an
+   id" are the same line of code seen from different sides. Anything already stored beats
+   anything this load could invent: localStorage first (it is where every wallet in the
+   table today is keyed, so an upgrading device must keep reading its own), then the cookie,
+   then IndexedDB. Minting happens only when all three came back empty.
+
+   INDEXEDDB IS ASYNCHRONOUS AND THIS FUNCTION IS NOT. Its callers are ordinary synchronous
+   code — chWebTrack builds a payload with it, hintOwner() answers a gate with it — and an
+   `await` here would be a rewrite of all of them. So IndexedDB never participates in the
+   answer this function returns; it is read once in the background and, if it turns out to
+   hold an id this load did not find, that id is adopted and pushed back into the two
+   synchronous stores. The cost is that a device whose only surviving copy is in IndexedDB
+   spends the first few milliseconds of the load under a freshly minted id; the events sent
+   in that window carry it, and the wallet does not, because hintOwner() reads this on every
+   call rather than caching one.
+
+   EVERY STORE ACCESS IS WRAPPED, WITHOUT EXCEPTION. localStorage throws in Safari private
+   mode, document.cookie throws behind some enterprise policies, indexedDB.open throws in a
+   third-party frame with storage partitioned off. This block runs during module evaluation,
+   and a throw during module evaluation is a blank app for the entire fleet within minutes
+   of the push — the one failure this repo's whole pre-push gate exists to prevent. Nothing
+   in here may be the thing that ends the module.
+
+   ⚠️ AND NOTHING HERE MAY BE A TEMPORAL DEAD ZONE. chDeviceId() is a hoisted declaration
+   that module-scope code above this point is free to reach — chWebTrack() calls it, and any
+   track() that ever runs during evaluation goes through that. A `const` up here would turn
+   such a call into a ReferenceError, which is the same blank app by a different route (this
+   file has been bitten by exactly that twice: chReplyTo and KF_AUTHOR_KEY). So the key names
+   are literals inside the functions that use them, and the four pieces of mutable state are
+   `var` — hoisted, `undefined` before this line, and `undefined` is falsy, which is what
+   every one of them means before it is set. */
+var didCache, didMinted, didIdbLive, didIdbSeen;
+/* WHAT AN ID IS ALLOWED TO LOOK LIKE, checked on every read from every store. A cookie is
+   editable by hand and an old IndexedDB row can hold anything, and this string is about to
+   be sent to the wallet as an owner key — so a value that does not have the shape of an id
+   this page mints is treated as absence, and absence is recoverable. "w-nostore" is excluded
+   by name: it is the sentinel for "no store took the write", never a device's own id, and
+   letting it be read back as one would key every storage-less browser to a single wallet. */
+function didOk(d){ return typeof d==="string" && d!=="w-nostore" && /^[A-Za-z0-9_-]{6,64}$/.test(d); }
+function didLsGet(){ try{ const d=localStorage.getItem("kamo_did"); return didOk(d)?d:""; }catch(e){ return ""; } }
+function didLsPut(d){ try{ localStorage.setItem("kamo_did",d); }catch(e){} }
+function didCkGet(){
+  try{
+    const m=(document.cookie||"").match(/(?:^|;\s*)kamo_did=([^;]*)/);
+    const d=m?decodeURIComponent(m[1]):"";
+    return didOk(d)?d:"";
+  }catch(e){ return ""; }
 }
+/* Two years, and `secure` only where the page is on https — a Secure cookie is dropped
+   outright over http, which is every local test server this repo runs. SameSite=Lax so the
+   id survives a friend's share link arriving from Messages or a browser's own referrer. */
+function didCkPut(d){
+  try{ document.cookie="kamo_did="+encodeURIComponent(d)+"; path=/; max-age=63072000; samesite=lax"+(location.protocol==="https:"?"; secure":""); }catch(e){}
+}
+/* `didIdbLive` is the only thing the synchronous path learns from IndexedDB, and it learns
+   it late: it says a database opened at least once, which is what stops the "no store took
+   the write" sentinel from firing on a browser whose storage is fine but whose only working
+   store is the asynchronous one. */
+function didIdbOpen(cb){
+  try{
+    if(!window.indexedDB) return cb(null);
+    const rq=indexedDB.open("kamo_id",1);
+    rq.onupgradeneeded=function(){ try{ rq.result.createObjectStore("kv"); }catch(e){} };
+    rq.onsuccess=function(){ didIdbLive=true; try{ cb(rq.result); }catch(e){} };
+    rq.onerror=function(){ try{ cb(null); }catch(e){} };
+    rq.onblocked=function(){ try{ cb(null); }catch(e){} };
+  }catch(e){ try{ cb(null); }catch(_){} }
+}
+function didIdbGet(cb){
+  didIdbOpen(function(db){
+    if(!db) return cb("");
+    try{
+      const rq=db.transaction("kv","readonly").objectStore("kv").get("did");
+      rq.onsuccess=function(){ try{ cb(didOk(rq.result)?rq.result:""); }catch(e){} };
+      rq.onerror=function(){ try{ cb(""); }catch(e){} };
+    }catch(e){ try{ cb(""); }catch(_){} }
+  });
+}
+function didIdbPut(d){
+  didIdbOpen(function(db){
+    if(!db) return;
+    try{ db.transaction("kv","readwrite").objectStore("kv").put(d,"did"); }catch(e){}
+  });
+}
+/* Fill in whatever is empty from the id this load settled on. This is the repair half, and
+   it only ever writes a store that does not already agree — an id already sitting somewhere
+   is never replaced by one from anywhere else, because the store that has one is the store
+   that might be the last copy of it. The IndexedDB write waits for the background read
+   (`didIdbSeen`): writing before it lands could put a freshly minted id on top of the older
+   one that read was about to return, which is the exact loss this whole block prevents. */
+function didSpread(){
+  const d=didCache; if(!d) return;
+  if(didLsGet()!==d) didLsPut(d);
+  if(didCkGet()!==d) didCkPut(d);
+  if(didIdbSeen) didIdbPut(d);
+}
+/* The background half, fired once during module evaluation so its answer is usually back
+   before anything asks. Three outcomes, and only one of them moves an id:
+     - IndexedDB holds an id and this load has none, or has one it minted itself → adopt it.
+       A minted id is a guess; a stored one is this device's history, so the stored one wins.
+     - IndexedDB holds an id and this load READ one (from localStorage or the cookie) → the
+       synchronous stores win, and IndexedDB is converged onto them. They are what every
+       wallet is keyed on today, and a divergence left alone would resurrect the loser the
+       next time the other two are cleared.
+     - IndexedDB holds nothing → seed it. */
+function didRestore(){
+  didIdbGet(function(stored){
+    didIdbSeen=true;
+    if(stored && (!didCache || (didMinted && stored!==didCache))){
+      didCache=stored; didMinted=false;
+      didLsPut(stored); didCkPut(stored);
+      return;
+    }
+    if(didCache) didIdbPut(didCache);
+  });
+}
+function chDeviceId(){
+  if(didCache) return didCache;
+  let d=didLsGet()||didCkGet();
+  if(!d){
+    d="w"+Math.random().toString(36).slice(2)+Date.now().toString(36);
+    didLsPut(d); didCkPut(d);
+    /* Nothing accepted the write and no database has opened: a browser with every store
+       refused. Return the old sentinel rather than caching a per-load id — a wallet that is
+       new on every page load is a free daily hint on every page load. Uncached on purpose,
+       so the next call gets a real id the moment storage comes back (which, on the
+       IndexedDB-only device above, is a few milliseconds later). */
+    if(didLsGet()!==d && didCkGet()!==d && !didIdbLive) return "w-nostore";
+    didMinted=true;
+  }
+  didCache=d;
+  didSpread();
+  return d;
+}
+try{ didRestore(); }catch(e){}
 function chWebTrack(event,props){
   try{
     /* EU, NOT api2. This project runs with serverZone:"EU" (see kamo-app/analytics.js), so
