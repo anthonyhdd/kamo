@@ -1507,6 +1507,30 @@ try {
   bad('UNDO OR CLEAR IS BROKEN:\n' + why(e));
 }
 
+/* ---- 13-bis-2. The reveal has to show the figure where the answer says it is ------------
+   Two descriptions of one position, built from different material: chGeom() reads the bbox of
+   maskCanvas and becomes the (cx,cy,r) the server tests every tap against, while beforeBoard
+   is the picture the seeker is shown when the round ends. commitMove() shifts the mask, so the
+   answer follows a nudged figure; beforeBoard was snapshot once inside capture() and never
+   again, so the reveal did not.
+   Nothing reports that, because the tap is still judged against the answer key — the round is
+   scored correctly and only the picture afterwards lies. From the player's side that is worse
+   than a wrong answer: they tap the figure, are told "Found in 9.4s", and are then shown the
+   figure half a screen from their mark. Reported from production 2026-08-21 on hide
+   d08d6d0795d96697. And it needs no deliberate gesture — a hold anywhere on the board starts
+   a move drag, so a thumb that rests a beat too long is enough. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-movereveal-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-movereveal-dom.mjs', 'MOVE/REVEAL TEST', out)
+    : ok('a moved figure is revealed where the answer key says it is (node scripts/test-movereveal-dom.mjs)');
+} catch (e) {
+  /* Both streams: this suite prints its passes to stdout and its failures to stderr. */
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('\u2717'));
+  bad('THE REVEAL AND THE ANSWER KEY DISAGREE:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
+}
+
 /* ---- 13-ter. The only channel this app has for a sentence -------------------------------
    showHint() is how "Reported. Thank you.", "Link copied", "Couldn't load the replay", "Still
    going up — give it a second" and "That one is in the app" are all said, and #hint shipped at
