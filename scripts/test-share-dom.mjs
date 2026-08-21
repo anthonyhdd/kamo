@@ -244,6 +244,95 @@ console.log('\nA PUBLISH THAT PRODUCED NO ROW IS NOT A PUBLISH');
     : bad(`a successful publish reads "${rescued.title}"`);
 }
 
+/* ⚠️ THE VISIBILITY ROW WAS MAKING A CLAIM ON BEHALF OF A WRITE NOBODY LISTENED TO.
+   set_hide_public was dispatched fire-and-forget while #ssVis repainted itself as the answer
+   it was asking for. CLAUDE.md's doctrine covers one direction — is_public defaults to FALSE,
+   so a write that never lands leaves a hide private, "never 'this reached strangers without
+   being asked'". That is true of the FIRST write and false of a RETRACTION: a hide made public
+   by a write that landed, then switched back to Private by one that does not, stays in the
+   public feed while this sheet tells its creator it is not. Measured on the real page: the row
+   read "Private / Only whoever you send the link to" with p_public=true as the last thing the
+   server had been told.
+   AND THE TRANSPORT WAS PART OF IT. set_hide_public returns void, PostgREST answers 204 with
+   no body, and chRpc parsed every answer with r.json() — so the promise rejected on every
+   SUCCESSFUL write too. Both cases are driven here through the real fetch for that reason. */
+console.log('\nTHE VISIBILITY ROW STATES WHAT THE SERVER WAS ACTUALLY TOLD');
+{
+  const visRun = async (plan) => {
+    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const heard = [];
+    await p2.route('**/rest/v1/rpc/create_hide', r => r.fulfill({ status: 200, contentType: 'application/json', body: '"visid1"' }));
+    await p2.route('**/rest/v1/rpc/set_hide_public', async r => {
+      let b = {}; try { b = JSON.parse(r.request().postData() || '{}'); } catch (e) {}
+      const kill = plan(heard.length);
+      heard.push({ p_public: b.p_public, dead: !!kill });
+      /* 204 + no body is exactly what a void rpc answers in production. */
+      return kill ? r.abort('failed') : r.fulfill({ status: 204, body: '' });
+    });
+    await p2.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"Key":"hides/x.jpg"}' }));
+    await p2.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; try { localStorage.setItem('kamo_hide_public', '1'); } catch (e) {} });
+    await p2.goto(base, { waitUntil: 'load' });
+    await p2.waitForTimeout(700);
+    await p2.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 800;
+      const g = c.getContext('2d'); g.fillStyle = '#7a8a6a'; g.fillRect(0, 0, 600, 800);
+      for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(${90 + i},120,${70 + i},.6)`; g.beginPath(); g.arc((i * 97) % 600, (i * 61) % 800, 30, 0, 7); g.fill(); }
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'r.jpg', { type: 'image/jpeg' }));
+      const inp = document.getElementById('fileInput'); inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await p2.waitForTimeout(800);
+    await p2.evaluate(() => document.getElementById('shutter').click());
+    await p2.waitForTimeout(1200);
+    await p2.evaluate(() => {
+      const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+      const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+      for (let y = r.top + r.height * 0.25; y < r.top + r.height * 0.62; y += 6) {
+        ev('pointerdown', r.left + r.width / 2 - 40, y);
+        for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+        ev('pointerup', r.left + r.width / 2 + 40, y);
+      }
+    });
+    await p2.evaluate(() => document.getElementById('btnDone').click());
+    await p2.waitForTimeout(2400);
+    await p2.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+    await p2.waitForTimeout(4200);
+    const row = () => p2.evaluate(() => ({
+      t: document.getElementById('ssVisT')?.textContent,
+      s: document.getElementById('ssVisS')?.textContent,
+    }));
+    return { p2, heard, row, tap: async () => { await p2.click('#ssVis'); await p2.waitForTimeout(2200); } };
+  };
+
+  /* Write 0 (the publish, public) lands; write 1 (the retraction) dies; write 2 — the retry —
+     lands again. Three answers, so the row has to be right three times running. */
+  const r = await visRun((n) => n === 1);
+  const published = await r.row();
+  /in the KAMO feed/.test(published.s || '')
+    ? ok('a published public hide states the feed plainly (204, no body, and it was believed)')
+    : bad(`a successful visibility write reads "${published.s}" — an empty answer is being read as a failure`);
+
+  await r.tap();                       // asks for Private, and that write dies
+  const failed = await r.row();
+  /Still in the feed/.test(failed.s || '')
+    ? ok(`a retraction that did not land says so ("${failed.t} · ${failed.s}")`)
+    : bad(`the row reads "${failed.t} · ${failed.s}" while the hide is still public — this is `
+        + 'the one direction the visibility doctrine says must never happen');
+
+  await r.tap();                       // the retry, and this one lands
+  const fixed = await r.row();
+  const last = r.heard[r.heard.length - 1];
+  last && last.p_public === false && !last.dead
+    ? ok('and a tap on an unsaved row RETRIES it rather than flipping past it')
+    : bad(`the retry asked the server for p_public=${last && last.p_public} — a plain toggle sends `
+        + 'the opposite of what the user just failed to get');
+  /Only whoever you send/.test(fixed.s || '')
+    ? ok('and the row goes back to stating the plain fact once it lands')
+    : bad(`after a successful retry the row still reads "${fixed.s}"`);
+  await r.p2.close();
+}
+
 const sentPerRound = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
 sentPerRound === 2
   ? ok('and across two rounds the stamp fired exactly twice — once per hide')
