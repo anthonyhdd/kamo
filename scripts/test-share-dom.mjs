@@ -483,6 +483,70 @@ console.log('\nTHE REVEAL IS THE SHARE, WHEREVER IT IS GOING');
   await page.close();
 }
 
+/* ═══ THE UPLOAD CEILING ═══
+   The bucket refuses anything over 400000 bytes with an HTTP 400 whose body says
+   {"statusCode":"413","code":"EntityTooLarge"}, and for seven days that refused 1054 uploads —
+   about half of every upload failure, and the half that repeats: 131 devices had EVERY hide
+   they ever made fail, because a busy photograph encodes over the line every single time.
+   The row is written before the photo is, so the cost is not "publish failed", it is a hide
+   that exists, gets sent, gets tapped, and has no kamo in it.
+   The ladder cannot be reached through the UI here — the board is capped at a phone's size, so
+   nothing this harness can paint encodes that large, and the shape that does blow it (a reply,
+   at 0.82, on a textured photo) needs a whole played round to set up. So this drives the real
+   function directly, through the hook beside it, with a blob that is genuinely over. */
+{
+  console.log('\n— the upload ceiling —');
+  const page=await browser.newPage({viewport:{width:390,height:844}});
+  page.on('pageerror',e=>bad('PAGE ERROR: '+e.message));
+  await page.goto(base,{waitUntil:'load'});
+  await page.waitForTimeout(400);
+
+  const r = await page.evaluate(async () => {
+    const H = window.KAMOBUDGET;
+    if (!H) return { missing: true };
+    /* Noise, because noise is how gravel, foliage, carpet and brick compress — which is to say,
+       how the surfaces this entire game is played on compress. */
+    const c = document.createElement('canvas'); c.width = 1400; c.height = 1400;
+    const g = c.getContext('2d'); const d = g.createImageData(1400, 1400);
+    for (let i = 0; i < d.data.length; i += 4) {
+      d.data[i]=Math.random()*255; d.data[i+1]=Math.random()*255; d.data[i+2]=Math.random()*255; d.data[i+3]=255;
+    }
+    g.putImageData(d, 0, 0);
+    const big = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+    window.__tr = [];
+    const out = await H.fit(big);
+    /* And a blob already under the line must come back untouched — the ladder is a rescue, not
+       a tax on every hide that was fine. */
+    const small = await new Promise(r => { const s=document.createElement('canvas'); s.width=40; s.height=40;
+      s.getContext('2d').fillRect(0,0,40,40); s.toBlob(r,'image/jpeg',0.7); });
+    const kept = await H.fit(small);
+    return { budget: H.budget, from: big.size, to: out.size,
+             ev: (window.__tr||[]).filter(e => e[0] === 'hide_blob_shrunk'),
+             smallIn: small.size, smallOut: kept.size, smallUntouched: kept === small };
+  });
+
+  if (r.missing) bad('window.KAMOBUDGET is gone — the ladder cannot be tested, and nothing else here proves a board fits');
+  else {
+    r.budget <= 400000
+      ? ok(`the budget (${r.budget}) sits under the bucket's 400000-byte ceiling`)
+      : bad(`the budget is ${r.budget}, at or over the ceiling that refuses the upload`);
+    r.from > r.budget
+      ? ok(`a textured board really does encode over it (${r.from} bytes)`)
+      : bad(`the fixture only reached ${r.from} bytes — it never crossed the line, so this proves nothing`);
+    r.to <= r.budget
+      ? ok(`and the ladder brought it under: ${r.from} → ${r.to} bytes`)
+      : bad(`the ladder gave up at ${r.to} bytes — this board still 400s, and its hide still has no kamo in it`);
+    const e = r.ev[0];
+    e && e[1] && e[1].fit === true
+      ? ok('hide_blob_shrunk reports the blob that was KEPT, and that it fits')
+      : bad(`hide_blob_shrunk said ${JSON.stringify(e ? e[1] : null)} — the one event that can tell us this is still failing is not telling the truth`);
+    r.smallUntouched
+      ? ok(`a board already under budget is returned untouched (${r.smallIn} bytes)`)
+      : bad(`an in-budget board came back re-encoded (${r.smallIn} → ${r.smallOut}) — every hide is paying for the rescue`);
+  }
+  await page.close();
+}
+
 await browser.close(); server.close();
-console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant, always its own hide, and the clip goes wherever it is sent');
+console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant, always its own hide, the clip goes wherever it is sent, and no board leaves over the ceiling');
 process.exit(failed?1:0);

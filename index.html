@@ -8476,6 +8476,15 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    attempt with a 0.0s clock into everybody else's percentile. At volume this one means
    storage, not phones — which is why it is worth being able to tell the two apart. */
 "seek_photo_failed",
+/* THE UPLOAD CEILING'S TWO WITNESSES, and they belong beside the three above because they are
+   the same failure one step later: not an image this app could not read, an image the bucket
+   would not take. `hide_blob_shrunk` says a painted board came in over 400 KB and by how much,
+   and its `fit` field says whether the ladder actually got it under — a `fit:false` row is a
+   hide on its way to having no kamo in it. `hide_frame_failed` is the reveal frame hitting the
+   same wall, which is the round that ends on a marker instead of the body.
+   Neither should carry volume. If `hide_blob_shrunk` does, the budget is being paid for in
+   quality nobody agreed to lose and the ceiling itself should move instead. */
+"hide_blob_shrunk","hide_frame_failed",
 "reply_photo_failed","feed_black_dropped","feed_black_all",
 /* `feed_dupe_blocked` is a MEASURE OF A SERVER BUG, not of a client one: feed_page paginates
    on created_at while ordering by score, so it re-serves rows the page above already showed.
@@ -11590,8 +11599,57 @@ function chBlob(src){
        the bucket's 400 KB ceiling, and this has to stay under it. This slows the decay, it
        does not stop it; nothing short of carrying the original around would. */
     c.toBlob(b=>res(b),"image/jpeg",chReplyTo?0.82:0.72);
-  });
+  }).then(chFitBudget);
 }
+/* ⚠️ THE CEILING WAS KNOWN AND NEVER CHECKED, AND IT IS THE BIGGEST SINGLE REASON A PAINTED
+   KAMO DOES NOT EXIST. The note above states it — "1080px at 0.72 lands 150-250 KB against the
+   bucket's 400 KB ceiling, and this has to stay under it" — and then nothing measured whether
+   it did. The bucket's file_size_limit is 400000 bytes and storage answers an oversized POST
+   with HTTP 400 carrying {"statusCode":"413","code":"EntityTooLarge"} in the body. Verified by
+   posting a 500 KB JPEG at it.
+   WHAT THAT COST, over seven days: 1054 uploads refused with `upload 400` — about half of all
+   upload failures, and the deterministic half. It is not a flaky network: a busy photograph on
+   a big screen encodes over the line every single time, which is why 131 devices have had
+   EVERY hide they ever made fail. The surviving objects prove the ceiling by their shape — the
+   largest in three days is 385 KB, p99 is 223 KB, and nothing at all sits above 400.
+   Quality goes first because it is the cheapest thing to give up and the eye barely reads it
+   at this size; pixels only after, and only if quality alone will not do it. 380 KB rather
+   than 400 leaves room for the multipart envelope. A reply still STARTS at 0.82 for the reason
+   the note above gives — this only steps down when the alternative is not existing. */
+const CH_BLOB_BUDGET=380000;
+async function chFitBudget(b){
+  if(!b||b.size<=CH_BLOB_BUDGET) return b;
+  const src=await createImageBitmap(b).catch(()=>null);
+  if(!src) return b;
+  const enc=(cv,q)=>new Promise(r=>cv.toBlob(r,"image/jpeg",q));
+  let w=src.width, h=src.height, q=chReplyTo?0.82:0.72, out=b;
+  const draw=()=>{ const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+    cv.getContext("2d").drawImage(src,0,0,w,h); return cv; };
+  for(let i=0;i<4&&out&&out.size>CH_BLOB_BUDGET;i++){
+    q=Math.max(0.45,q-0.1);
+    out=await enc(draw(),q);
+  }
+  /* Pixels only after quality has given all it will, and then WITHOUT A STEP BUDGET: a ladder
+     that runs out of rungs while still over the line delivers exactly the outcome it exists to
+     prevent. The floor is the guard instead — 360px is narrower than any kamo should have to
+     be found in, and a board that still will not fit at 360px is not a photo, it is a bug. */
+  while(out&&out.size>CH_BLOB_BUDGET&&w>360){
+    w=Math.round(w*0.8); h=Math.round(h*0.8);
+    out=await enc(draw(),q);
+  }
+  try{ src.close(); }catch(_){}
+  const kept=(out&&out.size<b.size)?out:b;
+  /* Reports what was KEPT, not what the ladder happened to make. `fit:false` is the row worth
+     watching: it means a board went to storage still over the ceiling and the 400 is coming. */
+  track("hide_blob_shrunk",{from:b.size,to:kept.size,q:Math.round(q*100),w:w,fit:kept.size<=CH_BLOB_BUDGET});
+  return kept;
+}
+/* TEST HOOK, same posture as KAMOREPLY: not on window.KAMO, which is the wrapper's bridge
+   contract. The ladder cannot be reached through the UI in a harness — the board is capped at
+   a phone's size, so nothing a test can paint encodes over the ceiling — and the shape that
+   does blow it in production (a reply, at 0.82, on a textured photo) needs a whole played round
+   to set up. So scripts/test-share-dom.mjs feeds the real function a real over-budget blob. */
+window.KAMOBUDGET={ budget:CH_BLOB_BUDGET, fit:(b)=>chFitBudget(b) };
 
 /* THE REVEAL FRAMES — what the seeker's snap and A/B flip are made of (see chSeek).
    Two more JPEGs beside the camouflaged one, at DERIVED names: …_b.jpg is the figure
@@ -11604,9 +11662,18 @@ function chBlob(src){
 async function chUploadReveal(name){
   try{
     if(!beforeBoard) return;
+    /* ⚠️ AND THESE WERE POSTED WITH NOBODY LOOKING AT THE ANSWER. The reveal frames go through
+       the same 400 KB ceiling as the photo, and a rejected _b.jpg is exactly the round that
+       ends on a marker instead of the body — the "you don't show the body" report. Not fatal
+       to the hide, so it stays fire-and-forget; but a failure that nothing records is a failure
+       nobody can size. */
     const put=async(sfx,blob)=>{ if(!blob) return;
-      await fetch(CH_URL+"/storage/v1/object/hides/"+name.replace(/\.jpg$/,sfx+".jpg"),{method:"POST",
-        headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob}); };
+      try{
+        const r=await fetch(CH_URL+"/storage/v1/object/hides/"+name.replace(/\.jpg$/,sfx+".jpg"),{method:"POST",
+          headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
+        if(!r.ok){ let d=""; try{ const j=JSON.parse(await r.text()); d=(j.code||j.error||""); }catch(_){}
+          track("hide_frame_failed",{sfx:sfx,status:r.status,code:d,bytes:blob.size}); }
+      }catch(e){ track("hide_frame_failed",{sfx:sfx,status:0,code:"throw",bytes:blob.size}); } };
     await put("_b",await chBlob(beforeBoard));
     let wav=null;
     try{
@@ -11788,7 +11855,22 @@ function chPrepare(){
        which needs the row's img_path to move with it — see the note in chUpload. */
     const up=await fetch(CH_URL+"/storage/v1/object/hides/"+slot.name,{method:"POST",
       headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
-    if(!up.ok) throw new Error("upload "+up.status);
+    /* THE STATUS IS THE ENVELOPE, NOT THE ERROR. Supabase storage answers 400 for a whole
+       family of refusals and puts the real one in the body — 413 EntityTooLarge for an
+       oversized object, 403 for an RLS refusal, 404 for a bad key. Recording up.status alone
+       filed every one of them under the single word "upload 400".
+       ⚠️ THAT IS NOT A TIDINESS COMPLAINT, IT IS HOW 2026-08-21 LASTED FIFTEEN HOURS. Every
+       upload in the app was being refused 403 `new row violates row-level security policy`,
+       and the only thing anyone could see was `upload 400` — the same string the size ceiling
+       had been producing for weeks. An outage that reads exactly like the known background
+       failure is an outage nobody goes looking for. The body is where the difference lives,
+       so it is now read and carried into the event. */
+    if(!up.ok){
+      let detail="";
+      try{ const t=await up.text(); const j=JSON.parse(t);
+           detail=" "+(j.code||j.error||"")+(j.statusCode?" "+j.statusCode:""); }catch(_){}
+      throw new Error("upload "+up.status+detail);
+    }
     return slot;
   })().catch((e)=>{
     /* Cleared, so the tap can try again rather than inheriting a dead promise for the
