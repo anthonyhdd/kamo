@@ -717,8 +717,16 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
    The #ssGoPub handler is an arrow in a block, so the function-anchored wiring table above
    cannot reach it. What must hold: the tap performs the visibility toggle's own act — the
    sticky preference, the repaint, and the ROW-LEVEL flag. A handler that sets the label and
-   skips kfApplyVisibility would show "In the feed ✓" over a hide that never left private,
-   which is the one dishonest state this sheet must never produce. */
+   skips the publish would show "In the feed ✓" over a hide that never left private, which is
+   the one dishonest state this sheet must never produce.
+   ⚠️ THE ANCHOR IS kfPublishByHand(id) NOW, NOT kfApplyVisibility(id,true), and the change is
+   a tightening rather than a loosening. kfPublishByHand() is the same publish with one thing
+   in front of it: it will not write a hide public until its PHOTO is in the bucket. Without
+   that, a creator whose upload failed could hand the feed a row whose image 404s — 5 such rows
+   existed when this was written — and "In the feed ✓" would be true of the row and false of
+   anything a seeker could play. The old anchor is deliberately still listed as forbidden: a
+   handler that goes back to the raw write has lost the gate, and that is the regression this
+   line now guards. */
 {
   /* Anchored on the onclick assignment, not on the $("#ssGoPub") lookup — peekShareSheet's
      per-round reset holds the same lookup earlier in the file, and indexOf would land there
@@ -731,12 +739,17 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
        measured against a length this file does not have at that offset. */
     const seg = html.slice(at, at + 5000)
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-    const wants = ['kfSetWantPublic(true)', 'kfRenderVis()', 'kfApplyVisibility(id,true)', 'track("sent_public_accepted"'];
+    const wants = ['kfSetWantPublic(true)', 'kfRenderVis()', 'kfPublishByHand(id)', 'track("sent_public_accepted"'];
     const missing = wants.filter((w) => !seg.includes(w));
+    /* Going back to the ungated write is the specific regression, so it is named. */
+    const raw = seg.includes('kfApplyVisibility(id,true)');
     missing.length
       ? bad('the #ssGoPub handler is missing: ' + missing.join(', ') + ' — the receipt and the '
           + 'publish have to travel together or the label lies')
-      : ok('the go-public tap flips the preference, repaints the sheet, and publishes the row');
+      : raw
+        ? bad('the #ssGoPub handler publishes through kfApplyVisibility(id,true) again — that is '
+            + 'the write without the photo gate, and it can hand the feed a row whose image 404s')
+        : ok('the go-public tap flips the preference, repaints the sheet, and publishes a row that has its photo');
   }
 }
 
