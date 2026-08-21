@@ -1386,14 +1386,18 @@ console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
     const h = document.getElementById('hint');
     return { txt: h ? h.textContent : null, op: h ? getComputedStyle(h).opacity : null };
   });
+  /* ⚠️ ANSWERED THE WAY PRODUCTION ANSWERS IT, WHICH IS THE WHOLE POINT OF THIS BLOCK NOW.
+     report_hide returns void, and PostgREST answers a void function 204 with an empty body —
+     verified against the live endpoint. chRpc read every answer with `await r.json()`, which
+     throws on that, so the promise REJECTED on every successful report. The copy above was
+     shipped on 2026-08-20 to stop this control claiming a success it did not have; on the real
+     transport it did the opposite and told everyone their report had failed.
+     So report_hide is deliberately NOT seeded here. The seed short-circuits chRpc at its
+     declaration and would test a version of the transport that does not exist; letting the
+     fetch run and answering it 204 is the only way this assertion means anything. */
   for (const dead of [false, true]) {
-    const page = await open(ROWS(3), { report_hide: { ok: true } });
-    /* THE SEED IS THE NETWORK HERE. chRpc is stubbed at its declaration in this harness, so a
-       page.route() on the rpc endpoint would never be reached — the failure has to be handed
-       back through the same door the answer comes through. A rejected promise is exactly what
-       chRpc does on a dead network; the catch on it only silences Node's unhandled-rejection
-       warning and does not stop the awaiter seeing the rejection. */
-    if (dead) await page.evaluate(() => { const r = Promise.reject(new Error('dead')); r.catch(() => {}); window.__seed.report_hide = r; });
+    const page = await open(ROWS(3));
+    await page.route('**/rest/v1/rpc/report_hide', r => dead ? r.abort('failed') : r.fulfill({ status: 204, body: '' }));
     const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
     await page.evaluate(() => document.getElementById('kfFlag').click());
     await page.waitForTimeout(1800);
@@ -1409,8 +1413,8 @@ console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
         : bad(`a report that never sent reads "${s.txt}"`);
     } else {
       /Reported\. Thank you\./.test(s.txt || '')
-        ? ok('and a real one is thanked, once the server has answered')
-        : bad(`a live report reads "${s.txt}"`);
+        ? ok('and a real one — 204, no body, exactly as PostgREST answers a void rpc — is thanked')
+        : bad(`a live report reads "${s.txt}" — an empty answer is being read as a failure`);
     }
     await page.close();
   }
