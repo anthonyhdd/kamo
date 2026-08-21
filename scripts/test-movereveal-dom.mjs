@@ -80,6 +80,10 @@ window.__mv={
       return x1<0?null:{cx:(x0+x1)/2/W, cy:(y0+y1)/2/H};
     }catch(e){ return null; }
   },
+  /* HOW MANY TIMES THE PUBLISHED PHOTO HAS BEEN ENCODED. chBlob() snapshots the board
+     synchronously, so one call is one frozen photo — and an edit that never re-encodes is an
+     edit that never reaches the friend who opens the link. */
+  blobs:0,
   /* The answer key AS FROZEN FOR PUBLICATION — chSlot() mints it once, at the first reveal,
      and create_hide is called with this rather than with a fresh chGeom(). */
   slot:()=>{ try{ return (chSlotV&&chSlotV.g)||null; }catch(e){ return null; } },
@@ -100,7 +104,8 @@ window.__mv={
       return true;
     }catch(e){ return false; }
   }
-};`;
+};
+(()=>{ const _b=chBlob; chBlob=function(){ window.__mv.blobs++; return _b.apply(null,arguments); }; })();`;
 const pageHtml = real.replace(ANCHOR, HOOK);
 
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.css': 'text/css', '.woff2': 'font/woff2' };
@@ -228,12 +233,13 @@ console.log('\nAND A SECOND MOVE COMPOUNDS RATHER THAN RESETTING');
       + 'the rebuild is not running on every commitMove()');
 }
 
-console.log('\nAND A NUDGE AFTER THE REVEAL MOVES NEITHER — THE ROUND IS ALREADY FROZEN');
+console.log('\nAND AN EDIT AFTER THE REVEAL IS RE-FROZEN, NOT DISCARDED');
 {
   /* #btnDone mints the name, the id and the answer key and starts encoding the photo, and
-     #btnEdit goes straight back to painting with Move still on the toolbar. Nothing a drag
-     does there can reach the hide that was frozen — so the reveal frame must not follow it
-     either, or it becomes the one surface describing a position nobody else knows about.
+     #btnEdit goes straight back to painting with every tool live. Everything done there used
+     to land on a board nobody was going to publish: the photo bytes, the answer key and the
+     reveal frame were all frozen at that first reveal and cached for the round. Going back to
+     the board thaws all three, and the next reveal takes them again, together.
      The floor is 30% coverage, and the strokes have to land ON the figure to count — so this
      runs on a FRESH capture, where the figure is still where the rig puts it, rather than on
      the board the blocks above have been dragging around. */
@@ -251,6 +257,7 @@ console.log('\nAND A NUDGE AFTER THE REVEAL MOVES NEITHER — THE ROUND IS ALREA
   if (!frozen) {
     bad('#btnDone did not mint a slot — coverage never cleared the floor, so this block proves nothing');
   } else {
+    const encodes = await page.evaluate(() => window.__mv.blobs);
     await page.click('#btnEdit');
     await page.waitForTimeout(400);
     await page.click('#btnMove');
@@ -260,17 +267,34 @@ console.log('\nAND A NUDGE AFTER THE REVEAL MOVES NEITHER — THE ROUND IS ALREA
     await page.mouse.up();
     await page.waitForTimeout(500);
 
-    const s = await read(page);
-    const live = s.geom;
-    const drift = Math.hypot(live.cx - frozen.cx, live.cy - frozen.cy);
+    const mid = await read(page);
+    const drift = Math.hypot(mid.geom.cx - frozen.cx, mid.geom.cy - frozen.cy);
     drift > 0.03
-      ? ok(`the board moved under the frozen hide (live answer ${drift.toFixed(3)} from the published one)`)
+      ? ok(`the board moved after the reveal (${drift.toFixed(3)} from where the hide was frozen)`)
       : bad(`the post-reveal drag never landed (${drift.toFixed(4)}) — this block proves nothing`);
-    const toFrozen = Math.hypot(s.reveal.cx - frozen.cx, s.reveal.cy - frozen.cy);
-    toFrozen <= TOL
-      ? ok(`and the reveal frame stayed with the hide that was published (${toFrozen.toFixed(4)} apart)`)
-      : bad(`the reveal frame followed the board instead of the published hide (${toFrozen.toFixed(3)} from it) —\n`
-        + '    the photo, the answer key and the revealed frame have to be one instant');
+    /* While the board is being edited the reveal frame tracks it again, exactly as it does
+       before the first reveal. The freeze is what the next #btnDone re-applies. */
+    Math.hypot(mid.reveal.cx - mid.geom.cx, mid.reveal.cy - mid.geom.cy) <= TOL
+      ? ok('the reveal frame follows the board again while it is being edited')
+      : bad('back in the editor the reveal frame is stuck at the freeze the first reveal took');
+
+    await page.click('#btnDone');
+    await page.waitForTimeout(900);
+    const after = await read(page);
+    const refrozen = await page.evaluate(() => window.__mv.slot());
+    const keyGap = Math.hypot(refrozen.cx - after.geom.cx, refrozen.cy - after.geom.cy);
+    keyGap <= TOL
+      ? ok(`the second reveal re-freezes the answer key on the edited board (${keyGap.toFixed(4)} apart)`)
+      : bad(`the answer key that would be published is still the pre-edit one (${keyGap.toFixed(3)} from the\n`
+        + '    board) — a seeker who taps the figure they can see would be told they missed');
+    Math.hypot(after.reveal.cx - refrozen.cx, after.reveal.cy - refrozen.cy) <= TOL
+      ? ok('and the reveal frame was taken in the same instant — all three agree again')
+      : bad('the reveal frame and the re-frozen answer key describe different positions');
+    const encodesAfter = await page.evaluate(() => window.__mv.blobs);
+    encodesAfter > encodes
+      ? ok(`the photo was encoded again for the edited board (${encodes} → ${encodesAfter})`)
+      : bad(`the photo was not re-encoded (${encodesAfter} encodes, unchanged) — everything done after the\n`
+        + '    first reveal is missing from the hide that actually gets shared');
   }
 }
 
