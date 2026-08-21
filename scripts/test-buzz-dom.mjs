@@ -428,6 +428,12 @@ console.log('\nA PHOTO THAT NEVER ARRIVES SAYS SO, AND FILES NOTHING');
   retry.includes('Try again')
     ? ok('and a link round is offered the one thing that can still work')
     : bad(`no way out of a dead link round: ${JSON.stringify(retry)}`);
+  /* The card is the whole message. Left visible, the failed <img> paints the browser's own
+     broken-image glyph — grey box, question mark, alt text as a caption — in the middle of it. */
+  const glyph = await page.evaluate(() => { const i = document.querySelector('#chFrame img'); return i ? getComputedStyle(i).display : 'gone'; });
+  (glyph === 'none' || glyph === 'gone')
+    ? ok('and the broken image is taken off the card rather than left to draw its own error')
+    : bad(`the failed <img> is still display:${glyph} — the browser paints a broken-image glyph over the card`);
   await page.close();
 }
 

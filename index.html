@@ -14760,6 +14760,12 @@ function chSeek(hideId,opts){
       try{ quit.remove(); }catch(_){}
       try{ hintBtn.remove(); }catch(_){}
       track("seek_photo_failed",TP({tries:imgTries}));
+      /* ⚠️ AND THE BROKEN <img> GOES WITH IT. The element is still in the frame with a src that
+         404s, so on top of an honest failure card the browser paints its own — the grey box and
+         the question mark, wearing the alt text "Find the hidden figure" as a caption. Founder's
+         screenshot, 2026-08-21: a clean card with a broken-image glyph sitting in the middle of
+         it. The card is the whole message; the element that failed has nothing left to say. */
+      try{ img.style.display="none"; }catch(_){}
       /* ⚠️ AND THE SLIDE HAS TO BE RELEASED, or this is the feed lock's trap by another door.
          onEnded is the feed's only "this round is over" signal and it is fired from ending(),
          which this path deliberately does not call — there is no round to end, only a photo
