@@ -8348,6 +8348,14 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    ENTRY. */
 "feed_gate_shown","feed_gate_tapped","feed_gate_passed",
 "feed_load_failed","hide_visibility_set",
+/* `hide_visibility_failed` is the other half of the line above it, and the half that has a
+   victim. set_hide_public was dispatched and forgotten while the row repainted itself as the
+   answer it was asking for, so a write that never landed was invisible on both sides: nothing
+   on screen and nothing in the data. The direction matters — `wanted:false` means a hide that
+   is still in the public feed after its creator asked for it back, which is the one outcome
+   the visibility doctrine says must never happen. At any volume this is a number to act on,
+   not a curiosity. */
+"hide_visibility_failed",
 /* THE ONE THAT SAYS HOW LONG IT TOOK, and it has to travel with the rest of the family.
    `feed_first_paint` carries the milliseconds from the tap to the first photograph being
    decoded, and it is only readable against `feed_opened` — same session, same device, same
@@ -9728,8 +9736,15 @@ function ssOfferPub(){
     kfRenderVis();
     let id=chId;
     if(!id){ try{ id=await chAwaitId(2500); }catch(err){} }
-    if(id) kfApplyVisibility(id,true);
-    track("sent_public_accepted",{published:!!id});
+    /* ⚠️ AND THE RECEIPT IS TAKEN BACK IF IT WAS NOT EARNED. The comment above still holds —
+       the tap has to land visibly on a sheet that otherwise does not move, so the ✓ goes on
+       first — but "fire-and-forget, and its failure direction is the safe one" was only half
+       an argument. Safe means the hide stays out of the feed; it does not mean the button may
+       keep saying it is in one. A creator who reads "In the feed ✓" has no reason to look
+       again, which is exactly why the offer has to come back when the write did not land. */
+    const ok = id ? await kfApplyVisibility(id,true) : false;
+    if(!ok){ g.classList.remove("on"); g.textContent="Put it in the feed too"; }
+    track("sent_public_accepted",{published:!!id,applied:ok});
   };
 }
 /* ssOfferFeed() IS GONE, AND THE BUTTON IT REVEALED WITH IT.
@@ -11478,19 +11493,42 @@ let chId="";   // the hide this round produced; "" until the upload lands
    — right for every single-row function this file had until now, and silently wrong for one
    that returns a list: my_replies would have reported exactly one reply forever, which reads
    as "the feature works" rather than as a bug. Same headers, different unwrap. */
-async function chRpcRows(fn,body){
+/* ⚠️ A FUNCTION THAT RETURNS void ANSWERS 204 WITH NO BODY, AND r.json() THROWS ON THAT.
+   Both of these read the answer with `await r.json()` straight after the r.ok check — and
+   eight of this app's RPCs return void: attach_push_token, log_skip, mark_hide_sent,
+   react_to_hide, report_hide, save_seek_trace, set_hide_lang, set_hide_public. PostgREST
+   answers every one of them 204 Content-Length: 0 (verified against the live endpoint), so
+   the parse threw and the promise REJECTED on every successful call these ever made.
+
+   IT WENT UNNOTICED FOR AS LONG AS NOBODY LISTENED. The server does the work before it
+   answers, so the write always landed; every caller was fire-and-forget behind a
+   `.catch(()=>{})`, and a rejection nobody reads is indistinguishable from a resolve. The
+   moment a caller started to CARE about the answer, the transport lied to it:
+
+     · report_hide — the moderation path. A report that succeeded told the user "Hidden here
+       — but the report didn't send. Check your connection." and filed sent:false. Shipped
+       2026-08-20 in the fix that stopped it claiming the opposite; the copy was right and the
+       transport underneath it was not.
+     · attach_push_token — `.then(()=>track("push_attached"),()=>{})`, so push_attached could
+       never fire on a token that attached fine. Every reading of that number has been zero
+       for a reason that has nothing to do with push.
+
+   An empty body is an empty ANSWER, not a failed one. Read as text and parsed only when
+   there is something to parse; a non-empty body behaves exactly as it did, malformed JSON
+   still throws, and !r.ok is still the only thing that means failure. */
+async function chRpcBody(fn,body){
   const r=await fetch(CH_URL+"/rest/v1/rpc/"+fn,{method:"POST",
     headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"application/json"},
     body:JSON.stringify(body)});
   if(!r.ok) throw new Error(fn+" "+r.status);
-  const j=await r.json(); return Array.isArray(j)?j:(j?[j]:[]);
+  const t=await r.text();
+  return t ? JSON.parse(t) : null;
+}
+async function chRpcRows(fn,body){
+  const j=await chRpcBody(fn,body); return Array.isArray(j)?j:(j?[j]:[]);
 }
 async function chRpc(fn,body){
-  const r=await fetch(CH_URL+"/rest/v1/rpc/"+fn,{method:"POST",
-    headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"application/json"},
-    body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(fn+" "+r.status);
-  const j=await r.json(); return Array.isArray(j)?j[0]:j;
+  const j=await chRpcBody(fn,body); return Array.isArray(j)?j[0]:j;
 }
 
 /* THE ANSWER KEY IS READ OFF maskCanvas, not recomputed. That canvas is the three.js
@@ -11795,7 +11833,30 @@ window.KAMOREPLY={
    state and it is cleared with the round: a new hide starts as unpublished-but-fine, not as
    the failure of the one before it. Set in chUpload's catch, cleared the moment a row lands. */
 let chPubFailed=false;
-function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chPubFailed=false; chRound++; }
+/* ⚠️ WHAT THE VISIBILITY ROW ASKED FOR AND THE SERVER NEVER HEARD.
+   null when the row and the database agree; otherwise the boolean the user chose that did not
+   land. It exists because the row is an OPTIMISTIC control over a fire-and-forget write, and
+   one of its two directions fails unsafely.
+   CLAUDE.md's doctrine covers the other one: hides.is_public defaults to FALSE, so a
+   set_hide_public that never lands leaves the hide private — "the failure mode is 'this did
+   not reach the feed', never 'this reached strangers without being asked'." That is true of
+   the FIRST write. It is not true of a RETRACTION. A hide that went public on a write that
+   landed, and is then switched back to Private on a write that does not, stays in the public
+   feed while this sheet tells its creator it is not. Measured: the row read "Private / Only
+   whoever you send the link to" with p_public=true as the last thing the server was told.
+   Round state, cleared with the round like chPubFailed — a new hide does not inherit the
+   previous one's unsaved answer. */
+let chVisUnsaved=null;
+/* WHAT THE SERVER IS KNOWN TO HOLD FOR THIS HIDE. It starts FALSE because that is the column's
+   default and the row was created seconds ago — see the visibility doctrine in CLAUDE.md.
+   It exists so a write that changes NOTHING cannot raise an alarm: chUpload() always calls
+   kfApplyVisibility(mine,kfWantPublic()) — deliberately, and check.mjs asserts that exact call
+   because a hardcoded literal there would publish against the row's own switch — so on a
+   private hide it writes `false` over a `false`. That write failing is not a state anybody
+   needs to fix, and telling a creator their private hide is "still in the feed" would be a
+   worse lie than the one this whole change is about. */
+let chVisServer=false;
+function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chPubFailed=false; chVisUnsaved=null; chVisServer=false; chRound++; }
 
 /* WHO MADE IT — a random per-device string, so a viewer can say "not this person again".
  *
@@ -11970,9 +12031,24 @@ function chCreateForms(base,who){
 const KF_VIS_KEY="kamo_hide_public";
 function kfWantPublic(){ try{ return localStorage.getItem(KF_VIS_KEY)!=="0"; }catch(e){ return true; } }
 function kfSetWantPublic(on){ try{ localStorage.setItem(KF_VIS_KEY,on?"1":"0"); }catch(e){} }
-function kfApplyVisibility(id,pub){
-  if(!id) return;
-  try{ chRpc("set_hide_public",{p_id:id,p_public:!!pub}).catch(()=>{}); }catch(e){}
+/* ⚠️ IT ANSWERS NOW, BECAUSE THE ROW ABOVE IT IS MAKING A CLAIM ON ITS BEHALF.
+   This was `chRpc(...).catch(()=>{})` — dispatched and forgotten — while #ssVis had already
+   repainted itself as the state it was asking for. set_hide_public returns void, so a resolve
+   of any shape is a success and only a throw is a failure; there is nothing subtle to read,
+   there was simply nobody listening. See chVisUnsaved for why the failure matters in one
+   direction more than the other. Awaited by its callers rather than returning a promise
+   nobody holds: every one of the three is already able to wait. */
+async function kfApplyVisibility(id,pub){
+  if(!id) return false;
+  let ok=false;
+  /* Whether this write has anything to undo if it fails — see chVisServer. */
+  const changes = (!!pub !== chVisServer);
+  try{ await chRpc("set_hide_public",{p_id:id,p_public:!!pub}); ok=true; }catch(e){ ok=false; }
+  if(ok){ chVisServer=!!pub; chVisUnsaved=null; }
+  else if(changes){ chVisUnsaved=!!pub; }
+  try{ kfRenderVis(); }catch(_){}
+  if(!ok&&changes) track("hide_visibility_failed",{wanted:!!pub});
+  return ok;
 }
 
 /* THE ICON HAS TO CHANGE WITH THE ANSWER, not just its tint. A globe means "the world sees
@@ -12079,7 +12155,15 @@ function kfRenderVis(){
   b.setAttribute("aria-pressed",pub?"true":"false");
   const t=$("#ssVisT"), s=$("#ssVisS");
   if(t) t.textContent=pub?"Public":"Private";
-  if(s) s.textContent=pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to";
+  /* ⚠️ AND IT SAYS WHEN IT HAS NOT LANDED. The toggle keeps showing what the user chose —
+     that is their answer and it still governs the next hide — but the line under it stops
+     asserting a state the server was never told about. The two failures are not the same
+     sentence: one leaves a hide out of a feed, the other leaves it IN one after its creator
+     asked for it back. */
+  if(s) s.textContent = chVisUnsaved===null
+    ? (pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to")
+    : (chVisUnsaved ? "Not in the feed yet — tap to try again"
+                    : "Still in the feed — tap to try again");
   const ico=$("#ssVisIco"); const svg=ico&&ico.querySelector("svg");
   if(svg) svg.innerHTML = pub ? VIS_ICO_PUBLIC : VIS_ICO_PRIVATE;
   /* THE HEADLINE DOES NOT FOLLOW THE TOGGLE ANY MORE, AND THAT IS THE FIX RATHER THAN A
@@ -12131,15 +12215,19 @@ function kfRenderVis(){
 }
 try{
   const vb=$("#ssVis");
-  if(vb) vb.onclick=(e)=>{
+  if(vb) vb.onclick=async(e)=>{
     e.stopPropagation();
-    const on=!kfWantPublic();
+    /* A TAP ON A ROW THAT HAS NOT SAVED IS A RETRY, NOT A FLIP. Plain toggling would send the
+       OPPOSITE of what the user just asked for and failed to get — somebody who asked for
+       Private, was told "Still in the feed — tap to try again", and tapped, would be asking
+       for Public. The sub line only earns the words "try again" if the tap does. */
+    const on = (chVisUnsaved!==null) ? chVisUnsaved : !kfWantPublic();
     kfSetWantPublic(on); kfRenderVis(); haptic(10);
-    track("hide_visibility_set",{public:on,published:!!chId});
+    track("hide_visibility_set",{public:on,published:!!chId,retry:chVisUnsaved!==null});
     /* Retroactive within the round: the sheet is often already open (and the hide already
        published) when this is tapped, and a switch that only applied to the NEXT hide would
        be a switch that does nothing at the moment it is used. */
-    if(chId) kfApplyVisibility(chId,on);
+    if(chId) await kfApplyVisibility(chId,on);
   };
   kfRenderVis();
 }catch(e){}
