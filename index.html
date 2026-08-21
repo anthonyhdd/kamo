@@ -5380,7 +5380,7 @@ function commitMove(){
      answer key and the revealed frame have to be one instant, so the reveal frame freezes
      when they do. What a post-reveal nudge costs is unchanged by this fix: the hide that goes
      out is the one that was frozen at the reveal. */
-  if(!chSlotV) bakeBeforeBoard();
+  if(!chSlotV||chStale) bakeBeforeBoard();
   compositeBoard();
   currentScore=computeScore(); updateCoverageHud();
 }
@@ -11280,6 +11280,9 @@ function enterFinished(auto){ if(finished) return; finished=true; resetZoom();  
   requestAnimationFrame(anim);
   setTimeout(peekShareSheet,1600); }
 function exitFinished(){ finished=false; stage.classList.remove("done");
+  /* Back to the board: whatever was frozen at the reveal is no longer what this player is
+     going to publish. See chThaw() — it is a no-op once the hide is out. */
+  try{ chThaw(); }catch(e){}
   /* Back to editing: the sheet belongs to the reveal and must not survive it. Without this
      the peek stays pinned over the paint tools, which is worse than never showing it. */
   closeShareSheet();
@@ -11617,6 +11620,36 @@ const CH_MIN_COVERAGE=30;
  * One PROMISE, not a flag: chUpload() awaits this, so a tap that lands mid-upload joins
  * the flight already in progress instead of starting a second one. */
 let chPrep=null, chSlotV=null;
+/* ⚠️ THE ROUND WAS FROZEN AT THE FIRST REVEAL AND THE PLAYER COULD STILL EDIT IT.
+   chSlot() mints the name, the id and the answer key once and caches all three; chPrepare()
+   encodes the camouflaged JPEG in the same breath, and its promise is cached too — chBlob()
+   snapshots the board synchronously, so those bytes are the board AS IT WAS at that instant.
+   Then #btnEdit goes straight back to painting, with every tool live.
+   So everything done after that first reveal — more paint, a nudged figure, a colour picked
+   and laid down over the last visible edge — was on a board nobody was going to publish. The
+   hide that went out was the one frozen before the edit, and the answer key with it. Nothing
+   says so: the reveal on screen is the live board, so the player watches themselves improve a
+   photo that is not the one their friend will open.
+   `chStale` says the freeze is out of date and the next reveal must take it again. It is set
+   only while the hide is still UNPUBLISHED — see chThaw() for why that boundary is hard. */
+let chStale=false;
+/* The upload that the re-freeze is replacing, kept so the two can never race. */
+let chPrevUp=null;
+/* Called when the player leaves the reveal for the board — see exitFinished().
+   ⚠️ NOT ONCE THE ROW EXISTS. After create_hide the hide is out: the link may already be in
+   somebody's thread, and the object name is inside it. Re-encoding then would change the photo
+   under an id whose answer row is already written, which is this file's other bug — a picture
+   and an answer key describing different positions — arrived at from the opposite side. So a
+   published hide stays exactly as published, and an edit after that is a new round's business.
+   The name and the id survive a thaw deliberately: chSlotLink() may already have handed that
+   link to navigator.share, and it has to keep resolving to this hide. Only the two things that
+   describe the board are retaken. */
+function chThaw(){
+  if(chId||!chSlotV) return;
+  if(chPrep) chPrevUp=chPrep;
+  chPrep=null; chStale=true;
+  try{ chPrepare._retried=false; }catch(e){}
+}
 /* THE ID MUST NOT WAIT ON THE BYTES. This is the split that fixes the share going out with
  * no game in it.
  *
@@ -11643,7 +11676,13 @@ let chPrep=null, chSlotV=null;
  * A dead image on a handful of links is a smaller wound than six in ten shares carrying
  * nothing. */
 function chSlot(){
-  if(chSlotV) return chSlotV;
+  if(chSlotV){
+    /* Retaken here rather than in chThaw() because the board is still being edited when the
+       thaw happens — this runs at the next reveal, which is the instant the hide is being
+       described again. */
+    if(chStale){ const g2=chGeom(); if(g2) chSlotV.g=g2; chStale=false; }
+    return chSlotV;
+  }
   if(!CH_MAKE) return null;
   if(Math.round(currentScore||0)<CH_MIN_COVERAGE) return null;
   const g=chGeom(); if(!g) return null;
@@ -11683,9 +11722,18 @@ function chPrepare(){
   if(!CH_MAKE) return Promise.resolve(null);
   const slot=chSlot(); if(!slot) return Promise.resolve(null);
   chPrep=(async()=>{
+    /* FIRST, AND SYNCHRONOUSLY INSIDE chBlob(): the bytes are the board at the moment this
+       reveal happened, not at the moment the network gets round to it. */
     const blob=await chBlob(); if(!blob) return null;
+    /* THEN WAIT OUT THE UPLOAD THIS ONE REPLACES, if there is one. A re-freeze POSTs to the
+       same object name as the upload it supersedes; without this the old bytes can land
+       second and the published photo becomes the pre-edit one while the answer key is the
+       post-edit one. Its failure is not this upload's problem, hence the swallow. */
+    if(chPrevUp){ try{ await chPrevUp; }catch(e){} chPrevUp=null; }
     const up=await fetch(CH_URL+"/storage/v1/object/hides/"+slot.name,{method:"POST",
-      headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg"},body:blob});
+      /* x-upsert, because the second time round the object already exists and storage
+         answers 409 to a plain POST. */
+      headers:{apikey:CH_KEY,Authorization:"Bearer "+CH_KEY,"Content-Type":"image/jpeg","x-upsert":"true"},body:blob});
     if(!up.ok) throw new Error("upload "+up.status);
     return slot;
   })().catch((e)=>{
