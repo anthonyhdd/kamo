@@ -753,6 +753,36 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5d-septies. The photo upload must not ask storage for an upsert ----------------------
+   THIS ONE COST FIFTEEN HOURS OF EVERY UPLOAD IN THE APP. `x-upsert:"true"` was added to
+   chPrepare's POST on 2026-08-21 to solve a real problem — a re-freeze POSTs to the object
+   name it supersedes and a plain POST to an existing object answers 409 — and it took the
+   whole publish path down: from 06:00 UTC, zero successful uploads, every hide created with
+   no photo behind it, for as long as it took to find.
+   THE MECHANISM IS WHY THIS IS A CHECK AND NOT A COMMENT. x-upsert turns the INSERT into an
+   upsert, and anon has exactly one policy on storage.objects — "anon uploads a hide", INSERT
+   only. An upsert needs UPDATE too, so Postgres refuses the row before it ever considers
+   whether the object exists: `new row violates row-level security policy`. That means it
+   fails on the FIRST post of a brand-new name, which is why a change that reads as "handle
+   the second upload better" broke the first one for everybody. 683 of 684 storage failures
+   in one eight-hour window carried that message, against a single EntityTooLarge.
+   AND THE OBVIOUS REPAIR IS THE WRONG ONE: granting anon UPDATE would let anyone holding the
+   public key — it ships in index.html — overwrite the photo behind any hide already shared.
+   So the header stays out until storage has a policy that makes it safe, and this says so. */
+{
+  const at = html.indexOf('/storage/v1/object/hides/"+slot.name');
+  if (at < 0) bad('chPrepare no longer POSTs the board to /storage/v1/object/hides/ — the upload '
+      + 'moved and the upsert guard is anchored to nothing');
+  else {
+    const seg = html.slice(at, at + 600).replace(/\/\*[\s\S]*?\*\//g, '');
+    /[\'"]x-upsert[\'"]/.test(seg)
+      ? bad('the photo upload asks for x-upsert again — anon has INSERT and no UPDATE on '
+          + 'storage.objects, so this refuses EVERY upload with "new row violates row-level '
+          + 'security policy", not just the ones that would have 409d')
+      : ok('the photo upload posts without x-upsert, which anon has no policy to satisfy');
+  }
+}
+
 /* ---- 5d-bis. tlFrames and tlTimes are one array wearing two names -------------------------
  * tlTimes carries the wall-clock mark for tlFrames[i], and sessionPayload() zips them by
  * index to hand native the pace the round actually ran at. So the pairing IS the feature, and
