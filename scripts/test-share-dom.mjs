@@ -333,6 +333,82 @@ console.log('\nTHE VISIBILITY ROW STATES WHAT THE SERVER WAS ACTUALLY TOLD');
   await r.p2.close();
 }
 
+/* ⚠️ AND PUBLIC NEEDS A PICTURE — A GATE ONLY ONE OF THREE CALL SITES HAD.
+   chUpload publishes from inside bytes.then(up => { if(!up) return; ... }), and its note says
+   why: "an upload that never lands can never reach it: the hide stays private, which is the
+   direction this file already fails in everywhere else." The .ssVis toggle and "Put it in the
+   feed too" had no such gate, so a creator whose photo failed to upload could put the row in
+   the public feed by hand — and every seeker served it meets "This one didn't load".
+   Not hypothetical: 473 rows in seven days have no object in the bucket, and 5 of them were
+   public, three inside one hour from one device. */
+console.log('\nA HIDE WITH NO PHOTO CANNOT BE PUT IN THE FEED BY HAND');
+{
+  const tryPublic = async (uploadOk) => {
+    const p3 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const wrote = [];
+    await p3.route('**/rest/v1/rpc/create_hide', r => r.fulfill({ status: 200, contentType: 'application/json', body: '"gid1"' }));
+    await p3.route('**/rest/v1/rpc/set_hide_public', async r => {
+      let b = {}; try { b = JSON.parse(r.request().postData() || '{}'); } catch (e) {}
+      wrote.push(b.p_public); return r.fulfill({ status: 204, body: '' });
+    });
+    await p3.route('**/storage/v1/object/hides/**', r => uploadOk
+      ? r.fulfill({ status: 200, contentType: 'application/json', body: '{"Key":"hides/x.jpg"}' })
+      : r.abort('failed'));
+    await p3.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; try { localStorage.setItem('kamo_hide_public', '0'); } catch (e) {} });
+    await p3.goto(base, { waitUntil: 'load' });
+    await p3.waitForTimeout(700);
+    await p3.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 800;
+      const g = c.getContext('2d'); g.fillStyle = '#7a8a6a'; g.fillRect(0, 0, 600, 800);
+      for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(${90 + i},120,${70 + i},.6)`; g.beginPath(); g.arc((i * 97) % 600, (i * 61) % 800, 30, 0, 7); g.fill(); }
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'r.jpg', { type: 'image/jpeg' }));
+      const inp = document.getElementById('fileInput'); inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await p3.waitForTimeout(800);
+    await p3.evaluate(() => document.getElementById('shutter').click());
+    await p3.waitForTimeout(1200);
+    await p3.evaluate(() => {
+      const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+      const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+      for (let y = r.top + r.height * 0.25; y < r.top + r.height * 0.62; y += 6) {
+        ev('pointerdown', r.left + r.width / 2 - 40, y);
+        for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+        ev('pointerup', r.left + r.width / 2 + 40, y);
+      }
+    });
+    await p3.evaluate(() => document.getElementById('btnDone').click());
+    await p3.waitForTimeout(2400);
+    await p3.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+    await p3.waitForTimeout(4200);
+    await p3.click('#ssVis');            // the creator asks for the feed by hand
+    await p3.waitForTimeout(4000);
+    const out = await p3.evaluate(() => ({
+      sub: document.getElementById('ssVisS')?.textContent,
+      reasons: (window.__tr || []).filter(x => x[0] === 'hide_visibility_failed').map(x => x[1] && x[1].reason),
+    }));
+    await p3.close();
+    return { publics: wrote.filter(v => v === true).length, ...out };
+  };
+
+  const good = await tryPublic(true);
+  good.publics === 1
+    ? ok('a hide whose photo is in the bucket goes public on the tap')
+    : bad(`the gate refused a hide that has its photo (${good.publics} writes)`);
+
+  const bad2 = await tryPublic(false);
+  bad2.publics === 0
+    ? ok('and one whose photo never uploaded is NOT written public — the feed cannot be handed a dead slide')
+    : bad(`set_hide_public(true) was sent for a hide with no photo in the bucket (${bad2.publics}×)`);
+  bad2.reasons.includes('no_photo')
+    ? ok('and the refusal is filed as no_photo, separable from a write that failed')
+    : bad(`the refusal filed ${JSON.stringify(bad2.reasons)}`);
+  /Not in the feed yet/.test(bad2.sub || '')
+    ? ok(`and the row says so rather than claiming the feed ("${bad2.sub}")`)
+    : bad(`the row reads "${bad2.sub}" for a hide that is not in the feed and cannot be`);
+}
+
 const sentPerRound = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
 sentPerRound === 2
   ? ok('and across two rounds the stamp fired exactly twice — once per hide')
