@@ -4414,7 +4414,7 @@ function enterCompose(){
    session that follows. capture() rebuilds every one of them. */
 function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   undoStack.length=0;
-  moving=false; movingDrag=false; moveDX=0; moveDY=0; $("#btnMove")?.classList.remove("active");   // a retake starts a fresh mask — nothing left to nudge
+  moving=false; movingDrag=false; moveDX=0; moveDY=0; moveBakedX=0; moveBakedY=0; revealBakedX=0; revealBakedY=0; $("#btnMove")?.classList.remove("active");   // a retake starts a fresh mask — nothing left to nudge
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null; paintLayer=null; pctx=null;
   board.width=1; board.height=1;   // the visible board is a full-retina canvas too — release its backing store
   mode="compose"; $("#paintUI").style.display="none"; board.style.display="none";
@@ -4823,7 +4823,7 @@ function capture(){
   undoStack.length=0;
   sceneCanvas=null; maskCanvas=null; blurCanvas=null; beforeBoard=null;
   paintLayer=null; pctx=null; figLayer=null; figctx=null; shadeSrc=null;
-  moving=false; movingDrag=false; moveDX=0; moveDY=0; $("#btnMove")?.classList.remove("active");   // new mask, nothing to nudge yet
+  moving=false; movingDrag=false; moveDX=0; moveDY=0; moveBakedX=0; moveBakedY=0; revealBakedX=0; revealBakedY=0; $("#btnMove")?.classList.remove("active");   // new mask, nothing to nudge yet
   stopCamView();   // the preview canvas is another full-size backing store — drop it BEFORE the six below, not after (suspendCamera() further down would be too late to matter)
   /* Cap the paint resolution at the width everything is EXPORTED at.
      Every share path renders 1080 wide — composeShare(1080), composeBeforeAfter(1080) and
@@ -4852,7 +4852,7 @@ function capture(){
   scene.updateMatrixWorld(true); hiderPoints=characters.map(projectChar).filter(Boolean);
   buildShadeSrc();   // derived from maskCanvas, which is fixed from here on — see composeInto()
   compositeBoard();
-  beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H; beforeBoard.getContext("2d").drawImage(board,0,0);
+  bakeBeforeBoard();   // scene + figure, pre-paint — and rebuilt by commitMove(), see there
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   resetZoom();   // every round starts framed as shot — a leftover zoom would silently crop the next hide
   board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; kfShowBtn(false); $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; btnFrame.style.display="none";
@@ -5014,6 +5014,13 @@ let paintColor="#8a7f6a", brush=20, brushMode="solid", painting=false, eyedrop=f
    near composeInto) is what actually rewrites the pixels once a drag ends — see it for why
    paintLayer moves WITH the mask instead of being left behind. */
 let moving=false, moveDX=0, moveDY=0, movingDrag=false, moveLastX=0, moveLastY=0;
+/* ⚠️ WHERE THE FIGURE HAS BEEN MOVED TO SINCE THE SHUTTER, IN BOARD PIXELS, CUMULATIVE.
+   moveDX/moveDY are the live drag and are zeroed by every commitMove(); this is the sum of
+   every landed one, and it exists because TWO things are still drawn from the 3D rig as it
+   was at capture time — the wave frame in chUploadReveal(), re-rendered off the live rig,
+   and hiderPoints, projected once in capture(). Both are the pre-move position unless they
+   are told, and neither has any other way to find out. */
+let moveBakedX=0, moveBakedY=0, revealBakedX=0, revealBakedY=0;
 /* HOLD-TO-MOVE: lets a finger move the figure without ever leaving the paint tool. A quick
    drag anywhere still paints, byte-for-byte the old behaviour — only a finger that PAUSES
    (HOLD_MS) before moving arms a move for that one touch, released the moment it lifts.
@@ -5277,6 +5284,53 @@ function composeInto(x,y,w,h){
   ctx.drawImage(sceneCanvas,x,y,w,h,x,y,w,h);
   ctx.drawImage(figLayer,x,y,w,h,x,y,w,h);
 }
+/* THE REVEAL FRAME, AND IT IS BUILT RATHER THAN SNAPSHOT — because it has to be built TWICE.
+   beforeBoard is the figure visible, pre-paint: the seeker's revealed photo (…_b.jpg), the
+   hider's own A/B wipe in drawReveal(), and the frame the reveal video wipes in through
+   composeShare(). It used to be one drawImage of `board` taken inside capture() and never
+   touched again — and Move landed after capture. So a figure nudged even slightly left the
+   answer key (chGeom, read off maskCanvas, which commitMove DOES shift) pointing at the new
+   spot while every reveal surface still drew the old one.
+   What that looks like to a player: they tap the figure, the server says found — correctly,
+   the camouflaged photo and the answer agree — and then the reveal draws the figure somewhere
+   else entirely, so a real find reads as the game marking a miss as a success. Reported from
+   production on 2026-08-21 against hide d08d6d0795d96697: answer at (0.342,0.563), the tap
+   0.037 away from it, and the revealed figure most of a screen to the right.
+   ⚠️ NOT A SHIFT OF THE FINISHED FRAME. Sliding beforeBoard by the same dx/dy would take the
+   PHOTO with it — a band of empty pixels at one edge and a background that no longer lines up
+   with the camouflaged shot, which is a worse lie than the one being fixed. It is recomposed
+   from its parts instead: the scene as shot, then the figure where the figure now is.
+   maskCanvas is already at the landed position by the time this runs, so there is no offset
+   to apply here — that is the whole reason it is drawn from the mask rather than from a
+   remembered delta. */
+function bakeBeforeBoard(){
+  if(!sceneCanvas||!maskCanvas) return;
+  /* WHAT OFFSET THIS FRAME WAS BUILT AT, for the one reveal surface that cannot be rebuilt
+     from a canvas: chUploadReveal()'s wave pose is a fresh render off the 3D rig, and the rig
+     never heard about a 2D nudge. Pinned to the bake rather than to the live offset so the
+     two stop together when the round freezes — see the guard in commitMove(). */
+  revealBakedX=moveBakedX; revealBakedY=moveBakedY;
+  const W=board.width,H=board.height;
+  if(!beforeBoard||beforeBoard.width!==W||beforeBoard.height!==H){
+    beforeBoard=document.createElement("canvas"); beforeBoard.width=W; beforeBoard.height=H;
+  }
+  const g=beforeBoard.getContext("2d");
+  g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation="source-over"; g.globalAlpha=1;
+  g.clearRect(0,0,W,H);
+  g.drawImage(sceneCanvas,0,0);
+  /* Figure and its shading on their own layer, then blitted — the same order composeInto()
+     uses, minus the paint, which is exactly what "before" means. Compositing the soft-light
+     pass straight onto the scene would shade the whole photograph. */
+  const f=document.createElement("canvas"); f.width=W; f.height=H;
+  const fg=f.getContext("2d");
+  fg.drawImage(maskCanvas,0,0);
+  if(shadeSrc&&SHADE_STRENGTH){
+    fg.globalCompositeOperation="soft-light"; fg.globalAlpha=SHADE_STRENGTH;
+    fg.drawImage(shadeSrc,0,0,shadeSrc.width,shadeSrc.height,0,0,W,H);
+    fg.globalAlpha=1; fg.globalCompositeOperation="source-over";
+  }
+  g.drawImage(f,0,0);
+}
 /* Drag preview: moveDX/moveDY are read by composeInto() above on every drawImage of
    maskCanvas/shadeSrc/paintLayer, so nudging them and repainting the whole board is the
    entire live preview — nothing is baked yet. Always the FULL board, not a dirty rect: a
@@ -5310,7 +5364,23 @@ function commitMove(){
   const npx=np.getContext("2d",{willReadFrequently:true}); npx.drawImage(paintLayer,dx,dy);
   maskCanvas=nm; paintLayer=np; pctx=npx;
   moveDX=0; moveDY=0;
+  moveBakedX+=dx; moveBakedY+=dy;
+  /* Projected once, in capture(), off a 3D scene this drag does not touch — so they are
+     carried rather than recomputed. They are the circles the share card zooms into, which
+     would otherwise magnify the patch of room the figure used to stand on. */
+  try{ hiderPoints=hiderPoints.map(p=>Object.assign({},p,{x:p.x+dx,y:p.y+dy})); }catch(e){}
   buildShadeSrc();      // derived from maskCanvas — stale after any reposition, see the note above it
+  /* ⚠️ ONLY WHILE THE ROUND IS STILL UNFROZEN, AND THE GUARD IS THE POINT.
+     chSlot() mints the name, the id and the answer key at the first reveal, and chPrepare()
+     encodes the camouflaged JPEG in the same breath; both are cached for the rest of the
+     round. #btnEdit then goes BACK to painting, where Move is available again — so a nudge
+     after the reveal moves the board on screen and changes nothing that has been published.
+     Rebuilding the reveal frame there would make it the only surface describing the new
+     position, which is this bug again with the pieces swapped. The published photo, the
+     answer key and the revealed frame have to be one instant, so the reveal frame freezes
+     when they do. What a post-reveal nudge costs is unchanged by this fix: the hide that goes
+     out is the one that was frozen at the reveal. */
+  if(!chSlotV) bakeBeforeBoard();
   compositeBoard();
   currentScore=computeScore(); updateCoverageHud();
 }
@@ -11506,7 +11576,11 @@ async function chUploadReveal(name){
         const c2=document.createElement("canvas"); c2.width=board.width; c2.height=board.height;
         const g2=c2.getContext("2d");
         g2.drawImage(sceneCanvas,0,0);
-        g2.drawImage(glCanvas,0,0,board.width,board.height);
+        /* AT THE LANDED OFFSET. Everything else here is a canvas commitMove() shifted;
+           this one is a fresh render off the 3D rig, and the rig still has the figure where
+           it was posed at capture. Drawn at 0,0 the wave frame lands on the old spot and the
+           A/B flip slides the figure across the photo. */
+        g2.drawImage(glCanvas,revealBakedX,revealBakedY,board.width,board.height);
         /* Put the rig back exactly as it was — glCanvas is display:none from capture(), so
            the wave frame never flashes on screen, but the retake path re-shows it. */
         characters.forEach((c,i)=>setPoseInstant(c,saved[i]));
