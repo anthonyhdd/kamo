@@ -15244,6 +15244,9 @@ function chSeek(hideId,opts){
     const pts=new Map();
     const RET_OFF=CH_RET_OFF;
     let ret=null, aimRec=null, aimId=-1, pinch=null, postDown=null;
+    /* The ring drawn where the player buzzed. Kept because the reveal has two shapes and only
+       one of them can afford to leave it on screen — see snapReveal. */
+    let missMark=null;
     const closeAim=(committed)=>{
       if(aimRec){ aimRec.c=committed?1:0; aimRec.u=elapsed();
         if(trace.a.length<40) trace.a.push(aimRec); aimRec=null; }
@@ -15358,6 +15361,9 @@ function chSeek(hideId,opts){
       const mk=document.createElement("div"); mk.className="chMark stay";
       mk.style.left=fx+"px"; mk.style.top=fy+"px";
       $$("chFrame").appendChild(mk);
+      /* Held so snapReveal can take it away if it ends up drawing the answer as a MARKER
+         rather than as the body — see the note there. */
+      missMark=mk;
       buzzHaptic(20);
       let res=null;
       if(REPLAY){
@@ -15488,6 +15494,14 @@ function chSeek(hideId,opts){
       let bSrc=null, wSrc=null;
       const bP=load(base+"_b.jpg"), wP=load(base+"_w.jpg");
       try{ bSrc=await bP; }catch(_){}
+      /* ⚠️ ONE CHANCE WAS ALL THE BODY GOT. This frame is the payoff of the whole round — the
+         double-take the app is named for — and a single failed <img> load dropped it to the
+         marker fallback for good: no body, no flip button, nothing to try again with. The
+         frames are there (16 of 16 played public hides sampled across four days carry theirs),
+         so what reaches this line is a blip, not an absence, and a blip should not cost a
+         player the reveal. Cache-busted, because the thing being retried is often a cached
+         negative. One retry only: past that it really is a legacy hide with no frame at all. */
+      if(!bSrc){ try{ bSrc=await load(base+"_b.jpg?r=1"); }catch(_){} }
       if(bSrc){
         /* THE FLIP FIRST, THE WAVE WHEN IT GETS HERE. Swapping the photo is the payoff and it
            only needs `_b`; holding it back for a frame that is not drawn for another 360ms
@@ -15511,6 +15525,15 @@ function chSeek(hideId,opts){
         try{
           const g=await chRpc("reveal_hide",{p_id:HID});
           if(g&&g.cx!=null){
+            /* ⚠️ ONE CIRCLE, NOT TWO. With the body on screen the player's own ring earns its
+               place — the flip against the revealed frame shows exactly how far off they were,
+               which is half the double-take. Here there IS no body: the answer is itself a
+               ring, and leaving the miss up puts two rings on a photograph with nothing on
+               screen saying which is which. Founder, 2026-08-21, from the feed: "why u put 2
+               circles and don't show the body". They differ only by border colour — mint for
+               the answer, white for the miss — which is a legend nobody was given.
+               So the miss goes and the remaining circle means one thing: it was here. */
+            try{ if(missMark) missMark.remove(); }catch(_){}
             const mk2=document.createElement("div"); mk2.className="chMark hit";
             mk2.style.left=(g.cx*img.offsetWidth)+"px"; mk2.style.top=(g.cy*img.offsetHeight)+"px";
             mk2.style.animation="none"; mk2.style.opacity="1"; mk2.style.transform="scale(1.2)";
