@@ -305,7 +305,15 @@ console.log('\nTAPPING IT OPENS THE FEED ON THAT HIDE');
 
   /* THE SLIDE IS THE PLAYER'S OWN, so the hint has to say so. Without it they meet a round
      whose tap does nothing — the replay flag, working correctly — and read it as broken. */
-  await p.waitForTimeout(700);
+  /* WAIT ON THE CONDITION, NOT ON A GUESS. This was waitForTimeout(700), and 700ms is a bet
+     that the feed has painted — a bet this machine loses whenever anything else is running,
+     which made the whole gate report a random red suite per run. Polling is fast when the
+     render is fast and patient when it is not, and it still fails honestly if the hint never
+     arrives: the assertion below is unchanged. */
+  await p.waitForFunction(() => {
+    const h = window.__s.feedHint();
+    return !!(h && /yours/i.test(h));
+  }, { timeout: 10000 }).catch(() => {});
   const hint = await p.evaluate(() => window.__s.feedHint());
   hint && /yours/i.test(hint) && /scroll/i.test(hint)
     ? ok(`the first slide is named as theirs and points onward ("${hint}")`)
