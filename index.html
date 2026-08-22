@@ -8538,6 +8538,12 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    emits, and the gate fails it as a phantom. Two other drafts of this note did that too.
    Backticks in prose, always, and never name a character class. */
 "reply_auto_opened",
+/* `hide_photo_missing` is the creator-side count of the failure `hide_prepare_failed` only
+   ever described from the network's point of view: a row that exists with no picture behind
+   it, seen by the person who made it. The two are not the same number — prepare can fail and
+   retry successfully — and this one is the one that matters, because it counts hides that
+   were announced as live and were not. */
+"hide_photo_missing",
 "seek_photo_failed",
 /* THE UPLOAD CEILING'S TWO WITNESSES, and they belong beside the three above because they are
    the same failure one step later: not an image this app could not read, an image the bucket
@@ -11994,6 +12000,16 @@ window.KAMOREPLY={
    state and it is cleared with the round: a new hide starts as unpublished-but-fine, not as
    the failure of the one before it. Set in chUpload's catch, cleared the moment a row lands. */
 let chPubFailed=false;
+/* ⚠️ THE ROW LANDED AND THE PHOTO DID NOT, which is a different failure from chPubFailed and
+   was the one nothing said out loud. create_hide is deliberately NOT made to wait for the
+   bytes — the link has to be instant — so a refused upload leaves a row whose img_path points
+   at nothing, and every sentence on this sheet went on claiming the hide was live. That is the
+   creator's half of 2026-08-21: 364 hides published that day with no photo behind them, each
+   one announced as live and offered a Send button.
+   The seeker's half is already answered server-side (get_hide refuses a hide whose object is
+   missing, so the round ends honestly instead of on an empty frame). This is the half that
+   faces the person who made it. */
+let chPhotoGone=false;
 /* ⚠️ WHAT THE VISIBILITY ROW ASKED FOR AND THE SERVER NEVER HEARD.
    null when the row and the database agree; otherwise the boolean the user chose that did not
    land. It exists because the row is an OPTIMISTIC control over a fire-and-forget write, and
@@ -12017,7 +12033,7 @@ let chVisUnsaved=null;
    needs to fix, and telling a creator their private hide is "still in the feed" would be a
    worse lie than the one this whole change is about. */
 let chVisServer=false;
-function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chPubFailed=false; chVisUnsaved=null; chVisServer=false; chRound++; }
+function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chPubFailed=false; chPhotoGone=false; chVisUnsaved=null; chVisServer=false; chRound++; }
 
 /* WHO MADE IT — a random per-device string, so a viewer can say "not this person again".
  *
@@ -12351,10 +12367,17 @@ function kfRenderVis(){
      asserting a state the server was never told about. The two failures are not the same
      sentence: one leaves a hide out of a feed, the other leaves it IN one after its creator
      asked for it back. */
-  if(s) s.textContent = chVisUnsaved===null
-    ? (pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to")
-    : (chVisUnsaved ? "Not in the feed yet — tap to try again"
-                    : "Still in the feed — tap to try again");
+  /* AND WITHOUT A PHOTO IT PROMISES NEITHER. kfPublishByHand already refuses to write a
+     photoless hide public — so the feed is safe — but the line underneath went on saying
+     "Anyone can play it in the KAMO feed" about a hide that cannot be played at all. The
+     toggle still shows what the user chose; the sentence stops describing a room the hide
+     never reached. */
+  if(s) s.textContent = chPhotoGone
+    ? "Nothing to play yet — the photo didn't upload"
+    : chVisUnsaved===null
+      ? (pub?"Anyone can play it in the KAMO feed":"Only whoever you send the link to")
+      : (chVisUnsaved ? "Not in the feed yet — tap to try again"
+                      : "Still in the feed — tap to try again");
   const ico=$("#ssVisIco"); const svg=ico&&ico.querySelector("svg");
   if(svg) svg.innerHTML = pub ? VIS_ICO_PUBLIC : VIS_ICO_PRIVATE;
   /* THE HEADLINE DOES NOT FOLLOW THE TOGGLE ANY MORE, AND THAT IS THE FIX RATHER THAN A
@@ -12377,7 +12400,13 @@ function kfRenderVis(){
      that premise is false, and this is the line that answers it. Repainted through this
      function like everything else on the sheet, so toggling the visibility row cannot put the
      claim back. */
-  if(h) h.textContent = chPubFailed ? "That one didn't go up." : "Your kamo is live!";
+  /* THREE STATES, NOT TWO. chPubFailed is "there is no row"; chPhotoGone is "there is a row
+     and no picture in it", which reads identically to success on every surface the creator can
+     see and is the more dangerous of the two — it is the one that still offers a Send button
+     for a hide nobody will be able to play. */
+  if(h) h.textContent = chPubFailed ? "That one didn't go up."
+                      : chPhotoGone ? "The photo didn't upload."
+                      : "Your kamo is live!";
   /* WHOEVER IS GOING TO TELL THEM. Inside the wrapper armResultsPing() schedules the local
      nudge and attach_push_token buys the real one, so the promise is kept. In a browser
      neither exists — and #ssGet three rows down is selling exactly that gap, so promising a
@@ -12441,6 +12470,21 @@ async function chUpload(){
        need a picture. Started at the reveal (see enterFinished) in the normal case, so this
        usually just joins a flight already in progress. */
     const bytes=chPrepare();
+    /* AND SOMEBODY WATCHES IT LAND. Not awaited — the whole point of starting the bytes here
+       and creating the row without them is that the link does not wait on a photo. But the
+       answer, whenever it arrives, is news the sheet has to hear: chPrepare resolves null on
+       a refused or dead upload, and from that moment "Your kamo is live!" is false.
+       Guarded on the round, because a reply typed while this was in flight belongs to the next
+       hide and must not inherit this one's failure. */
+    try{
+      const myBytesRound=chRound;
+      Promise.resolve(bytes).then((landed)=>{
+        if(landed||myBytesRound!==chRound) return;
+        chPhotoGone=true;
+        try{ kfRenderVis(); }catch(_){}
+        track("hide_photo_missing",{});
+      }).catch(()=>{});
+    }catch(e){}
     const name=slot.name, g=slot.g;
     /* WHICH OVERLOAD, AND WHY THERE ARE TWO LEFT. create_hide exists at 6, 8 and 9
        arguments and PostgREST resolves by the exact set of keys sent. The 8-arg

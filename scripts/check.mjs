@@ -852,6 +852,34 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5d-decies. The sheet may not call a hide live before its photo is up -----------------
+   create_hide does not wait for the bytes and must not: the share link is the product's
+   fastest moment. The cost is that a refused upload leaves a row pointing at no object, and
+   the only thing standing between that and a creator being told it worked is the watcher on
+   chPrepare's result. Drop it and every sentence on the sheet goes back to claiming a hide is
+   live when there is nothing in it — which is what 364 people were told on 2026-08-21.
+   Anchored on the declaration rather than the call so that moving the watcher still fails. */
+{
+  const decl = /let\s+chPhotoGone\s*=/.test(html);
+  const reset = /chPhotoGone\s*=\s*false;[\s\S]{0,120}chRound\+\+/.test(html);
+  const at = html.indexOf('const bytes=chPrepare();');
+  const seg = at < 0 ? '' : html.slice(at, at + 900).replace(/\/\*[\s\S]*?\*\//g, '');
+  const watched = /chPhotoGone\s*=\s*true/.test(seg);
+  const headline = /chPhotoGone\s*\?\s*"The photo didn't upload\."/.test(html);
+  !decl
+    ? bad('chPhotoGone is gone — nothing distinguishes a row with no picture from a published hide')
+    : at < 0
+      ? bad('chUpload no longer starts the bytes with chPrepare() — the watcher is anchored to nothing')
+      : !watched
+        ? bad('the upload result is no longer watched — a refused upload leaves the sheet saying '
+            + 'the hide is live, which is the creator-side half of the 2026-08-21 outage')
+        : !headline
+          ? bad('the headline no longer branches on chPhotoGone — the retraction exists and says nothing')
+          : !reset
+            ? bad('chPhotoGone is not cleared with the round — one failed upload marks every hide after it')
+            : ok('a refused upload retracts the live claim, and it is cleared with the round');
+}
+
 /* ---- 5d-bis. tlFrames and tlTimes are one array wearing two names -------------------------
  * tlTimes carries the wall-clock mark for tlFrames[i], and sessionPayload() zips them by
  * index to hand native the pace the round actually ran at. So the pairing IS the feature, and
@@ -1568,6 +1596,20 @@ try {
     : ok('the app opens where its arm says, the camera survives it, and a share link still wins (node scripts/test-openarm-dom.mjs)');
 } catch (e) {
   bad('THE OPEN EXPERIMENT IS BROKEN:\n' + why(e));
+}
+
+/* The row is written without waiting for the bytes, on purpose — the share link has to be
+   instant. So a refused upload leaves a row whose img_path points at nothing, and until this
+   suite existed the sheet went on announcing that hide as live, over a Send button. That is
+   the creator's half of 2026-08-21. The middle assertion is the one that earns the suite: a
+   retraction that fires on every round would look exactly like a fix. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-photoless-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-photoless-dom.mjs', 'PHOTOLESS-PUBLISH TEST', out)
+    : ok('a hide with no photo is never announced as live, and a working one still is (node scripts/test-photoless-dom.mjs)');
+} catch (e) {
+  bad('THE PHOTOLESS PUBLISH IS BROKEN:\n' + why(e));
 }
 
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
