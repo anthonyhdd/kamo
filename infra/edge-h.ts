@@ -86,14 +86,15 @@ const PUBLIC = "https://playkamo.com";
  * and the two are not interchangeable for reporting. Do not "unify" them without checking
  * which one each consumer reads. */
 const APP_STORE = "https://apps.apple.com/app/id6789639784";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+
 const ONELINK = "https://kamo.onelink.me/dc9X";
 const installLink = (id: string) =>
   id
     ? ONELINK + "?pid=challenge_link&c=challenge&deep_link_value=hide"
       + "&deep_link_sub2=" + encodeURIComponent(id)
     : APP_STORE;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 /** This goes into an HTML attribute and `name` is typed by a user. */
 const esc = (s: unknown) =>
@@ -122,9 +123,9 @@ async function getHide(id: string) {
  * hand-copied rewrite — and the whole point of this function is that the picture reaches
  * the thread. Clients that read the twitter:* set (X, and several link unfurlers that
  * prefer it when present) would have fallen back to no image at all. */
-function page(o: { title: string; desc: string; image: string; to: string; self: string; hide?: string }) {
+function page(o: { title: string; desc: string; image: string; to: string; self: string; get: string }) {
   const to = esc(o.to);
-  const get = esc(installLink(o.hide || ""));
+  const get = esc(o.get);
   const self = esc(o.self);
   const title = esc(o.title);
   const desc = esc(o.desc);
@@ -194,6 +195,7 @@ Deno.serve(async (req: Request) => {
     // The icon stretched into a summary_large_image frame read as a broken advert.
     image: "https://playkamo.com/img/og.jpg",
     to: SITE,
+    get: APP_STORE,
   };
 
   /* This page's OWN address, for og:url. `id` is already down to [a-f0-9]{0,16}, so it goes
@@ -221,7 +223,7 @@ Deno.serve(async (req: Request) => {
     desc: generic.desc,
     image,
     to: `${SITE}?h=${encodeURIComponent(id)}`,
-    hide: id,
+    get: installLink(id),
     self,
   }));
 });
