@@ -124,9 +124,24 @@ async function open({ arm = 'on', mine = [], seen = false, firstOffer = 'spent' 
 }
 
 /* One slide down, then long enough for the round to mount and the card's own 900ms to run. */
+/* ⚠️ EACH SWIPE HAS TO LAND BEFORE THE NEXT ONE IS ISSUED, and a flat sleep does not
+   guarantee that. This slept 1100ms per swipe; on a loaded machine a second `scrollTop +=`
+   could be issued while the first was still in flight, the two coalesced, and the run ended
+   up on the wrong slide — so the gate card was never on screen and three assertions failed
+   together for a reason that had nothing to do with the gate.
+   Waiting for the scroll to ARRIVE (>= one full slide further than it started) is what makes
+   the count of swipes equal the count of slides. The sleep stays after it: arriving is not
+   the same as the feed having reacted, and that beat is what the card mounts on. */
 async function swipe(page, n = 1) {
   for (let i = 0; i < n; i++) {
-    await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop += s.clientHeight; });
+    const from = await page.evaluate(() => {
+      const s = document.getElementById('kfScroll');
+      const before = s.scrollTop; s.scrollTop += s.clientHeight; return before;
+    });
+    await page.waitForFunction((y) => {
+      const s = document.getElementById('kfScroll');
+      return s && s.scrollTop >= y + s.clientHeight - 4;
+    }, from, { timeout: 6000 }).catch(() => {});
     await page.waitForTimeout(1100);
   }
 }
@@ -200,11 +215,29 @@ console.log('\nA THUMB GOING PAST IS THE OTHER HALF OF THE RATIO');
 {
   const page = await open();
   await swipe(page, 3);
+  /* ⚠️ THESE THREE READS USED TO HAPPEN THE INSTANT swipe()'s 1100ms SLEEP EXPIRED, and on a
+     loaded machine the feed had not finished reacting to the scroll yet. All three then fail
+     together — "no card to scroll past", "feed_gate_passed fired 0 times", "the card
+     survived" are three readings of one swipe that had not landed — which is exactly how
+     this suite produced a random red in a gate that is otherwise green.
+     Each read now waits for its OWN condition first, with the assertion left untouched
+     underneath: a card that genuinely never mounts, an event that genuinely never fires and
+     a card that genuinely outlives its slide all still fail, they just stop failing for
+     being asked too early. The wait is inside the suite rather than in swipe() because the
+     thing to wait for is the app reacting, not the scrollbar arriving — a settle-on-scroll
+     wait was tried here first and is stricter than the app is, so it failed every run. */
+  await page.waitForSelector('.kfGate', { timeout: 8000 }).catch(() => {});
   await card(page) !== null || bad('no card to scroll past');
   await swipe(page);
+  await page.waitForFunction(
+    () => (window.__tr || []).some(e => e[0] === 'feed_gate_passed'),
+    { timeout: 8000 }).catch(() => {});
   const passed = await evs(page, 'feed_gate_passed');
   passed.length === 1 ? ok('scrolling on files it as passed, once')
                       : bad(`feed_gate_passed fired ${passed.length} times`);
+  await page.waitForFunction(
+    () => !document.querySelector('.kfGate'),
+    { timeout: 8000 }).catch(() => {});
   await card(page) === null ? ok('and the card goes with the slide it belonged to')
                             : bad('the card survived the slide it was mounted on');
   const shown = await evs(page, 'feed_gate_shown');
