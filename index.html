@@ -3449,6 +3449,53 @@ let bangerArm;
   }
 }
 
+/* ═══ THE WAITING-REPLY EXPERIMENT — does a challenge that came back get to open itself? ═══
+ *
+ * A reply is the one thing in this app that is BOTH waiting for you and worth doing: it is a
+ * round somebody built as an answer to yours, addressed to you, and playing it is how the loop
+ * turns. Plays and reactions are feedback — there is nothing to do with them (see the note on
+ * the news tray, which orders replies first for exactly this reason).
+ *
+ * TODAY IT IS A GREY DOT ON THE WORDMARK. chReplyCheck() finds the reply ~1200ms after launch,
+ * lights brandDot(true), and then waits for the user to notice an ~18px mark and tap it. The
+ * highest-intent surface in the product is behind a tap most people never make.
+ *
+ * "on" OPENS IT. Same card brandTap() opens, on the same launch, only without requiring the
+ * tap. "off" is today: the dot, and nothing else.
+ *
+ * FIRES ONLY ON A REPLY, never on the dot's other two reasons. A card that opens itself to
+ * report reactions is an interruption; one that opens because somebody answered your kamo is
+ * the thing you came back for. And only when the reply is NEWER than the last one this device
+ * saw — the same high-water mark the dot uses — so it opens once per new reply, not once per
+ * launch forever.
+ *
+ * AND ONLY OVER AN IDLE LAUNCH. The probe lands more than a second in, by which time the user
+ * may be composing, seeking, reading the feed or holding the share sheet. Taking the screen
+ * from any of those to show a card is hostile, so the arm stands down unless nothing else is
+ * up. A share link is excluded by the same test: CH_SEEK means somebody handed them a specific
+ * hide, and that is not the moment.
+ *
+ * READ IT AS: reply rounds PLAYED per reply_pending, and hide_published / hide_sent per
+ * app_opened, split by open_arm. The first says whether the card converts the notice into a
+ * round; the second is the guard-rail — this must not buy reply-plays by interrupting people
+ * who were about to make something.
+ * STOP RULE: if "on" sends fewer hides per open than "off", the card is taking the screen from
+ * creation and it goes, whatever it does for reply-plays.
+ * KILL: rollout to 0 and push, about two minutes, no build. A stored arm keeps its side.
+ * Same coin discipline as gateArm and bangerArm — stored wins, webdriver pins "off" so no
+ * other suite in scripts/ has a card open itself mid-test, storage-throw sits the device out. */
+const REPLY_OPEN_ROLLOUT=50;
+let openArm;
+{
+  const s=lsGet("kamo_reply_open_arm");
+  if(s==="on"||s==="off") openArm=s;
+  else if(navigator.webdriver) openArm="off";
+  else {
+    openArm=(Math.random()*100<REPLY_OPEN_ROLLOUT)?"on":"off";
+    lsSet("kamo_reply_open_arm",openArm);
+  }
+}
+
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
    on every single use, forever. Users run ~8 hides a day, so by the third round these are not
@@ -8475,6 +8522,22 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    was failing silently: a round played on a photo that never arrived, which filed a real
    attempt with a 0.0s clock into everybody else's percentile. At volume this one means
    storage, not phones — which is why it is worth being able to tell the two apart. */
+/* `reply_auto_opened` is the waiting-reply arm's own exposure — the launches where the card
+   actually opened itself, as opposed to the ones where the arm was live and something else
+   owned the screen. Without it, an arm that fired and an arm that stood down are one number,
+   and the experiment reads weaker than it is. Web-first for the usual reason: the page
+   deploys in minutes and the wrapper's allow-list needs a build.
+   ⚠️ TWO CHARACTERS MUST NEVER APPEAR ANYWHERE IN THIS SET, COMMENTS INCLUDED — a closing
+   SQUARE BRACKET, and an ordinary English word in double quotes.
+   The square bracket is the serious one: check.mjs finds this Set by matching everything up
+   to the first closing bracket, so one inside a comment ends the Set early, the match fails,
+   and the gate reports the whole allow-list missing. A draft of this very note quoted the
+   audit regex, brackets and all, and did exactly that.
+   The double quotes are the cheap one: the audit reads quoted words straight out of the raw
+   body, so prose here saying a word in double quotes registers it as an event name nothing
+   emits, and the gate fails it as a phantom. Two other drafts of this note did that too.
+   Backticks in prose, always, and never name a character class. */
+"reply_auto_opened",
 "seek_photo_failed",
 /* THE UPLOAD CEILING'S TWO WITNESSES, and they belong beside the three above because they are
    the same failure one step later: not an image this app could not read, an image the bucket
@@ -8690,7 +8753,7 @@ function track(event,props){
      feed_gate_* events: the question the arm exists to answer is asked of hide_published, of
      feed_slide's depth and of the seeker's own events, none of which know the card exists. One
      property on everything is what makes those segmentable without a build. */
-  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,emit:"web"};
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -13770,6 +13833,35 @@ function chSetHasReplies(on){
   chHasReplies=!!on;
   try{ if(on) localStorage.setItem("kamo_has_replies","1"); else localStorage.removeItem("kamo_has_replies"); }catch(e){}
 }
+/* NOTHING ELSE IS ON SCREEN. Every surface that can own the launch, tested by the thing that
+   proves it rather than by a flag somebody has to remember to set: the feed (kfState), a live
+   seek (chLive or a .chS screen in the DOM), a share sheet with the .show class, and the hero
+   still being up — a user reading the hero has not chosen anything yet, but they are looking
+   at a permission ask, and a card over that is how a camera permission gets denied.
+   CH_SEEK is the other half: a share link means somebody was handed a specific hide. */
+function chHomeIdle(){
+  try{
+    if(CH_SEEK) return false;
+    if(typeof kfState!=="undefined" && kfState) return false;
+    if(typeof chLive!=="undefined" && chLive) return false;
+    if(document.querySelector(".chS")) return false;
+    /* EVERY OVERLAY THAT TAKES THE SCREEN, by the class that puts it there. Enumerated rather
+       than guessed: these are exactly the ids with a `.show{display:flex}` rule — the share
+       sheet, the paywall, the confirm sheet, the member card and this card itself. The member
+       card was missing from the first version of this list and test-openarm-dom.mjs caught it
+       opening straight over the top of it, which is what this list is for. */
+    for(const id of ["shareSheet","paywall","confirmSheet","kamoPlus","kamoHome"]){
+      const el=document.getElementById(id);
+      if(el && el.classList.contains("show")) return false;
+    }
+    if(startEl && startEl.style.display!=="none") return false;
+    return true;
+  }catch(_){ return false; }
+}
+/* ONCE PER LAUNCH. chReplyCheck is not guaranteed to run only once — the probe can be
+   re-armed — and a card that reopens itself over a user who just closed it is the worst
+   version of this experiment. */
+let khAutoOpened=false;
 async function chReplyCheck(){
   /* No published hides means nothing can ever have answered — a free answer, no round trip. */
   const ids=chMine(); if(!ids.length){ chSetHasReplies(false); return; }
@@ -13788,6 +13880,14 @@ async function chReplyCheck(){
   if(chReplyNewest && chReplyNewest>replySeenAt()){
     brandDot(true);
     track("reply_pending",{n:rows.length,signed:!!rows[0].name});
+    /* THE ARM — see openArm's note. The card opens itself instead of waiting for a tap on an
+       18px dot, and ONLY over a launch where nothing else is on screen: composing, seeking,
+       the feed, the share sheet and a share link all outrank it, because taking the screen
+       from any of them is an interruption rather than a delivery. Wrapped, because a reply
+       check that throws must cost the experiment and never the dot that shipped before it. */
+    if(openArm==="on"){
+      try{ if(!khAutoOpened && chHomeIdle()){ khAutoOpened=true; openKamoHome(); track("reply_auto_opened",{n:rows.length}); } }catch(e){}
+    }
   }
 }
 /* THE DOT'S THIRD REASON. Same shape as chReplyCheck: totals compared to a high-water mark

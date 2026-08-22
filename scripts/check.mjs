@@ -815,6 +815,43 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5d-nonies. The waiting-reply arm opens a card, never an interruption ----------------
+   openArm decides whether a reply that came back opens its own card instead of lighting an
+   18px dot and hoping. Three things have to stay true, and none are visible from the arm's
+   declaration.
+   IT FIRES ONLY ON A FRESH REPLY. The hook sits inside chReplyCheck's `newer than the mark`
+   branch, beside brandDot(true). Moved out of it, the card opens on every launch that has any
+   reply at all — forever, for the same one — and on the dot's other two reasons, which are
+   feedback with nothing to do.
+   IT STANDS DOWN OVER A BUSY SCREEN. chHomeIdle() is what keeps this a delivery rather than
+   an interruption: composing, seeking, the feed, the share sheet, the hero and a share link
+   all outrank it. Without that test the card lands on top of whatever the user was doing more
+   than a second after launch.
+   AND ITS EXPOSURE HAS A ROUTE. reply_auto_opened separates "arm was on" from "card actually
+   opened"; a new event name not on WEB_ONLY measures nothing on the live build. */
+{
+  const at = html.indexOf('track("reply_pending"');
+  if (at < 0) bad('reply_pending is gone — the waiting-reply arm has no fresh-reply branch to hang on');
+  else {
+    const seg = html.slice(at, at + 900).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+REPLY_OPEN_ROLLOUT\s*=\s*(\d+)/);
+    const wo = (html.match(/const WEB_ONLY=new Set\(\[([\s\S]*?)\]\)/) || [])[1] || '';
+    const routed = wo.replace(/\/\*[\s\S]*?\*\//g, '').includes('"reply_auto_opened"');
+    !m
+      ? bad('REPLY_OPEN_ROLLOUT is gone — the waiting-reply arm has no rollout to kill it with')
+      : !seg.includes('openKamoHome()')
+        ? bad('the fresh-reply branch no longer opens the card — the arm has no treatment, and '
+            + 'every device reads as the control side')
+        : !seg.includes('chHomeIdle()')
+          ? bad('the auto-open no longer tests chHomeIdle() — the card can now land on top of '
+              + 'someone composing, seeking or reading the feed a second after launch')
+          : !routed
+            ? bad('reply_auto_opened is not on WEB_ONLY — the arm cannot tell "on" from "on but '
+                + 'stood down", and the event measures nothing on the live build')
+            : ok(`the waiting-reply arm is a ${m[1]}% coin, fires only on a fresh reply, and stands down over a busy screen`);
+  }
+}
+
 /* ---- 5d-bis. tlFrames and tlTimes are one array wearing two names -------------------------
  * tlTimes carries the wall-clock mark for tlFrames[i], and sessionPayload() zips them by
  * index to hand native the pace the round actually ran at. So the pairing IS the feature, and
@@ -1517,6 +1554,20 @@ try {
     : ok('the proven opener obeys its arm, once per session, position only (node scripts/test-banger-dom.mjs)');
 } catch (e) {
   bad('THE OPENER EXPERIMENT IS BROKEN:\n' + why(e));
+}
+
+/* The open experiment sits on the BOOT LINE — the one place in index.html where a mistake is
+   a blank app for every user at once — so it gets a suite, not a comment. Four silent failure
+   modes: a control arm that also opens the feed (no measurement), a share link taken by the
+   coin (the sender's hide replaced by strangers), a first launch diverted away from its hero
+   and its permission sheet, and a camera that stops booting under the feed. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-openarm-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-openarm-dom.mjs', 'OPEN-ARM TEST', out)
+    : ok('the app opens where its arm says, the camera survives it, and a share link still wins (node scripts/test-openarm-dom.mjs)');
+} catch (e) {
+  bad('THE OPEN EXPERIMENT IS BROKEN:\n' + why(e));
 }
 
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
