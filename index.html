@@ -3449,6 +3449,50 @@ let bangerArm;
   }
 }
 
+/* ═══ THE OPEN EXPERIMENT — does KAMO open on the camera or on the feed? ═══════════════════
+ *
+ * Founder's question, 2026-08-22, and it is not answerable from the numbers already in hand:
+ * the app has only ever opened on the camera, so there is no feed-first arm to compare it to.
+ * Hence a coin rather than an opinion.
+ *
+ * WHAT THE ARM CHANGES, AND ONLY THIS: what is in FRONT when the app opens. "on" opens the
+ * feed over a camera that booted underneath exactly as it does today; "off" is today. Closing
+ * the feed on the "on" arm lands on the same compose screen the "off" arm started on, so the
+ * variable is the first screen and NOT "the camera is gone" — an arm that also cost people
+ * their camera would measure two things and settle neither.
+ *
+ * WHY IT IS GATED ON camEverAsked(). A device that has never been here has a designed first
+ * launch — the hero, the priming line, the permission sheet — and diverting THAT to the feed
+ * would change onboarding and open-destination in one move, which is unreadable. It would
+ * also put a permission sheet up behind a feed the user is reading. Returning devices only:
+ * the question is where you land when you COME BACK, which is the question that was asked.
+ *
+ * CH_SEEK STILL WINS, ABOVE THIS. A share link is somebody being handed a specific hide, and
+ * no experiment gets to take that. The boot branch keeps chSeek() first for that reason.
+ *
+ * READ IT AS: hide_published and hide_sent per app_opened, split by open_arm. Those are the
+ * loop, and the loop is what the camera door exists to feed. feed_opened will of course rise
+ * on "on" — it is the arm, not a result, and reading it as one would be reading the coin.
+ * STOP RULE, and it is the honest one: if "on" PUBLISHES or SENDS less per open than "off",
+ * the feed door is buying sessions with creations and it goes. Sends matter more than
+ * publishes here — a hide nobody sends recruits nobody, and the send rate is already the
+ * product's flattest number (57% on 08-14 down to 39% on 08-22).
+ * KILL: rollout to 0 and push — about two minutes, no build. A stored arm keeps its side,
+ * which is correct for a rollback: the next launch simply reads the arm and opens the camera.
+ * Same coin discipline as the two above — stored wins, webdriver pins "off" so no other suite
+ * in scripts/ suddenly opens onto a feed, storage-throw sits the device out. */
+const OPEN_FEED_ROLLOUT=50;
+let openArm;
+{
+  const s=lsGet("kamo_open_arm");
+  if(s==="on"||s==="off") openArm=s;
+  else if(navigator.webdriver) openArm="off";
+  else {
+    openArm=(Math.random()*100<OPEN_FEED_ROLLOUT)?"on":"off";
+    lsSet("kamo_open_arm",openArm);
+  }
+}
+
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
    on every single use, forever. Users run ~8 hides a day, so by the third round these are not
@@ -8690,7 +8734,7 @@ function track(event,props){
      feed_gate_* events: the question the arm exists to answer is asked of hide_published, of
      feed_slide's depth and of the seeker's own events, none of which know the card exists. One
      property on everything is what makes those segmentable without a build. */
-  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,emit:"web"};
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -18359,7 +18403,21 @@ function bootCamera(){
   setTimeout(()=>bootCamera.decide(),700);
 }
 if(CH_SEEK){ chSeek(); }
-else bootCamera();
+/* THE OPEN EXPERIMENT'S ONE BRANCH — see openArm's note. The camera boots either way; on the
+   "on" arm the feed is put in FRONT of it, so closing the feed lands on the same compose
+   screen the control arm started on. Returning devices only (camEverAsked), so this never
+   diverts a first launch away from the hero and never raises a permission sheet behind a feed.
+   ⚠️ WRAPPED, AND THE CATCH IS THE POINT. This file deploys to every user on push and a throw
+   on the boot line is a blank app for all of them. Anything that goes wrong here — chFeed not
+   reachable, storage refusing, the feed failing to build — lands on exactly what shipped
+   yesterday, which is bootCamera() having already run one line above. The arm can cost us the
+   experiment; it must not cost us the app. */
+else {
+  bootCamera();
+  if(openArm==="on"){
+    try{ if(camEverAsked()) chFeed({src:"launch"}); }catch(e){}
+  }
+}
 /* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone
    wrong"; at 600ms this also covers the ordinary first-launch case — the permission sheet
    is up, nothing will settle until it is answered, and the user should be reading the hero
