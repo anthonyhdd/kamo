@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * THE OPEN EXPERIMENT — what is in front when the app opens, and the four ways an arm like
- * this fails while looking perfectly fine.
+ * THE WAITING-REPLY ARM — a challenge that came back opens its own card, and the four ways
+ * that turns from a delivery into an interruption.
  *
- * Founder's question, 2026-08-22: feed or camera on open? The app has only ever opened on the
- * camera, so there was nothing to compare and openArm is a 50/50 coin rather than an opinion.
- * It sits on the BOOT LINE, which is the one line in index.html where a mistake is a blank app
- * for every user at once — hence a suite rather than a comment.
+ * A reply is the only thing in KAMO that is both waiting for you and worth doing: somebody
+ * built a round as an answer to yours. Today it lights an 18px dot on the wordmark and waits
+ * for a tap most people never make. "on" opens the card chReplyCheck already has the rows for.
  *
- *   - THE LEAKING HOLDOUT. A control arm that also opens on the feed is not a smaller effect,
- *     it is no measurement, and the screen looks identical to a working experiment.
- *   - THE STOLEN SHARE LINK. chSeek() has to outrank the coin. A link is somebody being handed
- *     a specific hide; if the arm wins, the sender's hide is replaced by a feed of strangers
- *     and the most valuable arrival in the product is spent on the wrong screen.
- *   - THE HIJACKED FIRST LAUNCH. A device that has never been here has a designed hero and a
- *     permission sheet. Diverting that to the feed changes onboarding and open-destination in
- *     one move — unreadable — and raises a permission prompt behind a feed being read.
- *   - THE VANISHED CAMERA. The arm puts the feed IN FRONT of a booted camera. If the camera
- *     stops booting, closing the feed lands on nothing and the arm measures two changes.
+ *   - THE LEAKING HOLDOUT. A control arm whose card also opens is not a smaller effect, it is
+ *     no measurement, and the screen looks identical to a working experiment.
+ *   - THE INTERRUPTION. The probe lands more than a second after launch, by which time the
+ *     user may be composing, seeking, reading the feed or holding the share sheet. A card that
+ *     takes the screen from any of those is the failure this arm has to avoid to be worth
+ *     running at all.
+ *   - THE STALE REOPEN. It must fire only on a reply NEWER than the mark this device stamped.
+ *     Out of that branch it opens on every launch, forever, for the same old reply.
+ *   - THE UNROUTED EXPOSURE. reply_auto_opened separates "arm was on" from "card actually
+ *     opened". A new event name that never reaches Amplitude makes the arm read weaker than
+ *     it is, and it is silently dropped on the live build unless it is on WEB_ONLY.
  *
  *   PW_CORE=<dir with node_modules> node scripts/test-openarm-dom.mjs
  */
@@ -71,95 +71,110 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
-const ROWS = Array.from({ length: 8 }, (_, i) => ({
-  id: 'hide' + i, img_path: 'p' + i + '.jpg', name: null,
-  n_attempts: i, n_found: 0, created_at: '2026-08-16T10:0' + i + ':00Z',
-}));
+/* One reply, newer than any mark the device carries, so chReplyCheck's fresh branch fires. */
+const REPLY = { id: 'r1', img_path: 'r1.jpg', name: 'zoe', created_at: '2026-08-22T10:00:00Z' };
 
 /**
- * `returning` is the whole of the gate: camEverAsked() reads kamo_cam_asked, and the arm is
- * deliberately blind to devices that have never been here.
+ * A device that published something (so my_replies is even asked) and has a reply waiting.
+ * `seenAt` is the high-water mark; `busy` decides whether something owns the screen when the
+ * probe lands, which is the whole of chHomeIdle().
  */
-async function launch({ arm = 'on', returning = true, link = '' } = {}) {
+async function launch({ arm = 'on', reply = REPLY, seenAt = '', busy = null, link = '', hero = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
-    window.__seed = { feed_page: a.rows, feed_best: [], log_skip: null, log_attempt: null, get_hide: null };
-    localStorage.setItem('kamo_open_arm', a.arm);
-    localStorage.setItem('kamo_feed_gate_arm', 'off');     // one experiment on stage at a time
+    window.__seed = {
+      my_replies: a.reply ? [a.reply] : [],
+      my_reactions: [], feed_page: [], feed_best: [],
+      log_skip: null, log_attempt: null, get_hide: null,
+    };
+    localStorage.setItem('kamo_reply_open_arm', a.arm);
+    localStorage.setItem('kamo_feed_gate_arm', 'off');
     localStorage.setItem('kamo_feed_banger_arm', 'off');
-    if (a.returning) localStorage.setItem('kamo_cam_asked', '1');
+    localStorage.setItem('kamo_hides', JSON.stringify(['mine1']));   // so chMine() is non-empty
+    if (a.seenAt) localStorage.setItem('kamo_replies_seen', a.seenAt);
+    localStorage.setItem('kamo_cam_asked', '1');
     localStorage.setItem('kamo_pw_first', '1');
     localStorage.setItem('kamo_feed_swiped', '1');
-  }, { rows: ROWS, arm, returning });
+  }, { reply, arm, seenAt });
   await page.goto(base + (link ? '?h=' + link : ''), { waitUntil: 'load' });
-  await page.waitForTimeout(1400);
+  /* THE HERO HAS TO BE DOWN, and this is not harness convenience — it is the state the arm
+     targets. A real returning device with the camera already granted reaches compose in
+     ~200ms and never sees the hero; the harness has no camera, so the hero stays up forever
+     and chHomeIdle() correctly refuses. `hero: true` leaves it up, which is its own test. */
+  if (!hero) await page.evaluate(() => { const el = document.getElementById('start'); if (el) el.style.display = 'none'; });
+  /* Put something on screen BEFORE the 1200ms probe lands — that is the race the idle test
+     exists for, and testing it after the fact would test nothing. */
+  if (busy) await page.evaluate((b) => {
+    const el = document.getElementById(b);
+    if (el) el.classList.add('show');
+  }, busy);
+  await page.waitForTimeout(2200);
   return page;
 }
+const homeUp = page => page.evaluate(() => {
+  const el = document.getElementById('kamoHome');
+  return !!(el && el.classList.contains('show'));
+});
 const feedUp = page => page.evaluate(() => !!document.getElementById('kfeed'));
 const evs = page => page.evaluate(() => (window.__tr || []).map(e => e[0]));
 
-console.log('\nTHE ARM DECIDES WHAT IS IN FRONT, AND ONLY THAT');
+console.log('\nA REPLY THAT CAME BACK OPENS ITSELF');
 {
   const on = await launch({ arm: 'on' });
-  await feedUp(on) ? ok('the "on" arm opens the app on the feed')
-                   : bad('the "on" arm launched with no #kfeed — the experiment has no treatment');
-  const booted = await on.evaluate(() => window.__booted | 0);
-  booted === 1 ? ok('and the camera booted underneath it, so closing the feed lands on compose')
-               : bad(`bootCamera ran ${booted} times on the "on" arm — the arm took the camera away instead of covering it`);
-  const src = await on.evaluate(() => ((window.__tr || []).find(e => e[0] === 'feed_opened') || [])[1]);
-  src && src.src === 'launch'
-    ? ok('feed_opened names the door "launch", so the arm\'s exposure is readable')
-    : bad(`feed_opened carried ${JSON.stringify(src)} — the arm\'s own opens are indistinguishable from taps`);
+  await homeUp(on) ? ok('the "on" arm opens the card on a fresh reply, with no tap on the dot')
+                   : bad('the "on" arm left the card closed — the experiment has no treatment');
+  const ev = await on.evaluate(() => (window.__tr || []).filter(e => e[0] === 'reply_auto_opened').length);
+  ev === 1 ? ok('and files reply_auto_opened once, which is the arm\'s real exposure')
+           : bad(`reply_auto_opened fired ${ev} times — "on" and "on but stood down" are one number`);
   await on.close();
 }
 {
   const off = await launch({ arm: 'off' });
-  await feedUp(off) === false
-    ? ok('the "off" arm opens on the camera, exactly as it does today')
-    : bad('the control arm ALSO opened the feed — a leaking holdout is not a measurement');
-  (await off.evaluate(() => window.__booted | 0)) === 1
-    ? ok('and it boots the camera, once')
-    : bad('the control arm did not boot the camera');
+  await homeUp(off) === false
+    ? ok('the "off" arm still just lights the dot, exactly as it does today')
+    : bad('the control arm ALSO opened the card — a leaking holdout is not a measurement');
   await off.close();
 }
 
-console.log('\nA SHARE LINK OUTRANKS THE EXPERIMENT');
+console.log('\nAND IT NEVER TAKES THE SCREEN FROM SOMEBODY');
+for (const [id, what] of [['shareSheet', 'the share sheet is up'], ['kamoPlus', 'the member card is up'], ['paywall', 'the paywall is up'], ['confirmSheet', 'a confirm sheet is up']]) {
+  const p = await launch({ arm: 'on', busy: id });
+  await homeUp(p) === false
+    ? ok(`it stands down while ${what}`)
+    : bad(`the card opened while ${what} — that is an interruption, not a delivery`);
+  await p.close();
+}
 {
   const seek = await launch({ arm: 'on', link: 'abc123def4567890' });
-  await feedUp(seek) === false
-    ? ok('a ?h= link on the "on" arm still opens the hide it was sent for, not the feed')
-    : bad('the arm took a share link — the sender\'s hide was replaced by strangers');
-  (await seek.evaluate(() => window.__booted | 0)) === 0
-    ? ok('and the seeker owns the launch, so no camera boots behind it')
-    : bad('bootCamera ran on a share link — the seek path no longer owns its launch');
+  await homeUp(seek) === false
+    ? ok('and it stands down on a share link — that arrival belongs to the hide it was sent for')
+    : bad('the card opened over a share link, taking the screen from the hide somebody was handed');
   await seek.close();
 }
 
-console.log('\nA FIRST LAUNCH IS NEVER DIVERTED');
+console.log('\nONLY A REPLY THAT IS ACTUALLY NEW');
 {
-  const fresh = await launch({ arm: 'on', returning: false });
-  await feedUp(fresh) === false
-    ? ok('a device that has never been here keeps its hero and its permission sheet')
-    : bad('the arm hijacked a first launch — onboarding and open-destination changed together, and a permission sheet is now behind a feed');
-  await fresh.close();
+  const stale = await launch({ arm: 'on', seenAt: '2026-08-23T00:00:00Z' });
+  await homeUp(stale) === false
+    ? ok('a reply already seen does not reopen the card on the next launch')
+    : bad('the card reopened on a reply this device has already seen — it will do that forever');
+  await stale.close();
 }
-
-console.log('\nEVERY EVENT CARRIES THE ARM');
 {
-  const p = await launch({ arm: 'on' });
-  const stamped = await p.evaluate(() => {
-    const t = (window.__tr || []);
-    return t.length ? t.every(e => e[1] && typeof e[1] === 'object') : false;
-  });
-  const names = await evs(p);
-  names.includes('app_opened')
-    ? ok('app_opened fires on the "on" arm, so the split has a denominator')
-    : bad(`no app_opened in ${JSON.stringify(names.slice(0, 8))} — the arm has no denominator to divide by`);
-  stamped ? ok('and every event carries a props object for the stamp to ride on')
-          : bad('an event went out with no props — open_arm cannot ride it');
-  await p.close();
+  const onHero = await launch({ arm: 'on', hero: true });
+  await homeUp(onHero) === false
+    ? ok('a launch still sitting on the hero is left alone — that screen is a permission ask')
+    : bad('the card opened over the hero, on top of a camera permission ask');
+  await onHero.close();
+}
+{
+  const none = await launch({ arm: 'on', reply: null });
+  await homeUp(none) === false
+    ? ok('and a device with nothing waiting is left alone')
+    : bad('the card opened with no reply at all');
+  await none.close();
 }
 
 await browser.close(); server.close();
-console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the arm decides the first screen, the camera survives it, and a share link still wins');
+console.log(failed ? `\n\u2717 ${failed} failure(s)` : '\n\u2713 a fresh reply opens its own card, and only ever over an idle launch');
 process.exit(failed ? 1 : 0);

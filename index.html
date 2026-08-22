@@ -3449,47 +3449,50 @@ let bangerArm;
   }
 }
 
-/* ═══ THE OPEN EXPERIMENT — does KAMO open on the camera or on the feed? ═══════════════════
+/* ═══ THE WAITING-REPLY EXPERIMENT — does a challenge that came back get to open itself? ═══
  *
- * Founder's question, 2026-08-22, and it is not answerable from the numbers already in hand:
- * the app has only ever opened on the camera, so there is no feed-first arm to compare it to.
- * Hence a coin rather than an opinion.
+ * A reply is the one thing in this app that is BOTH waiting for you and worth doing: it is a
+ * round somebody built as an answer to yours, addressed to you, and playing it is how the loop
+ * turns. Plays and reactions are feedback — there is nothing to do with them (see the note on
+ * the news tray, which orders replies first for exactly this reason).
  *
- * WHAT THE ARM CHANGES, AND ONLY THIS: what is in FRONT when the app opens. "on" opens the
- * feed over a camera that booted underneath exactly as it does today; "off" is today. Closing
- * the feed on the "on" arm lands on the same compose screen the "off" arm started on, so the
- * variable is the first screen and NOT "the camera is gone" — an arm that also cost people
- * their camera would measure two things and settle neither.
+ * TODAY IT IS A GREY DOT ON THE WORDMARK. chReplyCheck() finds the reply ~1200ms after launch,
+ * lights brandDot(true), and then waits for the user to notice an ~18px mark and tap it. The
+ * highest-intent surface in the product is behind a tap most people never make.
  *
- * WHY IT IS GATED ON camEverAsked(). A device that has never been here has a designed first
- * launch — the hero, the priming line, the permission sheet — and diverting THAT to the feed
- * would change onboarding and open-destination in one move, which is unreadable. It would
- * also put a permission sheet up behind a feed the user is reading. Returning devices only:
- * the question is where you land when you COME BACK, which is the question that was asked.
+ * "on" OPENS IT. Same card brandTap() opens, on the same launch, only without requiring the
+ * tap. "off" is today: the dot, and nothing else.
  *
- * CH_SEEK STILL WINS, ABOVE THIS. A share link is somebody being handed a specific hide, and
- * no experiment gets to take that. The boot branch keeps chSeek() first for that reason.
+ * FIRES ONLY ON A REPLY, never on the dot's other two reasons. A card that opens itself to
+ * report reactions is an interruption; one that opens because somebody answered your kamo is
+ * the thing you came back for. And only when the reply is NEWER than the last one this device
+ * saw — the same high-water mark the dot uses — so it opens once per new reply, not once per
+ * launch forever.
  *
- * READ IT AS: hide_published and hide_sent per app_opened, split by open_arm. Those are the
- * loop, and the loop is what the camera door exists to feed. feed_opened will of course rise
- * on "on" — it is the arm, not a result, and reading it as one would be reading the coin.
- * STOP RULE, and it is the honest one: if "on" PUBLISHES or SENDS less per open than "off",
- * the feed door is buying sessions with creations and it goes. Sends matter more than
- * publishes here — a hide nobody sends recruits nobody, and the send rate is already the
- * product's flattest number (57% on 08-14 down to 39% on 08-22).
- * KILL: rollout to 0 and push — about two minutes, no build. A stored arm keeps its side,
- * which is correct for a rollback: the next launch simply reads the arm and opens the camera.
- * Same coin discipline as the two above — stored wins, webdriver pins "off" so no other suite
- * in scripts/ suddenly opens onto a feed, storage-throw sits the device out. */
-const OPEN_FEED_ROLLOUT=50;
+ * AND ONLY OVER AN IDLE LAUNCH. The probe lands more than a second in, by which time the user
+ * may be composing, seeking, reading the feed or holding the share sheet. Taking the screen
+ * from any of those to show a card is hostile, so the arm stands down unless nothing else is
+ * up. A share link is excluded by the same test: CH_SEEK means somebody handed them a specific
+ * hide, and that is not the moment.
+ *
+ * READ IT AS: reply rounds PLAYED per reply_pending, and hide_published / hide_sent per
+ * app_opened, split by open_arm. The first says whether the card converts the notice into a
+ * round; the second is the guard-rail — this must not buy reply-plays by interrupting people
+ * who were about to make something.
+ * STOP RULE: if "on" sends fewer hides per open than "off", the card is taking the screen from
+ * creation and it goes, whatever it does for reply-plays.
+ * KILL: rollout to 0 and push, about two minutes, no build. A stored arm keeps its side.
+ * Same coin discipline as gateArm and bangerArm — stored wins, webdriver pins "off" so no
+ * other suite in scripts/ has a card open itself mid-test, storage-throw sits the device out. */
+const REPLY_OPEN_ROLLOUT=50;
 let openArm;
 {
-  const s=lsGet("kamo_open_arm");
+  const s=lsGet("kamo_reply_open_arm");
   if(s==="on"||s==="off") openArm=s;
   else if(navigator.webdriver) openArm="off";
   else {
-    openArm=(Math.random()*100<OPEN_FEED_ROLLOUT)?"on":"off";
-    lsSet("kamo_open_arm",openArm);
+    openArm=(Math.random()*100<REPLY_OPEN_ROLLOUT)?"on":"off";
+    lsSet("kamo_reply_open_arm",openArm);
   }
 }
 
@@ -8519,6 +8522,22 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    was failing silently: a round played on a photo that never arrived, which filed a real
    attempt with a 0.0s clock into everybody else's percentile. At volume this one means
    storage, not phones — which is why it is worth being able to tell the two apart. */
+/* `reply_auto_opened` is the waiting-reply arm's own exposure — the launches where the card
+   actually opened itself, as opposed to the ones where the arm was live and something else
+   owned the screen. Without it, an arm that fired and an arm that stood down are one number,
+   and the experiment reads weaker than it is. Web-first for the usual reason: the page
+   deploys in minutes and the wrapper's allow-list needs a build.
+   ⚠️ TWO CHARACTERS MUST NEVER APPEAR ANYWHERE IN THIS SET, COMMENTS INCLUDED — a closing
+   SQUARE BRACKET, and an ordinary English word in double quotes.
+   The square bracket is the serious one: check.mjs finds this Set by matching everything up
+   to the first closing bracket, so one inside a comment ends the Set early, the match fails,
+   and the gate reports the whole allow-list missing. A draft of this very note quoted the
+   audit regex, brackets and all, and did exactly that.
+   The double quotes are the cheap one: the audit reads quoted words straight out of the raw
+   body, so prose here saying a word in double quotes registers it as an event name nothing
+   emits, and the gate fails it as a phantom. Two other drafts of this note did that too.
+   Backticks in prose, always, and never name a character class. */
+"reply_auto_opened",
 "seek_photo_failed",
 /* THE UPLOAD CEILING'S TWO WITNESSES, and they belong beside the three above because they are
    the same failure one step later: not an image this app could not read, an image the bucket
@@ -13814,6 +13833,35 @@ function chSetHasReplies(on){
   chHasReplies=!!on;
   try{ if(on) localStorage.setItem("kamo_has_replies","1"); else localStorage.removeItem("kamo_has_replies"); }catch(e){}
 }
+/* NOTHING ELSE IS ON SCREEN. Every surface that can own the launch, tested by the thing that
+   proves it rather than by a flag somebody has to remember to set: the feed (kfState), a live
+   seek (chLive or a .chS screen in the DOM), a share sheet with the .show class, and the hero
+   still being up — a user reading the hero has not chosen anything yet, but they are looking
+   at a permission ask, and a card over that is how a camera permission gets denied.
+   CH_SEEK is the other half: a share link means somebody was handed a specific hide. */
+function chHomeIdle(){
+  try{
+    if(CH_SEEK) return false;
+    if(typeof kfState!=="undefined" && kfState) return false;
+    if(typeof chLive!=="undefined" && chLive) return false;
+    if(document.querySelector(".chS")) return false;
+    /* EVERY OVERLAY THAT TAKES THE SCREEN, by the class that puts it there. Enumerated rather
+       than guessed: these are exactly the ids with a `.show{display:flex}` rule — the share
+       sheet, the paywall, the confirm sheet, the member card and this card itself. The member
+       card was missing from the first version of this list and test-openarm-dom.mjs caught it
+       opening straight over the top of it, which is what this list is for. */
+    for(const id of ["shareSheet","paywall","confirmSheet","kamoPlus","kamoHome"]){
+      const el=document.getElementById(id);
+      if(el && el.classList.contains("show")) return false;
+    }
+    if(startEl && startEl.style.display!=="none") return false;
+    return true;
+  }catch(_){ return false; }
+}
+/* ONCE PER LAUNCH. chReplyCheck is not guaranteed to run only once — the probe can be
+   re-armed — and a card that reopens itself over a user who just closed it is the worst
+   version of this experiment. */
+let khAutoOpened=false;
 async function chReplyCheck(){
   /* No published hides means nothing can ever have answered — a free answer, no round trip. */
   const ids=chMine(); if(!ids.length){ chSetHasReplies(false); return; }
@@ -13832,6 +13880,14 @@ async function chReplyCheck(){
   if(chReplyNewest && chReplyNewest>replySeenAt()){
     brandDot(true);
     track("reply_pending",{n:rows.length,signed:!!rows[0].name});
+    /* THE ARM — see openArm's note. The card opens itself instead of waiting for a tap on an
+       18px dot, and ONLY over a launch where nothing else is on screen: composing, seeking,
+       the feed, the share sheet and a share link all outrank it, because taking the screen
+       from any of them is an interruption rather than a delivery. Wrapped, because a reply
+       check that throws must cost the experiment and never the dot that shipped before it. */
+    if(openArm==="on"){
+      try{ if(!khAutoOpened && chHomeIdle()){ khAutoOpened=true; openKamoHome(); track("reply_auto_opened",{n:rows.length}); } }catch(e){}
+    }
   }
 }
 /* THE DOT'S THIRD REASON. Same shape as chReplyCheck: totals compared to a high-water mark
@@ -18403,21 +18459,7 @@ function bootCamera(){
   setTimeout(()=>bootCamera.decide(),700);
 }
 if(CH_SEEK){ chSeek(); }
-/* THE OPEN EXPERIMENT'S ONE BRANCH — see openArm's note. The camera boots either way; on the
-   "on" arm the feed is put in FRONT of it, so closing the feed lands on the same compose
-   screen the control arm started on. Returning devices only (camEverAsked), so this never
-   diverts a first launch away from the hero and never raises a permission sheet behind a feed.
-   ⚠️ WRAPPED, AND THE CATCH IS THE POINT. This file deploys to every user on push and a throw
-   on the boot line is a blank app for all of them. Anything that goes wrong here — chFeed not
-   reachable, storage refusing, the feed failing to build — lands on exactly what shipped
-   yesterday, which is bootCamera() having already run one line above. The arm can cost us the
-   experiment; it must not cost us the app. */
-else {
-  bootCamera();
-  if(openArm==="on"){
-    try{ if(camEverAsked()) chFeed({src:"launch"}); }catch(e){}
-  }
-}
+else bootCamera();
 /* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone
    wrong"; at 600ms this also covers the ordinary first-launch case — the permission sheet
    is up, nothing will settle until it is answered, and the user should be reading the hero
