@@ -404,8 +404,17 @@ console.log('\nA HIDE WITH NO PHOTO CANNOT BE PUT IN THE FEED BY HAND');
   bad2.reasons.includes('no_photo')
     ? ok('and the refusal is filed as no_photo, separable from a write that failed')
     : bad(`the refusal filed ${JSON.stringify(bad2.reasons)}`);
-  /Not in the feed yet/.test(bad2.sub || '')
-    ? ok(`and the row says so rather than claiming the feed ("${bad2.sub}")`)
+  /* THE INTENT HERE IS "IT MUST NOT CLAIM THE FEED", and that has not moved. What moved is
+     which true sentence it says instead. This asserted `Not in the feed yet — tap to try
+     again`, which invites a retry that CANNOT succeed: the feed write is gated on the photo
+     and the photo is what is missing, so every tap files another no_photo. When the upload is
+     the blocker the row now names it, and the retry offer is gone with it. Both halves are
+     asserted — no feed claim, and the reason stated — so a row that goes back to promising
+     the feed still fails here. */
+  const claimsFeed = /Anyone can play it in the KAMO feed/.test(bad2.sub || '');
+  const namesCause = /photo didn't upload|Not in the feed yet/.test(bad2.sub || '');
+  !claimsFeed && namesCause
+    ? ok(`and the row says why rather than claiming the feed ("${bad2.sub}")`)
     : bad(`the row reads "${bad2.sub}" for a hide that is not in the feed and cannot be`);
 }
 
