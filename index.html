@@ -18617,11 +18617,30 @@ pwFirstArm();
    the funnel ended at "they tapped send". This arrives because the visitor is in a browser,
    where track() posts straight to Amplitude — no allow-list, no wrapper, nothing to drop it.
    invite_landed against the invite_tapped carrier gives the click-through rate; app_opened
-   already carries surface:"web" for everything else. */
-(function(){ try{ if(new URLSearchParams(location.search).get("i")){
-  track("invite_landed",{});
-  setTimeout(()=>showHint("👀 Someone hid one for you — beat their time",4600),900);
-} }catch(e){} })();
+   already carries surface:"web" for everything else.
+
+   ⚠️ IT HAS TO ANSWER TO `?h=` TOO, AND UNTIL NOW IT DID NOT — which is why the loop looked
+   dead. `?i=1` is inviteUrl(), the generic "come play" link. Every PER-HIDE challenge arrives
+   as `?h=<id>`: chLink() and SHARE_HOST were born 2026-08-14 and infra/edge-h.ts sends the
+   human on to `SITE?h=<id>`. From that day the only landing this event could still see was
+   the old generic link, so the arrival of a challenge — the single number the whole loop is
+   judged on — read as a collapse to near zero across every chart. Nothing collapsed; nothing
+   counted it. Do not compare any invite_landed figure across 2026-08-14, and do not compare
+   one across TODAY either: the denominator changes again here.
+
+   `via` is what stops that happening a third time. A flat line is now attributable to a
+   population instead of inferred from one, and `hide` lets a landing be joined back to the
+   challenge that earned it. */
+(function(){ try{
+  const challenge = !!CH_SEEK;
+  const generic = !!(new URLSearchParams(location.search).get("i"));
+  if(!challenge && !generic) return;
+  track("invite_landed", challenge ? {via:"challenge",hide:CH_SEEK} : {via:"invite"});
+  /* The banner stays on the generic link ONLY. A challenge arrival already lands in the seek
+     UI carrying its own copy; a second banner there would be a UX change riding in on an
+     instrumentation fix, and those two have to be judged apart. */
+  if(!challenge) setTimeout(()=>showHint("👀 Someone hid one for you — beat their time",4600),900);
+}catch(e){} })();
 
 /* NOTIFICATION COPY. These lines used to exist only inside the binary, which made them the
    one piece of user-facing text in KAMO that could not be changed without an App Store
