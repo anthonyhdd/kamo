@@ -815,40 +815,40 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
-/* ---- 5d-nonies. The open experiment's coin, its stamp and the link that outranks it -------
-   openArm decides what is in front when the app opens, so it sits on the boot line — the one
-   line in this file where a throw is a blank app for every user at once. Three things have to
-   stay true and none of them are visible from the arm's own declaration.
-   THE SHARE LINK OUTRANKS THE EXPERIMENT. chSeek() must remain the FIRST branch: a link is
-   somebody being handed a specific hide and no coin gets to take that. If the arm ever moves
-   above it, a share opens on a feed and the hide the sender chose is gone.
-   THE CAMERA STILL BOOTS ON BOTH ARMS. The variable is what is in FRONT, not whether the
-   camera exists — an arm that also removed the camera would measure two things and settle
-   neither, and closing the feed would land on nothing.
-   AND THE STAMP IS THE ASSIGNMENT RECORD. Same as gate_arm and banger_arm: the assignment is
-   never its own event, so if open_arm stops riding on track() the experiment has no exposure
-   data and every split reads as one arm. */
+/* ---- 5d-nonies. The waiting-reply arm opens a card, never an interruption ----------------
+   openArm decides whether a reply that came back opens its own card instead of lighting an
+   18px dot and hoping. Three things have to stay true, and none are visible from the arm's
+   declaration.
+   IT FIRES ONLY ON A FRESH REPLY. The hook sits inside chReplyCheck's `newer than the mark`
+   branch, beside brandDot(true). Moved out of it, the card opens on every launch that has any
+   reply at all — forever, for the same one — and on the dot's other two reasons, which are
+   feedback with nothing to do.
+   IT STANDS DOWN OVER A BUSY SCREEN. chHomeIdle() is what keeps this a delivery rather than
+   an interruption: composing, seeking, the feed, the share sheet, the hero and a share link
+   all outrank it. Without that test the card lands on top of whatever the user was doing more
+   than a second after launch.
+   AND ITS EXPOSURE HAS A ROUTE. reply_auto_opened separates "arm was on" from "card actually
+   opened"; a new event name not on WEB_ONLY measures nothing on the live build. */
 {
-  const at = html.indexOf('if(CH_SEEK){ chSeek(); }');
-  if (at < 0) bad('the boot branch is gone — chSeek()/bootCamera() no longer decide the launch');
+  const at = html.indexOf('track("reply_pending"');
+  if (at < 0) bad('reply_pending is gone — the waiting-reply arm has no fresh-reply branch to hang on');
   else {
-    const seg = html.slice(at, at + 1200).replace(/\/\*[\s\S]*?\*\//g, '');
-    const m = html.match(/const\s+OPEN_FEED_ROLLOUT\s*=\s*(\d+)/);
-    const stamped = /open_arm\s*:\s*openArm/.test(html);
-    const seekFirst = seg.indexOf('chSeek()') >= 0
-      && (seg.indexOf('chFeed(') < 0 || seg.indexOf('chSeek()') < seg.indexOf('chFeed('));
+    const seg = html.slice(at, at + 900).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+REPLY_OPEN_ROLLOUT\s*=\s*(\d+)/);
+    const wo = (html.match(/const WEB_ONLY=new Set\(\[([\s\S]*?)\]\)/) || [])[1] || '';
+    const routed = wo.replace(/\/\*[\s\S]*?\*\//g, '').includes('"reply_auto_opened"');
     !m
-      ? bad('OPEN_FEED_ROLLOUT is gone — the open experiment has no rollout to kill it with')
-      : !seekFirst
-        ? bad('chSeek() no longer runs before the open arm — a share link would open on the '
-            + 'feed instead of on the hide it was sent for')
-        : !seg.includes('bootCamera()')
-          ? bad('the boot branch no longer calls bootCamera() — the arm has taken the camera '
-              + 'away instead of putting the feed in front of it')
-          : !stamped
-            ? bad('open_arm no longer rides on track() — the experiment loses its only '
-                + 'exposure record and every split reads as one arm')
-            : ok(`the open arm is a ${m[1]}% coin, the camera boots on both sides, and a share link still outranks it`);
+      ? bad('REPLY_OPEN_ROLLOUT is gone — the waiting-reply arm has no rollout to kill it with')
+      : !seg.includes('openKamoHome()')
+        ? bad('the fresh-reply branch no longer opens the card — the arm has no treatment, and '
+            + 'every device reads as the control side')
+        : !seg.includes('chHomeIdle()')
+          ? bad('the auto-open no longer tests chHomeIdle() — the card can now land on top of '
+              + 'someone composing, seeking or reading the feed a second after launch')
+          : !routed
+            ? bad('reply_auto_opened is not on WEB_ONLY — the arm cannot tell "on" from "on but '
+                + 'stood down", and the event measures nothing on the live build')
+            : ok(`the waiting-reply arm is a ${m[1]}% coin, fires only on a fresh reply, and stands down over a busy screen`);
   }
 }
 
