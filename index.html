@@ -3496,6 +3496,50 @@ let openArm;
   }
 }
 
+/* ═══ THE LANDING EXPERIMENT — where a finished hide leaves you ═══════════════════════════
+ *
+ * Founder, 2026-08-22: "on ferait pas mieux de l'envoyer sur son hide en mode feed avec la
+ * share modal... et comme ça après avoir tapé done, l'utilisateur pourrait scroller direct
+ * vers les autres hides sans même avoir besoin de tap sur le sien vu qu'il sait déjà où c'est."
+ *
+ * Today a finished hide ends on the reveal, which is a dead end: the only ways out are the ✕
+ * and #ssSeeLive, and the creator's own kamo is the one hide in the world they have no reason
+ * to play. On the live arm the screen BEHIND the sheet becomes the feed, seeded on the hide
+ * they just made — so closing the sheet leaves them mid-feed, one swipe from somebody else's.
+ *
+ * THE REVEAL IS NOT TOUCHED, AND THAT IS DELIBERATE RATHER THAN CAUTIOUS. It does two jobs and
+ * only one of them is visible: it is the celebration the send is decided on (median dwell 154
+ * seconds), and it is what PAYS FOR THE UPLOAD — chPrepare runs underneath it. Skipping it to
+ * reach the feed sooner would land people on a hide that does not exist yet, which is the bug
+ * fixed hours before this was written. So the reveal plays exactly as it does today; the arm
+ * changes only what is behind the sheet once the row is real.
+ *
+ * ⚠️ AND IT LEAVES THE SHEET UP, WHICH CONTRADICTS A DECISION ALREADY WRITTEN DOWN. The
+ * #ssSeeLive handler closes the sheet before opening the feed, on the grounds that "leaving
+ * the sheet under it is how you end up with two dismissals to get back". That reasoning holds
+ * where it is — a tap on See-it-live is a request for the feed, so the sheet has done its job.
+ * Here the sheet has NOT done its job: the send has not happened yet, and the send is the
+ * flattest number in the product (57.3% of publishes on 08-14, 38.7% on 08-22). Taking the
+ * share sheet away to show a feed would be buying scroll with sends. The second dismissal is
+ * also cheap here in a way it is not there: the screen underneath is a feed, not a spent
+ * reveal, so the first ✕ leaves you somewhere worth being.
+ *
+ * READ IT AS hide_sent per app_opened FIRST, feed_slide second, and in that order. STOP RULE:
+ * if the live arm SENDS less per open, it goes, whatever it does for scrolling.
+ * KILL: rollout to 0 and push. Same coin discipline as the three arms above — stored wins,
+ * webdriver pins the control side so no suite in scripts/ suddenly finishes into a feed. */
+const FEED_LANDING_ROLLOUT=50;
+let landArm;
+{
+  const s=lsGet("kamo_land_arm");
+  if(s==="on"||s==="off") landArm=s;
+  else if(navigator.webdriver) landArm="off";
+  else {
+    landArm=(Math.random()*100<FEED_LANDING_ROLLOUT)?"on":"off";
+    lsSet("kamo_land_arm",landArm);
+  }
+}
+
 /* TEACHING HINTS ONLY EXIST ON THE FIRST HIDE.
    "Tap the scene to grab its color", "Slide to a pose and release" and the rest were firing
    on every single use, forever. Users run ~8 hides a day, so by the third round these are not
@@ -8544,6 +8588,11 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    retry successfully — and this one is the one that matters, because it counts hides that
    were announced as live and were not. */
 "hide_photo_missing",
+/* `land_on_own_hide` is the landing arm's exposure — the publishes that actually ended in the
+   feed, as distinct from the ones where the arm was live and the id never arrived. Without it
+   a publish that failed to seed is indistinguishable from a control-arm publish, and the arm
+   reads stronger than it is. */
+"land_on_own_hide",
 "seek_photo_failed",
 /* THE UPLOAD CEILING'S TWO WITNESSES, and they belong beside the three above because they are
    the same failure one step later: not an image this app could not read, an image the bucket
@@ -8759,7 +8808,7 @@ function track(event,props){
      feed_gate_* events: the question the arm exists to answer is asked of hide_published, of
      feed_slide's depth and of the seeker's own events, none of which know the card exists. One
      property on everything is what makes those segmentable without a build. */
-  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,emit:"web"};
+  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -9351,6 +9400,29 @@ function peekShareSheet(){
      bought a redesign of something that may not be broken. Its own name, not share_opened:
      arriving and asking are different acts and merging them would repeat the mistake. */
   track("sheet_presented",{score:Math.round(currentScore||0)});
+  /* THE LANDING ARM — see landArm's note. Everything above has already happened: the reveal
+     ran, the sheet is up, the upload has been paid for. All this adds is what sits BEHIND the
+     sheet, and only once there is a real row to sit on.
+     NOT AWAITED, so the sheet is never held back by it — the send is what this screen is for.
+     Four things it refuses to do:
+       · a REPLY is excluded. chReplyTo rounds have their own return to the feed (see the
+         receipt in #ssInvite), and two returns racing each other is a screen that jumps.
+       · NO ID, NO LANDING. chAwaitId answering nothing means the publish failed or never ran,
+         and the feed cannot seed on a hide that is not there — the creator stays on the reveal,
+         which is exactly today's behaviour and the honest one.
+       · a feed already open is left alone; this must not stack a second one.
+       · and a resolve that arrives after the round moved on is dropped, or it would haul the
+         next hide's creator into the last one's feed. */
+  if(landArm==="on" && !chReplyTo){
+    try{
+      const myLandRound=chRound;
+      chAwaitId(2500).then((id)=>{
+        if(!id||myLandRound!==chRound||kfState) return;
+        track("land_on_own_hide",{});
+        try{ chFeed({first:id,fromReveal:true,src:"published"}); }catch(_){}
+      }).catch(()=>{});
+    }catch(e){}
+  }
 }
 function expandShareSheet(){
   /* THE PEEK CLASS IS NOT DROPPED HERE. It used to be, one line before openShareSheet(), and

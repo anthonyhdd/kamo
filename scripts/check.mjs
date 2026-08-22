@@ -880,6 +880,37 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
             : ok('a refused upload retracts the live claim, and it is cleared with the round');
 }
 
+/* ---- 5d-undecies. The landing waits for a real row, and keeps the sheet -------------------
+   landArm turns the screen behind the share sheet into the feed, seeded on the hide just made.
+   Three things have to hold and none are visible from the arm's declaration.
+   IT WAITS FOR AN ID. chAwaitId answering nothing means the publish failed or never ran;
+   seeding a feed on that hide is the bug fixed the same day this arm was written, arrived at
+   from the other direction.
+   IT DOES NOT CLOSE THE SHEET. #ssSeeLive closes it deliberately — a tap there IS a request
+   for the feed — but here the send has not happened yet, and the send is the flattest number
+   in the product. A closeShareSheet() in this branch buys scroll with sends.
+   AND IT LEAVES REPLIES ALONE, because chReplyTo rounds already return to the feed on their
+   own and two returns racing is a screen that jumps. */
+{
+  const at = html.indexOf('track("sheet_presented"');
+  if (at < 0) bad('sheet_presented is gone — the landing arm is anchored to nothing');
+  else {
+    const seg = html.slice(at, at + 1400).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+FEED_LANDING_ROLLOUT\s*=\s*(\d+)/);
+    !m
+      ? bad('FEED_LANDING_ROLLOUT is gone — the landing experiment has no rollout to kill it with')
+      : !seg.includes('chFeed(')
+        ? bad('the landing no longer opens a feed — the arm has no treatment and every device reads as control')
+        : !seg.includes('chAwaitId(')
+          ? bad('the landing no longer waits for an id — it can seed a feed on a hide that was never created')
+          : !/!chReplyTo/.test(seg)
+            ? bad('the landing no longer excludes replies — a reply round now gets two returns to the feed')
+            : seg.includes('closeShareSheet()')
+              ? bad('the landing closes the share sheet — the send has not happened yet, and that trades sends for scroll')
+              : ok(`the landing is a ${m[1]}% coin, waits for a real row, and keeps the sheet`);
+  }
+}
+
 /* ---- 5d-bis. tlFrames and tlTimes are one array wearing two names -------------------------
  * tlTimes carries the wall-clock mark for tlFrames[i], and sessionPayload() zips them by
  * index to hand native the pace the round actually ran at. So the pairing IS the feature, and
@@ -1610,6 +1641,20 @@ try {
     : ok('a hide with no photo is never announced as live, and a working one still is (node scripts/test-photoless-dom.mjs)');
 } catch (e) {
   bad('THE PHOTOLESS PUBLISH IS BROKEN:\n' + why(e));
+}
+
+/* The landing arm decides what sits behind the share sheet once a hide is real. It rides on
+   peekShareSheet, so a mistake here is felt by every publisher at once. Four silent failures:
+   a control arm that also lands, a landing that takes the sheet away (buying scroll with
+   sends), a feed seeded on a hide that was never created, and a reply hauled into a second
+   return. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-landing-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-landing-dom.mjs', 'LANDING TEST', out)
+    : ok('a finished hide lands in the feed with its sheet, and only when it is really there (node scripts/test-landing-dom.mjs)');
+} catch (e) {
+  bad('THE LANDING EXPERIMENT IS BROKEN:\n' + why(e));
 }
 
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
