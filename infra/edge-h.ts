@@ -59,7 +59,39 @@ const SITE = "https://kamo.bliss-coach.com/";
  * Cloudflare Worker on playkamo.com/h/* forwards here (infra/playkamo-worker.js), so every
  * link in every thread is a playkamo.com link and every self-referential tag has to say so. */
 const PUBLIC = "https://playkamo.com";
+
+/* THE INSTALL LINK ON THE HIGHEST-INTENT SURFACE THE PRODUCT HAS, and until now it was a
+ * bare listing URL. Two things were wrong with that, and the second is the expensive one.
+ *
+ *  - It is untracked. `~/SPANISH/content-engine/config.json` states the rule for the video
+ *    descriptions in one line — "never hardcode a bare apps.apple.com URL: it is untracked
+ *    and it outranks the tracked link" — and this page was breaking it on the one surface
+ *    where the visitor has already seen a friend's challenge and decided to install. Every
+ *    one of those installs has been landing in `af_status: Organic` with nothing to say the
+ *    loop earned it, which is why the loop's contribution is unknown rather than small.
+ *
+ *  - It drops the hide. The App Store round-trip loses the URL, so the friend who tapped a
+ *    challenge, installed, and opened, arrives on an empty camera with the round they came
+ *    for gone. A OneLink is the only carrier that survives that trip. `deep_link_value=hide`
+ *    names the route and `deep_link_sub2` carries the id; kamo-app/attribution.js reads
+ *    exactly that pair (extractDeepHide) and hands it to the same `deepHide` state a warm
+ *    universal link uses, so there is one road to a hide and not two.
+ *
+ * sub2 rather than sub1 because sub1 is the referrer code — see the note on extractDeepHide.
+ * `pid`/`c` are what AppsFlyer groups by, and they are named for this surface so a challenge
+ * install can be told apart from an in-app share and from the YouTube fleet.
+ *
+ * The base is the template kamo-app already ships (attribution.js ONELINK_URL). There is a
+ * SECOND template in the account — getkamo.onelink.me/0Dmw, used by the YouTube pipeline —
+ * and the two are not interchangeable for reporting. Do not "unify" them without checking
+ * which one each consumer reads. */
 const APP_STORE = "https://apps.apple.com/app/id6789639784";
+const ONELINK = "https://kamo.onelink.me/dc9X";
+const installLink = (id: string) =>
+  id
+    ? ONELINK + "?pid=challenge_link&c=challenge&deep_link_value=hide"
+      + "&deep_link_sub2=" + encodeURIComponent(id)
+    : APP_STORE;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 
@@ -90,8 +122,9 @@ async function getHide(id: string) {
  * hand-copied rewrite — and the whole point of this function is that the picture reaches
  * the thread. Clients that read the twitter:* set (X, and several link unfurlers that
  * prefer it when present) would have fallen back to no image at all. */
-function page(o: { title: string; desc: string; image: string; to: string; self: string }) {
+function page(o: { title: string; desc: string; image: string; to: string; self: string; hide?: string }) {
   const to = esc(o.to);
+  const get = esc(installLink(o.hide || ""));
   const self = esc(o.self);
   const title = esc(o.title);
   const desc = esc(o.desc);
@@ -116,7 +149,7 @@ function page(o: { title: string; desc: string; image: string; to: string; self:
 <p style="margin:0 0 16px;opacity:.75">${desc}</p>
 <img src="${image}" alt="${title}" style="width:100%;height:auto;border-radius:12px;display:block">
 <p style="margin:20px 0 0"><a href="${to}" style="color:#5fe6a4;font-weight:600;text-decoration:none">Find the kamo</a></p>
-<p style="margin:12px 0 0;font-size:14px;opacity:.7"><a href="${PUBLIC}/" style="color:#5fe6a4">What is KAMO?</a> &middot; <a href="${APP_STORE}" style="color:#5fe6a4">Get it on the App Store</a></p>
+<p style="margin:12px 0 0;font-size:14px;opacity:.7"><a href="${PUBLIC}/" style="color:#5fe6a4">What is KAMO?</a> &middot; <a href="${get}" style="color:#5fe6a4">Get it on the App Store</a></p>
 </main>
 <script>location.replace(${JSON.stringify(o.to)})</script>
 </body></html>`;
@@ -188,6 +221,7 @@ Deno.serve(async (req: Request) => {
     desc: generic.desc,
     image,
     to: `${SITE}?h=${encodeURIComponent(id)}`,
+    hide: id,
     self,
   }));
 });
