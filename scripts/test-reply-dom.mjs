@@ -400,7 +400,15 @@ console.log('\nAND THE FEED COMES BACK ON THE HIDE THAT WAS JUST SENT');
   /* The return is deliberately a beat behind the receipt (1600ms), so this waits for the feed
      rather than sleeping past it — a fixed sleep here is a test that fails on a slow morning. */
   await page.waitForSelector('#kfeed', { timeout: 10000 });
-  await page.waitForTimeout(400);
+  /* ...and then it slept 400ms anyway, which is the very thing the line above warns about.
+     The slow morning arrived: under machine load this read window.__rb.feed() before the
+     seeded slide had painted and reported an unlabelled slide that was in fact fine. Wait
+     for the label the assertion is about; the assertion itself is unchanged, so a slide that
+     genuinely never gets named still fails. */
+  await page.waitForFunction(() => {
+    const s = window.__rb.feed();
+    return !!(s && s.slides >= 1 && s.hint && /yours/i.test(s.hint));
+  }, { timeout: 10000 }).catch(() => {});
   const st = await page.evaluate(() => window.__rb.feed());
   const seeded = await page.evaluate((id) =>
     window.__rpc.some(([fn, b]) => fn === 'get_hide' && b && b.p_id === id), MINE);
