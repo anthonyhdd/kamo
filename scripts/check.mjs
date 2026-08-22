@@ -815,6 +815,43 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
+/* ---- 5d-nonies. The open experiment's coin, its stamp and the link that outranks it -------
+   openArm decides what is in front when the app opens, so it sits on the boot line — the one
+   line in this file where a throw is a blank app for every user at once. Three things have to
+   stay true and none of them are visible from the arm's own declaration.
+   THE SHARE LINK OUTRANKS THE EXPERIMENT. chSeek() must remain the FIRST branch: a link is
+   somebody being handed a specific hide and no coin gets to take that. If the arm ever moves
+   above it, a share opens on a feed and the hide the sender chose is gone.
+   THE CAMERA STILL BOOTS ON BOTH ARMS. The variable is what is in FRONT, not whether the
+   camera exists — an arm that also removed the camera would measure two things and settle
+   neither, and closing the feed would land on nothing.
+   AND THE STAMP IS THE ASSIGNMENT RECORD. Same as gate_arm and banger_arm: the assignment is
+   never its own event, so if open_arm stops riding on track() the experiment has no exposure
+   data and every split reads as one arm. */
+{
+  const at = html.indexOf('if(CH_SEEK){ chSeek(); }');
+  if (at < 0) bad('the boot branch is gone — chSeek()/bootCamera() no longer decide the launch');
+  else {
+    const seg = html.slice(at, at + 1200).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+OPEN_FEED_ROLLOUT\s*=\s*(\d+)/);
+    const stamped = /open_arm\s*:\s*openArm/.test(html);
+    const seekFirst = seg.indexOf('chSeek()') >= 0
+      && (seg.indexOf('chFeed(') < 0 || seg.indexOf('chSeek()') < seg.indexOf('chFeed('));
+    !m
+      ? bad('OPEN_FEED_ROLLOUT is gone — the open experiment has no rollout to kill it with')
+      : !seekFirst
+        ? bad('chSeek() no longer runs before the open arm — a share link would open on the '
+            + 'feed instead of on the hide it was sent for')
+        : !seg.includes('bootCamera()')
+          ? bad('the boot branch no longer calls bootCamera() — the arm has taken the camera '
+              + 'away instead of putting the feed in front of it')
+          : !stamped
+            ? bad('open_arm no longer rides on track() — the experiment loses its only '
+                + 'exposure record and every split reads as one arm')
+            : ok(`the open arm is a ${m[1]}% coin, the camera boots on both sides, and a share link still outranks it`);
+  }
+}
+
 /* ---- 5d-bis. tlFrames and tlTimes are one array wearing two names -------------------------
  * tlTimes carries the wall-clock mark for tlFrames[i], and sessionPayload() zips them by
  * index to hand native the pace the round actually ran at. So the pairing IS the feature, and
@@ -1517,6 +1554,20 @@ try {
     : ok('the proven opener obeys its arm, once per session, position only (node scripts/test-banger-dom.mjs)');
 } catch (e) {
   bad('THE OPENER EXPERIMENT IS BROKEN:\n' + why(e));
+}
+
+/* The open experiment sits on the BOOT LINE — the one place in index.html where a mistake is
+   a blank app for every user at once — so it gets a suite, not a comment. Four silent failure
+   modes: a control arm that also opens the feed (no measurement), a share link taken by the
+   coin (the sender's hide replaced by strangers), a first launch diverted away from its hero
+   and its permission sheet, and a camera that stops booting under the feed. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-openarm-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-openarm-dom.mjs', 'OPEN-ARM TEST', out)
+    : ok('the app opens where its arm says, the camera survives it, and a share link still wins (node scripts/test-openarm-dom.mjs)');
+} catch (e) {
+  bad('THE OPEN EXPERIMENT IS BROKEN:\n' + why(e));
 }
 
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
