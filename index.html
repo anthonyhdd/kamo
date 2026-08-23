@@ -3528,11 +3528,32 @@ let openArm;
  * if the live arm SENDS less per open, it goes, whatever it does for scrolling.
  * KILL: rollout to 0 and push. Same coin discipline as the three arms above — stored wins,
  * webdriver pins the control side so no suite in scripts/ suddenly finishes into a feed. */
-const FEED_LANDING_ROLLOUT=50;
+/* ⚠️ KILLED AT 0 ON 2026-08-23, ~10:00 UTC, AND THE REASON IS ON THE RECORD RATHER THAN IN A
+   COMMIT MESSAGE NOBODY WILL READ AGAIN. The arm shipped the evening of 08-22. The next
+   morning the send rate, measured per creator over the same slice of the clock with a
+   lag-safe window, was 22.7% against a 48-54% band all week — halved.
+   THE ARITHMETIC NAMES IT. A 50% arm can only drag a 52% population to 22.7% if its own side
+   sends almost nothing. That is not a nudge, it is a control that does not work.
+   AND THIS HAS HAPPENED BEFORE, ON THIS EXACT SURFACE. 2026-08-20: the send rate fell 62% to
+   51.4% because the feed's .kfHint pill was sitting over "Send to a friend". Opening the feed
+   BEHIND the share sheet puts the feed's furniture back on screen underneath it, which is the
+   same collision arrived at from the other direction — and the sheet is the one screen in this
+   app where the send lives.
+   Set back to 50 only with a test that puts a thumb on #ssInvite while the feed is open behind
+   it and asserts the tap reaches the button. Reading the DOM is not enough: the button was
+   present and visible last time too. It was covered. */
+const FEED_LANDING_ROLLOUT=0;
 let landArm;
 {
+  /* ⚠️ ZERO MEANS EVERYBODY, NOT JUST NEW DEVICES — and that is the difference between a
+     rollback and a kill. Every other arm here lets a stored side win over the rollout, which
+     is right for an experiment being retired: nobody's screen changes under them twice.
+     It is WRONG for an arm that is actively costing sends. Left as it was, rollout 0 would
+     have stopped new assignments and left every device already rolled live broken forever,
+     with no way back short of clearing storage. So 0 is read first and overrides the store. */
   const s=lsGet("kamo_land_arm");
-  if(s==="on"||s==="off") landArm=s;
+  if(FEED_LANDING_ROLLOUT<=0) landArm="off";
+  else if(s==="on"||s==="off") landArm=s;
   else if(navigator.webdriver) landArm="off";
   else {
     landArm=(Math.random()*100<FEED_LANDING_ROLLOUT)?"on":"off";
@@ -8593,6 +8614,16 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    a publish that failed to seed is indistinguishable from a control-arm publish, and the arm
    reads stronger than it is. */
 "land_on_own_hide",
+/* WEB_ONLY THOUGH IT ONLY EVER FIRES IN THE APP, and that is not a contradiction — it is the
+   only way this event exists at all before the next binary. The wrapper DROPS any name absent
+   from WEB_EVENTS (App.js: `if (WEB_EVENTS.has(msg.event))`), which is the right defence
+   against a typo in the web polluting the taxonomy and the wrong answer for a name coined
+   here today: routed through the wrapper it would be silently discarded until a build two
+   weeks out. WEB_ONLY posts it straight to Amplitude instead, carrying both ids like every
+   other web-direct event, so it lands today and still joins the app's events.
+   MOVE IT OUT the moment seek_end_swiped is added to WEB_EVENTS and that build ships —
+   leaving it here after that would split one event across two paths. */
+"seek_end_swiped",
 "seek_photo_failed",
 /* THE UPLOAD CEILING'S TWO WITNESSES, and they belong beside the three above because they are
    the same failure one step later: not an image this app could not read, an image the bucket
@@ -16061,6 +16092,16 @@ function chSeek(hideId,opts){
          means one thing in both places. "Found" is the only head a win ever produces. */
       const won=/^Found/.test(String(head||""));
       endWon=won;
+      /* ALREADY IN THE APP. The store button under this card was shown on every link round,
+         wrapper or not — so a player who opened a challenge from the widget, or from a
+         notification, finished the round and was offered the app they were holding. Worse
+         than noise: chGo goes to the App Store, so the one primary control on that card sent
+         an existing user out of the app to install what they already had.
+         `window.ReactNativeWebView`, the same test the rest of this file uses for "am I in the
+         wrapper" — not nativeCaps, which answers the different question of what the wrapper
+         can DO and is empty until setNativeCaps lands. This one is true from the first frame,
+         which is what a button rendered on first paint needs. */
+      const APP=!!window.ReactNativeWebView;
       const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(won) : null;
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
@@ -16158,7 +16199,11 @@ function chSeek(hideId,opts){
            WHAT SETTLES IT: seek_cta_tapped and seek_rehide_tapped now both carry `won`. Split
            on it. If rehides on wins do not rise by more than the store loses, revert to the
            single primary — this is two conditions. */
-        +((eopts.rehide&&!MINE)?'<button class="'+((!FEED&&!won)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
+        /* `&&!APP`: the demotion to secondary exists only because chGo takes the primary slot
+           on a loss. In the wrapper chGo is not rendered at all, so demoting here would leave
+           the card with no primary at all — a loss in the app would end on two outlines and
+           nothing to press. */
+        +((eopts.rehide&&!MINE)?'<button class="'+((!FEED&&!won&&!APP)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
         /* AND IT TAKES THE PRIMARY SLOT THERE, because on your own hide it is the only control
            left that does anything for the hide. A photo nobody was sent is a photo nobody
            plays: this is the whole reason the screen exists after "See it live". */
@@ -16197,6 +16242,14 @@ function chSeek(hideId,opts){
                hunting exactly this silhouette in a photo. The word "KAMO" is a brand they met
                four minutes ago; the figure is the thing they just found. Decorative to a
                screen reader (aria-hidden) — the label already says everything. */
+            /* NOT IN THE WRAPPER — see APP above. An install button is the one thing on this
+               card that cannot mean anything to somebody who is already inside the app. When
+               it goes, `rehide` rounds still end on "Challenge back" (promoted to primary
+               above); a round with nothing to answer ends on the report link alone, which is
+               correct — there is nothing left to offer a player who has the app and no
+               challenge waiting. */
+            : APP
+            ? ''
             : '<button class="'+((eopts.rehide&&!MINE&&won)?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+CH_CTA_FIG+'</button>')
         /* THE REACTION SLOT IS GONE FROM THIS CARD — the rail lives on the round now and is
            already on screen behind it. Left in, this markup would mint a SECOND element with
@@ -16221,6 +16274,22 @@ function chSeek(hideId,opts){
            would mean YOU — every later feed_page filtered against your own author key. A
            destructive button, correctly wired, pointed at the person pressing it. */
         +((FEED&&!MINE)?'<button class="chR" id="chBlk" style="text-decoration:none">Don\'t show me this person</button>':'')
+        /* THE SWIPE HAS TO ANNOUNCE ITSELF OR IT DOES NOT EXIST. Founder, 2026-08-23: "après
+           sa manche jouée il puisse scroll pour voir un autre hide". A link round is a `.chS`
+           screen with no scroller under it — the feed is a separate overlay — so the gesture
+           he reached for had nothing to move and no button to fall back on either: #btnFeed
+           only exists on the camera screens. In the app that made a challenge opened from the
+           widget a dead end.
+           A LINE, NOT A BUTTON, AND THAT IS THE WHOLE POINT. #371 put the feed BEHIND the
+           creator's ending screen and #373 killed it the next morning — "the send rate halved".
+           What was wrong there was replacing the screen; the card and its buttons stopped being
+           the thing in front of you. Here the card is untouched, every button keeps its place,
+           and the swipe is an extra exit for somebody who has finished and wants more. If it
+           still costs "Challenge back" taps, the arming block below is the one thing to delete.
+           Only where all three hold: in the app (a browser stranger gets the store button and
+           the web wall is a deliberate refusal to open this feed), off the feed (which already
+           scrolls), and only when the probe says there is something to scroll TO. */
+        +((APP&&!FEED&&kfHasContent)?'<div class="chR" id="chSwipe" style="text-decoration:none;pointer-events:none">Swipe up for the next hide \u2191</div>':'')
         +'</div>';
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
@@ -16229,6 +16298,30 @@ function chSeek(hideId,opts){
       if($$("chGo")) $$("chGo").onclick=()=>{ const u=refLink("seek_cta",HID);
         track("seek_cta_tapped",TP({tier:u===appLink?"plain":"onelink",round:chRoundsPlayed(),won:won}));
         location.href=u; };
+      /* ARMING THE SWIPE — see the note on #chSwipe above for why it exists and what to delete
+         if it costs sends. Pointer events rather than touch: this screen is driven by pointer
+         everywhere else, and a mouse drag in a desktop wrapper then behaves the same.
+         60px, and measured on pointerup rather than followed on move: a tap is ~0 and must not
+         open anything, and nothing is animated under the finger, so tracking the drag would
+         cost frames for a gesture with no visual to give back.
+         ONE SHOT. It unbinds itself before opening the feed — chFeed() is an overlay and a
+         second swipe landing behind it would try to open a feed that is already open (chFeed
+         returns early on kfState, so it is harmless, but a listener that survives the screen
+         it belongs to is how a leak starts). */
+      if(APP&&!FEED&&kfHasContent&&typeof chFeed==="function"){
+        let y0=null;
+        const down=(e)=>{ y0=e.clientY; };
+        const up=(e)=>{
+          if(y0===null) return;
+          const dy=e.clientY-y0; y0=null;
+          if(dy>-60) return;
+          w.removeEventListener("pointerdown",down); w.removeEventListener("pointerup",up);
+          try{ track("seek_end_swiped",TP({won:won,round:chRoundsPlayed()})); }catch(_){}
+          try{ chFeed({first:HID,src:"seek_end"}); }catch(_){}
+        };
+        w.addEventListener("pointerdown",down,{passive:true});
+        w.addEventListener("pointerup",up,{passive:true});
+      }
       /* The feed is told the moment this card exists, so it can drop the swipe hint before
          the pill and the card's own buttons occupy the same 40 pixels. */
       if(OPT.onEnded) try{ OPT.onEnded(won); }catch(_){}
@@ -18659,11 +18752,30 @@ pwFirstArm();
    the funnel ended at "they tapped send". This arrives because the visitor is in a browser,
    where track() posts straight to Amplitude — no allow-list, no wrapper, nothing to drop it.
    invite_landed against the invite_tapped carrier gives the click-through rate; app_opened
-   already carries surface:"web" for everything else. */
-(function(){ try{ if(new URLSearchParams(location.search).get("i")){
-  track("invite_landed",{});
-  setTimeout(()=>showHint("👀 Someone hid one for you — beat their time",4600),900);
-} }catch(e){} })();
+   already carries surface:"web" for everything else.
+
+   ⚠️ IT HAS TO ANSWER TO `?h=` TOO, AND UNTIL NOW IT DID NOT — which is why the loop looked
+   dead. `?i=1` is inviteUrl(), the generic "come play" link. Every PER-HIDE challenge arrives
+   as `?h=<id>`: chLink() and SHARE_HOST were born 2026-08-14 and infra/edge-h.ts sends the
+   human on to `SITE?h=<id>`. From that day the only landing this event could still see was
+   the old generic link, so the arrival of a challenge — the single number the whole loop is
+   judged on — read as a collapse to near zero across every chart. Nothing collapsed; nothing
+   counted it. Do not compare any invite_landed figure across 2026-08-14, and do not compare
+   one across TODAY either: the denominator changes again here.
+
+   `via` is what stops that happening a third time. A flat line is now attributable to a
+   population instead of inferred from one, and `hide` lets a landing be joined back to the
+   challenge that earned it. */
+(function(){ try{
+  const challenge = !!CH_SEEK;
+  const generic = !!(new URLSearchParams(location.search).get("i"));
+  if(!challenge && !generic) return;
+  track("invite_landed", challenge ? {via:"challenge",hide:CH_SEEK} : {via:"invite"});
+  /* The banner stays on the generic link ONLY. A challenge arrival already lands in the seek
+     UI carrying its own copy; a second banner there would be a UX change riding in on an
+     instrumentation fix, and those two have to be judged apart. */
+  if(!challenge) setTimeout(()=>showHint("👀 Someone hid one for you — beat their time",4600),900);
+}catch(e){} })();
 
 /* NOTIFICATION COPY. These lines used to exist only inside the binary, which made them the
    one piece of user-facing text in KAMO that could not be changed without an App Store

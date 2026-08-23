@@ -120,38 +120,65 @@ async function round({ arm = 'on', publishes = true } = {}) {
   return st;
 }
 
-console.log('\nA FINISHED HIDE LEAVES YOU IN THE FEED, ON IT');
-{
+/* THE ARM'S OWN ROLLOUT DECIDES WHAT THIS SUITE ASSERTS, because a killed arm still has to be
+   guarded — and what needs guarding changes completely. Live, the question is "does the
+   treatment work". At zero, the only question that matters is "is it off for EVERYBODY,
+   including the devices already carrying a stored on". Deleting these assertions when the arm
+   was killed would have left that second guarantee untested, which is the one keeping a
+   send-breaking control off half the fleet. */
+const ROLLOUT = Number((real.match(/const\s+FEED_LANDING_ROLLOUT=(\d+)/) || [])[1]);
+
+if (ROLLOUT <= 0) {
+  console.log(`\nTHE ARM IS KILLED (rollout ${ROLLOUT}) — SO IT IS OFF FOR EVERYBODY`);
+  /* Seeded 'on' deliberately: a device that already rolled live before the kill. Rollout 0 has
+     to beat the stored side, or every one of them stays broken forever with no way back short
+     of clearing storage. */
   const r = await round({ arm: 'on' });
-  r.feed ? ok('the live arm lands the creator in the feed')
-         : bad(`no #kfeed after a publish on the live arm — events were ${JSON.stringify(r.ev.slice(-7))}`);
-  r.landed === 1 ? ok('and files land_on_own_hide once, so the arm has its own exposure')
-                 : bad(`land_on_own_hide fired ${r.landed} times`);
+  !r.feed
+    ? ok('a device already carrying a stored live arm no longer lands in the feed')
+    : bad('rollout 0 did NOT override a stored arm — the devices that were already live stay live, and the kill kills nothing');
+  r.landed === 0
+    ? ok('and files no land_on_own_hide, so the kill is visible in the data too')
+    : bad(`land_on_own_hide still fired ${r.landed}× under a zero rollout`);
+  const c = await round({ arm: 'off' });
+  !c.feed && c.landed === 0
+    ? ok('and the control side is untouched, as it always was')
+    : bad('the control arm changed under a zero rollout');
+} else {
+  console.log('\nA FINISHED HIDE LEAVES YOU IN THE FEED, ON IT');
+  {
+    const r = await round({ arm: 'on' });
+    r.feed ? ok('the live arm lands the creator in the feed')
+           : bad(`no #kfeed after a publish on the live arm — events were ${JSON.stringify(r.ev.slice(-7))}`);
+    r.landed === 1 ? ok('and files land_on_own_hide once, so the arm has its own exposure')
+                   : bad(`land_on_own_hide fired ${r.landed} times`);
+  }
+  console.log('\nAND THE SHARE SHEET COMES WITH IT');
+  {
+    const r = await round({ arm: 'on' });
+    r.sheetUp && r.sheetVisible
+      ? ok('the sheet is still up over the feed — the send has not happened yet')
+      : bad('the landing dismissed the share sheet, which buys scroll with sends');
+  }
 }
 
-console.log('\nAND THE SHARE SHEET COMES WITH IT');
-{
-  const r = await round({ arm: 'on' });
-  r.sheetUp && r.sheetVisible
-    ? ok('the sheet is still up over the feed — the send has not happened yet')
-    : bad('the landing dismissed the share sheet, which buys scroll with sends');
-}
+if (ROLLOUT > 0) {
+  console.log('\nTHE CONTROL ARM STILL ENDS ON THE REVEAL');
+  {
+    const r = await round({ arm: 'off' });
+    !r.feed ? ok('the control arm does not open a feed')
+            : bad('the control arm ALSO landed in the feed — a leaking holdout is not a measurement');
+    r.landed === 0 ? ok('and files no land_on_own_hide') : bad('the control arm filed the arm event');
+  }
 
-console.log('\nTHE CONTROL ARM STILL ENDS ON THE REVEAL');
-{
-  const r = await round({ arm: 'off' });
-  !r.feed ? ok('the control arm does not open a feed')
-          : bad('the control arm ALSO landed in the feed — a leaking holdout is not a measurement');
-  r.landed === 0 ? ok('and files no land_on_own_hide') : bad('the control arm filed the arm event');
-}
-
-console.log('\nAND NOTHING LANDS ON A HIDE THAT DOES NOT EXIST');
-{
-  const r = await round({ arm: 'on', publishes: false });
-  !r.feed ? ok('a publish with no row leaves the creator on the reveal, exactly as today')
-          : bad('the arm opened a feed seeded on a hide that was never created');
-  r.landed === 0 ? ok('and files nothing, so a failed publish is not counted as a landing')
-                 : bad('land_on_own_hide fired for a hide with no row');
+  console.log('\nAND NOTHING LANDS ON A HIDE THAT DOES NOT EXIST');
+  {
+    const r = await round({ arm: 'on', publishes: false });
+    !r.feed ? ok('a publish with no row leaves the creator on the reveal, exactly as today')
+            : bad('the arm opened a feed seeded on a hide that was never created');
+    r.landed === 0 ? ok('and files nothing, so a failed publish is not counted as a landing')
+                   : bad('land_on_own_hide fired for a hide with no row');
+  }
 }
 
 await browser.close(); server.close();
