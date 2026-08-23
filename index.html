@@ -3528,11 +3528,32 @@ let openArm;
  * if the live arm SENDS less per open, it goes, whatever it does for scrolling.
  * KILL: rollout to 0 and push. Same coin discipline as the three arms above — stored wins,
  * webdriver pins the control side so no suite in scripts/ suddenly finishes into a feed. */
-const FEED_LANDING_ROLLOUT=50;
+/* ⚠️ KILLED AT 0 ON 2026-08-23, ~10:00 UTC, AND THE REASON IS ON THE RECORD RATHER THAN IN A
+   COMMIT MESSAGE NOBODY WILL READ AGAIN. The arm shipped the evening of 08-22. The next
+   morning the send rate, measured per creator over the same slice of the clock with a
+   lag-safe window, was 22.7% against a 48-54% band all week — halved.
+   THE ARITHMETIC NAMES IT. A 50% arm can only drag a 52% population to 22.7% if its own side
+   sends almost nothing. That is not a nudge, it is a control that does not work.
+   AND THIS HAS HAPPENED BEFORE, ON THIS EXACT SURFACE. 2026-08-20: the send rate fell 62% to
+   51.4% because the feed's .kfHint pill was sitting over "Send to a friend". Opening the feed
+   BEHIND the share sheet puts the feed's furniture back on screen underneath it, which is the
+   same collision arrived at from the other direction — and the sheet is the one screen in this
+   app where the send lives.
+   Set back to 50 only with a test that puts a thumb on #ssInvite while the feed is open behind
+   it and asserts the tap reaches the button. Reading the DOM is not enough: the button was
+   present and visible last time too. It was covered. */
+const FEED_LANDING_ROLLOUT=0;
 let landArm;
 {
+  /* ⚠️ ZERO MEANS EVERYBODY, NOT JUST NEW DEVICES — and that is the difference between a
+     rollback and a kill. Every other arm here lets a stored side win over the rollout, which
+     is right for an experiment being retired: nobody's screen changes under them twice.
+     It is WRONG for an arm that is actively costing sends. Left as it was, rollout 0 would
+     have stopped new assignments and left every device already rolled live broken forever,
+     with no way back short of clearing storage. So 0 is read first and overrides the store. */
   const s=lsGet("kamo_land_arm");
-  if(s==="on"||s==="off") landArm=s;
+  if(FEED_LANDING_ROLLOUT<=0) landArm="off";
+  else if(s==="on"||s==="off") landArm=s;
   else if(navigator.webdriver) landArm="off";
   else {
     landArm=(Math.random()*100<FEED_LANDING_ROLLOUT)?"on":"off";
