@@ -14977,9 +14977,47 @@ function chSeek(hideId,opts){
   };
 
   (async()=>{
-    let h; try{ h=await chRpc("get_hide",{p_id:HID}); }catch(e){}
+    /* THE THROW IS KEPT NOW, and it is load-bearing rather than tidy. This catch has always
+       swallowed the error into the same `h === undefined` that a genuinely missing row
+       produces, which was survivable while both ended on the same card. It stopped being
+       survivable the moment one of them started REMOVING the slide: a dropped connection
+       would silently eat feed rows one swipe at a time, and the reader would see a short feed
+       rather than an error. A row is only gone when the server said so. */
+    let h, rpcThrew=false;
+    try{ h=await chRpc("get_hide",{p_id:HID}); }catch(e){ rpcThrew=true; }
     if(killed) return;                 // swiped past before the hide arrived — build nothing
-    if(!h||!h.img_path){ track("seek_missing",TP()); ending("This hide is gone.","Expired, or taken down.",{}); return; }
+    /* A DEAD HIDE IS NOT AN ENDING — IT IS A ROW THAT SHOULD NOT STILL BE UNDER THE THUMB.
+       feed_page cannot serve one: it filters `expires_at > now()` and is STRICTER than
+       get_hide on every other column it shares (is_public, n_reported = 0, coverage >= 70
+       against get_hide's 30), so nothing it returns can fail this check at the moment it is
+       fetched. What fails is TIME. A page is fetched, mounted, and held while the reader
+       swipes through it; a hide in that page expires — or is taken down — before they reach
+       it. The row was honest when it was chosen and is gone when it opens, and no server
+       filter can close that window because the window is the scroll itself.
+       So in the feed it has to be invisible. What shipped instead was the worst possible
+       shape of it: a full ending card with a reaction rail, a "Send to a friend" button and a
+       "Don't show me this person" link, all mounted over a photo that cannot be played and an
+       author whose hide no longer exists. Founder screenshot, 2026-08-23.
+       The slide leaves and the next one comes up — the same exit a reported or blocked photo
+       already takes. drop() owns the rest and needs no new cases: it removes the element,
+       re-activates the neighbour, hands over to dry() when that was the last row, and takes
+       its `S.skipId === id` branch so a hide that was never playable is not filed as somebody
+       giving up on it. That branch exists for reports and is right here for the same reason —
+       there is no camouflage win in a photo the reader was never shown.
+       DEFERRED BY A TICK because drop() splices the array activate() is reasoning about, and
+       this runs from inside the round activate() has just assigned to S.round. Letting the
+       current task finish first keeps the teardown in activate()'s hands, which is the one
+       place that destroys a round before replacing it.
+       OUTSIDE THE FEED THE MESSAGE STAYS, and must: a shared link to an expired hide has no
+       next slide to advance to, and "This hide is gone" is the honest answer to it. `feed` on
+       the event is what tells the two apart in the funnel — the same absence, two meanings. */
+    if(!h||!h.img_path){
+      track("seek_missing",Object.assign({},TP(),{feed:FEED,errored:rpcThrew}));
+      /* ONLY ON AN ANSWER, NEVER ON A FAILURE TO ASK — see the catch above. A dropped call
+         leaves the card up, which is the honest thing to show when we do not know. */
+      if(FEED&&!rpcThrew&&typeof opts.onGone==="function"){ setTimeout(()=>{ try{ opts.onGone(HID); }catch(_){} },0); return; }
+      ending("This hide is gone.","Expired, or taken down.",{}); return;
+    }
     /* THE RAIL NO LONGER GOES UP HERE. It used to mount on this exact line for everyone —
        right after the existence check, before the photo even decoded. Two placements after
        that both broke in their own way: mounted on the stage's first tap (2026-08-18), a MINE
@@ -17506,6 +17544,10 @@ function chFeed(opts){
          promises. Nothing is in flight here, so there is no photo for the silence to protect. */
       onExit:()=>close(),
       onReported:(id)=>drop(id),
+      /* THE HIDE EXPIRED BETWEEN THE PAGE AND THE THUMB — see the seek_missing branch in
+         chSeek. Same exit as a report, and deliberately the same one line: the row is not
+         playable and the reader should never learn it was ever there. */
+      onGone:(id)=>drop(id),
       onBlocked:(id,stored)=>blockDrop(id,stored),
     });
     if(i>=S.slides.length-3) load();
