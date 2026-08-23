@@ -8614,6 +8614,16 @@ const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope
    a publish that failed to seed is indistinguishable from a control-arm publish, and the arm
    reads stronger than it is. */
 "land_on_own_hide",
+/* WEB_ONLY THOUGH IT ONLY EVER FIRES IN THE APP, and that is not a contradiction — it is the
+   only way this event exists at all before the next binary. The wrapper DROPS any name absent
+   from WEB_EVENTS (App.js: `if (WEB_EVENTS.has(msg.event))`), which is the right defence
+   against a typo in the web polluting the taxonomy and the wrong answer for a name coined
+   here today: routed through the wrapper it would be silently discarded until a build two
+   weeks out. WEB_ONLY posts it straight to Amplitude instead, carrying both ids like every
+   other web-direct event, so it lands today and still joins the app's events.
+   MOVE IT OUT the moment seek_end_swiped is added to WEB_EVENTS and that build ships —
+   leaving it here after that would split one event across two paths. */
+"seek_end_swiped",
 "seek_photo_failed",
 /* THE UPLOAD CEILING'S TWO WITNESSES, and they belong beside the three above because they are
    the same failure one step later: not an image this app could not read, an image the bucket
@@ -16226,6 +16236,22 @@ function chSeek(hideId,opts){
            would mean YOU — every later feed_page filtered against your own author key. A
            destructive button, correctly wired, pointed at the person pressing it. */
         +((FEED&&!MINE)?'<button class="chR" id="chBlk" style="text-decoration:none">Don\'t show me this person</button>':'')
+        /* THE SWIPE HAS TO ANNOUNCE ITSELF OR IT DOES NOT EXIST. Founder, 2026-08-23: "après
+           sa manche jouée il puisse scroll pour voir un autre hide". A link round is a `.chS`
+           screen with no scroller under it — the feed is a separate overlay — so the gesture
+           he reached for had nothing to move and no button to fall back on either: #btnFeed
+           only exists on the camera screens. In the app that made a challenge opened from the
+           widget a dead end.
+           A LINE, NOT A BUTTON, AND THAT IS THE WHOLE POINT. #371 put the feed BEHIND the
+           creator's ending screen and #373 killed it the next morning — "the send rate halved".
+           What was wrong there was replacing the screen; the card and its buttons stopped being
+           the thing in front of you. Here the card is untouched, every button keeps its place,
+           and the swipe is an extra exit for somebody who has finished and wants more. If it
+           still costs "Challenge back" taps, the arming block below is the one thing to delete.
+           Only where all three hold: in the app (a browser stranger gets the store button and
+           the web wall is a deliberate refusal to open this feed), off the feed (which already
+           scrolls), and only when the probe says there is something to scroll TO. */
+        +((APP&&!FEED&&kfHasContent)?'<div class="chR" id="chSwipe" style="text-decoration:none;pointer-events:none">Swipe up for the next hide \u2191</div>':'')
         +'</div>';
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
@@ -16234,6 +16260,30 @@ function chSeek(hideId,opts){
       if($$("chGo")) $$("chGo").onclick=()=>{ const u=refLink("seek_cta",HID);
         track("seek_cta_tapped",TP({tier:u===appLink?"plain":"onelink",round:chRoundsPlayed(),won:won}));
         location.href=u; };
+      /* ARMING THE SWIPE — see the note on #chSwipe above for why it exists and what to delete
+         if it costs sends. Pointer events rather than touch: this screen is driven by pointer
+         everywhere else, and a mouse drag in a desktop wrapper then behaves the same.
+         60px, and measured on pointerup rather than followed on move: a tap is ~0 and must not
+         open anything, and nothing is animated under the finger, so tracking the drag would
+         cost frames for a gesture with no visual to give back.
+         ONE SHOT. It unbinds itself before opening the feed — chFeed() is an overlay and a
+         second swipe landing behind it would try to open a feed that is already open (chFeed
+         returns early on kfState, so it is harmless, but a listener that survives the screen
+         it belongs to is how a leak starts). */
+      if(APP&&!FEED&&kfHasContent&&typeof chFeed==="function"){
+        let y0=null;
+        const down=(e)=>{ y0=e.clientY; };
+        const up=(e)=>{
+          if(y0===null) return;
+          const dy=e.clientY-y0; y0=null;
+          if(dy>-60) return;
+          w.removeEventListener("pointerdown",down); w.removeEventListener("pointerup",up);
+          try{ track("seek_end_swiped",TP({won:won,round:chRoundsPlayed()})); }catch(_){}
+          try{ chFeed({first:HID,src:"seek_end"}); }catch(_){}
+        };
+        w.addEventListener("pointerdown",down,{passive:true});
+        w.addEventListener("pointerup",up,{passive:true});
+      }
       /* The feed is told the moment this card exists, so it can drop the swipe hint before
          the pill and the card's own buttons occupy the same 40 pixels. */
       if(OPT.onEnded) try{ OPT.onEnded(won); }catch(_){}
