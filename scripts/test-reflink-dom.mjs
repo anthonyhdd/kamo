@@ -102,6 +102,62 @@ async function tapCta(pageHtml, hid) {
   return went;
 }
 
+/* THE SAME CARD, OPENED INSIDE THE APP. Everything above is the browser stranger this button
+   exists for. This is the other reader of the same markup: somebody who tapped the widget, or
+   a notification, played the round in the wrapper, and was then offered the app they were
+   already holding — a primary control that navigates an existing user to the App Store.
+   Returns BOTH ids on purpose. "#chGo is absent" passes just as well when the ending card
+   never rendered at all, which would hide a real break behind a green check; #chRep is drawn
+   by the same expression list, so requiring it present is what makes the absence mean what it
+   says. */
+async function cardInWrapper(pageHtml, hid, opts) {
+  const withFeed = !!(opts && opts.feed);
+  const server = createServer((rq, rs) => {
+    const p = decodeURIComponent(rq.url.split('?')[0]);
+    if (p === '/' || p === '/index.html') { rs.writeHead(200, { 'Content-Type': 'text/html' }); return rs.end(pageHtml); }
+    try {
+      const b = readFileSync(join(ROOT, p.replace(/^\/+/, '')));
+      rs.writeHead(200, { 'Content-Type': MIME[p.slice(p.lastIndexOf('.'))] || 'application/octet-stream' });
+      rs.end(b);
+    } catch { rs.writeHead(404); rs.end('x'); }
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/*', (route) => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+  await page.addInitScript((feed) => {
+    window.__seed = { get_hide: {} };
+    /* The wrapper, as the page tests for it everywhere: the object's presence IS the signal.
+       postMessage has to exist and swallow — the page posts dom-ready from the first frame. */
+    window.ReactNativeWebView = { postMessage() {} };
+    /* kfHasContent, through the door the page itself reads at launch. The swipe is armed only
+       when the probe says there is something to scroll TO, so without this the gesture is
+       correctly absent and a test for it would assert nothing. */
+    if (feed) { try { localStorage.setItem('kamo_feed_has', '1'); } catch {} }
+  }, withFeed);
+  await page.goto(`${origin}/?h=${hid}`, { waitUntil: 'load' });
+  await page.waitForSelector('#chRep', { timeout: 5000 }).catch(() => {});
+  const seen = await page.evaluate(() => ({
+    go: !!document.getElementById('chGo'),
+    card: !!document.getElementById('chRep'),
+    hint: !!document.getElementById('chSwipe'),
+  }));
+  /* AND THE GESTURE ITSELF, not just the line advertising it. A hint that promises a swipe
+     nothing listens for is worse than no hint. Dispatched on the seek wrapper the listener is
+     bound to, 120px up — comfortably past the 60px floor that keeps a tap from counting. */
+  if (withFeed) {
+    await page.evaluate(() => {
+      const w = document.querySelector('.chS');
+      const ev = (t, y) => w.dispatchEvent(new PointerEvent(t, { clientX: 190, clientY: y, bubbles: true, pointerId: 1 }));
+      ev('pointerdown', 600); ev('pointerup', 480);
+    });
+    await page.waitForTimeout(600);
+    seen.feed = await page.evaluate(() => !!document.getElementById('kfeed'));
+  }
+  await page.close(); server.close();
+  return seen;
+}
+
 console.log('\nTHE REFERRAL LINK AT THE END OF THE LOOP');
 
 /* ---- the shipped page ---- */
@@ -158,6 +214,27 @@ console.log('\nTHE REFERRAL LINK AT THE END OF THE LOOP');
     (fn[0].match(/encodeURIComponent/g) || []).length >= 2
       ? ok('refLink percent-encodes both the campaign and the id before splicing them in')
       : bad('refLink interpolates into the query string without encodeURIComponent on every value');
+  }
+}
+
+/* ---- and the same card inside the app ---- */
+console.log('\nAND IT IS NOT OFFERED TO SOMEBODY WHO ALREADY HAS THE APP');
+{
+  const seen = await cardInWrapper(withStub(real), 'abc123');
+  if (!seen.card) bad('the ending card did not render in the wrapper at all — this case proves nothing');
+  else if (seen.go) bad('#chGo is on the card inside the app — an existing user is being sent to the App Store to install what they are holding');
+  else ok('no install button in the wrapper, and the card is still there');
+}
+
+/* ---- and the way out of a finished link round ---- */
+console.log('\nA FINISHED LINK ROUND CAN BE SWIPED OUT OF, IN THE APP');
+{
+  const seen = await cardInWrapper(withStub(real), 'abc123', { feed: true });
+  if (!seen.card) bad('the ending card did not render — this case proves nothing');
+  else {
+    seen.hint ? ok('the card says the swipe exists') : bad('no #chSwipe — the gesture is undiscoverable');
+    seen.feed ? ok('and an upward swipe opens the feed on the hide just played')
+              : bad('swiping up after a link round did nothing — the round is still a dead end in the app');
   }
 }
 
