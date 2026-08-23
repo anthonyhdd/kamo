@@ -556,6 +556,93 @@ console.log('\nTHE REVEAL IS THE SHARE, WHEREVER IT IS GOING');
   await page.close();
 }
 
+/* ═══ THE SEND BUTTON HAS TO BE REACHABLE BY A THUMB, NOT MERELY PRESENT ═══════════════════
+   This app has now lost the send twice to the same thing, and neither time did any DOM
+   assertion notice, because nothing about the DOM was wrong:
+
+     2026-08-20  the feed's .kfHint pill sat over "Send to a friend". 62% -> 51.4%.
+     2026-08-23  the landing arm opened the feed behind the share sheet; #chStage covered the
+                 button. Per creator, 52% -> 22.7% overnight, and the arm was killed.
+
+   Both times the button was present, correctly sized, on screen, styled, and not disabled.
+   Both times it could not be tapped. `offsetParent`, `getComputedStyle` and a querySelector
+   all pass happily through this failure — the only thing that catches it is asking the
+   document what is ACTUALLY at those coordinates.
+
+   So this is a hit test, deliberately, and it is the assertion that would have caught both
+   incidents before they shipped. Anything that ever wants to render over the share sheet has
+   to get past it. */
+{
+  console.log('\n— a thumb reaches the send —');
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
+  await page.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, body: '{}' }));
+  /* ?debug, because window.HIDEY only exists behind it (see its declaration). Without the
+     query string the hook never appears and this reads as a timeout rather than as a missing
+     flag — which is how the first three attempts at this test failed. */
+  await page.goto(base + '?debug', { waitUntil: 'load' });
+  /* window.HIDEY is declared near the end of the module and needs the GL scene up, so it is
+     waited for rather than assumed — a flat sleep here fails on a loaded machine, which is the
+     bug this whole suite family kept hitting yesterday. */
+  await page.waitForFunction(() => !!(window.HIDEY && window.HIDEY.setBg), { timeout: 15000 });
+
+  /* DRIVEN, NOT STAGED. The first version of this added .peek to a fresh page and hit-tested
+     the button, and elementFromPoint answered `nothing` three times over — the sheet was never
+     laid out, so the button sat outside the viewport and the test was measuring its own
+     scaffolding. A real round is the only state in which these coordinates mean anything. */
+  await page.evaluate(() => window.HIDEY.setBg('data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="390" height="700"><rect width="100%" height="100%" fill="#8a9299"/></svg>')));
+  await page.waitForTimeout(900);
+  await page.evaluate(() => window.HIDEY.capture());
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+    const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+    for (let y = r.top + r.height * .25; y < r.top + r.height * .62; y += 6) {
+      ev('pointerdown', r.left + r.width / 2 - 40, y);
+      for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+      ev('pointerup', r.left + r.width / 2 + 40, y);
+    }
+  });
+  await page.evaluate(() => document.getElementById('btnDone').click());
+  await page.waitForTimeout(2600);
+  await page.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); if (c) c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+  await page.waitForTimeout(1500);
+
+  const probe = await page.evaluate(() => {
+    const btn = document.getElementById('ssInvite');
+    if (!btn) return { missing: true };
+    const r = btn.getBoundingClientRect();
+    if (!r.width || !r.height) return { collapsed: true };
+    if (r.y < 0 || r.y + r.height > innerHeight) return { offscreen: Math.round(r.y) };
+    const describe = (el) => !el ? 'nothing'
+      : el.id ? '#' + el.id
+      : '.' + String(el.className || '').split(' ').filter(Boolean).slice(0, 2).join('.');
+    /* Three points, not one: something covering only an edge still eats the taps that land
+       there, and a centre-only test would call that button reachable. */
+    const pts = [[0.5, 0.5], [0.14, 0.5], [0.86, 0.5]];
+    return {
+      rect: { w: Math.round(r.width), h: Math.round(r.height) },
+      hits: pts.map(([fx, fy]) => {
+        const el = document.elementFromPoint(r.x + r.width * fx, r.y + r.height * fy);
+        return { at: describe(el), ours: !!(el && (el === btn || btn.contains(el))) };
+      }),
+    };
+  });
+
+  if (probe.missing) bad('#ssInvite is gone — the send has no button to be covered');
+  else if (probe.collapsed) bad('#ssInvite has no box — the send button is not laid out at all');
+  else if (probe.offscreen !== undefined) bad(`#ssInvite sits at y=${probe.offscreen}, outside the viewport — a button nobody can scroll to is a button nobody taps`);
+  else {
+    const blocked = probe.hits.filter(h => !h.ours);
+    blocked.length === 0
+      ? ok(`a thumb reaches the send across its whole width (${probe.rect.w}×${probe.rect.h})`)
+      : bad(`"Send to a friend" is covered at ${blocked.length} of 3 points — a thumb lands on `
+          + blocked.map(h => h.at).join(', ') + ' instead of the button. This is how the send '
+          + 'was lost on 2026-08-20 and again on 2026-08-23: present, visible, untappable.');
+  }
+  await page.close();
+}
+
 await browser.close(); server.close();
 console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant, always its own hide, the clip goes wherever it is sent, and no board leaves over the ceiling');
 process.exit(failed?1:0);
