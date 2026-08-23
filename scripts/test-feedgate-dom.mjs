@@ -188,6 +188,15 @@ console.log('\nA TAP LEAVES FOR THE CAMERA, AND IS COUNTED ONCE');
 {
   const page = await open();
   await swipe(page, 3);
+  /* WAIT FOR THE CARD BEFORE CLICKING IT. This block opens a FRESH page — the section above
+     proved the gate mounts, but on its own page, and nothing here had established that this
+     one had caught up. So querySelector could return null and the whole suite died on
+     "Cannot read properties of null (reading 'click')" — not a failed assertion, an
+     uncaught throw, which reads in CI as the feature being broken rather than the test
+     racing it. Measured on an unchanged tree: 2 failures in 3 local runs, while the same
+     commit had gone green on main twelve minutes earlier. Same idiom as the wait further
+     down, which is the one place this file already got right. */
+  await page.waitForSelector('.kfGate button', { timeout: 8000 });
   await page.evaluate(() => document.querySelector('.kfGate button').click());
   await page.waitForTimeout(400);
 
