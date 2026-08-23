@@ -1448,6 +1448,43 @@ console.log('\nAND A BLOCK SAYS WHICH OF THE TWO THINGS IT DID');
   }
 }
 
+/* A HIDE THAT DIED UNDER THE THUMB LEAVES WITHOUT A WORD.
+   feed_page cannot serve an expired row — it filters `expires_at > now()` and is stricter than
+   get_hide on everything else they share — but it cannot stop one from expiring AFTER the page
+   is mounted and BEFORE the reader swipes down to it. That window is the scroll itself, so the
+   client is the only place it can be closed.
+   What shipped instead was a full ending card over a dead photo: reaction rail, "Send to a
+   friend", "Don't show me this person" — every affordance of a hide, on a hide that is gone
+   (founder screenshot, 2026-08-23). Stubbing get_hide to null is exactly that state, for every
+   row, so the assertion is the strong one: the sentence never reaches the DOM at all, and the
+   slides that carried it are gone from the scroller rather than sitting there unplayable. */
+console.log('\nAND AN EXPIRED HIDE IS DROPPED, NOT ANNOUNCED');
+{
+  const page = await open(ROWS(3), { get_hide: null });
+  await page.waitForTimeout(1800);
+
+  const said = await page.evaluate(() => /This hide is gone/.test(document.body.innerText || ''));
+  said ? bad('the feed showed "This hide is gone" — the dead end is still reachable')
+       : ok('the feed never says "This hide is gone"');
+
+  /* NOT "fewer than 3" BY LUCK: every row is dead here, so every slide must go. A count that
+     merely dropped would pass while the last one sat there unplayable, which is the exact
+     shape of the bug. */
+  const left = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+  left === 0 ? ok('every dead slide leaves the scroller (0 left)')
+             : bad(`${left} unplayable slide(s) still mounted`);
+
+  /* AND IT IS FILED AS WHAT IT WAS. `feed` on seek_missing is what separates a feed row that
+     died in the reader's hand from a shared link to an expired hide — same absence, two
+     different products. Without it the funnel cannot tell how often this window is hit. */
+  const marked = await page.evaluate(() =>
+    (window.__tr || []).some(e => e[0] === 'seek_missing' && e[1] && e[1].feed === true));
+  marked ? ok('seek_missing carries feed:true so the two causes stay apart')
+         : bad('seek_missing did not report which side it came from');
+
+  await page.close();
+}
+
 await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the feed plays real rounds and the visibility default is honest');
 process.exit(failed ? 1 : 0);
