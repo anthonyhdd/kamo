@@ -102,6 +102,44 @@ async function tapCta(pageHtml, hid) {
   return went;
 }
 
+/* THE SAME CARD, OPENED INSIDE THE APP. Everything above is the browser stranger this button
+   exists for. This is the other reader of the same markup: somebody who tapped the widget, or
+   a notification, played the round in the wrapper, and was then offered the app they were
+   already holding — a primary control that navigates an existing user to the App Store.
+   Returns BOTH ids on purpose. "#chGo is absent" passes just as well when the ending card
+   never rendered at all, which would hide a real break behind a green check; #chRep is drawn
+   by the same expression list, so requiring it present is what makes the absence mean what it
+   says. */
+async function cardInWrapper(pageHtml, hid) {
+  const server = createServer((rq, rs) => {
+    const p = decodeURIComponent(rq.url.split('?')[0]);
+    if (p === '/' || p === '/index.html') { rs.writeHead(200, { 'Content-Type': 'text/html' }); return rs.end(pageHtml); }
+    try {
+      const b = readFileSync(join(ROOT, p.replace(/^\/+/, '')));
+      rs.writeHead(200, { 'Content-Type': MIME[p.slice(p.lastIndexOf('.'))] || 'application/octet-stream' });
+      rs.end(b);
+    } catch { rs.writeHead(404); rs.end('x'); }
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/*', (route) => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+  await page.addInitScript(() => {
+    window.__seed = { get_hide: {} };
+    /* The wrapper, as the page tests for it everywhere: the object's presence IS the signal.
+       postMessage has to exist and swallow — the page posts dom-ready from the first frame. */
+    window.ReactNativeWebView = { postMessage() {} };
+  });
+  await page.goto(`${origin}/?h=${hid}`, { waitUntil: 'load' });
+  await page.waitForSelector('#chRep', { timeout: 5000 }).catch(() => {});
+  const seen = await page.evaluate(() => ({
+    go: !!document.getElementById('chGo'),
+    card: !!document.getElementById('chRep'),
+  }));
+  await page.close(); server.close();
+  return seen;
+}
+
 console.log('\nTHE REFERRAL LINK AT THE END OF THE LOOP');
 
 /* ---- the shipped page ---- */
@@ -159,6 +197,15 @@ console.log('\nTHE REFERRAL LINK AT THE END OF THE LOOP');
       ? ok('refLink percent-encodes both the campaign and the id before splicing them in')
       : bad('refLink interpolates into the query string without encodeURIComponent on every value');
   }
+}
+
+/* ---- and the same card inside the app ---- */
+console.log('\nAND IT IS NOT OFFERED TO SOMEBODY WHO ALREADY HAS THE APP');
+{
+  const seen = await cardInWrapper(withStub(real), 'abc123');
+  if (!seen.card) bad('the ending card did not render in the wrapper at all — this case proves nothing');
+  else if (seen.go) bad('#chGo is on the card inside the app — an existing user is being sent to the App Store to install what they are holding');
+  else ok('no install button in the wrapper, and the card is still there');
 }
 
 await browser.close();

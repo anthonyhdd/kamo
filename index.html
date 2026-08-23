@@ -16044,6 +16044,16 @@ function chSeek(hideId,opts){
          means one thing in both places. "Found" is the only head a win ever produces. */
       const won=/^Found/.test(String(head||""));
       endWon=won;
+      /* ALREADY IN THE APP. The store button under this card was shown on every link round,
+         wrapper or not — so a player who opened a challenge from the widget, or from a
+         notification, finished the round and was offered the app they were holding. Worse
+         than noise: chGo goes to the App Store, so the one primary control on that card sent
+         an existing user out of the app to install what they already had.
+         `window.ReactNativeWebView`, the same test the rest of this file uses for "am I in the
+         wrapper" — not nativeCaps, which answers the different question of what the wrapper
+         can DO and is empty until setNativeCaps lands. This one is true from the first frame,
+         which is what a button rendered on first paint needs. */
+      const APP=!!window.ReactNativeWebView;
       const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(won) : null;
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
@@ -16141,7 +16151,11 @@ function chSeek(hideId,opts){
            WHAT SETTLES IT: seek_cta_tapped and seek_rehide_tapped now both carry `won`. Split
            on it. If rehides on wins do not rise by more than the store loses, revert to the
            single primary — this is two conditions. */
-        +((eopts.rehide&&!MINE)?'<button class="'+((!FEED&&!won)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
+        /* `&&!APP`: the demotion to secondary exists only because chGo takes the primary slot
+           on a loss. In the wrapper chGo is not rendered at all, so demoting here would leave
+           the card with no primary at all — a loss in the app would end on two outlines and
+           nothing to press. */
+        +((eopts.rehide&&!MINE)?'<button class="'+((!FEED&&!won&&!APP)?'chCta2':'chCta')+'" id="chReh">Challenge back</button>':'')
         /* AND IT TAKES THE PRIMARY SLOT THERE, because on your own hide it is the only control
            left that does anything for the hide. A photo nobody was sent is a photo nobody
            plays: this is the whole reason the screen exists after "See it live". */
@@ -16180,6 +16194,14 @@ function chSeek(hideId,opts){
                hunting exactly this silhouette in a photo. The word "KAMO" is a brand they met
                four minutes ago; the figure is the thing they just found. Decorative to a
                screen reader (aria-hidden) — the label already says everything. */
+            /* NOT IN THE WRAPPER — see APP above. An install button is the one thing on this
+               card that cannot mean anything to somebody who is already inside the app. When
+               it goes, `rehide` rounds still end on "Challenge back" (promoted to primary
+               above); a round with nothing to answer ends on the report link alone, which is
+               correct — there is nothing left to offer a player who has the app and no
+               challenge waiting. */
+            : APP
+            ? ''
             : '<button class="'+((eopts.rehide&&!MINE&&won)?'chCta2':'chCta')+'" id="chGo">'+(eopts.rehide?'Get KAMO':'Play KAMO')+CH_CTA_FIG+'</button>')
         /* THE REACTION SLOT IS GONE FROM THIS CARD — the rail lives on the round now and is
            already on screen behind it. Left in, this markup would mint a SECOND element with
