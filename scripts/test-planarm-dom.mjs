@@ -36,6 +36,13 @@ if (!chromium) {
 }
 
 const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
+/* Read from the page rather than hardcoded, so this file follows the arm being ramped, killed
+   or set back to 50 instead of having to be edited alongside it. */
+const LIFETIME_ROLLOUT = Number(real.match(/const PLAN_LIFETIME_ROLLOUT\s*=\s*(\d+)/)?.[1]);
+if (!Number.isFinite(LIFETIME_ROLLOUT)) {
+  console.log('✗ could not read PLAN_LIFETIME_ROLLOUT out of index.html — the rollout-aware assertions cannot run');
+  process.exit(1);
+}
 const at = real.lastIndexOf('</script>');
 const html = real.slice(0, at)
   + '\nwindow.__p={'
@@ -188,11 +195,23 @@ console.log('\nSTORAGE THAT THROWS STILL GETS AN ARM — IT DOES NOT SILENTLY OP
 
   /* The half that a swallowed decision can never reach: before the fix `planArm` kept its
      "weekly" initialiser no matter what the coin said, so the lifetime arm was unreachable
-     on these devices and the 50/50 read 68/32 in production. */
+     on these devices and the 50/50 read 68/32 in production.
+
+     ⚠️ REWRITTEN 2026-08-24, WHEN PLAN_LIFETIME_ROLLOUT WENT TO 0. This used to assert that a
+     0.1 roll REACHES the lifetime arm, which is another way of asserting that the experiment is
+     still running — so retiring the arm turned a green test red for the one reason that is not a
+     regression. What the assertion was actually protecting is narrower and still worth keeping:
+     that a device whose storage throws makes a real decision instead of silently keeping an
+     initialiser. So it now checks the coin is consulted and lands on a VALID arm at whatever the
+     rollout says, at both ends of the roll — which stays true at 0, at 100, and at any 50/50 this
+     is ever set back to. The rendering path for the lifetime hero is not left uncovered: the
+     CONTROL and LIFETIME blocks below still seed it through localStorage, which is exactly why
+     rollout 0 does NOT override a stored arm (see the note in index.html). */
   const lo = await openDenied(0.1);
-  lo.plan_arm === 'lifetime' && lo.pwPlan === 'lifetime'
-    ? ok('and a low roll really reaches the lifetime arm, rather than falling back to the initialiser')
-    : bad(`plan_arm is "${lo.plan_arm}" / pwPlan "${lo.pwPlan}" on a 0.1 roll — the lifetime arm is unreachable when storage throws`);
+  const want = LIFETIME_ROLLOUT > 10 ? 'lifetime' : 'weekly';
+  lo.plan_arm === want && lo.pwPlan === want
+    ? ok(`and a low roll is decided too — "${want}" at PLAN_LIFETIME_ROLLOUT ${LIFETIME_ROLLOUT}, not an initialiser`)
+    : bad(`plan_arm is "${lo.plan_arm}" / pwPlan "${lo.pwPlan}" on a 0.1 roll — expected "${want}" at rollout ${LIFETIME_ROLLOUT}`);
 }
 
 console.log('\nCONTROL: WEEKLY IS THE HERO, LIFETIME IS THE LINE');
