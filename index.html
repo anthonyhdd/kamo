@@ -3360,7 +3360,27 @@ let pwArm;
  * purchase_completed / purchase_cancelled (product_id). Kill it by setting the rollout to 0
  * or 100 — at 100 a stored "weekly" is NOT promoted, unlike PW_FULL_ROLLOUT above, because
  * this one may well need to be rolled back rather than out. */
-const PLAN_LIFETIME_ROLLOUT=50;
+/* ⚠️ ROLLED BACK TO 0 ON 2026-08-24 — THE WEEKLY KEEPS THE HERO. Seven days, app_variant kamo:
+   lifetime hero 1 752 paywalls → 71 StoreKit sheets (4,05%); weekly hero 1 715 → 84 (4,90%).
+   Selling the lifetime first makes FEWER people open Apple's sheet, not more. The hypothesis was
+   that 12 of 19 sheets went to lifetime from the small line, so it would do better as the hero —
+   promoted, it does not. One purchase landed in the lifetime arm, so the arm cannot be arbitrated
+   on revenue at n=1; it can be on the tap, and on the tap it loses.
+   THE NUMBER THAT MATTERS IS NEITHER ARM'S: 3 467 paywalls, 155 sheets, 1 purchase. What is being
+   refused is a $2.99/week commitment for a novelty, not a layout — so the next test on this
+   surface should be a one-off at a coffee price against the weekly, not another arrangement of
+   the same two products (MECCHA_CHAMELEON_LEARNINGS.md §2A, in the SPANISH repo).
+   A STORED "lifetime" STILL WINS, unlike the landArm kill below, and that is a deliberate
+   difference rather than an oversight. landArm overrode its store because it was actively
+   costing sends — halving them — so leaving anyone on it was doing damage every day. This arm
+   is not doing damage: it is 0.85pp worse on the tap and it sells a product we still sell, on
+   the second line, to everybody. What overriding the store WOULD cost is real: test-planarm-dom
+   seeds kamo_plan_arm to reach the lifetime rendering path, and that path still ships — it is
+   what #pwLifeLine and the unsellable-lifetime fallback are made of. Forcing the variable would
+   make the half of the paywall we still sell untestable in order to retire an arm that is
+   merely mediocre. So: weekly is the default for every device that has not been assigned, and
+   the shrinking set that stored "lifetime" keeps it. */
+const PLAN_LIFETIME_ROLLOUT=0;
 let planArm;
 {
   const s=lsGet("kamo_plan_arm");
@@ -8839,7 +8859,40 @@ function track(event,props){
      feed_gate_* events: the question the arm exists to answer is asked of hide_published, of
      feed_slide's depth and of the seeker's own events, none of which know the card exists. One
      property on everything is what makes those segmentable without a build. */
-  const p={...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,emit:"web"};
+  /* ═══ THE ASSIGNMENT DIAGNOSTIC — three properties that say WHY a device got its arm ══════
+   *
+   * On 2026-08-24, 30 081 users reported design_arm "sheet" against 6 009 on "full" — while
+   * PW_FULL_ROLLOUT has been 100 since 08-14. At 100 that value is arithmetically unreachable:
+   * a stored "sheet" is promoted to "full", an lsGet failure falls through to the coin, and the
+   * coin at 100 always returns "full". The ONLY branch left that can produce it is
+   * `navigator.webdriver`. The same skew sits on every other arm (gate 13/87, plan 8/92 on
+   * app_opened, open 13/87) — always toward the value that branch pins — while plan_arm reads a
+   * clean 50/50 on paywall_viewed.
+   *
+   * The comment on PW_FULL_ROLLOUT already describes this symptom and blames a storage `throw`.
+   * That throw was fixed. The symptom grew. So the cause was never the throw, and guessing again
+   * is how a third fix misses too. These three properties end the guessing in one day:
+   *   wd        — is navigator.webdriver actually true here? If it reads true on ~83% of devices
+   *                the harness pin is firing in production, and five live experiments are
+   *                running on 17% of the fleet.
+   *   page_host — github.io (what the app loads) vs the share mirror vs anywhere else. Crossed
+   *                with `wd` this separates the two readings: webdriver-true INSIDE the app's
+   *                origin is our bug; the same population on the mirror is automated traffic
+   *                being counted as users.
+   * A boolean and a hostname, on events we already send. There is deliberately no third
+   * property for "is there a wrapper": chWebTrack already stamps `host` as "app"/"browser" for
+   * exactly that question, and adding one here would answer it twice under two names.
+   *
+   * ⚠️ page_host AND NOT host. `host` is taken — twice. chWebTrack defaults it to "app"/"browser"
+   * and the feed passes its own `host` per event, and because these ride AFTER the props spread,
+   * naming this one `host` silently overwrote both. test-sentcta-dom caught it on the first run
+   * ("sent_cta_tapped carries host=127.0.0.1:33713"), which is what that assertion is for. These
+   * two sit BEFORE the spread as well, so no event can ever be shadowed by the probe.
+   *
+   * DELETE THIS ONCE IT HAS ANSWERED. It is a probe, not instrumentation: it earns its place for
+   * as long as the split is unexplained and not one day longer. */
+  const p={wd:navigator.webdriver===true,page_host:location.host,
+           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
