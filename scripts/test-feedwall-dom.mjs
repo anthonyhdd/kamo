@@ -58,8 +58,22 @@ async function open(rounds,wrapper){
   page.on('pageerror',e=>bad('PAGE ERROR: '+e.message));
   await page.route('**/storage/v1/object/hides/**', r=>r.fulfill({status:200,body:'{}'}));
   await page.addInitScript(([n,w])=>{
-    localStorage.setItem('kamo_handle','tony');
-    if(n) localStorage.setItem('kamo_rounds',String(n));
+    /* ⚠️ GUARDED, AND THE REASON IS THE ONE ASSERTION IN THIS FILE THAT NAVIGATES AWAY.
+       An init script is re-run by Playwright on EVERY document the page creates, not just the
+       first — and case B clicks "Get KAMO", which sends the page at kamo.onelink.me. That
+       navigation cannot complete in this offline harness, but a document IS created for it, and
+       reading localStorage there throws SecurityError ("Access is denied for this document").
+       Unguarded, that throw was uncaught, so the page.on('pageerror') listener a few lines up
+       reported it as a PAGE ERROR and this suite failed — on the seeding, in a document the app
+       never runs in, while every assertion about the wall itself passed.
+       It looked exactly like an app bug: a real unguarded localStorage read on a real
+       storage-denied device is precisely the failure mode this codebase has been chasing, so the
+       message was believed rather than traced. The stack said `<anonymous>`, which is an injected
+       script and never index.html. Trace before believing a red gate. */
+    try {
+      localStorage.setItem('kamo_handle','tony');
+      if(n) localStorage.setItem('kamo_rounds',String(n));
+    } catch(e) {}
     let k=0;
     window.__rpc=(fn)=>{ if(fn==='create_hide'){ k++; return Promise.resolve('hide'+k); }
       /* The feed asks for a page of hides; one row is enough to prove it mounted. */
