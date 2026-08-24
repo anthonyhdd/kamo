@@ -102,7 +102,12 @@ async function boot(seed, priced) {
   });
   await page.addInitScript((s) => {
     window.__rpc = () => Promise.resolve(null);
-    Object.keys(s || {}).forEach(k => localStorage.setItem(k, s[k]));
+    /* Guarded because this file drives the store CTA. Playwright re-runs an init script on EVERY
+       document, and the one created for a cross-origin store navigation denies localStorage
+       outright — see the long note in test-feedwall-dom.mjs, where exactly that threw and read as
+       an app bug for a cycle. Seeding that silently fails is still loud: the assertions depending
+       on the seed fail. Nothing is hidden by the catch. */
+    try { Object.keys(s || {}).forEach(k => localStorage.setItem(k, s[k])); } catch (e) {}
   }, seed || {});
   await page.goto(base, { waitUntil: 'load' });
   /* Before the 900ms settle, so a priced page is priced well inside the shortened dwell. */
