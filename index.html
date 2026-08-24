@@ -391,7 +391,21 @@
      iOS-camera convention kept the good half: once a round has finished, the picker wears
      the last reveal as its face (lastShotRender), so the corner still previews your last
      picture — it just opens the photo library, like it always did. */
-  #btnPhoto{left:24px;}
+  /* HALF SIZE — founder's call, and it is a quality decision rather than a layout one. A
+     library photo has no locked-off scene behind it, so the camo has nothing clean to sample
+     and the hide comes out bad. The path stays reachable (a photo you already took is
+     sometimes the only one you have) but it stops competing with the shutter for the thumb.
+     46 → 23, with the icon and the corner radius scaled with it so it reads as the same
+     button smaller rather than a different, cramped one.
+     THE HIT AREA DOES NOT SHRINK WITH IT. 23px is well under the 44pt iOS minimum, and a
+     control nobody can land on is a bug, not a de-emphasis — the intent is that the eye goes
+     to the shutter, not that the thumb misses. ::after restores a 44px target centred on the
+     visible button, which is what iOS does for its own small controls. Nothing else in the
+     corner competes for those pixels (see the one-button note above), so the invisible pad
+     cannot steal a tap from anything. */
+  #btnPhoto{left:24px;width:23px;height:23px;border-radius:8px;}
+  #btnPhoto svg{width:12px;height:12px;stroke-width:2.2;}
+  #btnPhoto::after{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%);}
   #btnPhoto.hasShot{background-size:cover;background-position:center;border-color:rgba(255,255,255,.55);}
   #btnPhoto.hasShot svg{display:none;}
   /* Under the CTA the full arm sits on a photo, not on a card — the dim terms line and grey
@@ -4538,6 +4552,33 @@ function enterCompose(){
   if(canPro()) stopTimer(); else startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   lastShotRender();
   maybeOnboard();
+  /* ═══ THE MISSING DENOMINATOR — where the answer to a challenge actually dies ═══════════
+   *
+   * Measured 2026-08-24, 7 days, on the SAME button at the SAME moment:
+   *     browser  seek_rehide_tapped 1915 → hide_published  171   (8.9%)
+   *     app      seek_rehide_tapped  506 → hide_published  400  (79.1%)
+   * 1744 people a week answer a friend's hide and never finish one. It is not the camera
+   * (a rehide inherits the photo), not the fetch (reply_photo_failed: 5), not WebGL
+   * (webgl_dead: 21), and not the paywall (refused outright in a browser). reply_started
+   * fires for 1898 of the 1915 — so they DO get here — and photo_captured for 281. The
+   * whole loss sits between arriving on this screen and pressing the shutter.
+   *
+   * What no event could distinguish until now: a compose screen that appeared and was
+   * abandoned, versus one that never rendered at all. `reply_started` fires in chRehide
+   * BEFORE the photo is fetched and before this function runs, so it cannot be that
+   * denominator. This fires at the END of enterCompose, with the figure spawned and the
+   * scene up, so `photo_captured / compose_ready` is finally a rate that means something.
+   *
+   * `origin` is photoSrc — "rehide" is the population above, "camera"/"library" are the
+   * controls. `reply` separates an answer from a hide someone started on their own.
+   *
+   * ⚠️ IN WEB_ONLY, and that is load-bearing rather than tidy. track() posts to the native
+   * bridge for any name the bridge knows, and ~96% of installs run 1.0.2, whose bridge
+   * DROPS names it does not know — a new event would read as a flat zero inside the app
+   * forever, which is exactly the trap documented on hero_shown. WEB_ONLY routes it through
+   * chWebTrack instead, so it lands from both surfaces and carries `host`, which is the one
+   * property this whole comparison is built on. */
+  track("compose_ready",{origin:photoSrc||"none",reply:!!chReplyTo,kind:bgKind});
 }
 /* Reached only from the Retake confirmation (#cfYes), which calls exitFinished() first —
    so `finished` is already false and nothing still needs beforeBoard or the reveal. The
@@ -8442,7 +8483,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
