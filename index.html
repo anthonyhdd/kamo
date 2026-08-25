@@ -13159,10 +13159,22 @@ async function chTally(){
    `attempts` rows — see the migration. The order below is the order of interest: being found
    instantly is the most interesting thing that can happen to a hide, and "nobody yet" is the
    least, which is also the most common (2347 published, 197 ever played). */
+/* THE HIDE'S OWN RECORD, IN THE ONE FORM IT IS EVER SAID. get_hide returns best_ms — the
+   fastest anybody has ever found this photo, hits only and positive only (see the migration:
+   a miss carries an `ms` too and it measures something else entirely).
+   NULL IS "NO RECORD YET" AND NOT A ZERO. Nobody has found 44% of the hides that get played,
+   and printing "fastest 0.0s" on those would be the one number on this surface that is a lie.
+   Every caller tests the return rather than the field. */
+function chBestS(h){ const ms=(h&&h.best_ms)|0; return ms>0 ? (ms/1000).toFixed(1)+"s" : null; }
 function chStateLine(h){
   const taps=(h&&h.max_taps)||CH_TAPS;
-  if(h&&h.found_tap===1) return '<span class="khHit">found you on the first tap</span>';
-  if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>';
+  /* THE TIME RIDES WITH THE TWO LINES THAT ALREADY SAY SOMEBODY WON, and with no others.
+     On "nobody found you" there is no record to quote, and on "not played yet" there is no
+     anything. Appended rather than woven in: the state is the news and the record is the
+     detail, in that order, which is also the order they stay readable in when the row wraps. */
+  const best=chBestS(h), bit=best?' · fastest '+best:'';
+  if(h&&h.found_tap===1) return '<span class="khHit">found you on the first tap</span>'+bit;
+  if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>'+bit;
   if(h&&h.burned)        return '<span class="khWin">burned all '+taps+' taps</span>';
   if(h&&h.n_attempts>0)  return h.n_attempts+" tried · "+'<span class="khNone">nobody found you</span>';
   /* NEVER SENT IS NOT THE SAME NEWS AS NEVER PLAYED, and telling them apart is the whole
@@ -13200,8 +13212,25 @@ async function chShareHide(h,btn){
   const head = who ? "🫥 @"+who+" hid a kamo in this photo." : "🫥 There's a kamo hidden in this photo.";
   /* One deal for every hide, old or new — the seeker plays one buzz on no clock, so the
      message never quotes seconds or taps again, whatever the row still stores. */
-  const text = head+"\nOne tap to find it."+"\n\n"+link;
-  track("resend_tapped",{played:((h&&h.n_attempts)|0)>0});
+  /* ⚠️ "IT QUOTES NO NUMBERS AT ALL" WAS A RULE ABOUT THE DEAL, NOT ABOUT THE NEWS, and the
+     difference is the whole of this change. limit_s and max_taps are TERMS — a promise about
+     how the round will run — and quoting them from an old row promised a deal the round no
+     longer honours, which is why they left. n_attempts / n_found / best_ms are a REPORT: they
+     say what other people already did, which cannot come untrue and which the recipient
+     cannot be short-changed on. That rule is unchanged; nothing below quotes a term.
+     AND IT IS THE ONLY THING THIS MESSAGE HAS THAT A STRANGER'S DOES NOT. A photo with
+     "one tap to find it" is an invitation; a photo with "2 of 7 have found it, the fastest in
+     4.1s" is a scoreboard somebody is already on. Silent when there is nothing true to say —
+     an unplayed hide keeps the plain invitation rather than admitting it has no takers. */
+  const best=chBestS(h), plays=(h&&h.n_attempts)|0, found=(h&&h.n_found)|0;
+  const news = (found>0 && best)
+    ? "\n"+found+" of "+plays+" have found it — fastest "+best+". One tap to find it."
+    : "\nOne tap to find it.";
+  const text = head+news+"\n\n"+link;
+  /* `record` splits the two messages this button now sends. If the one carrying the hide's
+     record does not convert better than the plain invitation, the numbers are decoration and
+     this comes back out. */
+  track("resend_tapped",{played:((h&&h.n_attempts)|0)>0,record:!!(found>0&&best)});
   /* NO `score` FIELD — 0 is not "no score" on the other side. The native rating gate
      (storeReview.js maybeAsk) treats any finite score as real, and 0 ≤ minScore means a
      confirmed share from here was ALWAYS swallowed as skipped_low_score: 71 of the 78
