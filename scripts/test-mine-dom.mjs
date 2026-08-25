@@ -212,7 +212,7 @@ console.log('\nTHE SUMMARY IS A DOOR ONTO YOUR OWN GRID');
 
 console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
 {
-  await page.evaluate(() => window.__m.seed(['a', 'b', 'c', 'd'], {
+  await page.evaluate(() => window.__m.seed(['a', 'b', 'c', 'd', 'e'], {
     /* best_ms is the hide's own record — the fastest anybody has ever found this photo. Only
        `a` carries one, so the same seed proves both halves of the rule: the row that HAS a
        record says it, and the rows that do not stay silent instead of printing a zero. */
@@ -220,13 +220,18 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
     b: { n_attempts: 5, n_found: 0, found_tap: null, burned: true, max_taps: 5, img_path: 'bbb.jpg' },
     c: { n_attempts: 4, n_found: 1, found_tap: 4, burned: false, img_path: 'ccc.jpg' },
     d: { n_attempts: 0, n_found: 0, found_tap: null, burned: false },
+    /* UNBEATEN AND NOT YET BURNED — four people have tried this photo and none of them found
+       the kamo, but the taps have not run out. `b` above is the same news one rung higher and
+       keeps its own stronger line; this is the case that used to read "4 tried · nobody found
+       you", a report with a shrug in it, on the ~65 hides a day that qualify. */
+    e: { n_attempts: 4, n_found: 0, found_tap: null, burned: false, img_path: 'eee.jpg' },
   }, null));
   await page.evaluate(() => window.__m.openCard());
 
   const rows = await page.evaluate(() => window.__m.expand());
-  rows.length === 4
-    ? ok('the summary opens into one row per hide (4)')
-    : bad(`expanding gave ${rows.length} rows for 4 hides — the accordion is the feature`);
+  rows.length === 5
+    ? ok('the summary opens into one row per hide (5)')
+    : bad(`expanding gave ${rows.length} rows for 5 hides — the accordion is the feature`);
   rows.every((r) => r.send)
     ? ok('and every row carries its own send')
     : bad('a row has no send button, so a dead challenge stays dead');
@@ -274,6 +279,22 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
   !/fastest/.test(t[1] || '') && !/fastest/.test(t[2] || '') && !/fastest/.test(t[3] || '')
     ? ok('and a hide with no record quotes none, rather than a 0.0s')
     : bad(`a recordless row leaked a time: ${JSON.stringify([t[1], t[2], t[3]])}`);
+
+  /* A HIDE NOBODY HAS CRACKED READS AS THE WIN IT IS. The count and the outcome were both
+     already on this row; what changes is which of them the sentence is ABOUT. "4 tried ·
+     nobody found you" makes the subject the people who tried and the verdict the creator's
+     failure to be found — on a card whose every other line reports what was done TO them.
+     At three attempts and none found, the true reading is the opposite one. */
+  /unbeaten/.test(t[4] || '') && /4 have tried/.test(t[4] || '')
+    ? ok(`an uncracked hide reads as a flex ("${(t[4] || '').trim()}")`)
+    : bad(`4 tried and none found reads: ${JSON.stringify(t[4])}`);
+  /* AND BURNED KEEPS ITS OWN LINE, above this one. It is the stronger claim — nobody found it
+     AND the taps ran out — and folding it into the weaker one would lose that. Asserted
+     because the new branch sits directly under it and a misordered pair is invisible: both
+     sentences are true of `b`, and only one of them is the best thing to say. */
+  /burned all 5 taps/.test(t[1] || '') && !/unbeaten/.test(t[1] || '')
+    ? ok('and the burned hide keeps the stronger sentence rather than being demoted to it')
+    : bad(`the burned row now reads: ${JSON.stringify(t[1])}`);
 
   /* THE LINK IS THE WHOLE POINT OF THE ROW. These hides landed days ago, so their id is
      known and chLink cannot be empty — the race that produced ?i=1 sends cannot reach here.
@@ -324,6 +345,20 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
   !/fastest/.test(String(bare || ''))
     ? ok('and one with no record falls back to the plain invitation')
     : bad(`a recordless re-send quoted a time: ${JSON.stringify(bare)}`);
+
+  /* AND THE UNBEATEN ONE GOES OUT AS A DARE, which is the whole reason the badge is worth
+     having: a flex nobody can send is a private satisfaction. The measured leak this aims at
+     is 300-600 publishes a day against 200-300 sends — "nobody has found it" names something
+     for the recipient to beat instead of a favour to do the sender. */
+  const dare = await page.evaluate(() => window.__m.send(4));
+  /4 have tried/.test(String(dare || '')) && /[Nn]obody has found it/.test(String(dare || ''))
+    ? ok('re-sending an uncracked hide sends the challenge, not an invitation')
+    : bad(`the re-send of an unbeaten hide reads: ${JSON.stringify(dare)}`);
+  /* It is still a KAMO message and still states the deal — the dare replaces the boast, not
+     the instruction the recipient needs. */
+  /One tap to find it/.test(String(dare || '')) && /\?h=e(\s|$)/.test(String(dare || ''))
+    ? ok('and still names the deal and carries that hide by id')
+    : bad(`the dare lost the deal or the link: ${JSON.stringify(dare)}`);
 }
 
 /* THE DOT MUST NOT MOVE THE WORDMARK IT SITS ON, and it did.
