@@ -213,7 +213,10 @@ console.log('\nTHE SUMMARY IS A DOOR ONTO YOUR OWN GRID');
 console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
 {
   await page.evaluate(() => window.__m.seed(['a', 'b', 'c', 'd'], {
-    a: { n_attempts: 1, n_found: 1, found_tap: 1, burned: false, name: 'tony', limit_s: 30, max_taps: 5, img_path: 'aaa.jpg' },
+    /* best_ms is the hide's own record — the fastest anybody has ever found this photo. Only
+       `a` carries one, so the same seed proves both halves of the rule: the row that HAS a
+       record says it, and the rows that do not stay silent instead of printing a zero. */
+    a: { n_attempts: 1, n_found: 1, found_tap: 1, burned: false, name: 'tony', limit_s: 30, max_taps: 5, img_path: 'aaa.jpg', best_ms: 4100 },
     b: { n_attempts: 5, n_found: 0, found_tap: null, burned: true, max_taps: 5, img_path: 'bbb.jpg' },
     c: { n_attempts: 4, n_found: 1, found_tap: 4, burned: false, img_path: 'ccc.jpg' },
     d: { n_attempts: 0, n_found: 0, found_tap: null, burned: false },
@@ -259,6 +262,19 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
     ? ok('and an unopened one still says so, rather than showing nothing')
     : bad(`an unplayed hide reads: ${JSON.stringify(t[3])}`);
 
+  /* THE HIDE'S OWN RECORD, WHERE THERE IS ONE. Every other number on this card is a tally —
+     how many played, how many won — and a tally is a fact about a crowd. The fastest find is a
+     performance, which is the only kind of number somebody repeats out loud. */
+  /fastest 4\.1s/.test(t[0] || '')
+    ? ok(`a hide that has been beaten names the time to beat ("${(t[0] || '').trim()}")`)
+    : bad(`a hide with best_ms 4100 reads: ${JSON.stringify(t[0])}`);
+  /* AND NOWHERE ELSE. `b` burned all five taps: nobody found it, so there is no record, and
+     best_ms comes back NULL rather than 0 — printing "fastest 0.0s" on the 44% of played
+     hides nobody has cracked would be the one number on this surface that is a lie. */
+  !/fastest/.test(t[1] || '') && !/fastest/.test(t[2] || '') && !/fastest/.test(t[3] || '')
+    ? ok('and a hide with no record quotes none, rather than a 0.0s')
+    : bad(`a recordless row leaked a time: ${JSON.stringify([t[1], t[2], t[3]])}`);
+
   /* THE LINK IS THE WHOLE POINT OF THE ROW. These hides landed days ago, so their id is
      known and chLink cannot be empty — the race that produced ?i=1 sends cannot reach here.
      A row that shared the invite URL instead would look identical and send no game. */
@@ -290,6 +306,24 @@ console.log('\nEACH HIDE SAYS WHAT HAPPENED TO IT, AND OFFERS THE ONE ACTION');
   /One tap to find it/.test(String(full || ''))
     ? ok('and both state the one-buzz deal the seeker is actually offered')
     : bad(`the resend does not state the deal: ${JSON.stringify(full)}`);
+
+  /* AND THE MESSAGE CARRIES THE RECORD OUT WITH IT. This is the difference between an
+     invitation and a scoreboard somebody is already on, and it is the only thing a re-send
+     has that a stranger's first send does not.
+     THE RULE IT DOES NOT BREAK: the block above forbids quoting the round's TERMS, because a
+     term is a promise about how the round will run and the retired ones promise a deal that
+     no longer exists. These are a REPORT of what other people already did — it cannot come
+     untrue, and the recipient cannot be short-changed on it. Both assertions run on the same
+     string, which is the point. */
+  /1 of 1 have found it/.test(String(full || '')) && /fastest 4\.1s/.test(String(full || ''))
+    ? ok('a re-send of a beaten hide reports who beat it and how fast')
+    : bad(`the re-send of a hide with a record reads: ${JSON.stringify(full)}`);
+  /* `bare` is hide `c`: found on tap 4, but no best_ms on the row. Found without a record is
+     the case that would print "— fastest ." with an empty time if the two were not tested
+     together. */
+  !/fastest/.test(String(bare || ''))
+    ? ok('and one with no record falls back to the plain invitation')
+    : bad(`a recordless re-send quoted a time: ${JSON.stringify(bare)}`);
 }
 
 /* THE DOT MUST NOT MOVE THE WORDMARK IT SITS ON, and it did.
