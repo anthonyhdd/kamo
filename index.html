@@ -14595,6 +14595,41 @@ function chSeek(hideId,opts){
        pulse — not a burst. confettiBurst() already owns the find; a second celebration on the
        same frame would compete with it. */
     +".chRun.pb{animation:chRunPb .6s ease-out;}"
+    /* ═══ THE ENDED RUN DOCKS AT THE CARD, NOT AT THE TITLE ═══ founder, 2026-08-18.
+       #355 took the pill out of the corner and #356 gave it a record and a hot tier, but both
+       left it in .chTop — under the headline, at the TOP of the phone. At the moment a round
+       ends the eye is at the BOTTOM: that is where the reveal lands the flip button and the
+       card with the two buttons on it. So the ended states dock into #chFoot instead, as that
+       column's first child, and the live chip stays exactly where #355 put it — it sits over a
+       viewfinder somebody is hunting in, and moving it would cost the hunt its instrument.
+       LOUDER, because a docked pill is a statement rather than an instrument: a heavier ring
+       and a gold glow the live chip deliberately lacks.
+       THE TYPE IS CLAMPED, NOT SET. .chRun is white-space:nowrap globally, so the failure mode
+       here is not a wrap but an overrun off the side of a narrow phone. The longest string this
+       pill ever carries is "Run of 4 broken · best 6"; 17px on a normal phone, back to 15px on
+       the narrowest one this ships to. These rules come after .chRun.dead,.chRun.pb on purpose
+       — equal specificity, so the later one is what gives the ended states their size back. */
+    +".chRun.docked{margin:0;font-size:clamp(15px,4.4vw,17px);padding:9px clamp(12px,3.6vw,16px);"
+      +"background:rgba(4,6,10,.72);border-color:rgba(255,212,138,.55);"
+      +"box-shadow:0 8px 24px rgba(0,0,0,.45),0 0 0 3px rgba(255,212,138,.14);}"
+    +".chRun.docked svg{width:10.4px;height:17.6px;}"
+    /* THE ENTRANCE, and it is one animation deep on purpose: the pill rises into the column
+       the card is already painting into, so it reads as part of that arrival rather than as a
+       fourth thing appearing somewhere else. `both` holds the last frame — without it the
+       overshoot snaps back through its own start position on the final tick.
+       .dead and .pb keep their own animation and queue BEHIND this one: two names in the
+       shorthand, the second delayed by the first's duration. Same beat as before, one
+       entrance earlier. */
+    +".chRun.docked{animation:chRunRise .42s cubic-bezier(.2,.9,.25,1.25) both;}"
+    +"@keyframes chRunRise{0%{opacity:0;transform:translateY(14px) scale(.86)}"
+      +"62%{opacity:1;transform:translateY(-3px) scale(1.06)}100%{opacity:1;transform:none}}"
+    +".chRun.docked.dead{animation:chRunRise .42s cubic-bezier(.2,.9,.25,1.25) both,"
+      +"chRunDie .5s cubic-bezier(.36,.07,.19,.97) .42s forwards;}"
+    +".chRun.docked.pb{animation:chRunRise .42s cubic-bezier(.2,.9,.25,1.25) both,"
+      +"chRunPb .6s ease-out .42s;}"
+    /* Reduced motion keeps the pill and drops the travel. Nothing here encodes state in the
+       movement — the colour does that — so removing it costs nothing a player needs. */
+    +"@media (prefers-reduced-motion:reduce){.chRun.docked,.chRun.docked.dead,.chRun.docked.pb{animation:none;}}"
     +"@keyframes chRunPb{0%{transform:scale(1)}40%{transform:scale(1.16)}100%{transform:scale(1)}}"
     /* ⚠️ LEFT, NOT CENTRED, AND THAT IS THE HINT PILL'S DOING. Both live on the same row —
        bottom 16px + safe-area — and the hint's widest state is the OFFER, which is the longest
@@ -15060,6 +15095,25 @@ function chSeek(hideId,opts){
   }
 
   const runEl=$$("chRun");
+  /* HAS THIS ROUND FINISHED? The pill has two lives — a chip beside the clock while the hunt
+     is on, a docked statement above the ending card afterwards — and every caller of
+     chRunShow is on exactly one side of that line: the round-start call at chStreak() time,
+     and ending()'s two. A flag rather than a fourth argument because chRunDock() needs the
+     same answer several writes later, when the arguments are long gone.
+     IT IS ALSO THE ONLY WAY TO TELL A WIN AT THE END FROM A LIVE COUNT. A round won calls
+     chRunShow(run,"",best) — mode is empty, exactly as it is mid-hunt — so `mode` cannot
+     answer this and neither can the class list. */
+  let ended=false;
+  /* THE COLUMN'S FIRST CHILD, RE-ASSERTED. Called after every write that replaces #chFoot's
+     markup, because innerHTML on the foot destroys the pill along with everything else.
+     GUARDED ON display:none. Two endings leave the pill hidden — a loss with nothing behind
+     it (see ending()) and a genuinely new player with no record — and docking an invisible
+     div would push the flip button one slot down for nothing. The display check is the one
+     honest reading of "does this pill currently exist for the player". */
+  const chRunDock=()=>{ if(!runEl||!ended||REPLAY||runEl.style.display==="none") return;
+    const foot=$$("chFoot"); if(!foot) return;
+    if(foot.firstChild!==runEl) foot.prepend(runEl);
+  };
   /* THE MARK IS THE FIGURE, NOT A FLAME. The pill opened on 🔥, which is the same character
      the reaction rail hands every seeker a thumb's width below it — one glyph meaning "I
      liked this" and "you are on a run" on the same screen (founder, 2026-08-16). It also
@@ -15134,6 +15188,12 @@ function chSeek(hideId,opts){
     runEl.appendChild(document.createTextNode(
         mode==="dead" ? ("Run of "+v+" broken"+(b>v?" · best "+b:""))
       : mode==="pb"   ? (v+" best yet")
+      /* THE WIN SAYS WHAT THE NUMBER MEANS, now that it is no longer standing beside the
+         clock. Docked under the card with prose either side of it, a bare numeral is a
+         riddle — "Run of 4 broken" and "7 best yet" are sentences and this was a digit. Live,
+         it stays just the number: that chip has the clock next to it for context, and it is
+         an instrument rather than a statement. */
+      : ended         ? (v+" in a row"+(b>v?" · best "+b:""))
                       : (String(v)+(b>v?" · best "+b:""))));
     /* THE POP GOES ON A LIVE COUNT THAT ACTUALLY WENT UP, and on nothing else. Re-showing the
        same number on a re-render would otherwise pulse for no event, which is how an animation
@@ -15152,7 +15212,7 @@ function chSeek(hideId,opts){
        is where the pill starts to weigh something. One tier, not a ladder: two thresholds on a
        distribution whose median is 3 would be inventing granularity the data does not have. */
     const hot=!mode&&v>=RUN_HOT;
-    runEl.className="chRun"+(mode?" "+mode:"")+(grew?" up":"")+(hot?" hot":"");
+    runEl.className="chRun"+(mode?" "+mode:"")+(grew?" up":"")+(hot?" hot":"")+(ended?" docked":"");
     /* A SENTENCE LEAVES THE CHIP COLUMN; A CHIP STAYS IN IT. Live, the run is "2" beside the
        clock. At the end it turns into prose — "Run of 2 broken", "7 best yet" — three to four
        times as wide, and lands on the ending headline. The rule above reasons that the two can
@@ -15172,11 +15232,20 @@ function chSeek(hideId,opts){
        rule), so being inside .chTop is what puts it in the centred column at all rather than in
        the round's own flow behind the photo. The two end states already did this; the live one
        joining them is the whole point of the move. */
-    {
+    /* AND THE MOVE ITSELF HAPPENS LATER WHEN THE ROUND IS OVER, because it has to. #chFoot
+       is written with innerHTML when the ending card is built, and ending() calls this
+       function several lines BEFORE that write — dock here and the pill is destroyed by the
+       card it was docked in front of, silently, on every single round, with every geometric
+       assertion still passing because nothing overlaps when the element no longer exists.
+       So this sets the dress and chRunDock() does the move, from the far side of that write.
+       One-way: nothing returns the pill to .chTop, because a round that has ended never goes
+       back to having a live run. */
+    if(!ended){
       const top=runEl.parentNode&&runEl.parentNode.querySelector(".chTop");
       if(top&&runEl.parentNode!==top) top.appendChild(runEl);
     }
     runEl.style.display="block";
+    if(ended) chRunDock();
   };
 
   (async()=>{
@@ -16176,7 +16245,15 @@ function chSeek(hideId,opts){
     }
     function armFlipUI(){
       const b=document.createElement("button"); b.className="chFlipB"; b.id="chFlipB"; b.textContent="⇆";
-      $$("chFoot").prepend(b);
+      /* AFTER THE RUN PILL, NOT AT THE HEAD OF THE COLUMN. This used to prepend outright,
+         which was right while the pill lived somewhere else entirely; now the pill is
+         #chFoot's first child and a bare prepend would slide the flip button above it — the
+         one placement this dock exists to avoid. It still lands above the card either way:
+         the reveal resolves after ending() has written it, so "second" here means between the
+         two. With no docked run — a live round has none, and neither does "this hide is
+         gone" — firstChild is the card and this is the prepend it always was. */
+      const foot=$$("chFoot"), run=(runEl&&runEl.parentNode===foot)?runEl:null;
+      if(run) foot.insertBefore(b, run.nextSibling); else foot.prepend(b);
       b.onclick=(ev)=>{ ev.stopPropagation(); flip(); };
     }
 
@@ -16269,6 +16346,9 @@ function chSeek(hideId,opts){
        maintain and diverge. */
     function ending(head,sub,eopts){
       chLive=false;   // the hunt is over — see the declaration for what reads this
+      /* BEFORE the chRunShow calls below, which is the whole of its contract: they read it to
+         decide dress and placement, and chRunDock() reads it again after the card is written. */
+      ended=true;
       /* THE RAIL MOUNTS HERE NOW, WITH THE ENDING CARD — founder's call, reversing both the
          2026-08-16 "with the round" placement AND the 2026-08-18 first-tap gate. Neither
          survived contact with the layout: mounting before the card exists let the rail render
@@ -16494,6 +16574,11 @@ function chSeek(hideId,opts){
            scrolls), and only when the probe says there is something to scroll TO. */
         +((APP&&!FEED&&kfHasContent)?'<div class="chR" id="chSwipe" style="text-decoration:none;pointer-events:none">Swipe up for the next hide \u2191</div>':'')
         +'</div>';
+      /* AND THE RUN GOES BACK ON TOP OF IT. The assignment above replaced everything inside
+         #chFoot, the pill included — chRunShow ran ~90 lines earlier, before this card
+         existed. This is the write that puts it back, and the only one that matters on a
+         normal round. */
+      chRunDock();
       /* `tier` is the point of the property, not decoration: refLink() degrades to the bare
          listing silently, and a silent degradation in the ONE measured link is exactly the
          failure this change exists to end. Split seek_cta_tapped by tier and a template that
@@ -16649,7 +16734,12 @@ function chSeek(hideId,opts){
            page the reporter is holding was fetched before they tapped. */
         if(OPT.onReported) OPT.onReported(HID);
         const f=$$("chFoot");
-        if(f) f.innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>'; };
+        if(f) f.innerHTML='<div class="chCard" style="padding:16px"><div style="opacity:.6;font-size:12px">Reported. Thank you.</div></div>';
+        /* The run survives the report. This assignment clears #chFoot like every other one,
+           and a player who has just objected to a photo has not lost their streak with it.
+           The block button next to it needs no such line: it answers through showHint(),
+           which is not on the foot at all — see the note on `done` below. */
+        chRunDock(); };
       /* THE BLOCK IS THE SERVER'S ANSWER, NOT THIS SCREEN'S GUESS. block_author() turns the
          one thing this device legitimately holds — the id of a hide it was served — into a
          tag for whoever made it. The tag is what gets stored and what every later feed_page
