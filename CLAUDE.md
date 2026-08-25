@@ -149,6 +149,33 @@ deliveries, and the order matters: `my_replies()` + the wordmark dot reach **100
 on their next launch, and `notify_hide_reply` reaches the **~3%** who have a push token, now.
 The row is the mechanism; the notification is the accelerant. Do not invert them.
 
+### The push throttle is a priority, not an hour (2026-08-25)
+
+`notify_hide_creator` / `_reaction` / `_reply` used to share one rule — nothing if this hide was
+notified in the last hour — which treats every event as worth the same. Measured over 4214
+authors, the odds of creating again on a second day are **47.4% after a reply**, **44.6% after a
+reaction**, **28.4% after being merely played**, against a 25.6% baseline and 21.0% when nothing
+came back at all. A hide takes ~3 attempts, so the cheap signal routinely arrived first, spent
+the hour, and the two that actually bring somebody back were dropped in silence.
+
+So: `found(1) < reaction(2) < reply(3)`, via `push_may_notify()` — inside the hour only a
+strictly stronger kind may speak, and **two minutes is the floor nothing crosses** (priority
+without one puts two buzzes about one hide on a lock screen seconds apart, which is how an app
+loses its notifications for good). One shared gate instead of three copies of the same interval;
+`infra/2026-08-25-push-priority.sql` is the record.
+
+⚠️ **This is not the bottleneck, and do not let the change suggest otherwise.** Only **3370 of
+18682** hides carry a `push_token`, so **721 reactions and 771 replies** could not be announced
+at all — the trigger ran, found no token, and returned. All three kinds have been wired and
+enabled since 2026-08-16; what is missing is the notification permission, and that is fixed on
+the client, not here. Judge this change on pushes *sent per reaction/reply*, never on the total.
+
+`infra/edge-notify-creator.ts` mirrors the deployed `notify-creator` function, the same way
+`edge-h.ts` mirrors `h`. **It is a copy, not the source of truth** — the function lives in
+Supabase and deploying does not touch this repo, so diff the two before believing either.
+Its reaction line printed the emoji three times (twice bracketing the title, once in the
+subtitle) until a real lock screen showed what that looks like — 2026-08-25, now one.
+
 `create_hide` has **four overloads** (6, 8, 9 and 10 arguments) and that is deliberate. This file
 deploys on push and the database does not, so during a deploy both are live: a page loaded a
 minute ago calls the old signature. Add an overload, never change one. `get_hide` is the
