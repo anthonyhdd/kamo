@@ -13176,6 +13176,19 @@ function chStateLine(h){
   if(h&&h.found_tap===1) return '<span class="khHit">found you on the first tap</span>'+bit;
   if(h&&h.found_tap>1)   return '<span class="khHit">found you on tap '+h.found_tap+'</span>'+bit;
   if(h&&h.burned)        return '<span class="khWin">burned all '+taps+' taps</span>';
+  /* UNBEATEN IS A DIFFERENT SENTENCE FROM "nobody found you", and they were the same one.
+     The old line is a report with a shrug in it: the subject is the people who tried and the
+     verdict is a failure — the creator's failure to be found, in the grammar of a surface
+     whose every other line is about what was done TO them. At three attempts and none found
+     the true reading is the opposite one, and it is the only thing this card ever has to say
+     that somebody would repeat: your photo beat everybody who looked at it.
+     .khWin, the same dress "burned all N taps" wears, because it is the same news at a lower
+     bar. BURNED KEEPS ITS OWN LINE and stays above this one: it is the stronger claim —
+     nobody found it AND the taps ran out — and demoting it to this would lose that.
+     Nothing here is new information. The count and the outcome were both already on the row;
+     what changes is which of them the sentence is about. */
+  if(h&&(h.n_found|0)===0&&(h.n_attempts|0)>=CH_UNBEATEN_MIN)
+    return '<span class="khWin">unbeaten · '+(h.n_attempts|0)+' have tried</span>';
   if(h&&h.n_attempts>0)  return h.n_attempts+" tried · "+'<span class="khNone">nobody found you</span>';
   /* NEVER SENT IS NOT THE SAME NEWS AS NEVER PLAYED, and telling them apart is the whole
      reason get_hide now returns `sent`. Publishing happens when the share sheet is touched;
@@ -13223,14 +13236,28 @@ async function chShareHide(h,btn){
      4.1s" is a scoreboard somebody is already on. Silent when there is nothing true to say —
      an unplayed hide keeps the plain invitation rather than admitting it has no takers. */
   const best=chBestS(h), plays=(h&&h.n_attempts)|0, found=(h&&h.n_found)|0;
+  /* AND THE UNBEATEN HIDE GOES OUT AS A DARE. This is the whole of why the badge is worth
+     having: a flex nobody can send is a private satisfaction, and the measured leak on this
+     product is 300-600 publishes a day against 200-300 sends. "Nobody has found it" converts
+     a private send into a public challenge — it names something for the recipient to beat
+     instead of a favour to do the sender. ~65 hides a day qualify.
+     ORDER MATTERS: found-with-a-record first, because a hide that has been beaten is no
+     longer unbeaten and the two conditions are mutually exclusive by construction anyway
+     (found>0 vs found===0) — the sequence is what makes that legible rather than a puzzle. */
   const news = (found>0 && best)
     ? "\n"+found+" of "+plays+" have found it — fastest "+best+". One tap to find it."
+    : (found===0 && plays>=CH_UNBEATEN_MIN)
+    ? "\n"+plays+" have tried. Nobody has found it. One tap to find it."
     : "\nOne tap to find it.";
   const text = head+news+"\n\n"+link;
   /* `record` splits the two messages this button now sends. If the one carrying the hide's
      record does not convert better than the plain invitation, the numbers are decoration and
      this comes back out. */
-  track("resend_tapped",{played:((h&&h.n_attempts)|0)>0,record:!!(found>0&&best)});
+  /* THREE MESSAGES NOW LEAVE THIS BUTTON AND EACH ONE HAS TO EARN ITS PLACE. Split
+     resend_tapped on `record` and `unbeaten`: if neither converts better than the plain
+     invitation, the numbers are decoration and both come back out. */
+  track("resend_tapped",{played:((h&&h.n_attempts)|0)>0,record:!!(found>0&&best),
+                         unbeaten:!!(found===0&&plays>=CH_UNBEATEN_MIN)});
   /* NO `score` FIELD — 0 is not "no score" on the other side. The native rating gate
      (storeReview.js maybeAsk) treats any finite score as real, and 0 ≤ minScore means a
      confirmed share from here was ALWAYS swallowed as skipped_low_score: 71 of the 78
@@ -14366,6 +14393,16 @@ function chRepublish(){
  *   no install. The loop turns between two people of whom only one has the app; the
  *   install comes later, when they want their own photo. */
 const CH_TAPS=5;   // legacy: chStateLine still narrates pre-buzz hides in taps
+/* WHAT "UNBEATEN" COSTS TO CLAIM. Measured 2026-08-25 over 30 days: 1 950 of 18 919 hides
+   have three attempts or more and no find — 10.3%, about 65 a day. At one or two attempts
+   "nobody found it" is not a boast, it is a hide that has barely been seen, and printing it
+   as one would make the badge mean nothing on the days it is true.
+   NAMED RATHER THAN TYPED TWICE. The seeker's stakes line already dares on this exact number
+   ("5 tried · nobody found them", feed only, from the second slide) and the creator's row and
+   re-send now make the same claim about the same hide. Two surfaces disagreeing about what
+   unbeaten means is a bug nobody would ever see reported — it just reads as the app being
+   unsure of itself. */
+const CH_UNBEATEN_MIN=3;
 /* THE FIGURE, AS A STRING, so the store CTA on the ending card can wear the thing the round
    was about. Byte-for-byte the path from the body picker's .khCharIco — one silhouette in this
    product, not two that drift — with the viewBox cropped to the path's own bounds so the glyph
@@ -15560,7 +15597,7 @@ function chSeek(hideId,opts){
        off the row the server just served; below 3 attempts they are noise and the rule
        keeps the line. */
     const tries=h.n_attempts|0, found=h.n_found|0;
-    const stat=(FEED&&!OPT.firstInFeed&&tries>=3)
+    const stat=(FEED&&!OPT.firstInFeed&&tries>=CH_UNBEATEN_MIN)
       ? (tries+" tried · "+(found>0?found+" found them":"nobody found them"))
       : "One tap to find";
     $$("chSub").textContent=(rnd?"Round "+rnd+" · ":"")+stat;
