@@ -41,14 +41,20 @@ const pick = (name) => {
 const PUBLIC = pick('PUBLIC');
 const APP_STORE = pick('APP_STORE');
 const SITE = pick('SITE');
+const ONELINK = pick('ONELINK');
 
-/* Cut esc and page out of the source and run them as plain JS. Both carry a TS annotation in
-   their signature and nothing else, so the signatures are replaced wholesale and only the
-   BODIES are taken from the file — which is the part under test. Brace-matching starts after
-   the parameter list, not at the first `{`: page's own parameter type is an object literal,
-   and matching from there stops inside the annotation. */
-const escSrc = src.slice(src.indexOf('const esc ='), src.indexOf('async function getHide'))
-  .replace('(s: unknown)', '(s)');
+/* Cut the helpers and page out of the source and run them as plain JS. Each carries a TS
+   annotation in its signature and nothing else, so the signatures are replaced wholesale and
+   only the BODIES are taken from the file — which is the part under test. Brace-matching
+   starts after the parameter list, not at the first `{`: page's own parameter type is an
+   object literal, and matching from there stops inside the annotation.
+
+   The slice starts at installLink rather than esc because the install button is now a built
+   URL rather than a constant, and a link this test does not render is a link nothing checks —
+   which is exactly how `page()` came to reference a module const it could not see. */
+const escSrc = src.slice(src.indexOf('const installLink ='), src.indexOf('async function getHide'))
+  .replace('(s: unknown)', '(s)')
+  .replace('(id: string)', '(id)');
 
 const pStart = src.indexOf('function page(');
 if (pStart < 0) throw new Error('could not find function page( — did it get renamed?');
@@ -64,8 +70,8 @@ const pageSrc = 'function page(o) ' + src.slice(bodyStart, end + 1);
 
 /* page() closes over the module's origin constants; they are handed in as parameters rather
    than inlined, so the rendered links are whatever edge-h.ts declares them to be. */
-const page = new Function('PUBLIC', 'APP_STORE',
-  `${escSrc}\n${pageSrc}\nreturn page;`)(PUBLIC, APP_STORE);
+const { page, installLink } = new Function('PUBLIC', 'APP_STORE', 'ONELINK',
+  `${escSrc}\n${pageSrc}\nreturn { page, installLink };`)(PUBLIC, APP_STORE, ONELINK);
 
 /* A hide whose sender typed markup into their handle, because the handle is user input and it
    lands in a title, an alt and an og:title. */
@@ -76,6 +82,7 @@ const html = page({
   image: 'https://qpztlobbnjyjbxqyuzgg.supabase.co/storage/v1/object/public/hides/abc.jpg',
   to: `${SITE}?h=deadbeef`,
   self: `${PUBLIC}/h/deadbeef`,
+  get: installLink('deadbeef'),
 });
 
 console.log('\nthe head no longer hands the domain away');
@@ -100,9 +107,23 @@ console.log('\nthe body feeds the pages that are trying to rank');
 html.includes(`href="${PUBLIC}/"`)
   ? ok('a crawlable link to the landing page')
   : bad(`no link to ${PUBLIC}/ — the share surface passes nothing to the site`);
-html.includes(`href="${APP_STORE}"`)
-  ? ok('a crawlable link to the App Store listing')
-  : bad('no App Store link');
+/* THE INSTALL BUTTON NAMES THE CHALLENGE THAT EARNED IT. It used to be the bare listing URL,
+   which is untracked — so an install won by a friend's hide was indistinguishable from a paid
+   one, and the round was lost across the App Store round-trip either way. The reader for the
+   payload is kamo-app extractDeepHide. */
+html.includes(`href="${ONELINK}`)
+  ? ok('the install button is the tracked OneLink, not the bare listing')
+  : bad('the install button is untracked again — a bare apps.apple.com URL earns nothing '
+      + 'and carries no hide through the install');
+/deep_link_value=hide/.test(html) && /deep_link_sub2=deadbeef/.test(html)
+  ? ok('and it carries this hide, so the friend who installs lands on the round they were sent')
+  : bad('the install link names no hide: a cold install still arrives on an empty camera');
+
+/* The fallback page has no hide to name, so it degrades to the plain listing rather than
+   shipping a OneLink pointing at nothing. */
+installLink('') === APP_STORE
+  ? ok('no hide → the plain listing, never a OneLink with an empty payload')
+  : bad(`installLink('') should be the bare listing, got ${installLink('')}`);
 
 console.log('\nthe unfurl and the bounce still work');
 for (const tag of ['og:title', 'og:description', 'og:image', 'twitter:card', 'twitter:title',

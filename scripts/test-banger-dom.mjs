@@ -90,6 +90,18 @@ async function open({ arm = 'on', mine = [], seen = [], rows = ROWS } = {}) {
     window.__seed = {
       feed_page: a.rows,
       feed_best: [a.banger],
+      /* THE ROWS HAVE TO RESOLVE, or the ordering this file asserts is measured against a
+         scroller the feed has been emptying underneath it.
+         Unseeded, get_hide fell through the stub to the real call — and what came back
+         decided the test. On a machine with no route to the project it throws, the round
+         shows its card, every slide stays mounted and the assertions pass. On CI, where the
+         call lands, the server answers honestly that these fixture ids are not rows, and a
+         feed that now DROPS a hide the server says is gone takes them out one by one: slide 0
+         came back "p1.jpg" against an expected "b0.jpg" with four of nine rows left standing.
+         The feed was doing exactly what it was just taught to do; the fixture had never said
+         these hides exist. Seeded the same way test-feed-dom seeds it, so the two harnesses
+         agree on what a live row looks like. */
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
       log_skip: null,
       log_attempt: null,
     };

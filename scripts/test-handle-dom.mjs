@@ -176,6 +176,29 @@ console.log('\nBUT IT NEVER OVERWRITES A NAME THE USER JUST TYPED');
     : bad(`clearing the name did not stick (got "${empty}")`);
 }
 
+/* ⚠️ AND THE WRAPPER'S INJECTION HAS TO BE A STRING.
+   cleanHandle() stringifies whatever it is handed, so an object arriving through this bridge
+   became "[object Object]" and then, narrowed to alphanumerics, the handle "objectObject" —
+   written to localStorage, shown on the player card, and stamped onto every challenge that
+   device published from then on. Measured: setStoredHandle({a:1}) left kamo_handle set to
+   objectObject. The wrapper is the only caller and it is always a version behind, so the shape
+   it sends is not something this file can correct later; refusing the wrong one is. */
+{
+  for (const [shape, name] of [['{a:1}', 'an object'], ['12345', 'a number'], ['null', 'null'], ['undefined', 'undefined']]) {
+    await page.evaluate(() => { try { localStorage.removeItem('kamo_handle'); } catch (e) {} });
+    await page.evaluate((sh) => { try { eval(`window.KAMO.setStoredHandle(${sh})`); } catch (e) {} }, shape);
+    const got = await page.evaluate(() => window.__n.handle());
+    got === ''
+      ? ok(`${name} through setStoredHandle is refused, not minted into a name`)
+      : bad(`setStoredHandle(${shape}) minted the handle "${got}"`);
+  }
+  /* And the door still opens for the thing it is for. */
+  await page.evaluate(() => window.KAMO.setStoredHandle('realname'));
+  (await page.evaluate(() => window.__n.handle())) === 'realname'
+    ? ok('and a real string still lands')
+    : bad('the guard closed the door on a valid handle');
+}
+
 await browser.close();
 server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the name is typed once and survives the next launch');
