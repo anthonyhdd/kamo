@@ -14542,7 +14542,16 @@ function chSeek(hideId,opts){
      RETURNS WHAT THE CARD NEEDS TO SPEAK: the run after this round, the record, and `broke` —
      the length the run had reached when it died, which is the only number a loss owns. Read
      before the write, because after it there is no way back to it. */
-  const chNoteSeek=(hit)=>{ try{
+  /* `gaveUp` IS NOT A SECOND WAY OF SAYING `!hit`, and the difference is what the life costs.
+     A MISS is "I looked and I was wrong" — the honest failure, and the one the life exists to
+     soften. A GIVE-UP is "I choose to stop", and the feed lock was built precisely to make
+     that expensive: before it, scrolling past cost nothing and the run counted only the rounds
+     the player was already sure about (feed rounds read 59.2% found in 3.6s against 48.0% in
+     7.3s on a link — not an easier feed, a silently discarded denominator).
+     ⚠️ A LIFE ON THE GIVE-UP REOPENS THAT DOOR BY THE BACK. Hard hide, quit for free, next
+     easy find hands the life straight back — the exit is free every other round and the lock
+     is a slower swipe again. test-feedlock-dom ③ is the assertion that caught this. */
+  const chNoteSeek=(hit,gaveUp)=>{ try{
       const r=chSeekRecord();
       localStorage.setItem(CH_SEEN_KEY,String(r.n+1));
       if(hit) localStorage.setItem(CH_HIT_KEY,String(r.hit+1));
@@ -14550,7 +14559,7 @@ function chSeek(hideId,opts){
       /* THE SAVE, AND IT IS DECIDED HERE because this is the only place a round's outcome
          meets the run it lands on. Three cases and they are exhaustive: a find grows the run,
          a miss on a run worth losing spends the life and holds it, any other miss ends it. */
-      const saved=!hit && s.run>=CH_RUN_SAVE_MIN && s.life;
+      const saved=!hit && !gaveUp && s.run>=CH_RUN_SAVE_MIN && s.life;
       const run=hit ? s.run+1 : (saved ? s.run : 0), best=Math.max(s.best,run);
       localStorage.setItem(CH_RUN_KEY,String(run));
       if(best!==s.best) localStorage.setItem(CH_BEST_KEY,String(best));
@@ -16267,9 +16276,12 @@ function chSeek(hideId,opts){
       sendTrace("giveup");
       const frames=snapReveal(true);
       /* Giving up is still a loss with a clock on it — the seconds were spent looking.
-         Same line as the miss, same singular: see the note there on "The kamo". */
+         Same line as the miss, same singular: see the note there on "The kamo".
+         `giveup` IS NOT A DECORATION. It is the flag chNoteSeek reads to refuse this round a
+         life: the two losses reach ending() with the same head and the same subtitle, on
+         purpose, so nothing else here can tell them apart. See the note on chNoteSeek. */
       ending("Lost in "+(ms/1000).toFixed(1)+"s","The kamo was right there.",
-             {rehide:true,camoSrc:camoSrc});
+             {rehide:true,camoSrc:camoSrc,giveup:true});
       frames.then(f=>{ if(f) armFlipUI(); });
     };
 
@@ -16496,7 +16508,7 @@ function chSeek(hideId,opts){
          can DO and is empty until setNativeCaps lands. This one is true from the first frame,
          which is what a button rendered on first paint needs. */
       const APP=!!window.ReactNativeWebView;
-      const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(won) : null;
+      const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(won,!!(eopts&&eopts.giveup)) : null;
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
       /* THE RUN SPEAKS ON THE CARD TOO, because the pill is about to leave with the round.
