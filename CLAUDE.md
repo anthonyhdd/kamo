@@ -308,3 +308,40 @@ next day does not exist.** Of the few who do return, 45% create. There is no ret
   people a week were answered and never knew. `REPLY_OPEN_ROLLOUT` tests the fix; as of 08-24 it
   is **not readable** (11 in-app `reply_opened` in three days, and 93% of `hide_sent` still carry
   no `open_arm`), so do not conclude it yet.
+
+### Three mechanics added 2026-08-25, and what each is judged on
+
+All three come out of the same reading of the table above: KAMO does not have a motivation
+problem, it has a **restitution** problem. 57.5% make two hides in one sitting, then the hide goes
+off and accumulates real outcomes — 63% of hides get played by three people or more — and its
+maker learns none of it.
+
+**The run survives its first miss, once.** `kamo_seek_life`, spent on the first miss of a run of 2
+or more and given back by the next find (and by a death, so a fresh run never starts already
+spent). `"0"` means spent; anything else, missing key included, means available. The median best
+run in the base is 3 — one miss sent it to zero, which is the mechanic shape that teaches a player
+there is nothing left to come back for. ⚠️ This is a **session** streak, not a day streak: it buys
+session depth and should not be expected to move D1. Judge it on `run_saved{at}` against
+`run_broken{at}` on the same population — if saves cluster at 2 and 3 the life is buying nothing
+anybody would have missed, and if run_broken's distribution moves right, it worked. In tests, seed
+`kamo_seek_life` explicitly: an unseeded break case silently becomes a save case that still reads
+a pill.
+
+**The hide's record travels.** `get_hide` returns `best_ms` (hits only, `ms > 0` only — a miss
+carries an `ms` that measures failing, and 155 hit rows in 30 days carry `ms <= 0`). NULL on the
+44% of played hides nobody has cracked; `chBestS()` tests the return, never the field, so none of
+them can claim 0.0s. The re-send says "2 of 7 have found it — fastest 4.1s."
+
+**The unbeaten hide goes out as a dare.** `CH_UNBEATEN_MIN = 3`: 1 950 of 18 919 hides over 30
+days have ≥3 attempts and no find (10.3%, ~65/day). The row says "unbeaten · 4 have tried" and the
+re-send says "Nobody has found it." The seeker's stakes line already dared on this exact number;
+the constant exists so the two surfaces cannot drift.
+
+⚠️ **The one rule these did not break.** "The re-send quotes no numbers at all" was about the
+round's TERMS — `limit_s` / `max_taps` are a promise about how the round will run, they still sit
+on old rows, and nothing honours them, so quoting them promised a dead deal. `n_attempts`,
+`n_found` and `best_ms` are a REPORT of what other people already did: it cannot come untrue and
+the recipient cannot be short-changed on it. `test-mine-dom` asserts both on the same string.
+
+Split `resend_tapped` on `record` and `unbeaten`. If neither beats the plain invitation, the
+numbers are decoration and both come back out.
