@@ -157,15 +157,58 @@ console.log('\nTHE REPLY KNOWS WHO IT IS FOR');
 
   /* THE ONE WITH A VICTIM. A target that survives into the next photo puts a notification on
      a stranger's lock screen about a hide they were never part of. */
-  const cleared = await page.evaluate(() => {
+  /* ⚠️ AND IT IS ASYNCHRONOUS NOW, WHICH IS THE FIX AND NOT AN INCONVENIENCE. usePhotoSrc()
+     decodes the picked image in an off-DOM probe before it touches anything, because both
+     doors used to enter compose on an image that might never decode and leave the player on a
+     black board with a live clock. So the clear lands one decode later than the call, and
+     reading the state in the same evaluate() reads it before it has happened. Waited for
+     rather than slept through: a fixed pause would pass on this machine and rot on a slower
+     one. */
+  await page.evaluate(() => {
     /* The real door a new photo comes through: window.KAMO.usePickedPhoto is what the native
        picker calls, so this exercises production wiring rather than a test-only shortcut. */
     window.KAMO.usePickedPhoto('data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==');
-    return { st: window.KAMOREPLY.state(), label: window.KAMOREPLY.label() };
   });
+  await page.waitForFunction(() => window.KAMOREPLY.state().to === '', null, { timeout: 4000 }).catch(() => {});
+  const cleared = await page.evaluate(() => ({ st: window.KAMOREPLY.state(), label: window.KAMOREPLY.label() }));
   cleared.st.to === '' && cleared.label === 'Send to a friend'
     ? ok('picking a different photo ends the conversation — no target, generic label')
     : bad('after a new photo: ' + JSON.stringify(cleared));
+
+  await page.close();
+}
+
+/* THE OTHER DOOR, ON ITS OWN PAGE BECAUSE THE CASE ABOVE HAS ALREADY SPENT ITS REPLY.
+   pickPhoto() reaches the native picker only when the wrapper advertises photoPicker, so in a
+   BROWSER — which is where the mirror serves every challenge link — #fileInput is the only
+   door there is. It used to be a second, hand-copied arrival that had never learned
+   chClearReply(): a player who tapped "Challenge back" and then picked a different photo
+   published it stamped as an answer to a round whose picture they had just discarded, and
+   notify_hide_reply went to somebody with nothing to do with it. Measured on the real page
+   before the fix — reply still {to:'abc123def4567890'}, button still "Challenge @tony back".
+   Both doors land in usePhotoSrc() now, and this is the assertion that keeps them there. */
+console.log('\nAND THE FILE INPUT IS A DOOR TOO — THE ONLY ONE A BROWSER HAS');
+{
+  const page = await replyFrom('tony');
+  const before = await page.evaluate(() => window.KAMOREPLY.state());
+  before && before.to === 'abc123def4567890'
+    ? ok('the reply is standing before the pick')
+    : bad('no reply to clear: ' + JSON.stringify(before));
+
+  await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+    c.getContext('2d').fillRect(0, 0, 8, 8);
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    const dt = new DataTransfer(); dt.items.add(new File([blob], 'p.png', { type: 'image/png' }));
+    const inp = document.getElementById('fileInput');
+    inp.files = dt.files;
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForFunction(() => window.KAMOREPLY.state().to === '', null, { timeout: 5000 }).catch(() => {});
+  const after = await page.evaluate(() => ({ st: window.KAMOREPLY.state(), label: window.KAMOREPLY.label() }));
+  after.st.to === '' && after.label === 'Send to a friend'
+    ? ok('#fileInput ends the conversation exactly like the native picker')
+    : bad('after a new photo through #fileInput: ' + JSON.stringify(after));
 
   await page.close();
 }
@@ -357,7 +400,15 @@ console.log('\nAND THE FEED COMES BACK ON THE HIDE THAT WAS JUST SENT');
   /* The return is deliberately a beat behind the receipt (1600ms), so this waits for the feed
      rather than sleeping past it — a fixed sleep here is a test that fails on a slow morning. */
   await page.waitForSelector('#kfeed', { timeout: 10000 });
-  await page.waitForTimeout(400);
+  /* ...and then it slept 400ms anyway, which is the very thing the line above warns about.
+     The slow morning arrived: under machine load this read window.__rb.feed() before the
+     seeded slide had painted and reported an unlabelled slide that was in fact fine. Wait
+     for the label the assertion is about; the assertion itself is unchanged, so a slide that
+     genuinely never gets named still fails. */
+  await page.waitForFunction(() => {
+    const s = window.__rb.feed();
+    return !!(s && s.slides >= 1 && s.hint && /yours/i.test(s.hint));
+  }, { timeout: 10000 }).catch(() => {});
   const st = await page.evaluate(() => window.__rb.feed());
   const seeded = await page.evaluate((id) =>
     window.__rpc.some(([fn, b]) => fn === 'get_hide' && b && b.p_id === id), MINE);

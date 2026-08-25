@@ -58,6 +58,13 @@ for (const [anchor, patch] of [
   ['async function chRpc(fn,body){', 'if(window.__seed&&window.__seed[fn]!==undefined) return window.__seed[fn];'],
   ['let nativeCaps={};', 'try{ if(window.__caps) nativeCaps=window.__caps; }catch(e){}'],
   ['let chUserId="";', 'try{ if(window.__uid) chUserId=window.__uid; }catch(e){}'],
+  /* The pack's localized price does not exist on this side yet — setPrices() carries `weekly`
+     and `lifetime` and nothing else, and sending a third needs App.js, a build and a review.
+     It is seeded here anyway because the label appends it the day that ships, and the label's
+     width is what ⑧ is about: the offer is the longest sentence this button ever holds, and it
+     gets longer. Testing only the states that exist today would pin the geometry to the one
+     storefront that has no currency symbol. */
+  ['let hintPackPrice="";', 'try{ if(window.__price) hintPackPrice=window.__price; }catch(e){}'],
 ]) {
   if (html.indexOf(anchor) < 0) { console.error('  ✗ anchor missing from index.html: ' + anchor); process.exit(1); }
   html = html.replace(anchor, anchor + patch);
@@ -79,6 +86,19 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 
 const exe = chromeExe();
 if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
+/* THE ROUND'S PHOTO HAS TO ARRIVE, or this suite asserts against a failure screen.
+   chSeek() grew an img.onerror: a camo image that never loads now says so on the headline
+   ("This one didn't load"), stops the clock and refuses the buzz, instead of leaving a live
+   round on a black rectangle. That is the fix — and it means a harness which never serves the
+   photo is no longer testing the round it thinks it is. One transparent pixel is enough here:
+   these cases are about what is written above the picture, not about the picture. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+/* AND A REAL ONE FOR THE CASES THAT MEASURE THE ZONE. 600×800 of flat grey: the pixel above
+   renders 1×1, so a zone drawn on it is 1px across and every geometric assertion about it
+   passes on nothing. ⑦ is about where the ellipse LANDS and whether it is still there a
+   moment later, which needs a frame with a size. */
+const PHOTO = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAlgAAAMgCAAAAADaC0MYAAAFdUlEQVR42u3SMQ0AAAzDsOIsfyAFMe2zIURJ4UEkwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWBhLAoyFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjIWxJMBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlgYSwKMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYCy4GsBZUnusS0pAAAAAASUVORK5CYII=', 'base64');
+const servePhoto = (page, big) => page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: big ? PHOTO : PIXEL }));
 const browser = await chromium.launch({ executablePath: exe });
 
 let failed = 0;
@@ -88,19 +108,26 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 const HIDE = { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 20, max_taps: 5, name: 'tony' };
 
 /** Boot a hunt with the given capabilities, user id and canned hint_spend answer. */
-async function hunt({ caps = {}, uid = '', spend = undefined } = {}) {
+async function hunt({ caps = {}, uid = '', spend = undefined, state = undefined, big = false, price = '' } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-  await page.addInitScript(([h, c, u, s]) => {
+  await servePhoto(page, big);
+  await page.addInitScript(([h, c, u, s, st, pr]) => {
     window.__hintsLive = true;          // on, unless a case below turns it off
-    window.__seed = { get_hide: h, save_seek_trace: null };
+    /* hint_state is read on mount by every hunt now (the balance decorates the idle label),
+       and hint_intent/hint_claim are on the unidentified-device purchase path. Seeded flat so
+       no case reaches the network; individual cases override what they are about. */
+    window.__seed = { get_hide: h, save_seek_trace: null,
+                      hint_state: st || { balance: 0, free_available: true },
+                      hint_intent: { ok: true }, hint_claim: { claimed: false, reason: 'no_grant' } };
     if (s !== undefined) window.__seed.hint_spend = s;
+    if (pr) window.__price = pr;
     window.__caps = c; window.__uid = u;
     /* postNative's only real job in this suite is answering "did the purchase leave the
        page, and with which product". ReactNativeWebView has to exist or the web takes the
        browser branch and never posts at all — the shape of a false pass. */
     window.__posted = [];
     window.ReactNativeWebView = { postMessage(m) { try { window.__posted.push(JSON.parse(m)); } catch (e) {} } };
-  }, [HIDE, caps, uid, spend]);
+  }, [HIDE, caps, uid, spend, state, price]);
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(900);
   return page;
@@ -108,7 +135,7 @@ async function hunt({ caps = {}, uid = '', spend = undefined } = {}) {
 
 const btn = (page) => page.evaluate(() => {
   const b = document.getElementById('chHint');
-  return b ? { text: b.textContent, disabled: b.disabled } : null;
+  return b ? { text: b.textContent, disabled: b.disabled, loading: b.classList.contains('chLoad') } : null;
 });
 
 console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARANTEE');
@@ -125,10 +152,67 @@ console.log('\n① A SHIPPED BINARY SEES NOTHING — THIS IS THE LIVE-USER GUARA
   await p.close();
 }
 {
-  const p = await hunt({ caps: { hints: true }, uid: '' });
-  (await btn(p)) === null
-    ? ok('no button without a RevenueCat user id — the wallet would have no owner to credit')
-    : bad('the button appeared with no user id');
+  /* NO RevenueCat ID: THE BUTTON COMES, AND SO DOES THE SHEET — ONCE THE CREDIT HAS A ROUTE.
+     This assertion has now been written three ways, and the middle one was wrong in a way
+     worth recording. It first said "no id, no button", which protected the wallet by deleting
+     the feature: App.js sets chUserId from ONE unretried getAppUserID(), so a device that
+     loses that race could never see Hint again — which is exactly what happened on the
+     founder's phone across 1.1.4 and 1.1.5. It then said "button yes, sheet never", which
+     protected the money by making the only consumable this app sells unbuyable on those same
+     devices. Both halves are recoverable: hint_intent() stamps the sheet opening and
+     hint_claim() hands the grant to the device key, so the sheet may open — but ONLY if that
+     stamp answers. A purchase with no route to a credit is the one outcome worth refusing. */
+  const p = await hunt({ caps: { hints: true }, uid: '',
+                         spend: { used: 'none', reason: 'empty', balance: 0, free_available: false } });
+  const b0 = await btn(p);
+  b0 && b0.text === 'Free hint'
+    ? ok('the free hint is offered with no RevenueCat id — the wallet falls back to the device')
+    : bad(`no button without a user id: ${JSON.stringify(b0)} — the unidentified device is the bug, not the guard`);
+  await p.click('#chHint');
+  await p.waitForTimeout(600);
+  const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 1 && posted[0].product === 'com.blisscoach.kamo.hints5'
+    ? ok('and the pack can be bought once the intent is stamped — the claim brings the credit back')
+    : bad(`no purchase left the page with the intent stamped: ${JSON.stringify(posted)}`);
+  await p.close();
+}
+{
+  /* THE STAMP IS THE SWITCH. Migration not applied, network gone — either way the credit has
+     no route home, so nothing is sold. */
+  const p = await hunt({ caps: { hints: true }, uid: '',
+                         spend: { used: 'none', reason: 'empty', balance: 0, free_available: false } });
+  await p.evaluate(() => { window.__seed.hint_intent = { ok: false }; });
+  await p.click('#chHint');
+  await p.waitForTimeout(600);
+  const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 0
+    ? ok('and nothing is sold when the intent cannot be stamped — a credit with no route home')
+    : bad(`a purchase left the page with no claim path: ${JSON.stringify(posted)}`);
+  /* ⚠️ AND WHAT IT SAYS WHILE REFUSING, WHICH WAS A LIE ON THE TAP THAT MATTERS MOST.
+     This retired the button reading "Hint used" — on a wallet that was EMPTY, i.e. after a
+     button that read "No more hints. Get 5 Hints". The player accepted an offer to buy and
+     was told they had already spent something they never had, on the only paid door in this
+     app, which then greyed out and vanished. Refusing the sale is right; describing it as a
+     spend is not, and there is no way back from it.
+     The refusal has two causes and this side cannot tell them apart, so the first one is
+     treated as the blink it usually is — button alive, real sentence, offer intact. */
+  const b1 = await btn(p);
+  b1 && !b1.disabled && /store/i.test(b1.text) && !/used/i.test(b1.text)
+    ? ok(`a refused stamp says what actually went wrong and keeps the offer ("${b1.text}")`)
+    : bad(`the refusal reads ${JSON.stringify(b1)} — "Hint used" is a spend that never happened`);
+  /* Twice on one screen is a wall, not a blink, and a control that cannot succeed should not
+     sit there looking tappable — the same rule retireHint() was written under, now applied to
+     a sentence that is true. */
+  await p.click('#chHint');
+  await p.waitForTimeout(600);
+  const b2 = await btn(p);
+  b2 && b2.disabled && /unavailable/i.test(b2.text)
+    ? ok(`and a second refusal retires it honestly ("${b2.text}")`)
+    : bad(`the second refusal reads ${JSON.stringify(b2)}`);
+  const posted2 = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted2.length === 0
+    ? ok('and still nothing was sold across either tap')
+    : bad(`a purchase left the page on retry: ${JSON.stringify(posted2)}`);
   await p.close();
 }
 
@@ -138,7 +222,10 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   const p = await hunt({ caps: { hints: true }, uid: 'user-1',
                          spend: { used: 'free', region: REG, balance: 0, free_available: false } });
   const b = await btn(p);
-  b && b.text === 'Hint' && !b.disabled ? ok('the hint button is rendered and tappable') : bad(`button is ${JSON.stringify(b)}`);
+  /* "1 Hint" until 2026-08-20, which is a quantity and never said the word that gets the first
+     tap. The free daily is also the reason to come back tomorrow, and an allowance nobody is
+     told about is an allowance nobody returns for. */
+  b && b.text === 'Free hint' && !b.disabled ? ok('the free daily is named on the button') : bad(`button is ${JSON.stringify(b)}`);
 
   await p.click('#chHint');
   await p.waitForTimeout(400);
@@ -155,7 +242,10 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   if (!z) bad('no hint zone was drawn');
   else {
     /* THE ASSERTION THIS FILE WAS WRITTEN FOR. */
-    const wantW = Math.round(2 * REG.r * z.iw), wantH = Math.round(2 * REG.r * z.ih);
+    /* FOUR radii, not two: the element is the mask, 2x the region on each axis, with the clear
+       core at the gradient's 50% — see .chHintZone and ⑦. The per-axis scaling is the point
+       and is unchanged; only the multiple moved. */
+    const wantW = Math.round(4 * REG.r * z.iw), wantH = Math.round(4 * REG.r * z.ih);
     z.w === wantW && z.h === wantH
       ? ok(`the zone is an ellipse scaled per axis (${z.w}×${z.h} on a ${z.iw}×${z.ih} frame)`)
       : bad(`zone is ${z.w}×${z.h}, expected ${wantW}×${wantH} — a circle here would mis-state the server's region`);
@@ -174,7 +264,7 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
      all, since hint_spend spends the free daily first: one tap reveals the zone for nothing
      and the sheet is never reached at all. PR #295. */
   const b2 = await btn(p);
-  b2 && b2.text === 'Get 5 more' && !b2.disabled
+  b2 && b2.text === 'Get 5 hints' && !b2.disabled
     ? ok('the spent button becomes the pack offer, still tappable')
     : bad(`button after use: ${JSON.stringify(b2)}`);
   /* AND IT QUOTES NO PRICE. setPrices() carries `weekly` and `lifetime` and nothing else, so
@@ -202,9 +292,18 @@ const REG = { cx: 0.5, cy: 0.4, r: 0.2 };
   await p.click('#chHint');
   await p.waitForTimeout(400);
   const b = await btn(p);
-  b && b.text === '3 left' && b.disabled
+  b && b.text === '\u2713 3 hints left' && b.disabled
     ? ok('a spend off a stocked wallet locks the button and states the balance')
     : bad(`button after a stocked spend: ${JSON.stringify(b)}`);
+  /* ⚠️ AND IT IS NOT DIMMED. .chHint[disabled] is 45% opacity, which is the right reading for a
+     control that died and the wrong one for the receipt of something bought: this is the only
+     place in the app that states what a purchase is still worth, and it was rendering as the
+     greyed-out husk of a broken button. Untappable is correct — one hint per hide, and the
+     server answers `already` to a second ask — so the attribute stays and only the dimming goes. */
+  const opac = await p.evaluate(() => { const e = document.getElementById('chHint'); return e && +getComputedStyle(e).opacity; });
+  opac === 1
+    ? ok('and a paid balance is drawn at full strength, not as a dead control')
+    : bad(`the balance receipt is drawn at opacity ${opac} — a purchase reading as broken`);
   const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
   posted.length === 0
     ? ok('and nothing is sold to somebody who already has hints')
@@ -246,7 +345,7 @@ console.log('\n④ AN EMPTY WALLET IS THE ONLY THING THAT OPENS STOREKIT');
   await p.waitForTimeout(600);
   const after = await btn(p);
   const zone = await p.evaluate(() => !!document.querySelector('.chHintZone'));
-  zone && after && after.text === '4 left'
+  zone && after && after.text === '\u2713 4 hints left'
     ? ok('hintsPurchased() polls the wallet, draws the zone and shows what is left')
     : bad(`after purchase: zone=${zone} button=${JSON.stringify(after)}`);
   await p.close();
@@ -269,7 +368,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
      back under `already` and the wallet is untouched — 0 until the webhook lands. */
   const ALREADY = { used: 'already', via: 'free', region: REG, balance: 0, free_available: false };
   await p.evaluate((s) => { window.__seed.hint_spend = s; }, ALREADY);
-  await p.click('#chHint');                       // "Get 5 more" → StoreKit
+  await p.click('#chHint');                       // the empty-wallet offer → StoreKit
   await p.waitForTimeout(200);
   const bought = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
   bought.length === 1 ? ok('the offer opens StoreKit once') : bad(`posted ${JSON.stringify(bought)}`);
@@ -277,7 +376,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
   await p.evaluate(() => window.KAMO.hintsPurchased());
   await p.waitForTimeout(700);
   const mid = await btn(p);
-  mid && mid.text === '…'
+  mid && mid.loading
     ? ok('and the button holds while the webhook is still in flight')
     : bad(`the poll gave up before the credit — the button reads ${JSON.stringify(mid)}, which `
         + 'is what somebody who has just paid would be looking at');
@@ -286,7 +385,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
                    { used: 'already', via: 'free', region: REG, balance: 5, free_available: false });
   await p.waitForTimeout(2200);
   const after = await btn(p);
-  after && after.text === '5 left'
+  after && after.text === '\u2713 5 hints left'
     ? ok('and states the pack the moment the wallet grows')
     : bad(`after the credit the button reads ${JSON.stringify(after)}`);
   await p.close();
@@ -322,7 +421,7 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
 /* THE CANCEL, WHICH IS THE COMMONEST OUTCOME OF ANY PURCHASE SHEET. Native answers a
    userCancelled with buyDone() and every failure with a toast through window.KAMO.hint —
    both of which used to clear the paywall's spinner and nothing else, leaving the hint
-   button dead on "…" for the full 45s of its own timer. */
+   button spinning for the full 45s of its own timer. */
 {
   for (const [name, fire] of [
     ['buyDone() after a StoreKit cancel', () => window.KAMO.buyDone()],
@@ -332,14 +431,14 @@ console.log('\n⑤ BOUGHT FROM THE POST-USE OFFER — THE POLL WAITS FOR THE CRE
                            spend: { used: 'free', region: REG, balance: 0, free_available: false } });
     await p.click('#chHint');
     await p.waitForTimeout(400);
-    await p.click('#chHint');                     // "Get 5 more" → the sheet, button on "…"
+    await p.click('#chHint');                     // the empty-wallet offer → the sheet, button spinning
     await p.waitForTimeout(200);
     const during = await btn(p);
-    if (!during || during.text !== '…') bad(`button did not go to … before the cancel: ${JSON.stringify(during)}`);
+    if (!during || !during.loading) bad(`button did not show the spinner before the cancel: ${JSON.stringify(during)}`);
     await p.evaluate(fire);
     await p.waitForTimeout(200);
     const after = await btn(p);
-    after && after.text === 'Get 5 more' && !after.disabled
+    after && after.text === 'Get 5 hints' && !after.disabled
       ? ok(`${name} hands the offer back at once`)
       : bad(`after ${name} the button is ${JSON.stringify(after)} — it will sit there for 45s`);
     await p.close();
@@ -368,9 +467,135 @@ console.log('\n⑥ THE ROUND IS OVER — THE HINT GOES WITH IT');
    Connect. Apple will not take a first consumable without a version, so the binary lands
    before the product does — and in that window a visible Hint sells a product that does not
    exist. */
+console.log('\n⑦ THE ZONE SURVIVES THE ROUND — THIS IS THE THING THAT WAS PAID FOR');
+/* ⚠️ IT DID NOT. .chHintZone ran chPop, the flash the buzz mark uses on its way to .stay, and
+   chPop ends at opacity:0 with animation-fill-mode:forwards — so the one thing a player buys
+   was on screen for 0.45s and then gone for the rest of a round they still had to win.
+   Measured before the fix, on this harness: computed opacity 0.61 at 100ms, 0.10 at 300ms,
+   0 from 450ms onward, permanently.
+   AND chPop ANIMATES `transform`, which erases the translate(-50%,-50%) that centres the
+   ellipse on the region — so for its short life it hung down and right of the answer by half
+   its own size, i.e. it pointed somewhere the kamo was not.
+   The old suite passed through both because it read el.style.left/width — the inline values
+   the code had just written — and never asked the browser what was on screen. These
+   assertions go through getComputedStyle and getBoundingClientRect for that reason. */
+{
+  const REG7 = { cx: 0.42, cy: 0.33, r: 0.18 };
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1', big: true,
+                         state: { balance: 3, free_available: true },
+                         spend: { used: 'free', region: REG7, balance: 3, free_available: false } });
+  /* THE BEAT THAT PROVES THE PURCHASE, now carried by the mask's own opacity rather than by a
+     second element. The spotlight dips to full strength as it lands and eases back to its
+     resting level — so the player SEES the search collapse instead of being handed a shape and
+     left to infer it. The mask does NOT lift any more: it is the hint, not an announcement of
+     one, and the old temporary dim left a naked ring behind within the second.
+     ⚠️ SAMPLED OVER THE WINDOW, NOT READ AT AN INSTANT. This first asked for the opacity 300ms
+     after the tap, which is where the 620ms entry peaks — and that passed alone and failed
+     inside the full gate at 0.884, because a dozen Chromes sharing a machine do not run an
+     animation to the same phase at the same wall-clock moment. The assertion is about whether
+     a dip HAPPENS, so it takes the maximum the mask actually reached rather than betting on
+     catching it mid-flight. Started before the tap so nothing can be missed ahead of it. */
+  await p.evaluate(() => {
+    window.__peak = 0;
+    const t0 = performance.now();
+    const tick = () => {
+      const e = document.querySelector('.chHintZone');
+      if (e) window.__peak = Math.max(window.__peak, +getComputedStyle(e).opacity);
+      if (performance.now() - t0 < 1400) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await p.click('#chHint');
+  await p.waitForTimeout(1600);
+  const peak = await p.evaluate(() => window.__peak);
+  peak > 0.9
+    ? ok(`the spotlight lands at full strength (peak opacity ${peak.toFixed(2)})`)
+    : bad(`no beat on the reveal — the mask never went past ${peak}`);
+
+  const seen = async () => p.evaluate(() => {
+    const el = document.querySelector('.chHintZone'), fr = document.getElementById('chFrame');
+    if (!el || !fr) return null;
+    const r = el.getBoundingClientRect(), f = fr.getBoundingClientRect();
+    return { op: +getComputedStyle(el).opacity,
+             cx: r.left + r.width / 2 - f.left, cy: r.top + r.height / 2 - f.top,
+             w: r.width, h: r.height, fw: f.width, fh: f.height };
+  });
+  await p.waitForTimeout(2400);
+  const z = await seen();
+  if (!z) bad('the zone is not in the DOM at all');
+  else {
+    z.op > 0.6
+      ? ok(`the zone is still painted 2.7s in (opacity ${z.op.toFixed(2)})`)
+      : bad(`the zone is at opacity ${z.op} — the hint erased itself and the round goes on without it`);
+    z.op < 0.95
+      ? ok('and it has eased back off the beat, so the rest of the photo stays readable')
+      : bad(`the mask stayed at ${z.op} — the frame outside the region is too dark to sweep`);
+    /* Centred, in pixels, on the region the server named — not on the inline style that says so. */
+    const wantX = REG7.cx * z.fw, wantY = REG7.cy * z.fh;
+    Math.abs(z.cx - wantX) < 2 && Math.abs(z.cy - wantY) < 2
+      ? ok(`and centred on the answer (${Math.round(z.cx)},${Math.round(z.cy)} of ${Math.round(wantX)},${Math.round(wantY)})`)
+      : bad(`the zone renders at ${Math.round(z.cx)},${Math.round(z.cy)} but the region is at ${Math.round(wantX)},${Math.round(wantY)} — it points where the kamo is not`);
+    /* Still the ellipse ② was written for, now measured on the rendered box — but the box is
+       FOUR radii across, not two. The mask is 2x the region so the gradient's outer half is the
+       falloff, and `closest-side` puts the clear core at exactly 50%, i.e. exactly the region
+       (see .chHintZone). So the region is still stated exactly: width/4 is r*frameW. */
+    const wantW = 4 * REG7.r * z.fw, wantH = 4 * REG7.r * z.fh;
+    Math.abs(z.w - wantW) / wantW < 0.06 && Math.abs(z.h - wantH) / wantH < 0.06
+      ? ok(`and still an ellipse scaled per axis (${Math.round(z.w)}×${Math.round(z.h)} on ${Math.round(z.fw)}×${Math.round(z.fh)})`)
+      : bad(`rendered ${Math.round(z.w)}×${Math.round(z.h)}, expected about ${Math.round(wantW)}×${Math.round(wantH)}`);
+  }
+  /* THE BUZZ FREEZES IT AND KEEPS IT. Motion here would compete with the celebration, but
+     removing the ring would delete the most persuasive thing this product ever says about
+     hints: on a miss, the flip shows the kamo was inside the circle and the one tap was not. */
+  await p.mouse.click(120, 400);
+  await p.waitForTimeout(600);
+  const after = await p.evaluate(() => {
+    const el = document.querySelector('.chHintZone');
+    return el && { calm: el.classList.contains('calm'), op: +getComputedStyle(el).opacity };
+  });
+  after && after.calm && after.op > 0.3
+    ? ok('and it stays, frozen, once the buzz is spent — the miss is where the hint argues for itself')
+    : bad(`after the buzz the zone is ${JSON.stringify(after)}`);
+  await p.close();
+}
+
+console.log('\n⑧ THE OFFER DOES NOT SIT ON THE WAY OUT');
+/* ⚠️ IT DID. Both pills live on the same row — bottom 16px + safe-area — with the hint on the
+   right and the give-up button centred, and the hint's widest state is the OFFER, the longest
+   sentence it ever holds. Measured at 390px: the offer occupied x 162-378 and "I give up"
+   151-239, a 77px overlap, with the hint painting on top because it is appended second at the
+   same z-index. So the screen where the pack is sold was also the screen where the way out was
+   buried under the thing selling it — the same defect the swipe pill had over the ending card.
+   Shortening the label was not the fix: a localized price is appended to it the moment a build
+   sends one. Opposite corners cannot collide however long either label grows. */
+for (const [name, st, price] of [
+  ['the free daily', { balance: 0, free_available: true }, ''],
+  ['a stocked wallet', { balance: 4, free_available: false }, ''],
+  ['the pack offer', { balance: 0, free_available: false }, ''],
+  /* THE STATE THAT DOES NOT EXIST YET, AND IS THE WHOLE REASON THIS IS GEOMETRY AND NOT COPY.
+     Shortening the sentence cleared the collision on the day it was written; appending a
+     localized price puts it straight back, and that append is one shipped build away. CHF is
+     the widest ordinary storefront string. With the give-up button in the opposite corner
+     neither label can reach the other however long it grows. */
+  ['the offer once a build sends a price', { balance: 0, free_available: false }, 'CHF 1.00'],
+]) {
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1', state: st, price });
+  const g = await p.evaluate(() => {
+    const b = (id) => { const e = document.getElementById(id); if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; };
+    const h = document.getElementById('chHint');
+    return { hint: b('chHint'), quit: b('chQuit'), label: h && h.textContent };
+  });
+  const clear = g.hint && g.quit && (g.hint.l >= g.quit.r || g.hint.r <= g.quit.l || g.hint.b <= g.quit.t || g.hint.t >= g.quit.b);
+  clear
+    ? ok(`${name} ("${g.label}") clears the give-up button by ${Math.round(g.hint.l - g.quit.r)}px`)
+    : bad(`${name} ("${g.label}") overlaps the give-up button: hint ${JSON.stringify(g.hint)} quit ${JSON.stringify(g.quit)}`);
+  await p.close();
+}
+
 console.log('\nTHE HINT STAYS OFF UNTIL THE PACK IS APPROVED');
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await servePhoto(page);
   await page.addInitScript((h) => {
     window.__hintsLive = false;                     // the flag as it ships
     window.__seed = { get_hide: h, save_seek_trace: null };

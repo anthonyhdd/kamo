@@ -85,7 +85,11 @@ await page.route('https://kamo.onelink.me/**', r => r.fulfill({ status: 200, con
 await page.route('https://apps.apple.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<h1>store</h1>' }));
 
 await page.addInitScript(() => {
-  localStorage.setItem('kamo_handle', 'tony');
+  /* Guarded because this file drives the onelink CTA. Playwright re-runs an init script on EVERY
+     document, and the one created for a cross-origin store navigation denies localStorage — see
+     the long note in test-feedwall-dom.mjs, where that threw and read as an app bug for a cycle.
+     A seed that silently fails is still loud: the assertions depending on it fail. */
+  try { localStorage.setItem('kamo_handle', 'tony'); } catch (e) {}
   let n = 0;
   window.__rpc = (fn) => Promise.resolve(fn === 'create_hide' ? 'hide' + (++n) : null);
   /* A BROWSER, and the absence is the point: no window.ReactNativeWebView at all, which is
