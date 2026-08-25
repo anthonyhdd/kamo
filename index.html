@@ -391,7 +391,21 @@
      iOS-camera convention kept the good half: once a round has finished, the picker wears
      the last reveal as its face (lastShotRender), so the corner still previews your last
      picture — it just opens the photo library, like it always did. */
-  #btnPhoto{left:24px;}
+  /* HALF SIZE — founder's call, and it is a quality decision rather than a layout one. A
+     library photo has no locked-off scene behind it, so the camo has nothing clean to sample
+     and the hide comes out bad. The path stays reachable (a photo you already took is
+     sometimes the only one you have) but it stops competing with the shutter for the thumb.
+     46 → 23, with the icon and the corner radius scaled with it so it reads as the same
+     button smaller rather than a different, cramped one.
+     THE HIT AREA DOES NOT SHRINK WITH IT. 23px is well under the 44pt iOS minimum, and a
+     control nobody can land on is a bug, not a de-emphasis — the intent is that the eye goes
+     to the shutter, not that the thumb misses. ::after restores a 44px target centred on the
+     visible button, which is what iOS does for its own small controls. Nothing else in the
+     corner competes for those pixels (see the one-button note above), so the invisible pad
+     cannot steal a tap from anything. */
+  #btnPhoto{left:24px;width:23px;height:23px;border-radius:8px;}
+  #btnPhoto svg{width:12px;height:12px;stroke-width:2.2;}
+  #btnPhoto::after{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%);}
   #btnPhoto.hasShot{background-size:cover;background-position:center;border-color:rgba(255,255,255,.55);}
   #btnPhoto.hasShot svg{display:none;}
   /* Under the CTA the full arm sits on a photo, not on a card — the dim terms line and grey
@@ -2002,6 +2016,12 @@
      chMarkSent() reveals it, so the sheet still ARRIVES short — the card's height is
      content-driven, so it simply grows by one row at the moment there is something to say. */
   #shareSheet.peek .ssCard > *:not(.ssGrab):not(.pwTitle):not(.ssSub):not(.ssSign):not(.ssSignIn):not(.ssInvite):not(.ssGoPub):not(.ssSeeLive):not(.ssVis):not(.ssGet){display:none!important;}
+  /* #ssBell BORROWS .ssGet FOR ITS LOOK AND MUST NOT BORROW ITS PEEK RIGHTS. The rule above
+     keeps every .ssGet child visible in the folded sheet, which is right for the install
+     pitch and wrong for a permission ask: the peek is a summary, and a button that opens an
+     iOS dialog does not belong in one. An explicit override rather than a new class, so the
+     two keep sharing one set of styles and this stays the only line that separates them. */
+  #shareSheet.peek .ssCard > #ssBell{display:none!important;}
   /* RESIZING BETWEEN THE TWO STATES IS A TRANSITION, NOT A CUT. Short and long differ by a few
      hundred pixels and the card used to jump between them in one frame, which on a bottom sheet
      reads as a glitch rather than as a change of size.
@@ -2948,6 +2968,36 @@
          does not name, so this cannot leak into the folded sheet. -->
     <button class="ssBtn ssGet" id="ssGet" style="display:none">
       <span class="ssGetTxt"><b>Know when they find you</b><i>KAMO can notify you. A browser tab can't.</i></span>
+    </button>
+    <!-- THE WRAPPER'S HALF OF THE SAME BEAT, AND IT WAS EMPTY UNTIL NOW.
+         #ssGet above sells the app to a browser with one promise — "we'll tell you when they
+         find it". Inside the app that button correctly never appears, and nothing took its
+         place: the person who is holding the app gets the promise made to the person who
+         isn't, and no way to switch it on.
+         WHAT IT IS, STATED HONESTLY, BECAUSE THE OBVIOUS READING IS WRONG. Measured over 7
+         days: web_notif_armed ok=false for 3099 users against ok=true for 500. Six of every
+         seven return-nudges this app tries to set are dropped, and that is most of why D1
+         create retention is 10% — a local notification is the only return path this app has.
+         But those 3099 are NOT people who were never asked. armResultsPing() fires iOS's own
+         permission prompt seconds after this sheet opens (see the note on #ssSub, which exists
+         to give that prompt its one line of context), and iOS asks exactly once. So most of
+         that number is a refusal that has already happened.
+         THIS BUTTON IS THEREFORE A RECOVERY, NOT A FIRST ASK. For a device that truly declined,
+         notifAskResult lands on already_denied and the honest answer is the Settings route it
+         already prints. It is a first ask only for the rest of ok=false — a capability that
+         arrived late, a per-install cap, a schedule that failed for its own reasons.
+         The bigger lever is NOT here: it is that the one prompt iOS grants is currently spent
+         automatically, on a sheet the user has not yet said yes to. Gating it behind a
+         deliberate tap is the standard fix and usually the difference between a third and two
+         thirds — but it reverses a decision already written down two rows up, so it is the
+         founder's call and not this button's job.
+         Same .ssGet styling on purpose — same slot, same shape, opposite surface, no new CSS.
+         ⚠️ AND THAT SHARED CLASS IS WHY THERE IS AN EXTRA PEEK RULE. .ssGet is on the list of
+         children the folded sheet KEEPS, so borrowing the look silently borrowed the peek
+         rights too — a permission ask sitting in a summary, one tap from an iOS dialog. One
+         explicit override next to that rule takes it back; see there. -->
+    <button class="ssBtn ssGet" id="ssBell" style="display:none">
+      <span class="ssGetTxt"><b>Tell me when they find it</b><i>One notification, when someone plays your hide.</i></span>
     </button>
     <!-- #ssLive IS GONE, AND ITS TWO JOBS WERE SPLIT UP THE SHEET. It was a slab revealed
          after a send carrying a headline ("Your challenge is live") and a promise ("We'll
@@ -4538,6 +4588,33 @@ function enterCompose(){
   if(canPro()) stopTimer(); else startTimer("aim",aimSeconds(),()=>runExpire(()=>{ if(mode==="compose"){ captureWasAuto=true; capture(); } }));
   lastShotRender();
   maybeOnboard();
+  /* ═══ THE MISSING DENOMINATOR — where the answer to a challenge actually dies ═══════════
+   *
+   * Measured 2026-08-24, 7 days, on the SAME button at the SAME moment:
+   *     browser  seek_rehide_tapped 1915 → hide_published  171   (8.9%)
+   *     app      seek_rehide_tapped  506 → hide_published  400  (79.1%)
+   * 1744 people a week answer a friend's hide and never finish one. It is not the camera
+   * (a rehide inherits the photo), not the fetch (reply_photo_failed: 5), not WebGL
+   * (webgl_dead: 21), and not the paywall (refused outright in a browser). reply_started
+   * fires for 1898 of the 1915 — so they DO get here — and photo_captured for 281. The
+   * whole loss sits between arriving on this screen and pressing the shutter.
+   *
+   * What no event could distinguish until now: a compose screen that appeared and was
+   * abandoned, versus one that never rendered at all. `reply_started` fires in chRehide
+   * BEFORE the photo is fetched and before this function runs, so it cannot be that
+   * denominator. This fires at the END of enterCompose, with the figure spawned and the
+   * scene up, so `photo_captured / compose_ready` is finally a rate that means something.
+   *
+   * `origin` is photoSrc — "rehide" is the population above, "camera"/"library" are the
+   * controls. `reply` separates an answer from a hide someone started on their own.
+   *
+   * ⚠️ IN WEB_ONLY, and that is load-bearing rather than tidy. track() posts to the native
+   * bridge for any name the bridge knows, and ~96% of installs run 1.0.2, whose bridge
+   * DROPS names it does not know — a new event would read as a flat zero inside the app
+   * forever, which is exactly the trap documented on hero_shown. WEB_ONLY routes it through
+   * chWebTrack instead, so it lands from both surfaces and carries `host`, which is the one
+   * property this whole comparison is built on. */
+  track("compose_ready",{origin:photoSrc||"none",reply:!!chReplyTo,kind:bgKind});
 }
 /* Reached only from the Retake confirmation (#cfYes), which calls exitFinished() first —
    so `finished` is already false and nothing still needs beforeBoard or the reveal. The
@@ -7365,6 +7442,13 @@ window.KAMO.notifAskResult=function(outcome){
   const o=String(outcome||"");
   if(o==="system_granted"){
     b.classList.add("on"); b.disabled=true; b.textContent="I'll tell you ✓";
+    /* ⚠️ RE-ARM, AND ONLY FOR THE SHEET'S BELL. This button is offered precisely BECAUSE the
+       schedule armed by chMarkSent was swallowed for want of permission — so granting it now
+       fixes nothing on its own: the nudge for the hide that just went out is already gone,
+       and the user would have said yes to a notification that never comes. armResultsPing is
+       keyed ("results") and idempotent from the wrapper's side, so re-arming replaces rather
+       than duplicates. kfBell needs none of this: it arms per-hide from the feed row itself. */
+    if(b.id==="ssBell"){ try{ armResultsPing(true); }catch(_){} }
     setTimeout(()=>{ try{ b.remove(); }catch(_){} },2000);
     return;
   }
@@ -8442,7 +8526,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -9941,6 +10025,31 @@ function ssShowAgain(){ try{ const a=$("#ssAgain"); if(a) a.style.display="flex"
 function ssOfferApp(){
   try{ if(window.ReactNativeWebView) return;
        const g=$("#ssGet"); if(g) g.style.display="flex"; }catch(e){}
+}
+/* THE MIRROR OF ssOfferApp, FOR THE PEOPLE HOLDING THE APP. Revealed only when the schedule
+   we just tried was actually swallowed — __kamoNotifResult calls this with ok=false — so it
+   never appears to somebody whose permission is already granted and whose nudge is armed.
+   That is why it hangs off the callback rather than off chMarkSent directly: "did the arm
+   land" is answered asynchronously by the wrapper, and asking before the answer would show
+   this button to the 500 users a week who did not need it.
+   ONLY IN THE WRAPPER, and the test is window.ReactNativeWebView for the same reason
+   ssOfferApp uses it: the question is "is there an app around this page", true in every
+   wrapper ever shipped. A browser has no notifications to grant and already has #ssGet.
+   ONLY WHILE THE SHEET IS UP. armResultsPing also fires from publish-without-send, on a key
+   the wrapper answers identically — revealing a button on a sheet nobody has open would
+   leave it sitting there for the next hide. `offsetParent` is the same liveness test the
+   other sheet offers rely on.
+   ONCE PER ROUND: chResetRound hides it again with the rest of the sheet's earned rows. */
+function ssOfferBell(){
+  try{
+    if(!window.ReactNativeWebView) return;
+    if(!(nativeCaps && nativeCaps.notifSchedule)) return;   // a wrapper that cannot schedule cannot promise
+    const b=$("#ssBell"); if(!b) return;
+    if(b.style.display!=="none") return;                    // already offered this round
+    const sheet=$("#shareSheet"); if(!sheet||sheet.offsetParent===null) return;
+    b.style.display="flex";
+    track("notif_bell_shown",{source:"sheet"});
+  }catch(e){}
 }
 /* THE GO-PUBLIC OFFER, revealed only from chMarkSent() — the one moment a hide has provably
    gone out — and only while the visibility row says Private. Three-quarters of published
@@ -11649,6 +11758,27 @@ confirmSheet.onclick=e=>{ if(e.target===confirmSheet) closeConfirm(); };
     track("sent_cta_tapped",{tier:u===appLink?"plain":"onelink",link:!!chId});
     location.href=u; };
 }
+/* THE SHEET'S BELL — same gesture and same single result slot as the feed's kfBell, so there
+   is one implementation of "ask iOS" and one place that learns the answer. `source` is what
+   separates the two in Amplitude: the feed ask reaches ~689 people a week and this one should
+   reach everybody who sends, so a rate computed across both without splitting would be
+   meaningless.
+   NOT TRACKED ON THE OUTCOME HERE, matching kfBell: the wrapper already files the decision
+   itself, and a second web-side event would count the same choice against a different
+   Amplitude user. */
+{ const b=$("#ssBell");
+  if(b) b.onclick=(e)=>{
+    e.stopPropagation();
+    if(b.disabled) return;
+    haptic(10);
+    track("notif_bell_tapped",{source:"sheet"});
+    b.disabled=true;
+    kfAskBtn=b;
+    /* A wrapper too old to know the message cannot arm anything, so the button goes rather
+       than sitting there having promised a notification nobody scheduled. */
+    if(!postNative({type:"notif-ask"})){ kfAskBtn=null; b.remove(); }
+  };
+}
 
 window.addEventListener("resize",()=>{ dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1)); if(renderer) resize3(); });
 
@@ -12833,7 +12963,18 @@ function armResultsPing(sent){
    full, and those are the cases where the honest UI is to promise nothing. Without this the
    page could not tell "armed" from "swallowed", and the opt-in rate would look like a
    scheduling rate. openKamoHome cancels it — see there. */
-window.__kamoNotifResult=function(r){ try{ track("web_notif_armed",{key:(r&&r.key)||"",ok:!!(r&&r.ok)}); }catch(e){} };
+window.__kamoNotifResult=function(r){
+  try{ track("web_notif_armed",{key:(r&&r.key)||"",ok:!!(r&&r.ok)}); }catch(e){}
+  /* A SWALLOWED ARM IS THE ONLY HONEST TRIGGER FOR THE ASK. ok=false means the wrapper had
+     nowhere to put the nudge — already refused, never granted, or the per-install cap is full
+     — and that is exactly the population with no way back into this app tomorrow. 3099 users a
+     week land here against 500 who arm successfully. Most of them have already met iOS's one
+     prompt and said no, so this offers a recovery rather than a fresh ask; see the note on
+     #ssBell for why that distinction matters and where the real lever is. ssOfferBell decides
+     whether the sheet is the right place to say anything; this only reports there is something
+     to say. */
+  try{ if(r && r.key==="results" && !r.ok) ssOfferBell(); }catch(e){}
+};
 /* THE LINK THAT GOES OUT IS NOT THE LINK THAT PLAYS, and it has to be that way.
    344 of the 504 challenges ever sent were never opened. The reason is in this page's <head>:
    og:image is the app icon and og:title is the same sentence for every hide in existence,
