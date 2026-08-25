@@ -42,6 +42,11 @@ const MIME={'.js':'text/javascript','.glb':'model/gltf-binary','.woff2':'font/wo
 const real=readFileSync(join(ROOT,'index.html'),'utf8');
 // Stub the RPC layer, and make the storage POST take a REALISTIC 3s so the race is real.
 const html=real.replace('async function chRpc(fn,body){','async function chRpc(fn,body){ if(window.__rpc) return window.__rpc(fn,body);')
+  /* WHAT WAS FILED, not what was intended. The publish path's two outcomes are told apart by
+     the event they emit — hide_published against hide_publish_failed — and reading them off
+     the wire would mean waiting on Amplitude's own flush. Recorded at the declaration, the
+     same door test-feed-dom uses. */
+  .replace('function track(event,props){','function track(event,props){window.__tr=window.__tr||[];window.__tr.push([event,props]);')
   // module scope is sealed: expose the id the share actually reads
   .replace('let chId="";','let chId=""; window.__peek=()=>({chId,prep:!!chPrep});')
   /* THE ROUTING HOOK, and it fabricates only what a finished round would have left behind: a
@@ -73,7 +78,8 @@ await page.route('**/storage/v1/object/hides/**', async r=>{ await new Promise(x
 await page.addInitScript(()=>{
   localStorage.setItem('kamo_handle','tony');
   let n=0; window.__created=[];
-  window.__rpc=(fn,body)=>{ if(fn==='create_hide'){ n++; const id='hide'+n; window.__created.push(body.p_img_path); return Promise.resolve(id); } return Promise.resolve(null); };
+  window.__calls=[];
+  window.__rpc=(fn,body)=>{ window.__calls.push(fn); if(fn==='create_hide'){ n++; const id='hide'+n; window.__created.push(body.p_img_path); return Promise.resolve(id); } return Promise.resolve(null); };
   window.__msgs=[];
   window.__all=[];
   window.ReactNativeWebView={postMessage:(raw)=>{ try{ const m=JSON.parse(raw); window.__all.push(m.type); if(m.type==='invite') window.__msgs.push(m.message||''); }catch(e){ window.__all.push('unparsed'); } }};
@@ -131,6 +137,291 @@ offered===false ? ok('the Get-KAMO offer stays hidden inside the app') : bad('#s
 
 const r2=await round('ROUND 2 — same session, own hide',1200);
 /hide2/.test(r2.msg) ? ok('round 2 sends its OWN hide (hide2), not round 1\'s') : bad('STALE LINK: '+JSON.stringify(r2.msg.slice(-40)));
+/* ⚠️ A HIDE IS SENT ONCE, HOWEVER MANY TIMES THE BUTTON IS TAPPED.
+   Nothing guarded chMarkSent(), so a second tap fired a second mark_hide_sent, a second
+   `hide_sent`, a second pwFirstOffer and a second armResultsPing. Measured with three fast
+   taps before the fix: one create_hide, three mark_hide_sent.
+   A second tap must still SEND — sending the same hide to two people is the loop working, and
+   share_target_tapped counts every tap, which is what that event is for. What must not double
+   is the CLAIM that a hide was sent: hide_published → hide_sent is the conversion this product
+   steers by, and it already over-counts by the share of people who open iOS's sheet and back
+   out. An unbounded second source of inflation on top of a known bounded one is how a rate
+   stops meaning anything.
+   Asserted across round 2 as well, because the latch is keyed on the round: a per-session
+   guard would pass the first half of this and silently stop counting every later hide. */
+{
+  const before = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
+  const msgs = await page.evaluate(() => window.__msgs.length);
+  await page.evaluate(() => { const b = document.getElementById('ssInvite'); b.click(); b.click(); });
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
+  const msgs2 = await page.evaluate(() => window.__msgs.length);
+  after === before
+    ? ok(`two more taps stamp nothing new (mark_hide_sent stays at ${after})`)
+    : bad(`the stamp fired ${after - before} more time(s) on repeat taps — hide_sent inflates by re-tapping`);
+  msgs2 > msgs
+    ? ok('and the share still goes out on every tap — the same hide can reach two people')
+    : bad('a repeat tap sent nothing at all — the guard is on the share, not on the stamp');
+}
+/* ⚠️ A NULL ANSWER IS NOT A ROW, AND THE SHEET MUST NOT SAY IT IS.
+   chCreateForms() hands chUpload a widest-to-narrowest ladder of create_hide payloads and the
+   loop walks down it until one lands — except it only walked on a THROW. A 200 carrying `null`
+   (a server-side guard, an RLS-filtered RETURNING, an overload resolving to void mid-deploy)
+   ended the walk on the first rung with chId empty, and the code fell through to
+   track("hide_published"). Measured before the fix: one form tried, no row, counted as a
+   publish, and "Your kamo is live! / Come back to see who tried." on screen over nothing.
+   Three failures in one and all three silent — the rescue ladder never ran, the denominator
+   the send rate is read against counted a round that produced nothing, and the creator was
+   told to come back for results that will never exist.
+   Driven by answering the create_hide endpoint directly rather than through window.__rpc: the
+   distinction being tested is between a rejection and a resolved-but-empty answer, which is a
+   property of the transport, not of the stub. */
+console.log('\nA PUBLISH THAT PRODUCED NO ROW IS NOT A PUBLISH');
+{
+  const walk = async (answer) => {
+    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const tried = [];
+    await p2.route('**/rest/v1/rpc/create_hide', async r => {
+      const n = tried.length; tried.push(1);
+      const a = answer(n);
+      if (a === 'THROW') return r.fulfill({ status: 500, body: 'boom' });
+      r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(a) });
+    });
+    await p2.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"Key":"hides/x.jpg"}' }));
+    await p2.addInitScript(() => { window.__msgs = []; window.ReactNativeWebView = { postMessage() {} }; });
+    await p2.goto(base, { waitUntil: 'load' });
+    await p2.waitForTimeout(700);
+    await p2.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 800;
+      const g = c.getContext('2d'); g.fillStyle = '#7a8a6a'; g.fillRect(0, 0, 600, 800);
+      for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(${90 + i},120,${70 + i},.6)`; g.beginPath(); g.arc((i * 97) % 600, (i * 61) % 800, 30, 0, 7); g.fill(); }
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'r.jpg', { type: 'image/jpeg' }));
+      const inp = document.getElementById('fileInput'); inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await p2.waitForTimeout(800);
+    await p2.evaluate(() => document.getElementById('shutter').click());
+    await p2.waitForTimeout(1200);
+    await p2.evaluate(() => {
+      const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+      const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+      for (let y = r.top + r.height * 0.25; y < r.top + r.height * 0.62; y += 6) {
+        ev('pointerdown', r.left + r.width / 2 - 40, y);
+        for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+        ev('pointerup', r.left + r.width / 2 + 40, y);
+      }
+    });
+    await p2.evaluate(() => document.getElementById('btnDone').click());
+    await p2.waitForTimeout(2400);
+    await p2.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+    await p2.waitForTimeout(5000);
+    const out = await p2.evaluate(() => ({
+      title: document.getElementById('ssTitle')?.textContent,
+      events: (window.__tr || []).map(t => t[0]).filter(e => /^hide_publish/.test(e)),
+    }));
+    await p2.close();
+    return { tried: tried.length, ...out };
+  };
+
+  const nulled = await walk(() => null);
+  nulled.tried > 1
+    ? ok(`a null answer is a rung, not an exit — the ladder walked all ${nulled.tried} forms`)
+    : bad(`the ladder stopped after ${nulled.tried} form on a null answer — the fallback never runs`);
+  nulled.events.includes('hide_publish_failed') && !nulled.events.includes('hide_published')
+    ? ok('and a round that ended with no row is filed as a failure, not as a publish')
+    : bad(`a publish with no row reported ${JSON.stringify(nulled.events)}`);
+  !/is live/.test(nulled.title || '')
+    ? ok(`and the sheet stops claiming it ("${nulled.title}")`)
+    : bad(`the sheet still reads "${nulled.title}" over a hide that does not exist`);
+
+  const rescued = await walk((n) => (n === 0 ? null : 'realid1'));
+  rescued.tried === 2 && rescued.events.includes('hide_published')
+    ? ok('and a narrower form still rescues it — two tried, one row, one publish')
+    : bad(`the rescue path reports tried=${rescued.tried} events=${JSON.stringify(rescued.events)}`);
+  /is live/.test(rescued.title || '')
+    ? ok(`and the headline is back to the true one ("${rescued.title}")`)
+    : bad(`a successful publish reads "${rescued.title}"`);
+}
+
+/* ⚠️ THE VISIBILITY ROW WAS MAKING A CLAIM ON BEHALF OF A WRITE NOBODY LISTENED TO.
+   set_hide_public was dispatched fire-and-forget while #ssVis repainted itself as the answer
+   it was asking for. CLAUDE.md's doctrine covers one direction — is_public defaults to FALSE,
+   so a write that never lands leaves a hide private, "never 'this reached strangers without
+   being asked'". That is true of the FIRST write and false of a RETRACTION: a hide made public
+   by a write that landed, then switched back to Private by one that does not, stays in the
+   public feed while this sheet tells its creator it is not. Measured on the real page: the row
+   read "Private / Only whoever you send the link to" with p_public=true as the last thing the
+   server had been told.
+   AND THE TRANSPORT WAS PART OF IT. set_hide_public returns void, PostgREST answers 204 with
+   no body, and chRpc parsed every answer with r.json() — so the promise rejected on every
+   SUCCESSFUL write too. Both cases are driven here through the real fetch for that reason. */
+console.log('\nTHE VISIBILITY ROW STATES WHAT THE SERVER WAS ACTUALLY TOLD');
+{
+  const visRun = async (plan) => {
+    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const heard = [];
+    await p2.route('**/rest/v1/rpc/create_hide', r => r.fulfill({ status: 200, contentType: 'application/json', body: '"visid1"' }));
+    await p2.route('**/rest/v1/rpc/set_hide_public', async r => {
+      let b = {}; try { b = JSON.parse(r.request().postData() || '{}'); } catch (e) {}
+      const kill = plan(heard.length);
+      heard.push({ p_public: b.p_public, dead: !!kill });
+      /* 204 + no body is exactly what a void rpc answers in production. */
+      return kill ? r.abort('failed') : r.fulfill({ status: 204, body: '' });
+    });
+    await p2.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"Key":"hides/x.jpg"}' }));
+    await p2.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; try { localStorage.setItem('kamo_hide_public', '1'); } catch (e) {} });
+    await p2.goto(base, { waitUntil: 'load' });
+    await p2.waitForTimeout(700);
+    await p2.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 800;
+      const g = c.getContext('2d'); g.fillStyle = '#7a8a6a'; g.fillRect(0, 0, 600, 800);
+      for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(${90 + i},120,${70 + i},.6)`; g.beginPath(); g.arc((i * 97) % 600, (i * 61) % 800, 30, 0, 7); g.fill(); }
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'r.jpg', { type: 'image/jpeg' }));
+      const inp = document.getElementById('fileInput'); inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await p2.waitForTimeout(800);
+    await p2.evaluate(() => document.getElementById('shutter').click());
+    await p2.waitForTimeout(1200);
+    await p2.evaluate(() => {
+      const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+      const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+      for (let y = r.top + r.height * 0.25; y < r.top + r.height * 0.62; y += 6) {
+        ev('pointerdown', r.left + r.width / 2 - 40, y);
+        for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+        ev('pointerup', r.left + r.width / 2 + 40, y);
+      }
+    });
+    await p2.evaluate(() => document.getElementById('btnDone').click());
+    await p2.waitForTimeout(2400);
+    await p2.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+    await p2.waitForTimeout(4200);
+    const row = () => p2.evaluate(() => ({
+      t: document.getElementById('ssVisT')?.textContent,
+      s: document.getElementById('ssVisS')?.textContent,
+    }));
+    return { p2, heard, row, tap: async () => { await p2.click('#ssVis'); await p2.waitForTimeout(2200); } };
+  };
+
+  /* Write 0 (the publish, public) lands; write 1 (the retraction) dies; write 2 — the retry —
+     lands again. Three answers, so the row has to be right three times running. */
+  const r = await visRun((n) => n === 1);
+  const published = await r.row();
+  /in the KAMO feed/.test(published.s || '')
+    ? ok('a published public hide states the feed plainly (204, no body, and it was believed)')
+    : bad(`a successful visibility write reads "${published.s}" — an empty answer is being read as a failure`);
+
+  await r.tap();                       // asks for Private, and that write dies
+  const failed = await r.row();
+  /Still in the feed/.test(failed.s || '')
+    ? ok(`a retraction that did not land says so ("${failed.t} · ${failed.s}")`)
+    : bad(`the row reads "${failed.t} · ${failed.s}" while the hide is still public — this is `
+        + 'the one direction the visibility doctrine says must never happen');
+
+  await r.tap();                       // the retry, and this one lands
+  const fixed = await r.row();
+  const last = r.heard[r.heard.length - 1];
+  last && last.p_public === false && !last.dead
+    ? ok('and a tap on an unsaved row RETRIES it rather than flipping past it')
+    : bad(`the retry asked the server for p_public=${last && last.p_public} — a plain toggle sends `
+        + 'the opposite of what the user just failed to get');
+  /Only whoever you send/.test(fixed.s || '')
+    ? ok('and the row goes back to stating the plain fact once it lands')
+    : bad(`after a successful retry the row still reads "${fixed.s}"`);
+  await r.p2.close();
+}
+
+/* ⚠️ AND PUBLIC NEEDS A PICTURE — A GATE ONLY ONE OF THREE CALL SITES HAD.
+   chUpload publishes from inside bytes.then(up => { if(!up) return; ... }), and its note says
+   why: "an upload that never lands can never reach it: the hide stays private, which is the
+   direction this file already fails in everywhere else." The .ssVis toggle and "Put it in the
+   feed too" had no such gate, so a creator whose photo failed to upload could put the row in
+   the public feed by hand — and every seeker served it meets "This one didn't load".
+   Not hypothetical: 473 rows in seven days have no object in the bucket, and 5 of them were
+   public, three inside one hour from one device. */
+console.log('\nA HIDE WITH NO PHOTO CANNOT BE PUT IN THE FEED BY HAND');
+{
+  const tryPublic = async (uploadOk) => {
+    const p3 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const wrote = [];
+    await p3.route('**/rest/v1/rpc/create_hide', r => r.fulfill({ status: 200, contentType: 'application/json', body: '"gid1"' }));
+    await p3.route('**/rest/v1/rpc/set_hide_public', async r => {
+      let b = {}; try { b = JSON.parse(r.request().postData() || '{}'); } catch (e) {}
+      wrote.push(b.p_public); return r.fulfill({ status: 204, body: '' });
+    });
+    await p3.route('**/storage/v1/object/hides/**', r => uploadOk
+      ? r.fulfill({ status: 200, contentType: 'application/json', body: '{"Key":"hides/x.jpg"}' })
+      : r.abort('failed'));
+    await p3.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; try { localStorage.setItem('kamo_hide_public', '0'); } catch (e) {} });
+    await p3.goto(base, { waitUntil: 'load' });
+    await p3.waitForTimeout(700);
+    await p3.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 800;
+      const g = c.getContext('2d'); g.fillStyle = '#7a8a6a'; g.fillRect(0, 0, 600, 800);
+      for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(${90 + i},120,${70 + i},.6)`; g.beginPath(); g.arc((i * 97) % 600, (i * 61) % 800, 30, 0, 7); g.fill(); }
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'r.jpg', { type: 'image/jpeg' }));
+      const inp = document.getElementById('fileInput'); inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await p3.waitForTimeout(800);
+    await p3.evaluate(() => document.getElementById('shutter').click());
+    await p3.waitForTimeout(1200);
+    await p3.evaluate(() => {
+      const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+      const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+      for (let y = r.top + r.height * 0.25; y < r.top + r.height * 0.62; y += 6) {
+        ev('pointerdown', r.left + r.width / 2 - 40, y);
+        for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+        ev('pointerup', r.left + r.width / 2 + 40, y);
+      }
+    });
+    await p3.evaluate(() => document.getElementById('btnDone').click());
+    await p3.waitForTimeout(2400);
+    await p3.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+    await p3.waitForTimeout(4200);
+    await p3.click('#ssVis');            // the creator asks for the feed by hand
+    await p3.waitForTimeout(4000);
+    const out = await p3.evaluate(() => ({
+      sub: document.getElementById('ssVisS')?.textContent,
+      reasons: (window.__tr || []).filter(x => x[0] === 'hide_visibility_failed').map(x => x[1] && x[1].reason),
+    }));
+    await p3.close();
+    return { publics: wrote.filter(v => v === true).length, ...out };
+  };
+
+  const good = await tryPublic(true);
+  good.publics === 1
+    ? ok('a hide whose photo is in the bucket goes public on the tap')
+    : bad(`the gate refused a hide that has its photo (${good.publics} writes)`);
+
+  const bad2 = await tryPublic(false);
+  bad2.publics === 0
+    ? ok('and one whose photo never uploaded is NOT written public — the feed cannot be handed a dead slide')
+    : bad(`set_hide_public(true) was sent for a hide with no photo in the bucket (${bad2.publics}×)`);
+  bad2.reasons.includes('no_photo')
+    ? ok('and the refusal is filed as no_photo, separable from a write that failed')
+    : bad(`the refusal filed ${JSON.stringify(bad2.reasons)}`);
+  /* THE INTENT HERE IS "IT MUST NOT CLAIM THE FEED", and that has not moved. What moved is
+     which true sentence it says instead. This asserted `Not in the feed yet — tap to try
+     again`, which invites a retry that CANNOT succeed: the feed write is gated on the photo
+     and the photo is what is missing, so every tap files another no_photo. When the upload is
+     the blocker the row now names it, and the retry offer is gone with it. Both halves are
+     asserted — no feed claim, and the reason stated — so a row that goes back to promising
+     the feed still fails here. */
+  const claimsFeed = /Anyone can play it in the KAMO feed/.test(bad2.sub || '');
+  const namesCause = /photo didn't upload|Not in the feed yet/.test(bad2.sub || '');
+  !claimsFeed && namesCause
+    ? ok(`and the row says why rather than claiming the feed ("${bad2.sub}")`)
+    : bad(`the row reads "${bad2.sub}" for a hide that is not in the feed and cannot be`);
+}
+
+const sentPerRound = await page.evaluate(() => window.__calls.filter(f => f === 'mark_hide_sent').length);
+sentPerRound === 2
+  ? ok('and across two rounds the stamp fired exactly twice — once per hide')
+  : bad(`mark_hide_sent fired ${sentPerRound} times over two rounds`);
 const paths=await page.evaluate(()=>window.__created);
 paths.length===2 && paths[0]!==paths[1] ? ok(`two rounds → two distinct images (${paths.length})`) : bad('images: '+JSON.stringify(paths));
 /* The real-world case: the median gap between the reveal and a share is 154 seconds, so
@@ -201,6 +492,157 @@ console.log('\nTHE REVEAL IS THE SHARE, WHEREVER IT IS GOING');
   await page.close();
 }
 
+/* ═══ THE UPLOAD CEILING ═══
+   The bucket refuses anything over 400000 bytes with an HTTP 400 whose body says
+   {"statusCode":"413","code":"EntityTooLarge"}, and for seven days that refused 1054 uploads —
+   about half of every upload failure, and the half that repeats: 131 devices had EVERY hide
+   they ever made fail, because a busy photograph encodes over the line every single time.
+   The row is written before the photo is, so the cost is not "publish failed", it is a hide
+   that exists, gets sent, gets tapped, and has no kamo in it.
+   The ladder cannot be reached through the UI here — the board is capped at a phone's size, so
+   nothing this harness can paint encodes that large, and the shape that does blow it (a reply,
+   at 0.82, on a textured photo) needs a whole played round to set up. So this drives the real
+   function directly, through the hook beside it, with a blob that is genuinely over. */
+{
+  console.log('\n— the upload ceiling —');
+  const page=await browser.newPage({viewport:{width:390,height:844}});
+  page.on('pageerror',e=>bad('PAGE ERROR: '+e.message));
+  await page.goto(base,{waitUntil:'load'});
+  await page.waitForTimeout(400);
+
+  const r = await page.evaluate(async () => {
+    const H = window.KAMOBUDGET;
+    if (!H) return { missing: true };
+    /* Noise, because noise is how gravel, foliage, carpet and brick compress — which is to say,
+       how the surfaces this entire game is played on compress. */
+    const c = document.createElement('canvas'); c.width = 1400; c.height = 1400;
+    const g = c.getContext('2d'); const d = g.createImageData(1400, 1400);
+    for (let i = 0; i < d.data.length; i += 4) {
+      d.data[i]=Math.random()*255; d.data[i+1]=Math.random()*255; d.data[i+2]=Math.random()*255; d.data[i+3]=255;
+    }
+    g.putImageData(d, 0, 0);
+    const big = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+    window.__tr = [];
+    const out = await H.fit(big);
+    /* And a blob already under the line must come back untouched — the ladder is a rescue, not
+       a tax on every hide that was fine. */
+    const small = await new Promise(r => { const s=document.createElement('canvas'); s.width=40; s.height=40;
+      s.getContext('2d').fillRect(0,0,40,40); s.toBlob(r,'image/jpeg',0.7); });
+    const kept = await H.fit(small);
+    return { budget: H.budget, from: big.size, to: out.size,
+             ev: (window.__tr||[]).filter(e => e[0] === 'hide_blob_shrunk'),
+             smallIn: small.size, smallOut: kept.size, smallUntouched: kept === small };
+  });
+
+  if (r.missing) bad('window.KAMOBUDGET is gone — the ladder cannot be tested, and nothing else here proves a board fits');
+  else {
+    r.budget <= 400000
+      ? ok(`the budget (${r.budget}) sits under the bucket's 400000-byte ceiling`)
+      : bad(`the budget is ${r.budget}, at or over the ceiling that refuses the upload`);
+    r.from > r.budget
+      ? ok(`a textured board really does encode over it (${r.from} bytes)`)
+      : bad(`the fixture only reached ${r.from} bytes — it never crossed the line, so this proves nothing`);
+    r.to <= r.budget
+      ? ok(`and the ladder brought it under: ${r.from} → ${r.to} bytes`)
+      : bad(`the ladder gave up at ${r.to} bytes — this board still 400s, and its hide still has no kamo in it`);
+    const e = r.ev[0];
+    e && e[1] && e[1].fit === true
+      ? ok('hide_blob_shrunk reports the blob that was KEPT, and that it fits')
+      : bad(`hide_blob_shrunk said ${JSON.stringify(e ? e[1] : null)} — the one event that can tell us this is still failing is not telling the truth`);
+    r.smallUntouched
+      ? ok(`a board already under budget is returned untouched (${r.smallIn} bytes)`)
+      : bad(`an in-budget board came back re-encoded (${r.smallIn} → ${r.smallOut}) — every hide is paying for the rescue`);
+  }
+  await page.close();
+}
+
+/* ═══ THE SEND BUTTON HAS TO BE REACHABLE BY A THUMB, NOT MERELY PRESENT ═══════════════════
+   This app has now lost the send twice to the same thing, and neither time did any DOM
+   assertion notice, because nothing about the DOM was wrong:
+
+     2026-08-20  the feed's .kfHint pill sat over "Send to a friend". 62% -> 51.4%.
+     2026-08-23  the landing arm opened the feed behind the share sheet; #chStage covered the
+                 button. Per creator, 52% -> 22.7% overnight, and the arm was killed.
+
+   Both times the button was present, correctly sized, on screen, styled, and not disabled.
+   Both times it could not be tapped. `offsetParent`, `getComputedStyle` and a querySelector
+   all pass happily through this failure — the only thing that catches it is asking the
+   document what is ACTUALLY at those coordinates.
+
+   So this is a hit test, deliberately, and it is the assertion that would have caught both
+   incidents before they shipped. Anything that ever wants to render over the share sheet has
+   to get past it. */
+{
+  console.log('\n— a thumb reaches the send —');
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
+  await page.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, body: '{}' }));
+  /* ?debug, because window.HIDEY only exists behind it (see its declaration). Without the
+     query string the hook never appears and this reads as a timeout rather than as a missing
+     flag — which is how the first three attempts at this test failed. */
+  await page.goto(base + '?debug', { waitUntil: 'load' });
+  /* window.HIDEY is declared near the end of the module and needs the GL scene up, so it is
+     waited for rather than assumed — a flat sleep here fails on a loaded machine, which is the
+     bug this whole suite family kept hitting yesterday. */
+  await page.waitForFunction(() => !!(window.HIDEY && window.HIDEY.setBg), { timeout: 15000 });
+
+  /* DRIVEN, NOT STAGED. The first version of this added .peek to a fresh page and hit-tested
+     the button, and elementFromPoint answered `nothing` three times over — the sheet was never
+     laid out, so the button sat outside the viewport and the test was measuring its own
+     scaffolding. A real round is the only state in which these coordinates mean anything. */
+  await page.evaluate(() => window.HIDEY.setBg('data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="390" height="700"><rect width="100%" height="100%" fill="#8a9299"/></svg>')));
+  await page.waitForTimeout(900);
+  await page.evaluate(() => window.HIDEY.capture());
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    const b = document.getElementById('board'); const r = b.getBoundingClientRect();
+    const ev = (t, x, y) => b.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true, pointerId: 1, buttons: 1, pressure: .5 }));
+    for (let y = r.top + r.height * .25; y < r.top + r.height * .62; y += 6) {
+      ev('pointerdown', r.left + r.width / 2 - 40, y);
+      for (let x = r.left + r.width / 2 - 40; x < r.left + r.width / 2 + 40; x += 8) ev('pointermove', x, y);
+      ev('pointerup', r.left + r.width / 2 + 40, y);
+    }
+  });
+  await page.evaluate(() => document.getElementById('btnDone').click());
+  await page.waitForTimeout(2600);
+  await page.evaluate(() => { const c = document.querySelector('#shareSheet .ssCard'); if (c) c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2 })); });
+  await page.waitForTimeout(1500);
+
+  const probe = await page.evaluate(() => {
+    const btn = document.getElementById('ssInvite');
+    if (!btn) return { missing: true };
+    const r = btn.getBoundingClientRect();
+    if (!r.width || !r.height) return { collapsed: true };
+    if (r.y < 0 || r.y + r.height > innerHeight) return { offscreen: Math.round(r.y) };
+    const describe = (el) => !el ? 'nothing'
+      : el.id ? '#' + el.id
+      : '.' + String(el.className || '').split(' ').filter(Boolean).slice(0, 2).join('.');
+    /* Three points, not one: something covering only an edge still eats the taps that land
+       there, and a centre-only test would call that button reachable. */
+    const pts = [[0.5, 0.5], [0.14, 0.5], [0.86, 0.5]];
+    return {
+      rect: { w: Math.round(r.width), h: Math.round(r.height) },
+      hits: pts.map(([fx, fy]) => {
+        const el = document.elementFromPoint(r.x + r.width * fx, r.y + r.height * fy);
+        return { at: describe(el), ours: !!(el && (el === btn || btn.contains(el))) };
+      }),
+    };
+  });
+
+  if (probe.missing) bad('#ssInvite is gone — the send has no button to be covered');
+  else if (probe.collapsed) bad('#ssInvite has no box — the send button is not laid out at all');
+  else if (probe.offscreen !== undefined) bad(`#ssInvite sits at y=${probe.offscreen}, outside the viewport — a button nobody can scroll to is a button nobody taps`);
+  else {
+    const blocked = probe.hits.filter(h => !h.ours);
+    blocked.length === 0
+      ? ok(`a thumb reaches the send across its whole width (${probe.rect.w}×${probe.rect.h})`)
+      : bad(`"Send to a friend" is covered at ${blocked.length} of 3 points — a thumb lands on `
+          + blocked.map(h => h.at).join(', ') + ' instead of the button. This is how the send '
+          + 'was lost on 2026-08-20 and again on 2026-08-23: present, visible, untappable.');
+  }
+  await page.close();
+}
+
 await browser.close(); server.close();
-console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant, always its own hide, and the clip goes wherever it is sent');
+console.log(failed?`\n✗ ${failed} failure(s)`:'\n✓ the share is instant, always its own hide, the clip goes wherever it is sent, and no board leaves over the ceiling');
 process.exit(failed?1:0);

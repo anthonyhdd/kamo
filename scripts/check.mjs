@@ -25,6 +25,26 @@ const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
 let failed = 0;
 const ok = (m) => console.log('  ✓ ' + m);
 const bad = (m) => { failed++; console.error('  ✗ ' + m); };
+/* ⚠️ WHY A SUITE WENT RED, AND NEVER AN EMPTY RED.
+   Every block below catches its suite's non-zero exit and prints the ✗ lines out of its
+   stdout. That works when an assertion failed and it produces NOTHING when the process died
+   some other way — a waitForSelector timeout throwing, a browser that would not launch, a
+   syntax error in the suite itself. On 2026-08-20 this printed exactly
+   "✗ THE WEB FEED WALL IS IN THE WRONG PLACE:" and then a blank line, on a run whose very
+   next attempt was green and whose suite passed three times standing alone.
+   A gate that says DO NOT PUSH and cannot say why teaches the reader to run it again until it
+   agrees with them, which is the one habit this file exists to prevent. So when there are no
+   ✗ lines to show, what the process actually printed goes out instead. */
+function why(e) {
+  const out = ((e && e.stdout) || '').toString() + '\n' + ((e && e.stderr) || '').toString();
+  const hits = out.split('\n').filter((l) => l.includes('\u2717'));
+  if (hits.length) return hits.join('\n');
+  const tail = out.split('\n').filter((l) => l.trim()).slice(-8).join('\n');
+  return tail
+    ? '    NO ASSERTION FAILED — THE SUITE DIED. Its last output:\n' + tail
+    : '    it printed nothing at all (exit ' + ((e && e.status) != null ? e.status : '?') + ')';
+}
+
 /* ===== QUARANTINE, AND WHY THERE IS ONE =====================================================
    Until 2026-08-13 every DOM suite here globbed one hard-coded Linux path for its browser, so
    on the Mac where the work happens they ALL printed "skipping" and this script still ended
@@ -489,7 +509,46 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   }
 }
 
-/* ---- 5c-ter. WEB_ONLY and the wrapper's allow-list must not overlap -------------------------
+/* ---- 5c-ter. …and a carried event may not double as ITSELF -----------------------------------
+   5c-bis above guards one direction: a CARRIER name must mean one thing. This is the other,
+   and it cost more. Every call site fires `track(kind)` and then `trackCarried(kind)` — the
+   real name for anyone who can receive it, a carrier for the 1.0.2 fleet whose allow-list
+   drops it. The router reads `caps.eventsV2 ? kind : CARRIER_102[kind]`, so the day eventsV2
+   shipped it began resolving back to the name the call site had ALREADY sent, and both events
+   were counted. Amplitude on 2026-08-19: `purchase_initiated` split exactly 38 without
+   `carrier_for` and 38 with, the same 50/50 every day for a week. 90 buy taps on 08-17 read as
+   180; `round_finished` read 4 311 for ~2 200 rounds. A doubled numerator makes a checkout
+   rate look half as good as it is, and nothing anywhere looks broken.
+   The browser guard is the same defect wearing the other hat: with no wrapper there is no
+   allow-list to dodge and chWebTrack already delivered the real name, so the carrier only put
+   plain-browser rounds inside `reveal_previewed` — the number that is supposed to mean "a
+   round from a build that cannot say round_finished".
+   Static because the guards are one keystroke from deletion; test-carrier-dom.mjs then proves
+   at runtime that they actually hold, in all four worlds. */
+{
+  const fn = html.match(/function trackCarried\([\s\S]*?\n\}/);
+  if (!fn) bad('trackCarried not found — the funnel events for the old fleet have lost their router');
+  else {
+    const body = fn[0];
+    /* Only meaningful while the router CAN resolve to the real name. If someone later gives
+       eventsV2 its own dedicated name, the guard stops being load-bearing and this check
+       should stop demanding it rather than becoming a rule nobody remembers the reason for. */
+    const routesToKind = /\?\s*kind\s*:/.test(body);
+    const guards = [
+      [routesToKind && !/\bname\s*===\s*kind\b[^\n]*return/.test(body),
+        'the router can resolve to `kind` itself and nothing stops it re-sending a name the '
+        + 'call site already sent — that is the 90-taps-read-as-180 bug, exactly'],
+      [!/!window\.ReactNativeWebView\s*\)\s*return/.test(body),
+        'a carrier is sent even with no wrapper around the page, where the real name already '
+        + 'reached Amplitude through chWebTrack — browser traffic lands inside a carrier name'],
+    ].filter(([broken]) => broken).map(([, msg]) => msg);
+    guards.length
+      ? bad('ONE ACTION IS BEING COUNTED TWICE — ' + guards.join('; AND '))
+      : ok('a carried event is emitted once (trackCarried refuses the real name and the browser)');
+  }
+}
+
+/* ---- 5c-quater. WEB_ONLY and the wrapper's allow-list must not overlap ----------------------
    WEB_ONLY names bypass postNative() and go straight to Amplitude, because the wrapper drops
    anything not on its compiled WEB_EVENTS set and track() returns the moment postNative
    succeeds. That is only correct while the two lists are disjoint. The day someone adds one
@@ -658,8 +717,16 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
    The #ssGoPub handler is an arrow in a block, so the function-anchored wiring table above
    cannot reach it. What must hold: the tap performs the visibility toggle's own act — the
    sticky preference, the repaint, and the ROW-LEVEL flag. A handler that sets the label and
-   skips kfApplyVisibility would show "In the feed ✓" over a hide that never left private,
-   which is the one dishonest state this sheet must never produce. */
+   skips the publish would show "In the feed ✓" over a hide that never left private, which is
+   the one dishonest state this sheet must never produce.
+   ⚠️ THE ANCHOR IS kfPublishByHand(id) NOW, NOT kfApplyVisibility(id,true), and the change is
+   a tightening rather than a loosening. kfPublishByHand() is the same publish with one thing
+   in front of it: it will not write a hide public until its PHOTO is in the bucket. Without
+   that, a creator whose upload failed could hand the feed a row whose image 404s — 5 such rows
+   existed when this was written — and "In the feed ✓" would be true of the row and false of
+   anything a seeker could play. The old anchor is deliberately still listed as forbidden: a
+   handler that goes back to the raw write has lost the gate, and that is the regression this
+   line now guards. */
 {
   /* Anchored on the onclick assignment, not on the $("#ssGoPub") lookup — peekShareSheet's
      per-round reset holds the same lookup earlier in the file, and indexOf would land there
@@ -672,12 +739,175 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
        measured against a length this file does not have at that offset. */
     const seg = html.slice(at, at + 5000)
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-    const wants = ['kfSetWantPublic(true)', 'kfRenderVis()', 'kfApplyVisibility(id,true)', 'track("sent_public_accepted"'];
+    const wants = ['kfSetWantPublic(true)', 'kfRenderVis()', 'kfPublishByHand(id)', 'track("sent_public_accepted"'];
     const missing = wants.filter((w) => !seg.includes(w));
+    /* Going back to the ungated write is the specific regression, so it is named. */
+    const raw = seg.includes('kfApplyVisibility(id,true)');
     missing.length
       ? bad('the #ssGoPub handler is missing: ' + missing.join(', ') + ' — the receipt and the '
           + 'publish have to travel together or the label lies')
-      : ok('the go-public tap flips the preference, repaints the sheet, and publishes the row');
+      : raw
+        ? bad('the #ssGoPub handler publishes through kfApplyVisibility(id,true) again — that is '
+            + 'the write without the photo gate, and it can hand the feed a row whose image 404s')
+        : ok('the go-public tap flips the preference, repaints the sheet, and publishes a row that has its photo');
+  }
+}
+
+/* ---- 5d-septies. The photo upload must not ask storage for an upsert ----------------------
+   THIS ONE COST FIFTEEN HOURS OF EVERY UPLOAD IN THE APP. `x-upsert:"true"` was added to
+   chPrepare's POST on 2026-08-21 to solve a real problem — a re-freeze POSTs to the object
+   name it supersedes and a plain POST to an existing object answers 409 — and it took the
+   whole publish path down: from 06:00 UTC, zero successful uploads, every hide created with
+   no photo behind it, for as long as it took to find.
+   THE MECHANISM IS WHY THIS IS A CHECK AND NOT A COMMENT. x-upsert turns the INSERT into an
+   upsert, and anon has exactly one policy on storage.objects — "anon uploads a hide", INSERT
+   only. An upsert needs UPDATE too, so Postgres refuses the row before it ever considers
+   whether the object exists: `new row violates row-level security policy`. That means it
+   fails on the FIRST post of a brand-new name, which is why a change that reads as "handle
+   the second upload better" broke the first one for everybody. 683 of 684 storage failures
+   in one eight-hour window carried that message, against a single EntityTooLarge.
+   AND THE OBVIOUS REPAIR IS THE WRONG ONE: granting anon UPDATE would let anyone holding the
+   public key — it ships in index.html — overwrite the photo behind any hide already shared.
+   So the header stays out until storage has a policy that makes it safe, and this says so. */
+{
+  const at = html.indexOf('/storage/v1/object/hides/"+slot.name');
+  if (at < 0) bad('chPrepare no longer POSTs the board to /storage/v1/object/hides/ — the upload '
+      + 'moved and the upsert guard is anchored to nothing');
+  else {
+    const seg = html.slice(at, at + 600).replace(/\/\*[\s\S]*?\*\//g, '');
+    /[\'"]x-upsert[\'"]/.test(seg)
+      ? bad('the photo upload asks for x-upsert again — anon has INSERT and no UPDATE on '
+          + 'storage.objects, so this refuses EVERY upload with "new row violates row-level '
+          + 'security policy", not just the ones that would have 409d')
+      : ok('the photo upload posts without x-upsert, which anon has no policy to satisfy');
+  }
+}
+
+/* ---- 5d-octies. Nothing leaves the device over the bucket's ceiling ----------------------
+   The `hides` bucket has file_size_limit = 400000 and answers an oversized POST with HTTP 400
+   carrying {"statusCode":"413","code":"EntityTooLarge"}. Over seven days that refused 1054
+   uploads — roughly half of every upload failure, and the deterministic half: a busy photograph
+   encodes over the line every single time, which is why 131 devices had EVERY hide they ever
+   made fail. And because chUpload writes the ROW before it writes the photo, the user-visible
+   cost is not a publish that failed. It is a hide that exists, gets sent, gets tapped, and has
+   no kamo in it.
+   chBlob is the only place a board becomes bytes, so chFitBudget has to be on its way out —
+   not called somewhere near it, but the last thing that happens to the blob. The realistic
+   regression is somebody editing the encoder and dropping the .then(), which restores the bug
+   in full and silently: every board still encodes, and only the big ones stop existing. */
+{
+  const at = html.indexOf('c.toBlob(b=>res(b),"image/jpeg"');
+  if (at < 0) bad('chBlob no longer encodes through c.toBlob — the board-to-bytes path moved and '
+      + "the upload ceiling's only guard is anchored to nothing");
+  else {
+    const seg = html.slice(at, at + 400).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+CH_BLOB_BUDGET\s*=\s*(\d+)/);
+    const budget = m ? Number(m[1]) : NaN;
+    !seg.includes('.then(chFitBudget)')
+      ? bad('chBlob no longer ends .then(chFitBudget) — boards go to storage unmeasured again, '
+          + 'and the big ones come back 400 EntityTooLarge with the row already written')
+      : !m
+        ? bad('CH_BLOB_BUDGET is gone — the ladder has no line to bring a board under')
+        : budget > 400000
+          ? bad(`CH_BLOB_BUDGET is ${budget}, at or over the bucket's 400000-byte limit — the `
+              + 'ladder now stops shrinking while the upload still fails')
+          : ok(`every board leaves through chFitBudget, capped at ${budget} under the bucket's 400000`);
+  }
+}
+
+/* ---- 5d-nonies. The waiting-reply arm opens a card, never an interruption ----------------
+   openArm decides whether a reply that came back opens its own card instead of lighting an
+   18px dot and hoping. Three things have to stay true, and none are visible from the arm's
+   declaration.
+   IT FIRES ONLY ON A FRESH REPLY. The hook sits inside chReplyCheck's `newer than the mark`
+   branch, beside brandDot(true). Moved out of it, the card opens on every launch that has any
+   reply at all — forever, for the same one — and on the dot's other two reasons, which are
+   feedback with nothing to do.
+   IT STANDS DOWN OVER A BUSY SCREEN. chHomeIdle() is what keeps this a delivery rather than
+   an interruption: composing, seeking, the feed, the share sheet, the hero and a share link
+   all outrank it. Without that test the card lands on top of whatever the user was doing more
+   than a second after launch.
+   AND ITS EXPOSURE HAS A ROUTE. reply_auto_opened separates "arm was on" from "card actually
+   opened"; a new event name not on WEB_ONLY measures nothing on the live build. */
+{
+  const at = html.indexOf('track("reply_pending"');
+  if (at < 0) bad('reply_pending is gone — the waiting-reply arm has no fresh-reply branch to hang on');
+  else {
+    const seg = html.slice(at, at + 900).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+REPLY_OPEN_ROLLOUT\s*=\s*(\d+)/);
+    const wo = (html.match(/const WEB_ONLY=new Set\(\[([\s\S]*?)\]\)/) || [])[1] || '';
+    const routed = wo.replace(/\/\*[\s\S]*?\*\//g, '').includes('"reply_auto_opened"');
+    !m
+      ? bad('REPLY_OPEN_ROLLOUT is gone — the waiting-reply arm has no rollout to kill it with')
+      : !seg.includes('openKamoHome()')
+        ? bad('the fresh-reply branch no longer opens the card — the arm has no treatment, and '
+            + 'every device reads as the control side')
+        : !seg.includes('chHomeIdle()')
+          ? bad('the auto-open no longer tests chHomeIdle() — the card can now land on top of '
+              + 'someone composing, seeking or reading the feed a second after launch')
+          : !routed
+            ? bad('reply_auto_opened is not on WEB_ONLY — the arm cannot tell "on" from "on but '
+                + 'stood down", and the event measures nothing on the live build')
+            : ok(`the waiting-reply arm is a ${m[1]}% coin, fires only on a fresh reply, and stands down over a busy screen`);
+  }
+}
+
+/* ---- 5d-decies. The sheet may not call a hide live before its photo is up -----------------
+   create_hide does not wait for the bytes and must not: the share link is the product's
+   fastest moment. The cost is that a refused upload leaves a row pointing at no object, and
+   the only thing standing between that and a creator being told it worked is the watcher on
+   chPrepare's result. Drop it and every sentence on the sheet goes back to claiming a hide is
+   live when there is nothing in it — which is what 364 people were told on 2026-08-21.
+   Anchored on the declaration rather than the call so that moving the watcher still fails. */
+{
+  const decl = /let\s+chPhotoGone\s*=/.test(html);
+  const reset = /chPhotoGone\s*=\s*false;[\s\S]{0,120}chRound\+\+/.test(html);
+  const at = html.indexOf('const bytes=chPrepare();');
+  const seg = at < 0 ? '' : html.slice(at, at + 900).replace(/\/\*[\s\S]*?\*\//g, '');
+  const watched = /chPhotoGone\s*=\s*true/.test(seg);
+  const headline = /chPhotoGone\s*\?\s*"The photo didn't upload\."/.test(html);
+  !decl
+    ? bad('chPhotoGone is gone — nothing distinguishes a row with no picture from a published hide')
+    : at < 0
+      ? bad('chUpload no longer starts the bytes with chPrepare() — the watcher is anchored to nothing')
+      : !watched
+        ? bad('the upload result is no longer watched — a refused upload leaves the sheet saying '
+            + 'the hide is live, which is the creator-side half of the 2026-08-21 outage')
+        : !headline
+          ? bad('the headline no longer branches on chPhotoGone — the retraction exists and says nothing')
+          : !reset
+            ? bad('chPhotoGone is not cleared with the round — one failed upload marks every hide after it')
+            : ok('a refused upload retracts the live claim, and it is cleared with the round');
+}
+
+/* ---- 5d-undecies. The landing waits for a real row, and keeps the sheet -------------------
+   landArm turns the screen behind the share sheet into the feed, seeded on the hide just made.
+   Three things have to hold and none are visible from the arm's declaration.
+   IT WAITS FOR AN ID. chAwaitId answering nothing means the publish failed or never ran;
+   seeding a feed on that hide is the bug fixed the same day this arm was written, arrived at
+   from the other direction.
+   IT DOES NOT CLOSE THE SHEET. #ssSeeLive closes it deliberately — a tap there IS a request
+   for the feed — but here the send has not happened yet, and the send is the flattest number
+   in the product. A closeShareSheet() in this branch buys scroll with sends.
+   AND IT LEAVES REPLIES ALONE, because chReplyTo rounds already return to the feed on their
+   own and two returns racing is a screen that jumps. */
+{
+  const at = html.indexOf('track("sheet_presented"');
+  if (at < 0) bad('sheet_presented is gone — the landing arm is anchored to nothing');
+  else {
+    const seg = html.slice(at, at + 1400).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = html.match(/const\s+FEED_LANDING_ROLLOUT\s*=\s*(\d+)/);
+    !m
+      ? bad('FEED_LANDING_ROLLOUT is gone — the landing experiment has no rollout to kill it with')
+      : !seg.includes('chFeed(')
+        ? bad('the landing no longer opens a feed — the arm has no treatment and every device reads as control')
+        : !seg.includes('chAwaitId(')
+          ? bad('the landing no longer waits for an id — it can seed a feed on a hide that was never created')
+          : !/!chReplyTo/.test(seg)
+            ? bad('the landing no longer excludes replies — a reply round now gets two returns to the feed')
+            : seg.includes('closeShareSheet()')
+              ? bad('the landing closes the share sheet — the send has not happened yet, and that trades sends for scroll')
+              : ok(`the landing is a ${m[1]}% coin, waits for a real row, and keeps the sheet`);
   }
 }
 
@@ -927,7 +1157,7 @@ try {
   execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-share.mjs')], { stdio: 'pipe' });
   ok('share paths behave (node scripts/test-share.mjs for the detail)');
 } catch (e) {
-  bad('SHARE PATHS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('SHARE PATHS BROKEN:\n' + why(e));
 }
 
 /* ---- 7. The challenge link's head ----------------------------------------------------------
@@ -939,7 +1169,7 @@ try {
   execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edge-h.mjs')], { stdio: 'pipe' });
   ok('the challenge link unfurls and keeps its domain (node scripts/test-edge-h.mjs for the detail)');
 } catch (e) {
-  bad('CHALLENGE LINK HEAD BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('CHALLENGE LINK HEAD BROKEN:\n' + why(e));
 }
 
 /* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
@@ -968,7 +1198,7 @@ try {
      under it: the preview card, the rehearsal overlay, the Instagram slab.
      It now asserts the sheet that ships, and the paywall-copy block it carries earned its
      place on the way out — it caught three live strings calling the figurine a "body". */
-  bad('THE SHORT SHEET IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SHORT SHEET IS BROKEN:\n' + why(e));
 }
 
 /* ---- 9. The results chip ---------------------------------------------------------------
@@ -984,7 +1214,7 @@ try {
      settings are retired and the seeker plays one buzz on no clock, so the assertion was
      inverted rather than deleted — neither a hide storing those values nor one storing none
      may quote them, and both must state the deal actually on offer. */
-  bad('THE RESULTS CHIP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE RESULTS CHIP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 10. The creator pass --------------------------------------------------------------
@@ -998,7 +1228,7 @@ try {
     ? skipped('test-pass-dom.mjs', 'CREATOR-PASS TEST', out)
     : ok('the creator pass unlocks, persists and can be revoked (node scripts/test-pass-dom.mjs)');
 } catch (e) {
-  bad('THE CREATOR PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE CREATOR PASS IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11. The player card ---------------------------------------------------------------
@@ -1015,7 +1245,7 @@ try {
      headline itself became the way back into the field. The assertion it carried is the one
      that matters (there has to be a way to fix a typo after the field collapses), so it moved
      onto #khTitle rather than being dropped. */
-  bad('THE PLAYER CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE PLAYER CARD IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11b. The name has to survive the next launch ---------------------------------------
@@ -1030,7 +1260,7 @@ try {
     ? skipped('test-handle-dom.mjs', 'HANDLE TEST', out)
     : ok('the name is typed once and survives the next launch (node scripts/test-handle-dom.mjs)');
 } catch (e) {
-  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE NAME DOES NOT SURVIVE A RELAUNCH:\n' + why(e));
 }
 
 /* ---- 11c. The full-bleed paywall arm ---------------------------------------------------- */
@@ -1042,7 +1272,7 @@ try {
     ? skipped('test-pwfull-dom.mjs', 'FULL-ARM PAYWALL TEST', out)
     : ok('the full-bleed paywall arm renders and sells only real prices (node scripts/test-pwfull-dom.mjs)');
 } catch (e) {
-  bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE FULL-BLEED PAYWALL ARM IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11d. Which plan the CTA sells ------------------------------------------------------ */
@@ -1055,7 +1285,7 @@ try {
     ? skipped('test-planarm-dom.mjs', 'PLAN-ARM TEST', out)
     : ok('the hero-plan arm sells the plan it selected, and falls back when it cannot (node scripts/test-planarm-dom.mjs)');
 } catch (e) {
-  bad('THE HERO-PLAN ARM IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE HERO-PLAN ARM IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11e. The hint on the seek screen --------------------------------------------------- */
@@ -1068,7 +1298,7 @@ try {
   const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-hint-dom.mjs')], { stdio: 'pipe' }).toString();
   out.includes('skipping')
     ? skipped('test-hint-dom.mjs', 'HINT TEST', out)
-    : ok('the hint is gated on the native capability and drawn where the server put it (node scripts/test-hint-dom.mjs)');
+    : ok('the hint is gated, drawn where the server put it, and still there when the round ends (node scripts/test-hint-dom.mjs)');
 } catch (e) {
   /* BOTH STREAMS, because the \u2717 lines are on NEITHER the one this used to read. test-hint-dom
      prints its passes with console.log and its failures with console.error, so filtering
@@ -1077,6 +1307,30 @@ try {
   const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
   const lines = streams.split('\n').filter((l) => l.includes('\u2717'));
   bad('THE HINT IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
+}
+
+/* ---- 11e1. The device id, which is the hint wallet's key --------------------------------
+   hintOwner() keys the wallet on `chUserId || ("dev:"+chDeviceId())`, and chUserId is empty
+   for the whole live population — 152 wallets have spent a hint and ZERO were keyed on one.
+   So chDeviceId() IS the wallet, and it used to live in localStorage alone: 149 of those 152
+   (98%) spent exactly one hint ever, which is the shape of a wallet that is cleared away
+   before it can spend a second. Both halves of that failure are silent — the free daily hint
+   renews for anyone who clears storage, and a bought pack is credited to a key the phone can
+   no longer produce — so nothing but this suite reports it.
+   It also guards the more dangerous half of the fix: the block runs during module
+   evaluation and touches three storage APIs that throw on real devices. A throw there is a
+   blank app for the entire fleet, which is a far worse bug than the one it repairs. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-devid-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-devid-dom.mjs', 'DEVICE-ID TEST', out)
+    : ok('the device id survives a cleared store and an existing one is never minted over (node scripts/test-devid-dom.mjs)');
+} catch (e) {
+  /* Both streams, for the reason the hint block below documents: passes go to stdout and
+     failures to stderr, so filtering one of them finds nothing and names no cause. */
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('✗'));
+  bad('THE DEVICE ID IS NOT SURVIVING:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
 }
 
 /* ---- 11e2. The card on your own photo ----------------------------------------------------
@@ -1092,7 +1346,7 @@ try {
     ? skipped('test-ownpost-dom.mjs', 'OWN-POST TEST', out)
     : ok('your own hide gets its own card, and its exit reaches the camera (node scripts/test-ownpost-dom.mjs)');
 } catch (e) {
-  bad('THE OWN-HIDE CARD IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE OWN-HIDE CARD IS BROKEN:\n' + why(e));
 }
 
 /* ---- 11f. What the sheet claims, and to whom --------------------------------------------- */
@@ -1107,7 +1361,7 @@ try {
     ? skipped('test-sheetlive-dom.mjs', 'SHEET-LIVE TEST', out)
     : ok('the sheet claims only what the toggle allows, and opens the feed on that hide (node scripts/test-sheetlive-dom.mjs)');
 } catch (e) {
-  bad('THE SHEET IS CLAIMING THE WRONG THING:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('\u2717')).join('\n'));
+  bad('THE SHEET IS CLAIMING THE WRONG THING:\n' + why(e));
 }
 
 /* ---- 12. The signed challenge, from the receiver's side --------------------------------- */
@@ -1117,7 +1371,7 @@ try {
     ? skipped('test-seek-dom.mjs', 'SEEKER TEST', out)
     : ok('the seeker screen names the sender (node scripts/test-seek-dom.mjs)');
 } catch (e) {
-  bad('THE SEEKER SCREEN IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SEEKER SCREEN IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b. The one-buzz round, end to end -------------------------------------------------
@@ -1131,7 +1385,7 @@ try {
     ? skipped('test-buzz-dom.mjs', 'BUZZ TEST', out)
     : ok('the one-buzz round behaves end to end (node scripts/test-buzz-dom.mjs)');
 } catch (e) {
-  bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE ONE-BUZZ SEEKER IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-ter. The feed ---------------------------------------------------------------------
@@ -1147,7 +1401,25 @@ try {
     ? console.log('  · FEED TEST SKIPPED — ' + out.trim().split('\n').pop())
     : ok('the feed plays real rounds and states where a photo goes (node scripts/test-feed-dom.mjs)');
 } catch (e) {
-  bad('THE FEED IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FEED IS BROKEN:\n' + why(e));
+}
+
+/* ---- 12b-bis. The swipe is not free, and the lock is not a trap ---------------------------
+   chNoteSeek() runs from ending(), and ending() only happens on a buzz — so scrolling past a
+   feed round cost nothing and the run counted only the rounds the player was already sure
+   about. That is the same selection bias `n_attempts` carries (feed 59.2% found in 3.6s
+   against 48.0% in 7.3s on a link), and it made the hint pack insurance against a risk nobody
+   was exposed to. The slide is held until its round is answered.
+   The half that needs a gate is the RELEASE. There is no clock any more, so a slide that locks
+   and never lets go is a dead end with no timer and no gesture out of it — and one release
+   path (a photo that never loads) does not go through ending() at all. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-feedlock-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-feedlock-dom.mjs', 'FEED LOCK TEST', out)
+    : ok('the feed holds a round until it is answered, and always lets go (node scripts/test-feedlock-dom.mjs)');
+} catch (e) {
+  bad('THE FEED LOCK IS A TRAP OR A NO-OP:\n' + why(e));
 }
 
 /* ---- 12b-quater. The reply knows who it answers -------------------------------------------
@@ -1162,7 +1434,7 @@ try {
     ? console.log('  · REPLY TEST SKIPPED — ' + out.trim().split('\n').pop())
     : ok('a reply knows who it answers (node scripts/test-reply-dom.mjs)');
 } catch (e) {
-  bad('THE REPLY LOOP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE REPLY LOOP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-sexies. The feed's quality pass ----------------------------------------------------
@@ -1174,7 +1446,7 @@ try {
     ? skipped('test-feedq-dom.mjs', 'FEED-QUALITY TEST', out)
     : ok('the lqip paints (and only the real shape), the banger inserts fourth (node scripts/test-feedq-dom.mjs)');
 } catch (e) {
-  bad('THE FEED QUALITY PASS IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FEED QUALITY PASS IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-quinquies. The challenges panel ---------------------------------------------------
@@ -1189,7 +1461,7 @@ try {
     ? skipped('test-chal-dom.mjs', 'CHALLENGES TEST', out)
     : ok('the challenges panel behaves (node scripts/test-chal-dom.mjs)');
 } catch (e) {
-  bad('THE CHALLENGES PANEL IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE CHALLENGES PANEL IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-bis. The share sends THIS round's hide, and sends it now -------------------------
@@ -1204,7 +1476,7 @@ try {
     ? skipped('test-share-dom.mjs', 'SHARE-TIMING TEST', out)
     : ok('the share is instant and always its own hide (node scripts/test-share-dom.mjs)');
 } catch (e) {
-  bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SHARE SENDS THE WRONG HIDE OR MAKES THE USER WAIT:\n' + why(e));
 }
 
 /* ---- 12b-ter. Instagram is reachable, native-only, and it does not out-rank the send ------
@@ -1221,7 +1493,7 @@ try {
     ? skipped('test-igbtn-dom.mjs', 'INSTAGRAM BUTTON TEST', out)
     : ok('Instagram is reachable, native-only, and does not out-rank the send (node scripts/test-igbtn-dom.mjs)');
 } catch (e) {
-  bad('THE INSTAGRAM TARGET IS UNREACHABLE OR IT IS EATING THE ROW:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE INSTAGRAM TARGET IS UNREACHABLE OR IT IS EATING THE ROW:\n' + why(e));
 }
 
 /* ---- 12b-quater. The feed is walled in a browser, and NOTHING else is --------------------
@@ -1236,7 +1508,7 @@ try {
     ? skipped('test-feedwall-dom.mjs', 'FEED-WALL TEST', out)
     : ok('the wall is on the feed, and only on the feed (node scripts/test-feedwall-dom.mjs)');
 } catch (e) {
-  bad('THE WEB FEED WALL IS IN THE WRONG PLACE:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE WEB FEED WALL IS IN THE WRONG PLACE:\n' + why(e));
 }
 
 /* THE POST-SEND INSTALL OFFER, and the two ways it goes wrong are opposites. Shown inside the
@@ -1251,7 +1523,7 @@ try {
     ? skipped('test-sentcta-dom.mjs', 'SENT-CTA TEST', out)
     : ok('the app is offered after the send, and only in a browser (node scripts/test-sentcta-dom.mjs)');
 } catch (e) {
-  bad('THE POST-SEND OFFER IS WRONG:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE POST-SEND OFFER IS WRONG:\n' + why(e));
 }
 
 /* WHICH IMPRESSION THE PAYWALL SPENDS, AND WHERE IT STOPS. The nth split says the first
@@ -1266,7 +1538,7 @@ try {
     ? skipped('test-pwgate-dom.mjs', 'PAYWALL-GATE TEST', out)
     : ok('every install is offered once and the tail stays capped (node scripts/test-pwgate-dom.mjs)');
 } catch (e) {
-  bad('THE FIRST-OFFER GUARANTEE OR THE TAIL CAP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FIRST-OFFER GUARANTEE OR THE TAIL CAP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12b-septies. The record the broken run names ------------------------------------------
@@ -1281,7 +1553,7 @@ try {
     ? skipped('test-runrec-dom.mjs', 'RUN-RECORD TEST', out)
     : ok('the record speaks on the break and stays off the title (node scripts/test-runrec-dom.mjs)');
 } catch (e) {
-  bad('THE BROKEN RUN IS LANDING ON THE HEADLINE OR MISSTATING THE RECORD:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE BROKEN RUN IS LANDING ON THE HEADLINE OR MISSTATING THE RECORD:\n' + why(e));
 }
 
 /* ---- 12c. The spectator seat ------------------------------------------------------------
@@ -1296,7 +1568,7 @@ try {
     ? skipped('test-replay-dom.mjs', 'REPLAY TEST', out)
     : ok('the replay plays and never leaks the winning spot (node scripts/test-replay-dom.mjs)');
 } catch (e) {
-  bad('THE REPLAY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE REPLAY IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12d. The bell on your own hide ------------------------------------------------------
@@ -1310,7 +1582,7 @@ try {
     ? skipped('test-bell-dom.mjs', 'BELL TEST', out)
     : ok('the notification bell is offered where it is true, and answers honestly (node scripts/test-bell-dom.mjs)');
 } catch (e) {
-  bad('THE NOTIFICATION BELL IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE NOTIFICATION BELL IS BROKEN:\n' + why(e));
 }
 
 /* ---- 12e. The card on slide 4 ------------------------------------------------------------
@@ -1327,7 +1599,7 @@ try {
     ? skipped('test-feedgate-dom.mjs', 'FEED GATE TEST', out)
     : ok('the feed asks once, of the right person, and counts it once (node scripts/test-feedgate-dom.mjs)');
 } catch (e) {
-  bad('THE FEED\'S FIRST ASK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FEED\'S FIRST ASK IS BROKEN:\n' + why(e));
 }
 
 /* The opener experiment: the banger's POSITION obeys bangerArm, and nothing else moves. A
@@ -1340,7 +1612,49 @@ try {
     ? skipped('test-banger-dom.mjs', 'BANGER-OPENER TEST', out)
     : ok('the proven opener obeys its arm, once per session, position only (node scripts/test-banger-dom.mjs)');
 } catch (e) {
-  bad('THE OPENER EXPERIMENT IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE OPENER EXPERIMENT IS BROKEN:\n' + why(e));
+}
+
+/* The open experiment sits on the BOOT LINE — the one place in index.html where a mistake is
+   a blank app for every user at once — so it gets a suite, not a comment. Four silent failure
+   modes: a control arm that also opens the feed (no measurement), a share link taken by the
+   coin (the sender's hide replaced by strangers), a first launch diverted away from its hero
+   and its permission sheet, and a camera that stops booting under the feed. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-openarm-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-openarm-dom.mjs', 'OPEN-ARM TEST', out)
+    : ok('the app opens where its arm says, the camera survives it, and a share link still wins (node scripts/test-openarm-dom.mjs)');
+} catch (e) {
+  bad('THE OPEN EXPERIMENT IS BROKEN:\n' + why(e));
+}
+
+/* The row is written without waiting for the bytes, on purpose — the share link has to be
+   instant. So a refused upload leaves a row whose img_path points at nothing, and until this
+   suite existed the sheet went on announcing that hide as live, over a Send button. That is
+   the creator's half of 2026-08-21. The middle assertion is the one that earns the suite: a
+   retraction that fires on every round would look exactly like a fix. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-photoless-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-photoless-dom.mjs', 'PHOTOLESS-PUBLISH TEST', out)
+    : ok('a hide with no photo is never announced as live, and a working one still is (node scripts/test-photoless-dom.mjs)');
+} catch (e) {
+  bad('THE PHOTOLESS PUBLISH IS BROKEN:\n' + why(e));
+}
+
+/* The landing arm decides what sits behind the share sheet once a hide is real. It rides on
+   peekShareSheet, so a mistake here is felt by every publisher at once. Four silent failures:
+   a control arm that also lands, a landing that takes the sheet away (buying scroll with
+   sends), a feed seeded on a hide that was never created, and a reply hauled into a second
+   return. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-landing-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-landing-dom.mjs', 'LANDING TEST', out)
+    : ok('a finished hide lands in the feed with its sheet, and only when it is really there (node scripts/test-landing-dom.mjs)');
+} catch (e) {
+  bad('THE LANDING EXPERIMENT IS BROKEN:\n' + why(e));
 }
 
 /* A device that cannot create a WebGL context must get hunt-only mode, not a black screen.
@@ -1353,7 +1667,7 @@ try {
     ? skipped('test-webgl-dead.mjs', 'WEBGL-DEAD TEST', out)
     : ok('a GL-less phone gets hunt-only mode, not a black screen (node scripts/test-webgl-dead.mjs)');
 } catch (e) {
-  bad('HUNT-ONLY MODE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('HUNT-ONLY MODE IS BROKEN:\n' + why(e));
 }
 
 /* The handle crosses a trust boundary: one user types it, another user's phone renders it.
@@ -1385,7 +1699,67 @@ try {
     ? skipped('test-brush-dom.mjs', 'BRUSH TEST', out)
     : ok('members get the brush range they paid for (node scripts/test-brush-dom.mjs)');
 } catch (e) {
-  bad('THE BRUSH RANGE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE BRUSH RANGE IS BROKEN:\n' + why(e));
+}
+
+/* ---- 13-bis. The two escapes from a bad stroke ------------------------------------------
+   Undo and Clear are the only way back out of a stroke that went wrong, on a board with an
+   89-second clock running over it — and both of them were quietly wrong for as long as nothing
+   watched them. Undo popped the top of the stack and then painted what was UNDERNEATH it, so
+   the first tap took the good stroke as well as the bad one and the last tap did nothing;
+   Clear read the blank board off the front of the same stack, which the budget trim had been
+   shifting away since the seventh stroke. Neither throws, neither shows in a diff, and both
+   are perfectly visible in the number on the coverage chip — which is what the suite drives,
+   with real strokes through the real handlers. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-undo-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-undo-dom.mjs', 'UNDO TEST', out)
+    : ok('Undo takes back one stroke and Clear takes back all of them (node scripts/test-undo-dom.mjs)');
+} catch (e) {
+  bad('UNDO OR CLEAR IS BROKEN:\n' + why(e));
+}
+
+/* ---- 13-bis-2. The reveal has to show the figure where the answer says it is ------------
+   Two descriptions of one position, built from different material: chGeom() reads the bbox of
+   maskCanvas and becomes the (cx,cy,r) the server tests every tap against, while beforeBoard
+   is the picture the seeker is shown when the round ends. commitMove() shifts the mask, so the
+   answer follows a nudged figure; beforeBoard was snapshot once inside capture() and never
+   again, so the reveal did not.
+   Nothing reports that, because the tap is still judged against the answer key — the round is
+   scored correctly and only the picture afterwards lies. From the player's side that is worse
+   than a wrong answer: they tap the figure, are told "Found in 9.4s", and are then shown the
+   figure half a screen from their mark. Reported from production 2026-08-21 on hide
+   d08d6d0795d96697. And it needs no deliberate gesture — a hold anywhere on the board starts
+   a move drag, so a thumb that rests a beat too long is enough. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-movereveal-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-movereveal-dom.mjs', 'MOVE/REVEAL TEST', out)
+    : ok('a moved figure is revealed where the answer key says it is (node scripts/test-movereveal-dom.mjs)');
+} catch (e) {
+  /* Both streams: this suite prints its passes to stdout and its failures to stderr. */
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('\u2717'));
+  bad('THE REVEAL AND THE ANSWER KEY DISAGREE:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
+}
+
+/* ---- 13-ter. The only channel this app has for a sentence -------------------------------
+   showHint() is how "Reported. Thank you.", "Link copied", "Couldn't load the replay", "Still
+   going up — give it a second" and "That one is in the app" are all said, and #hint shipped at
+   z-index 12 INSIDE #app — a position:fixed element, so a stacking context. Every one of those
+   lines was painted, with the right text, underneath the surface that sent it: the reveal, the
+   share sheet, a seek round, the feed, My kamos, the player card. The file already worked
+   around the hero case in camFail() and nobody generalised it.
+   Asserted by hit-testing rather than by z-index arithmetic, because the number alone was
+   never the answer — the parent is half of it. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-toast-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-toast-dom.mjs', 'TOAST TEST', out)
+    : ok('every surface that sends a message can show one (node scripts/test-toast-dom.mjs)');
+} catch (e) {
+  bad('THE MESSAGE CHANNEL IS BURIED AGAIN:\n' + why(e));
 }
 
 /* ---- 13a. What the board does with the photo it was given -------------------------------
@@ -1400,7 +1774,7 @@ try {
     ? skipped('test-fit-dom.mjs', 'FRAMING TEST', out)
     : ok('a picked photo fills the board, the camera keeps its bars (node scripts/test-fit-dom.mjs)');
 } catch (e) {
-  bad('THE FRAMING IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE FRAMING IS BROKEN:\n' + why(e));
 }
 
 /* ---- 13a-bis. The crop the user drags ----------------------------------------------------
@@ -1414,7 +1788,7 @@ try {
     ? skipped('test-reframe-dom.mjs', 'REFRAME TEST', out)
     : ok('the crop the user drags is the crop that gets painted (node scripts/test-reframe-dom.mjs)');
 } catch (e) {
-  bad('THE PHOTO CROP IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE PHOTO CROP IS BROKEN:\n' + why(e));
 }
 
 /* ---- 13b. The clock the session clip runs on --------------------------------------------
@@ -1428,7 +1802,7 @@ try {
     ? skipped('test-session-dom.mjs', 'SESSION TEST', out)
     : ok('the session clip runs at the length of the round (node scripts/test-session-dom.mjs)');
 } catch (e) {
-  bad('THE SESSION CLIP\'S TIMELINE IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE SESSION CLIP\'S TIMELINE IS BROKEN:\n' + why(e));
 }
 
 /* ---- 14. The end of the viral loop ------------------------------------------------------
@@ -1443,7 +1817,7 @@ try {
     ? skipped('test-reflink-dom.mjs', 'REFERRAL-LINK TEST', out)
     : ok('the seeker CTA is attributed (node scripts/test-reflink-dom.mjs)');
 } catch (e) {
-  bad('THE REFERRAL LINK IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE REFERRAL LINK IS BROKEN:\n' + why(e));
 }
 
 /* The other silent measurement failure, and the reason it needs a wire-level test rather than
@@ -1459,7 +1833,22 @@ try {
     ? skipped('test-variantprop-dom.mjs', 'VARIANT-PROPERTY TEST', out)
     : ok('the web names its variant to Amplitude as a user property (node scripts/test-variantprop-dom.mjs)');
 } catch (e) {
-  bad('THE WEB IS INVISIBLE IN THE VARIANT DASHBOARDS:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE WEB IS INVISIBLE IN THE VARIANT DASHBOARDS:\n' + why(e));
+}
+
+/* The runtime half of 5c-ter. The static check can see that two guards are written; only a
+   browser can say that the router actually emits one name per action across the four worlds
+   that exist — eventsV2, an old build that announced its caps, a build that announced none,
+   and no wrapper at all. The middle two are the ones a "simplification" would delete, and
+   they are the only reason carriers exist. The Buy tap is then driven for real, because the
+   doubling was found on the path that pays and that is where it must stay found. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-carrier-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-carrier-dom.mjs', 'CARRIER TEST', out)
+    : ok('one action emits one event name, on every build (node scripts/test-carrier-dom.mjs)');
+} catch (e) {
+  bad('AN ACTION IS BEING COUNTED TWICE:\n' + why(e));
 }
 
 /* The regression this change exists to prevent, asserted on the source as well as at runtime:
@@ -1519,7 +1908,7 @@ try {
     ? skipped('test-trial-copy-dom.mjs', 'TRIAL-COPY TEST', out)
     : ok('the paywall promises only what the store returned (node scripts/test-trial-copy-dom.mjs)');
 } catch (e) {
-  bad('THE TRIAL COPY IS BROKEN:\n' + (e.stdout || '').toString().split('\n').filter((l) => l.includes('✗')).join('\n'));
+  bad('THE TRIAL COPY IS BROKEN:\n' + why(e));
 }
 
 /* THE FEED'S load() MUST HAND A JOINER THE PAGE IT IS ALREADY FETCHING.

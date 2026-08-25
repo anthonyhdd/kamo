@@ -94,6 +94,34 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
+/* ⚠️ A SWIPE COSTS A ROUND NOW, SO A TEST THAT SWIPES HAS TO PLAY ONE.
+   The feed locks the slide under the thumb until its round is answered (FEED_LOCK in chFeed),
+   which is what stopped the run being farmable by scrolling. Every case below that scrolls to
+   prove something about the SLIDE LIFECYCLE — teardown, timing properties, block filtering —
+   used to set scrollTop straight past a live round, and the clamp now pulls it back.
+   Answering first is the faithful fix rather than switching the lock off for the suite: it is
+   what a player does, and it keeps these cases running against the shipped configuration. One
+   tap on the stage is the whole game, so it ends the round whatever the answer is. */
+const answerAndScroll = async (page) => {
+  await page.evaluate(() => {
+    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+    if (!st) return;
+    const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+    st.dispatchEvent(new PointerEvent('pointerdown', o));
+    st.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  /* ⚠️ WAITED FOR, NEVER SLEPT ON — the rule this file already writes down further below, and
+     the lock is a new way to get it wrong. A fixed 600ms passed alone and failed inside the
+     full gate, where a dozen Chromes share the machine: the ending had not landed, the slide
+     was still locked, the clamp pulled the scroll back and the failure read as "the round did
+     not follow the scroll" — a sentence about the feed, produced by a sleep in the harness. */
+  await page.waitForFunction(
+    () => ![...document.querySelectorAll('.kfSlide')].some(x => x.classList.contains('kfLock')),
+    { timeout: 9000 }).catch(() => {});
+  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+};
+
+
 const ROWS = n => Array.from({ length: n }, (_, i) => ({
   id: 'hide' + i, img_path: 'p' + i + '.jpg', name: i ? null : 'tony',
   n_attempts: i, n_found: 0, created_at: '2026-08-1' + (2 - (i % 3)) + 'T10:0' + i + ':00Z',
@@ -103,8 +131,15 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
    can plant localStorage the app will read on boot (a legacy reaction key, say). It takes the
    page rather than a value so it can use addInitScript, which is the one hook that survives
    the navigation. */
+/* THE ROUND'S PHOTO HAS TO ARRIVE. chSeek() grew an img.onerror: a camo image that never
+   loads now says so on the headline ("This one didn't load"), stops the clock and refuses the
+   buzz, rather than leaving a live round on a black rectangle filing 0.0s attempts. That is
+   the fix, and it means a harness which lets the photo 404 is asserting against the failure
+   screen instead of against the round. One transparent pixel is all any of these cases need. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 async function open(rows, extra, before) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   if (before) await before(page);
   await page.addInitScript((a) => {
     window.__seed = Object.assign({
@@ -139,8 +174,9 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
   const one = await page.evaluate(() => document.querySelectorAll('.chS').length);
   one === 1 ? ok('exactly one round is alive') : bad(`expected 1 round, got ${one}`);
 
-  /* The scroll drives the IntersectionObserver, which is what a swipe does on a phone. */
-  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  /* The scroll drives the IntersectionObserver, which is what a swipe does on a phone — and it
+     has to be earned now, see answerAndScroll. */
+  await answerAndScroll(page);
   await page.waitForTimeout(900);
   const still = await page.evaluate(() => document.querySelectorAll('.chS').length);
   still === 1 ? ok('scrolling to the next hide destroys the previous round (still 1)') : bad(`after a scroll there are ${still} rounds`);
@@ -160,8 +196,12 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
      how much (p_limit), which slice (p_before / p_offset / p_seen) and who is filtered out
      (p_block_tags) — and nothing else, ever.
      `p_seen` is this device telling the server what it has already been given, which travels the
-     same way round as everything else here: OUT. Nothing on this list can carry an answer back. */
-  const LISTING_ARGS = new Set(['p_before', 'p_limit', 'p_offset', 'p_block_tags', 'p_seen']);
+     same way round as everything else here: OUT. Nothing on this list can carry an answer back.
+     `p_seed` is the same shape of thing and belongs here for the same reason: it names WHICH
+     ORDER this device gets, never which hide or where the kamo is in it. It is a random string
+     minted on this device (kfSeed) and it decides a tiebreak inside the ranking — the server
+     cannot answer anything with it and the page cannot learn anything from having sent it. */
+  const LISTING_ARGS = new Set(['p_before', 'p_limit', 'p_offset', 'p_block_tags', 'p_seen', 'p_seed']);
   const args = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').map(c => Object.keys(c[1]).sort()));
   const leaked = args.flat().filter(k => !LISTING_ARGS.has(k));
   args.length && !leaked.length
@@ -259,7 +299,7 @@ console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
   await page.waitForTimeout(1200);
   /* A real second slide, so "later slides carry no timing" is an assertion and not a vacuous
      pass over an empty list. */
-  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  await answerAndScroll(page);
   await page.waitForTimeout(900);
 
   const paint = sent.find(e => e.event_type === 'feed_first_paint');
@@ -684,49 +724,21 @@ console.log('\nTHE FEED CAN SAY SOMETHING BACK');
   const page = await open(ROWS(3), { react_to_hide: null, hide_reactions_of: [{ emoji: '\u{1F525}', n: 4 }],
     submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
     save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
-  /* BEFORE THE BUZZ — the point of the 2026-08-16 move. Reactions used to be built by
-     ending(), so the only people who could ever say anything were the ones who had already
-     spent their shot; everybody who looked and scrolled on met no control at all. The rail is
-     mounted with the round now, so it must already be there while the photo is still a
-     puzzle. Asserted first, because after the buzz this selector passes either way. */
-  await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
-  const live = await page.evaluate(() => document.querySelectorAll('#chRx .chRxB').length);
-  live === 4 ? ok('four reactions are offered before the round is played') : bad(`live reactions: ${live}`);
-  /* AND THE RAIL MUST NOT COST THE SHOT. It sits on top of the stage, which owns every
-     gesture on this screen — a pointerdown that reached the stage would arm an aim at the
-     emoji and the pointerup would fire the player's single buzz into the margin. */
-  /* CHECKED BETWEEN THE DOWN AND THE UP, and that detail is the test. The reticle is created
-     on pointerdown and REMOVED on pointerup (closeAim), so asserting after a full tap would
-     pass whether or not the event ever reached the stage — a green light for a broken guard.
-     No pointerup on the stage either: that one commits the buzz and would spend the round the
-     assertions below still need. */
-  const armed = await page.evaluate(() => {
-    const b = document.querySelector('#chRx .chRxB');
-    const o = { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', clientX: 360, clientY: 400 };
-    b.dispatchEvent(new PointerEvent('pointerdown', o));
-    const seen = !!document.querySelector('.chRet');
-    b.dispatchEvent(new PointerEvent('pointerup', o));
-    return seen;
-  });
-  armed === false ? ok('and a tap on the rail never arms an aim') : bad('the rail armed the aim reticle');
-  /* THE CONTROL FOR THAT CONTROL: the same gesture on the stage MUST arm it, or the assertion
-     above is measuring a stage that stopped listening rather than a guard that works. */
-  const stageArms = await page.evaluate(() => {
-    const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
-    const o = { bubbles: true, cancelable: true, pointerId: 11, pointerType: 'touch', clientX: 195, clientY: 300 };
-    st.dispatchEvent(new PointerEvent('pointerdown', o));
-    const seen = !!document.querySelector('.chRet');
-    st.dispatchEvent(new PointerEvent('pointercancel', o));   // abandoned, never committed
-    return seen;
-  });
-  stageArms === true ? ok('while the stage itself still arms one') : bad('the stage no longer arms an aim — the guard above proves nothing');
+  /* WITH THE ENDING CARD, not before it and not on the first touch — two earlier placements
+     (live with the round, then gated on the stage's first tap) both fought the layout instead
+     of the round: the tap-gate left a MINE round's rail unmounted forever (nothing ever
+     touches your own photo) and eager-mounting it rendered against a stage that had not
+     settled (top-left, not mid-right). ending() is the one moment both a played round and a
+     MINE review reach, after layout has settled — so this is a real buzz, not an abandoned
+     touch: the round has to actually end for the rail to exist at all. */
   await page.evaluate(() => {
     const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
     const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
     st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
   });
+  await page.waitForSelector('#chRx .chRxB', { timeout: 10000 }).catch(() => {});
   const n = await page.evaluate(() => document.querySelectorAll('#chRx .chRxB').length);
-  n === 4 ? ok('and they survive the ending card that used to build them') : bad(`reactions: ${n}`);
+  n === 4 ? ok('four reactions are offered once the round ends') : bad(`reactions: ${n}`);
   await page.waitForTimeout(500);
   const counts = await page.evaluate(() => { const e=document.querySelector('#chRx .chRxN'); return e?e.textContent:''; });
   counts === '4' ? ok("and it shows everybody's count, not this phone's") : bad('count shows ' + JSON.stringify(counts));
@@ -899,8 +911,13 @@ console.log('\nTHE FEED CAN SEND SOMEBODY ELSE\'S HIDE');
      control that no longer exists.
      What survives the removal is the real claim: the share is the SECOND thing on the card,
      directly under the one primary action, and no other button separates them. */
+  /* ⚠️ SCOPED TO .chCard, NOT TO #chFoot. The flip button (⇆) is prepended to the FOOT, not
+     to the card, and it only exists when the reveal frames actually downloaded — so this read
+     the card's order correctly for as long as the harness let those frames 404, and started
+     reporting chFlipB first the moment they were served. The claim was never about the foot's
+     chrome; it is about what the card offers and in which order. */
   const order = await page.evaluate(() => {
-    const f = document.querySelector('#chFoot'); if (!f) return 'no card';
+    const f = document.querySelector('#chFoot .chCard'); if (!f) return 'no card';
     const ids = [...f.querySelectorAll('button')].map(b => b.id).filter(Boolean);
     if (ids.indexOf('chNext') !== -1) return 'chNext is back: ' + ids.join(',');
     return (ids[0] === 'chReh' && ids[1] === 'chSend') ? 'second' : ids.join(',');
@@ -958,12 +975,13 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
     submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
     save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
 
-  /* Down one slide first, so there is something above the block as well as below it. */
-  await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
+  /* Down one slide first, so there is something above the block as well as below it — and the
+     round on the way has to be answered before the feed will let go of it. */
+  await answerAndScroll(page);
   await page.waitForTimeout(900);
-  /* THE ONLY WAY OUT OF A FEED ROUND IS NOW THE TAP. "I give up" was removed from the feed
-     — the swipe is the exit there — so this ends the round the way a player does: press and
-     release on the stage, which commits the aim. */
+  /* THE TAP IS STILL THE ORDINARY WAY OUT OF A FEED ROUND. "I give up" is back on this surface
+     too (it is what keeps the lock from being a trap), but the buzz is what a player reaches
+     for: press and release on the stage, which commits the aim. */
   await page.evaluate(() => {
     const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
     if (!st) return;
@@ -1025,6 +1043,10 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
 console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  /* The photo has to arrive here too: a link round whose image 404s now retires itself with
+     "This one didn't load" and takes the give-up button with it, so without this the click
+     below lands on nothing and the card this block is about never exists. */
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   await page.addInitScript(() => {
     window.__seed = {
       get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
@@ -1279,6 +1301,187 @@ console.log('\nTHE ROUND\'S CHROME NEVER COVERS THE FEED\'S CONTROLS');
   !hits(geo.run, geo.head)
     ? ok('and the headline still clears it')
     : bad(`the run pill overlaps the headline: run=${JSON.stringify(geo.run)} head=${JSON.stringify(geo.head)}`);
+  await page.close();
+}
+
+/* ⚠️ THE SWIPE HINT AND THE ENDING CARD WERE SHARING A ROW, AND THE CARD WAS UNDERNEATH.
+   killHint() deliberately does not fire when a round ends — the swipe is the only way out of
+   a finished round, so the instruction is load-bearing exactly then. That decision rests on
+   one sentence written when "Next hide ↑" was deleted: "the pill only ever died there because
+   it landed on top of this button; with the button gone the collision is gone." The card grew
+   back around it. .kfHint is pinned at bottom:84px and the card is taller than that: measured
+   on a round lost in 2.3s, the pill occupied 707–759 while "Challenge back" was 684–740 and
+   "Send to a friend" 748–794 — it straddled both, at z-index 25, for the six seconds before it
+   fades. 55% of misses land under four seconds, so that is the ordinary first session, on the
+   two buttons the whole loop runs through.
+   pointer-events:none means the taps still landed, which is why nothing was ever reported as
+   broken — the labels were simply unreadable. A test that asked "is the button clickable"
+   would have passed all along, so this one asks about the pixels. */
+console.log('\nTHE SWIPE HINT CLEARS THE ENDING CARD');
+{
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await page.addInitScript((r) => {
+    window.__seed = {
+      feed_page: r,
+      get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
+      /* A MISS, because that is the card with two CTAs on it and the one 54% of finished
+         rounds actually reach. */
+      submit_attempt: { hit: false, tries: 4, missed: 3, secs: 9, pct: 40, others: 0 },
+      reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 },
+      save_seek_trace: null,
+    };
+  }, ROWS(4));
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(800);
+  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.waitForTimeout(1000);
+
+  const pill = await page.evaluate(() => !!document.getElementById('kfHint'));
+  pill ? ok('a first session gets the swipe instruction') : bad('no #kfHint — this block proves nothing');
+
+  /* Buzzed fast on purpose: the pill fades at 6s, so a slow round would pass by outliving
+     nothing. This is the shape of the round that actually collides. */
+  await page.mouse.move(190, 420);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await page.waitForTimeout(1800);
+
+  const geo = await page.evaluate(() => {
+    const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, t: e.textContent.trim().slice(0, 28) }; };
+    return {
+      hint: r(document.getElementById('kfHint')),
+      ctas: [...document.querySelectorAll('.chCta, .chCta2')].map(r).filter(Boolean),
+    };
+  });
+  const hits2 = (a, b) => !!(a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h);
+
+  geo.hint && geo.hint.h > 0 && geo.ctas.length >= 2
+    ? ok(`the pill is still up over a ${geo.ctas.length}-button card — the state that collided`)
+    : bad(`nothing to measure: hint=${JSON.stringify(geo.hint)} ctas=${geo.ctas.length}`);
+
+  const covered = geo.ctas.filter((c) => hits2(geo.hint, c));
+  covered.length === 0
+    ? ok(`and it clears every one of them (${geo.ctas.map(c => `"${c.t}"`).join(', ')})`)
+    : bad('the swipe pill is on top of the loop\'s own buttons again:\n'
+        + `      hint=${JSON.stringify(geo.hint)}\n`
+        + covered.map(c => `      covers=${JSON.stringify(c)}`).join('\n'));
+  await page.close();
+}
+
+/* ⚠️ THE MODERATION PATH MUST NOT THANK SOMEBODY FOR SOMETHING THAT DID NOT HAPPEN.
+   Both report controls were fire-and-forget — `chRpc(...).catch(()=>{})` and the thank-you on
+   the next line — so an offline moment, an RLS refusal or a server error produced exactly the
+   screen a successful report produced: the photo left this feed and the viewer was thanked.
+   Apple requires this control (guideline 1.2), the person using it is telling us something is
+   wrong, and a false receipt means they stop looking at the photo AND we never hear about it.
+   The block two hundred lines away already stated the rule: "That is not an error and must not
+   be dressed as a success."
+   Driven by killing report_hide at the network, which is the failure a phone actually has. */
+console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
+{
+  const seen = async (page) => page.evaluate(() => {
+    const h = document.getElementById('hint');
+    return { txt: h ? h.textContent : null, op: h ? getComputedStyle(h).opacity : null };
+  });
+  /* ⚠️ ANSWERED THE WAY PRODUCTION ANSWERS IT, WHICH IS THE WHOLE POINT OF THIS BLOCK NOW.
+     report_hide returns void, and PostgREST answers a void function 204 with an empty body —
+     verified against the live endpoint. chRpc read every answer with `await r.json()`, which
+     throws on that, so the promise REJECTED on every successful report. The copy above was
+     shipped on 2026-08-20 to stop this control claiming a success it did not have; on the real
+     transport it did the opposite and told everyone their report had failed.
+     So report_hide is deliberately NOT seeded here. The seed short-circuits chRpc at its
+     declaration and would test a version of the transport that does not exist; letting the
+     fetch run and answering it 204 is the only way this assertion means anything. */
+  for (const dead of [false, true]) {
+    const page = await open(ROWS(3));
+    await page.route('**/rest/v1/rpc/report_hide', r => dead ? r.abort('failed') : r.fulfill({ status: 204, body: '' }));
+    const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+    await page.evaluate(() => document.getElementById('kfFlag').click());
+    await page.waitForTimeout(1800);
+    const after = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+    const s = await seen(page);
+    /* The photo goes either way — the viewer asked for that much and it costs nothing. */
+    after === before - 1
+      ? ok(`${dead ? 'a failed' : 'a live'} report still takes the photo out of this feed`)
+      : bad(`slides went ${before} → ${after} on a ${dead ? 'failed' : 'live'} report`);
+    if (dead) {
+      /^Hidden here/.test(s.txt || '') && !/Thank you/.test(s.txt || '')
+        ? ok(`and says so instead of thanking them ("${s.txt}")`)
+        : bad(`a report that never sent reads "${s.txt}"`);
+    } else {
+      /Reported\. Thank you\./.test(s.txt || '')
+        ? ok('and a real one — 204, no body, exactly as PostgREST answers a void rpc — is thanked')
+        : bad(`a live report reads "${s.txt}" — an empty answer is being read as a failure`);
+    }
+    await page.close();
+  }
+}
+
+/* THE BLOCK'S TWO SENTENCES WERE WRITTEN WITH CARE AND SHOWN TO NOBODY. done(msg) wrote into
+   $$("chFoot") AFTER OPT.onBlocked had already destroyed the round and removed its slide, so
+   the write landed on an empty foot belonging to a freshly-mounted round — or on nothing.
+   Measured after a stored block: every #chFoot on the page empty, no message anywhere. The
+   distinction between "Blocked. You won't see their hides again." and "Hidden. This one won't
+   come back." — the entire reason there are two branches — was invisible either way. */
+console.log('\nAND A BLOCK SAYS WHICH OF THE TWO THINGS IT DID');
+{
+  for (const [tag, expect, label] of [['tag-xyz', /^Blocked\./, 'a stored block'], [null, /^Hidden\./, 'a hide with no author on record']]) {
+    const page = await open(ROWS(3), { block_author: tag, save_seek_trace: null,
+      submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
+      reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 } });
+    await page.evaluate(() => {
+      const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+      const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+      st.dispatchEvent(new PointerEvent('pointerdown', o)); st.dispatchEvent(new PointerEvent('pointerup', o));
+    });
+    await page.waitForSelector('#chBlk', { timeout: 8000 }).catch(() => {});
+    await page.evaluate(() => { const b = document.getElementById('chBlk'); if (b) b.click(); });
+    await page.waitForTimeout(2200);
+    const txt = await page.evaluate(() => document.getElementById('hint')?.textContent);
+    expect.test(txt || '')
+      ? ok(`${label} says so ("${txt}")`)
+      : bad(`${label} reads ${JSON.stringify(txt)} — the message is going somewhere nobody is looking`);
+    await page.close();
+  }
+}
+
+/* A HIDE THAT DIED UNDER THE THUMB LEAVES WITHOUT A WORD.
+   feed_page cannot serve an expired row — it filters `expires_at > now()` and is stricter than
+   get_hide on everything else they share — but it cannot stop one from expiring AFTER the page
+   is mounted and BEFORE the reader swipes down to it. That window is the scroll itself, so the
+   client is the only place it can be closed.
+   What shipped instead was a full ending card over a dead photo: reaction rail, "Send to a
+   friend", "Don't show me this person" — every affordance of a hide, on a hide that is gone
+   (founder screenshot, 2026-08-23). Stubbing get_hide to null is exactly that state, for every
+   row, so the assertion is the strong one: the sentence never reaches the DOM at all, and the
+   slides that carried it are gone from the scroller rather than sitting there unplayable. */
+console.log('\nAND AN EXPIRED HIDE IS DROPPED, NOT ANNOUNCED');
+{
+  const page = await open(ROWS(3), { get_hide: null });
+  await page.waitForTimeout(1800);
+
+  const said = await page.evaluate(() => /This hide is gone/.test(document.body.innerText || ''));
+  said ? bad('the feed showed "This hide is gone" — the dead end is still reachable')
+       : ok('the feed never says "This hide is gone"');
+
+  /* NOT "fewer than 3" BY LUCK: every row is dead here, so every slide must go. A count that
+     merely dropped would pass while the last one sat there unplayable, which is the exact
+     shape of the bug. */
+  const left = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+  left === 0 ? ok('every dead slide leaves the scroller (0 left)')
+             : bad(`${left} unplayable slide(s) still mounted`);
+
+  /* AND IT IS FILED AS WHAT IT WAS. `feed` on seek_missing is what separates a feed row that
+     died in the reader's hand from a shared link to an expired hide — same absence, two
+     different products. Without it the funnel cannot tell how often this window is hit. */
+  const marked = await page.evaluate(() =>
+    (window.__tr || []).some(e => e[0] === 'seek_missing' && e[1] && e[1].feed === true));
+  marked ? ok('seek_missing carries feed:true so the two causes stay apart')
+         : bad('seek_missing did not report which side it came from');
+
   await page.close();
 }
 

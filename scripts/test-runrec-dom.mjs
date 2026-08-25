@@ -110,6 +110,94 @@ async function breakRun(run, best, width) {
   return out;
 }
 
+
+/* ⚠️ AND THE STATE NOBODY EVER SAW, WHICH IS MOST OF THEM. Until 2026-08-20 the pill was hidden
+   whenever the run was 0 and `best` was passed only on the break — so it appeared when you were
+   winning, vanished when you were not, and showed your record exactly once, in its own epitaph.
+   The median best run in the whole base is 3: most people are at 0 most of the time, so the
+   centre of this game was invisible to most of them, permanently.
+   These read the pill AT MOUNT, with no tap, because that is the state the old fixture could
+   not reach — breakRun() taps, and a tap is what produced the only state that was ever tested. */
+async function atMount(run, best, width) {
+  const page = await browser.newPage({ viewport: { width, height: 844 }, deviceScaleFactor: 2 });
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ contentType: 'image/png', body: PNG }));
+  await page.addInitScript(([r, b]) => {
+    window.__seed = {
+      get_hide: { img_path: 'x.png', secs: 9, n_attempts: 0, n_found: 0, limit_s: 20, max_taps: 5, name: 'tony' },
+      submit_attempt: { hit: false, tries: 1, missed: 1, secs: 0, pct: null, others: 0 },
+    };
+    try { localStorage.setItem('kamo_seek_run', String(r)); localStorage.setItem('kamo_seek_best', String(b)); } catch (e) {}
+  }, [run, best]);
+  await page.goto(base + '?h=abc123', { waitUntil: 'load' });
+  await page.waitForTimeout(1100);
+  const out = await page.evaluate(() => {
+    const pill = document.getElementById('chRun'), head = document.getElementById('chHead');
+    if (!pill || !head) return { err: 'pill or headline missing' };
+    const p = pill.getBoundingClientRect(), h = head.getBoundingClientRect();
+    return {
+      text: pill.textContent.trim(), cls: pill.className,
+      shown: getComputedStyle(pill).display !== 'none',
+      overlap: !(p.right <= h.left || p.left >= h.right || p.bottom <= h.top || p.top >= h.bottom),
+      offscreen: p.left < 0 || p.right > innerWidth,
+      height: Math.round(p.height),
+    };
+  });
+  await page.close();
+  return out;
+}
+
+console.log('\nAT ZERO IT NAMES THE TARGET INSTEAD OF THE VOID');
+{
+  const r = await atMount(0, 6, 390);
+  r.err ? bad(r.err)
+    : r.shown && r.text === 'Best 6'
+      ? ok(`a player at 0 with a record is told what there is to beat ("${r.text}")`)
+      : bad(`the zero state reads ${JSON.stringify(r.text)} shown=${r.shown}`);
+  !r.overlap && !r.offscreen ? ok('and it clears the headline like every other state') : bad('the zero state collides');
+  /* Quieter than a live run: it is a target, not a stake. Giving it the same weight would tell
+     somebody at 0 that they are in the middle of something. */
+  /rest/.test(r.cls || '') ? ok('and it is drawn as the quiet state') : bad(`class is ${JSON.stringify(r.cls)}`);
+}
+{
+  /* NOTHING AT ALL FOR A GENUINELY NEW PLAYER. There is no true sentence yet, and the
+     alternative is teaching copy — the two biggest teaching pills on this screen were deleted
+     for spending 7.2 seconds of a round on text. */
+  const r = await atMount(0, 0, 390);
+  r.err ? bad(r.err)
+    : r.shown === false ? ok('and a player with no record at all is shown nothing, rather than a 0')
+    : bad(`a brand-new player sees ${JSON.stringify(r.text)}`);
+}
+
+console.log('\nTHE RECORD IS VISIBLE WHILE THE RUN IS LIVE, NOT ONLY IN ITS EPITAPH');
+{
+  const r = await atMount(4, 6, 390);
+  r.err ? bad(r.err)
+    : r.text === '4 · best 6' ? ok(`a live run carries the number it is chasing ("${r.text}")`)
+    : bad(`a live run reads ${JSON.stringify(r.text)}`);
+  r.height <= 44 ? ok('on one line') : bad(`the live pill is ${r.height}px tall — it wrapped`);
+}
+{
+  /* Same rule the break line already follows: at best <= run the record IS this run, and
+     "6 · best 6" prints one number twice and reads like a bug. */
+  const r = await atMount(6, 6, 390);
+  r.err ? bad(r.err)
+    : r.text === '6' ? ok('and says it once when the run has caught the record')
+    : bad(`equality reads ${JSON.stringify(r.text)}`);
+}
+
+console.log('\nAND IT WEIGHS MORE ONCE THERE IS SOMETHING TO LOSE');
+/* p90 of the best run anyone has ever had is 8 and p99 is 18, so a live 7 is rare air: the tap
+   is expensive and a hint is worth its price for the first time. That is the moment the pill
+   has to stop looking like the one at 1. */
+{
+  const lo = await atMount(4, 9, 390), hi = await atMount(7, 9, 390);
+  !/\bhot\b/.test(lo.cls || '') ? ok('a run of 4 is drawn plainly') : bad('the escalation fires too early');
+  /\bhot\b/.test(hi.cls || '') ? ok('a run of 7 is drawn as a stake') : bad(`a run of 7 reads class ${JSON.stringify(hi.cls)}`);
+  hi.height <= 52 && !hi.overlap && !hi.offscreen
+    ? ok('and the heavier pill still clears the headline and the viewport')
+    : bad(`the hot pill is ${hi.height}px, overlap=${hi.overlap} offscreen=${hi.offscreen}`);
+}
+
 console.log('\nTHE BROKEN RUN NAMES THE RECORD IT FELL SHORT OF');
 for (const width of [390, 320]) {
   const r = await breakRun(4, 6, width);

@@ -35,7 +35,7 @@ PW_CORE=<dir with node_modules> node scripts/check.mjs
 ```
 
 It must be green before every push. It parses every inline script, resolves every unguarded
-element id, and chains **34** browser tests — it was six when this line was written, and naming
+element id, and chains **42** browser tests — it was six when this line was written, and naming
 them here only teaches the next reader a list that is already wrong; `grep 'test-.*\.mjs'
 scripts/check.mjs` is the answer that stays true. `playwright-core` is not a dependency —
 install it anywhere and point `PW_CORE` at it, or the browser tests skip loudly and you are
@@ -149,6 +149,33 @@ deliveries, and the order matters: `my_replies()` + the wordmark dot reach **100
 on their next launch, and `notify_hide_reply` reaches the **~3%** who have a push token, now.
 The row is the mechanism; the notification is the accelerant. Do not invert them.
 
+### The push throttle is a priority, not an hour (2026-08-25)
+
+`notify_hide_creator` / `_reaction` / `_reply` used to share one rule — nothing if this hide was
+notified in the last hour — which treats every event as worth the same. Measured over 4214
+authors, the odds of creating again on a second day are **47.4% after a reply**, **44.6% after a
+reaction**, **28.4% after being merely played**, against a 25.6% baseline and 21.0% when nothing
+came back at all. A hide takes ~3 attempts, so the cheap signal routinely arrived first, spent
+the hour, and the two that actually bring somebody back were dropped in silence.
+
+So: `found(1) < reaction(2) < reply(3)`, via `push_may_notify()` — inside the hour only a
+strictly stronger kind may speak, and **two minutes is the floor nothing crosses** (priority
+without one puts two buzzes about one hide on a lock screen seconds apart, which is how an app
+loses its notifications for good). One shared gate instead of three copies of the same interval;
+`infra/2026-08-25-push-priority.sql` is the record.
+
+⚠️ **This is not the bottleneck, and do not let the change suggest otherwise.** Only **3370 of
+18682** hides carry a `push_token`, so **721 reactions and 771 replies** could not be announced
+at all — the trigger ran, found no token, and returned. All three kinds have been wired and
+enabled since 2026-08-16; what is missing is the notification permission, and that is fixed on
+the client, not here. Judge this change on pushes *sent per reaction/reply*, never on the total.
+
+`infra/edge-notify-creator.ts` mirrors the deployed `notify-creator` function, the same way
+`edge-h.ts` mirrors `h`. **It is a copy, not the source of truth** — the function lives in
+Supabase and deploying does not touch this repo, so diff the two before believing either.
+Its reaction line printed the emoji three times (twice bracketing the title, once in the
+subtitle) until a real lock screen showed what that looks like — 2026-08-25, now one.
+
 `create_hide` has **four overloads** (6, 8, 9 and 10 arguments) and that is deliberate. This file
 deploys on push and the database does not, so during a deploy both are live: a page loaded a
 minute ago calls the old signature. Add an overload, never change one. `get_hide` is the
@@ -241,3 +268,43 @@ Measured 2026-08-07, and worth re-measuring before acting on:
   recorded `ONE TIME` — and it has 4 paying customers behind it, so **do not "fix" it by
   detaching it from the entitlement or changing its type.** The open question is which event the
   ad groups optimise on, not whether the events are separable.
+
+### Retention, measured 2026-08-24 — and the number every reveal change is judged against
+
+Cohorts computed by window intersection (A + B − union), because Amplitude's retention CSV
+returns cohort sizes rather than rates. In-app only (`host = "app"`): the browser population is
+~89% automated and poisons every denominator it touches.
+
+| | |
+|---|---|
+| D1 open (22→23/08) | 86/510 = **16.9%** |
+| D1 create | 39/387 = **10.1%** |
+| W1→W2 (10-16 → 17-23/08) | 339/1846 = **18.4%** |
+| DAU/MAU creators | **9.8%** |
+| Make 2+ hides in one sitting | **57.5%** |
+
+The shape is unambiguous, and it is not an engagement problem: **the session is excellent and the
+next day does not exist.** Of the few who do return, 45% create. There is no return trigger.
+
+- **The send rate is the guard metric on every reveal/share change, without exception.** 47.6%
+  of publishers send. A hide nobody receives has no answer and no reason to bring anyone back,
+  so half the creator base sits outside the retention loop by construction. It is also the most
+  fragile number in the product — 57.3% on 08-14, 38.7% on 08-22 — and it has been broken twice
+  by things that merely sat NEAR the send button: the feed's `.kfHint` pill covering "Send to a
+  friend" (08-20, −62%) and the feed-landing arm opening a feed behind the share sheet (08-22,
+  halved, killed 08-23). **Read `hide_sent / hide_published` before and after anything that
+  touches the reveal, the sheet, or what sits behind it.** Reading the DOM is not enough — both
+  failures shipped with the button present and visible.
+- **The return machinery is all built; permission is the entire bottleneck.** `armResultsPing`
+  schedules the local nudge, `chTally` renders what happened while you were away, the news tray
+  orders replies first. But `web_notif_armed` is **ok=false for 3099 users a week against
+  ok=true for 500** — six of seven nudges are dropped. And iOS asks exactly once: the prompt
+  fires automatically seconds after the share sheet opens, carrying one line of context
+  (`#ssSub`), so most of that 3099 is a refusal that has already happened and cannot be re-asked.
+  `#ssBell` recovers what it can. The untried lever is gating that one prompt behind a
+  deliberate tap instead of spending it automatically.
+- **911 replies waited, 287 were opened.** The highest-intent event in the product — somebody
+  built an answer addressed to you — is announced by an ~18px grey dot on the wordmark. 624
+  people a week were answered and never knew. `REPLY_OPEN_ROLLOUT` tests the fix; as of 08-24 it
+  is **not readable** (11 in-app `reply_opened` in three days, and 93% of `hide_sent` still carry
+  no `open_arm`), so do not conclude it yet.
