@@ -85,6 +85,14 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
+/* THE ROUND'S PHOTO HAS TO ARRIVE, or this suite asserts against a failure screen.
+   chSeek() grew an img.onerror: a camo image that never loads now says so on the headline
+   ("This one didn't load"), stops the clock and refuses the buzz, instead of leaving a live
+   round on a black rectangle. That is the fix — and it means a harness which never serves the
+   photo is no longer testing the round it thinks it is. One transparent pixel is enough here:
+   these cases are about what is written above the picture, not about the picture. */
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const servePhoto = (page) => page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 const browser = await chromium.launch({ executablePath: chromeExe(ROOT) || undefined,
   args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 
@@ -106,6 +114,7 @@ const ANSWER = { reveal_hide: { cx: 0.5, cy: 0.5, r: 0.05 }, save_seek_trace: nu
    that survives the navigation, and chMine() is read while the round is being built. */
 async function open({ mine, first, fromReveal, extra }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await servePhoto(page);
   await page.addInitScript((a) => {
     if (a.mine) localStorage.setItem('kamo_hides', JSON.stringify(a.mine));
     /* Spent already, so the swipe hint does not float over the card being read. */
@@ -163,7 +172,10 @@ console.log('\nTHE REACTION RAIL IS A READOUT ON YOUR OWN PHOTO');
 {
   const page = await open({ mine: [MINE], first: MINE, fromReveal: true,
                             extra: { hide_reactions_of: [{ emoji: '🔥', n: 7 }, { emoji: '😂', n: 2 }] } });
-  await page.waitForTimeout(500);
+  /* THE RAIL MOUNTS WITH THE ENDING CARD NOW, not with the round — so even on your own
+     photo, reaching it takes the same buzz (REPLAY makes it a guaranteed hit regardless of
+     where it lands, see the note on ANSWER above). */
+  await buzz(page);
   const rail = await readRail(page);
 
   rail && rail.tags.length === 4 && rail.tags.every(t => t === 'DIV')
@@ -186,11 +198,6 @@ console.log('\nTHE REACTION RAIL IS A READOUT ON YOUR OWN PHOTO');
   wrote.length === 0
     ? ok('and tapping all four writes nothing — the counts stay everybody else\'s')
     : bad(`react_to_hide was called ${wrote.length}×`);
-
-  /* AND THE TAP MUST NOT COST THE SHOT. The stage owns every gesture on this screen; a div
-     swallows none by itself, which is why the stopPropagation listeners sit above the branch. */
-  const spent = await page.evaluate(() => !!document.querySelector('#chFoot .chCard'));
-  !spent ? ok('and does not fire the round\'s single buzz into the margin') : bad('a tap on the rail ended the round');
 
   await page.close();
 }

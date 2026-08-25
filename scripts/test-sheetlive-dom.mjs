@@ -73,6 +73,11 @@ const html = real.slice(0, at)
   + 'i.dispatchEvent(new Event("input",{bubbles:true}));'
   + 'i.dispatchEvent(new Event("change",{bubbles:true})); i.blur(); return this.sign(); },'
   + 'willSign(){ return ensureHandle(); },'
+  /* THE STATE EVERY PUBLISHER IS IN FROM THEIR SECOND SHEET ONWARD. setHandle() without the
+     byUser flag is exactly the write ensureHandle() performs at the first publish: a name on
+     disk that nobody ever agreed to. Driven through setHandle rather than localStorage so the
+     fixture cannot drift from the one writer of the chosen flag. */
+  + 'assigned(v){ setHandle(v); ssRenderSign(); return this.sign(); },'
   /* The sheet has to be genuinely OPEN for "it stays put" to mean anything — a class
      that was never added cannot be observed surviving. */
   + 'openSheet(){ ssState="open"; shareSheetEl.classList.add("show"); return shareSheetEl.classList.contains("show"); },'
@@ -212,6 +217,29 @@ console.log('\nTHE SHEET SHOWS THE NAME THE CHALLENGE WILL CARRY');
   await p.close();
 }
 
+/* AND THE QUESTION IS NOT A ONE-LAUNCH EVENT.
+   ensureHandle() commits the invented name at the FIRST publish, so `getHandle()` is non-empty
+   for every creator from their second sheet onward — and while that was the test for "theirs",
+   the row spent the rest of their life saying "Change" over a name they had never agreed to.
+   670 taps on 19,299 sheets (3.5%, 15-20 Aug) with 53% of those taps going on to type: the
+   field was never the bottleneck, the question was only ever put once.
+   The flag is allowed to be WRONG here and this suite must not forget why: `false` means
+   UNKNOWN, so a creator who named themselves before 2026-08-16 gets asked once about a name
+   they picked. That is a question, not a gate — see HANDLE_CHOSE_KEY's note. */
+console.log('\nAND IT KEEPS ASKING UNTIL SOMEBODY ACTUALLY TYPES');
+{
+  const p = await open(true);
+  const stamped = await p.evaluate(() => window.__s.assigned('OchreWren'));
+  stamped.stored === 'OchreWren' && stamped.shown === '@OchreWren'
+    ? ok('a creator past their first publish carries the name the app invented for them')
+    : bad(`after the publish path's own write: ${JSON.stringify(stamped)}`);
+  /this is you/i.test(stamped.cta)
+    ? ok(`and the row is still asking, not telling ("${stamped.cta}")`)
+    : bad(`the affordance reads ${JSON.stringify(stamped.cta)} over a name nobody chose — a `
+        + 'name on disk is not consent, and this is the row that asks for it');
+  await p.close();
+}
+
 console.log('\nAND CHANGING IT IS ONE TAP, IN PLACE');
 {
   const p = await open(true);
@@ -277,7 +305,15 @@ console.log('\nTAPPING IT OPENS THE FEED ON THAT HIDE');
 
   /* THE SLIDE IS THE PLAYER'S OWN, so the hint has to say so. Without it they meet a round
      whose tap does nothing — the replay flag, working correctly — and read it as broken. */
-  await p.waitForTimeout(700);
+  /* WAIT ON THE CONDITION, NOT ON A GUESS. This was waitForTimeout(700), and 700ms is a bet
+     that the feed has painted — a bet this machine loses whenever anything else is running,
+     which made the whole gate report a random red suite per run. Polling is fast when the
+     render is fast and patient when it is not, and it still fails honestly if the hint never
+     arrives: the assertion below is unchanged. */
+  await p.waitForFunction(() => {
+    const h = window.__s.feedHint();
+    return !!(h && /yours/i.test(h));
+  }, { timeout: 10000 }).catch(() => {});
   const hint = await p.evaluate(() => window.__s.feedHint());
   hint && /yours/i.test(hint) && /scroll/i.test(hint)
     ? ok(`the first slide is named as theirs and points onward ("${hint}")`)

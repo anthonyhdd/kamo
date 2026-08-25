@@ -70,11 +70,14 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
-async function boot({ hit, pct, others, frames, name = 'tony' }) {
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
     const u = route.request().url();
+    /* `deadPhoto` kills the camo image itself, not just the reveal frames: a dead storage
+       path, an object still replicating, a tunnel. See the block at the end of this file. */
+    if (deadPhoto) return route.fulfill({ status: 404, body: 'x' });
     if (!frames && (u.includes('_b.jpg') || u.includes('_w.jpg'))) return route.fulfill({ status: 404, body: 'x' });
     route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
   });
@@ -283,8 +286,63 @@ console.log('\nLEGACY HIDE — no frames uploaded: marker fallback, no flip');
   cs.includes('reveal_hide') ? ok('falls back to reveal_hide') : bad('no reveal_hide call: ' + cs);
   const marks = await page.evaluate(() => document.querySelectorAll('#chFrame .chMark.hit').length);
   marks >= 1 ? ok('answer marker shown') : bad('no answer marker');
+  /* ⚠️ AND IT IS THE ONLY RING ON THE PHOTO. With the body revealed the player's own mark earns
+     its place — the flip against the revealed frame shows how far off they were. Here there is
+     no body: the answer is itself a ring, so leaving the miss up puts two rings on a photograph
+     with nothing on screen saying which is which. They differ only by border colour, mint
+     against white, which is a legend nobody was given. Founder, 2026-08-21, looking at exactly
+     this screen: "why u put 2 circles and don't show the body". */
+  const all = await page.evaluate(() => [...document.querySelectorAll('#chFrame .chMark')].map(m => m.className));
+  all.length === 1 && /hit/.test(all[0])
+    ? ok('and it is the ONLY ring on the photo — the miss steps aside when it has no body to be measured against')
+    : bad(`${all.length} rings on a photo with no body: ${JSON.stringify(all)}`);
   const flipBtn = await page.evaluate(() => !!document.getElementById('chFlipB'));
   !flipBtn ? ok('no flip button without frames') : bad('flip armed with nothing to flip');
+  await page.close();
+}
+
+/* ⚠️ AND A BLIP ON THE REVEAL FRAME NO LONGER COSTS THE BODY.
+   The frame is the payoff of the whole round, and it got exactly one <img> load. A single
+   failure dropped the round to the marker fallback for good — no body, no flip button, nothing
+   to try again with — and the frames are demonstrably there: 16 of 16 played public hides
+   sampled across four days carry theirs. So what reaches that branch is a transient failure,
+   not an absent asset, and it was being treated as permanent. */
+console.log('\nA BLIP ON THE REVEAL FRAME IS RETRIED, NOT SURRENDERED TO');
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
+  let bTries = 0;
+  await page.route('**/storage/v1/object/public/hides/**', route => {
+    const u = route.request().url();
+    if (u.includes('_b.jpg')) { bTries++; if (bTries === 1) return route.abort('failed'); }
+    route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
+  });
+  await page.addInitScript(() => {
+    window.__calls = [];
+    window.__rpc = (fn) => {
+      window.__calls.push([fn, null]);
+      if (fn === 'get_hide') return Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 3, n_found: 1, limit_s: null, max_taps: null, name: 'tony' });
+      if (fn === 'submit_attempt') return Promise.resolve({ hit: false, tries: 4, missed: 3, secs: 9, pct: 40, others: 0 });
+      if (fn === 'reveal_hide') return Promise.resolve({ cx: 0.5, cy: 0.5, r: 0.1 });
+      return Promise.resolve(null);
+    };
+  });
+  await page.goto(base + '?h=abc123', { waitUntil: 'load' });
+  await page.waitForTimeout(700);
+  await page.mouse.move(200, 500); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
+  await page.waitForTimeout(2000);
+  const got = await page.evaluate(() => {
+    const i = document.querySelector('#chFrame img');
+    return { src: i ? i.src : '', flip: !!document.getElementById('chFlipB'), marks: document.querySelectorAll('#chFrame .chMark').length };
+  });
+  bTries >= 2 ? ok(`the frame was asked for again (${bTries} requests)`) : bad(`only ${bTries} request — the blip was taken as an absence`);
+  /* EITHER reveal frame counts. Once `_b` lands the two alternate every 360ms — up, wave, up —
+     so pinning this to `_b` would fail on whichever tick the read happens to land on. What is
+     being asserted is that the camo photo has been replaced by the body at all. */
+  /_(b|w)\.jpg/.test(got.src)
+    ? ok(`and the body is on screen after the retry (${got.src.split('/').pop().split('?')[0]})`)
+    : bad(`the photo is still ${got.src.split('/').pop()} — a blip cost the player the reveal`);
+  got.flip ? ok('and the flip is armed, so the double-take is there to replay') : bad('no flip button after a successful retry');
   await page.close();
 }
 
@@ -327,6 +385,55 @@ console.log('\nSEND ONE BACK — drops into compose with the same photo, no came
     : bad('the photo taints the canvas — every publish from this round would die at toBlob');
   const composing = await page.evaluate(() => document.getElementById('start') ? document.getElementById('start').style.display === 'none' : true);
   composing ? ok('compose flow entered (splash gone)') : bad('splash still up');
+  await page.close();
+}
+
+/* ⚠️ A PHOTO THAT NEVER ARRIVES IS NOT A ROUND — AND IT USED TO BE PLAYED ANYWAY.
+   There was no img.onerror on the seeker at all. With storage answering 404 the screen kept
+   its headline ("@tony hid a kamo here / One tap to find") over a black rectangle wearing the
+   alt text of a broken <img>, and the round underneath was completely live: the buzz still
+   committed and submit_attempt still filed an attempt. The clock, which hangs off img.onload
+   alone, never started — so what it filed was p_ms 0, and that number goes into the percentile
+   every other player on that hide is scored against. A round nobody could see, timed at 0.0s,
+   counted for everyone.
+   THE THREE THINGS THAT HAVE TO HOLD, and each of them failed on its own before: the screen
+   says so, the round refuses the tap, and nothing is filed. */
+console.log('\nA PHOTO THAT NEVER ARRIVES SAYS SO, AND FILES NOTHING');
+{
+  const page = await boot({ hit: false, deadPhoto: true });
+  /* One retry is built in, so the failure state lands a beat after the first 404. */
+  await page.waitForFunction(() => /didn't load/.test(document.getElementById('chHead')?.textContent || ''), null, { timeout: 6000 }).catch(() => {});
+  const head = await txt(page, 'chHead');
+  /didn't load/.test(head || '')
+    ? ok(`the screen says the photo failed ("${head}")`)
+    : bad(`a dead photo still reads "${head}" — a live round on a black rectangle`);
+  const sub = await txt(page, 'chSub');
+  /didn't come through/.test(sub || '')
+    ? ok('and the sub says what to do about it')
+    : bad(`sub reads "${sub}"`);
+  const clock = await page.evaluate(() => document.getElementById('chClock').style.display);
+  clock === 'none' ? ok('the clock never started, and is not shown pretending to') : bad(`clock display: ${clock}`);
+  /* The buzz, driven exactly as a thumb drives it in the cases above. */
+  await page.mouse.move(190, 420);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+  const filed = await calls(page);
+  filed.includes('submit_attempt')
+    ? bad(`an attempt was filed on a photo that never loaded: ${JSON.stringify(filed)} — this is the 0.0s round`)
+    : ok('and the buzz commits nothing — no attempt, no 0.0s in anybody else\'s percentile');
+  /* On a link there is nowhere to go but the same URL, so the card offers exactly that. */
+  const retry = await page.evaluate(() => [...document.querySelectorAll('#chFoot button')].map(b => b.textContent.trim()));
+  retry.includes('Try again')
+    ? ok('and a link round is offered the one thing that can still work')
+    : bad(`no way out of a dead link round: ${JSON.stringify(retry)}`);
+  /* The card is the whole message. Left visible, the failed <img> paints the browser's own
+     broken-image glyph — grey box, question mark, alt text as a caption — in the middle of it. */
+  const glyph = await page.evaluate(() => { const i = document.querySelector('#chFrame img'); return i ? getComputedStyle(i).display : 'gone'; });
+  (glyph === 'none' || glyph === 'gone')
+    ? ok('and the broken image is taken off the card rather than left to draw its own error')
+    : bad(`the failed <img> is still display:${glyph} — the browser paints a broken-image glyph over the card`);
   await page.close();
 }
 
