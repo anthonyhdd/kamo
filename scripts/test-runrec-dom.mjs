@@ -72,31 +72,54 @@ const ok = m => console.log('  ✓ ' + m), bad = m => { failed++; console.error(
 
 /* One wrong tap ends the round — the miss branch calls ending() directly, it does not wait for
    max_taps — so the whole fixture is: seed the two numbers, load, tap once, read the pill. */
-async function breakRun(run, best, width) {
+async function breakRun(run, best, width, life = false, how = 'miss') {
   const page = await browser.newPage({ viewport: { width, height: 844 }, deviceScaleFactor: 2 });
   /* The camo photo is an absolute Supabase URL, so it cannot come off the local server. A real
      decoded image matters here and did not in test-seek-dom: an <img> that never loads leaves
      .chFrame at zero height, and a tap on a zero-height frame is a tap on nothing. */
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ contentType: 'image/png', body: PNG }));
-  await page.addInitScript(([r, b]) => {
+  await page.addInitScript(([r, b, l]) => {
     window.__seed = {
       get_hide: { img_path: 'x.png', secs: 9, n_attempts: 0, n_found: 0, limit_s: 20, max_taps: 5, name: 'tony' },
       submit_attempt: { hit: false, tries: 1, missed: 1, secs: 0, pct: null, others: 0 },
     };
-    try { localStorage.setItem('kamo_seek_run', String(r)); localStorage.setItem('kamo_seek_best', String(b)); } catch (e) {}
-  }, [run, best]);
+    try {
+      localStorage.setItem('kamo_seek_run', String(r)); localStorage.setItem('kamo_seek_best', String(b));
+      /* SPENT UNLESS THE CASE SAYS OTHERWISE. A run now survives its first miss, so every
+         assertion below about a BREAK is an assertion about a run with no life left — and
+         leaving this unseeded would have silently turned each of them into a save test that
+         happened to still read a pill. "0" is spent; anything else, missing included, is a
+         life in hand. */
+      localStorage.setItem('kamo_seek_life', l ? '1' : '0');
+    } catch (e) {}
+  }, [run, best, life]);
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(900);
-  const frame = await page.locator('#chFrame').boundingBox();
-  if (!frame) { await page.close(); return { err: 'the frame never mounted' }; }
-  await page.mouse.click(frame.x + frame.width / 2, frame.y + frame.height / 2);
+  if (how === 'giveup') {
+    /* The other way a round ends without a find, and it must not be reachable by the same
+       door: the give-up is the feed lock's price and it has to stay expensive. */
+    const q = await page.$('#chQuit');
+    if (!q) { await page.close(); return { err: 'no give-up button mounted' }; }
+    await q.click();
+  } else {
+    const frame = await page.locator('#chFrame').boundingBox();
+    if (!frame) { await page.close(); return { err: 'the frame never mounted' }; }
+    await page.mouse.click(frame.x + frame.width / 2, frame.y + frame.height / 2);
+  }
   await page.waitForTimeout(1300);
   const out = await page.evaluate(() => {
     const pill = document.getElementById('chRun'), head = document.getElementById('chHead');
     if (!pill || !head) return { err: 'pill or headline missing' };
     const p = pill.getBoundingClientRect(), h = head.getBoundingClientRect();
     return {
-      text: pill.textContent.trim(),
+      text: pill.textContent.trim(), cls: pill.className,
+      /* WHAT THE RUN IS AFTER THE ROUND, read from storage rather than inferred from the
+         pill: a pill that says the right sentence over a number that was silently zeroed is
+         the exact failure this rule exists to prevent, and it looks identical on screen. */
+      stored: (() => { try { return {
+        run: localStorage.getItem('kamo_seek_run'), life: localStorage.getItem('kamo_seek_life'),
+      }; } catch (e) { return {}; } })(),
+      sub: (document.getElementById('chSub') || {}).textContent || '',
       shown: getComputedStyle(pill).display !== 'none',
       /* The founder's question, answered as geometry: do the two boxes share any area at all. */
       overlap: !(p.right <= h.left || p.left >= h.right || p.bottom <= h.top || p.top >= h.bottom),
@@ -251,6 +274,65 @@ console.log('\nAND IT DOCKS WHERE THE EYE ALREADY IS — ABOVE THE CARD, NOT UND
     r.aboveCard ? ok('and ahead of the ending card') : bad('the card comes before the pill');
     r.aboveFlip ? ok('and ahead of the flip button, which used to own that slot') : bad('the flip button prepended itself above the pill');
   }
+}
+
+console.log('\nA RUN WORTH LOSING SURVIVES ITS FIRST MISS');
+/* The median best run in the whole base is 3, and one miss used to send the number to zero —
+   the mechanic shape that teaches a player there is nothing left to come back for. The first
+   miss on a run worth losing spends a life instead. */
+{
+  const r = await breakRun(4, 6, 390, true);
+  if (r.err) bad(r.err);
+  else {
+    r.text === 'Run of 4 held'
+      ? ok(`the run is held, and the pill says so ("${r.text}")`)
+      : bad(`a first miss on a run of 4 reads ${JSON.stringify(r.text)}`);
+    /* The screen and the storage have to agree. A pill saying "held" over a run that was
+       zeroed anyway is worse than no save at all. */
+    r.stored.run === '4' ? ok('and the run is still 4 in storage') : bad(`storage kept run=${r.stored.run}`);
+    r.stored.life === '0' ? ok('and the life is spent') : bad(`life reads ${JSON.stringify(r.stored.life)}`);
+    /\bheld\b/.test(r.cls || '') ? ok('and it is drawn as its own state, not as a loss') : bad(`class is ${JSON.stringify(r.cls)}`);
+    /one more miss/i.test(r.sub) ? ok(`and the card spends its subtitle on the stake ("${r.sub}")`) : bad(`the subtitle reads ${JSON.stringify(r.sub)}`);
+  }
+}
+{
+  /* AND A SECOND MISS ENDS IT EXACTLY AS BEFORE. The life is one, not a shield: if this
+     branch ever stops firing the run becomes unloseable and the stake is gone. */
+  const r = await breakRun(4, 6, 390, false);
+  r.err ? bad(r.err)
+    : r.text === 'Run of 4 broken · best 6' ? ok('with no life left, the same miss ends the run')
+    : bad(`a miss with no life reads ${JSON.stringify(r.text)}`);
+  r.stored && r.stored.run === '0' ? ok('and the run is zero in storage') : bad(`storage kept run=${r.stored && r.stored.run}`);
+  /* THE LIFE COMES BACK WITH THE NEXT RUN. Starting a fresh run already spent would carry a
+     punishment across the line the player was told was final. */
+  r.stored && r.stored.life === '1' ? ok('and the next run starts with its life') : bad(`life after a death reads ${JSON.stringify(r.stored && r.stored.life)}`);
+}
+{
+  /* ⚠️ AND A GIVE-UP IS NOT A MISS, WHICH IS THE WHOLE PRICE OF THE LIFE. A miss is "I looked
+     and I was wrong" — the honest failure this softens. A give-up is "I choose to stop", and
+     the feed lock exists to make exactly that expensive: before it, scrolling past cost
+     nothing and the run counted only the rounds the player was already sure about (feed rounds
+     read 59.2% found in 3.6s against 48.0% on a link — not an easier feed, a silently
+     discarded denominator).
+     A life on the give-up reopens that door by the back: hard hide, quit for free, next easy
+     find hands the life straight back, and the exit is free every other round. Caught by
+     test-feedlock-dom ③ on the feed; asserted here too, on the link, because this is where the
+     rule lives and a suite about the run should not need the feed's suite to defend it. */
+  const r = await breakRun(4, 6, 390, true, 'giveup');
+  r.err ? bad(r.err)
+    : r.text === 'Run of 4 broken · best 6' ? ok('giving up breaks the run even with a life in hand')
+    : bad(`a give-up with a life reads ${JSON.stringify(r.text)}`);
+  r.stored && r.stored.run === '0' ? ok('and the run is zero in storage') : bad(`a give-up left run=${r.stored && r.stored.run}`);
+  r.stored && r.stored.life === '1' ? ok('and the life is not spent on it either — it was never offered') : bad(`life after a give-up reads ${JSON.stringify(r.stored && r.stored.life)}`);
+}
+{
+  /* NOTHING TO SAVE AT 1. "Your run of 1 survives" is a ceremony about nothing, and it is the
+     same threshold the break line already refuses to speak below. */
+  const r = await breakRun(1, 6, 390, true);
+  r.err ? bad(r.err)
+    : !/held/.test(r.text) ? ok('a run of 1 is not worth a life')
+    : bad(`a run of 1 reads ${JSON.stringify(r.text)}`);
+  r.stored && r.stored.life === '1' ? ok('and the life is not spent on it') : bad(`life reads ${JSON.stringify(r.stored && r.stored.life)}`);
 }
 
 console.log('\nAND STAYS QUIET WHEN THE RUN THAT DIED WAS THE RECORD');
