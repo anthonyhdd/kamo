@@ -1065,12 +1065,21 @@
   #stage.pwCover #timerTag,#stage.pwCover #timerNum,#stage.pwCover #timerBar,
   #stage.pwCover #sizeBar,#stage.pwCover #paintUI,#stage.pwCover #actionRow,#stage.pwCover #shutterWrap,
   #stage.pwCover #btnPhoto,#stage.pwCover #btnPlus,#stage.pwCover #btnLight,
-  #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar,
+  #stage.pwCover #flip,#stage.pwCover #btnFrame,#stage.pwCover #frameBar{visibility:hidden!important;}
   /* #covHud is the pill that replaced #scoreChip in this same slot (see the note above) — it
      was never added here, so a paywall opened mid-paint (Pro upsell chips, the brush-size
      lock) showed "N% hidden · ready to challenge" floating over the sales card. Same rule,
-     same reason: the round underneath is chrome the paywall has to own the screen from. */
-  #stage.pwCover #covHud{visibility:hidden!important;}
+     same reason: the round underneath is chrome the paywall has to own the screen from.
+     #btnFeed AND #sizeStar ARE THE SAME OMISSION, and the three together are why the LIST is
+     the bug rather than any one id: it is an ALLOW-LIST, so every piece of chrome born after
+     2026-08-12 defaults to showing through and stays that way until somebody photographs it.
+     #btnFeed arrived 08-13, one day after this rule, a sibling of #btnPhoto which is already
+     listed — the paywall left one lone mint button floating on the camera screen. #sizeStar
+     is the Pro star beside the size bar: #sizeBar is hidden here, the star was not.
+     So the fix that lasts is not this line, it is the probe: test-pwfull-dom reads the
+     computed visibility of all three, and the next id somebody forgets fails a test instead
+     of shipping. */
+  #stage.pwCover #covHud,#stage.pwCover #btnFeed,#stage.pwCover #sizeStar{visibility:hidden!important;}
   /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
      #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
      descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
