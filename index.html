@@ -12388,11 +12388,22 @@ function kfAuthorKeyRO(){
    board owns it, computed server-side over one UTC day, and a second local notion of today
    would be a second answer to the same question. */
 const CH_RUN_KEY="kamo_seek_run", CH_BEST_KEY="kamo_seek_best";
+/* ONE LIFE PER RUN, AND THE RUN IS WHAT MOST PEOPLE NEVER GET TO KEEP. The median best run
+   in the whole base is 3: a single miss sent the number to zero, which is the one mechanic
+   shape that teaches a player there is nothing left to come back for. So the first miss on a
+   run worth losing spends a life instead of the run; the next find gives the life back, and
+   a second miss with no life left ends it exactly as before.
+   FROM 2, the same threshold the break line already uses. At a run of 1 there is nothing to
+   save, and "your run of 1 survives" is a ceremony about nothing.
+   "0" MEANS SPENT AND EVERYTHING ELSE MEANS AVAILABLE, missing key included — a device that
+   has never seen this code starts its next miss with a life rather than without one. */
+const CH_LIFE_KEY="kamo_seek_life", CH_RUN_SAVE_MIN=2;
 function chStreak(){
   try{
     return {run:parseInt(localStorage.getItem(CH_RUN_KEY)||"0",10)||0,
-            best:parseInt(localStorage.getItem(CH_BEST_KEY)||"0",10)||0};
-  }catch(e){ return {run:0,best:0}; }
+            best:parseInt(localStorage.getItem(CH_BEST_KEY)||"0",10)||0,
+            life:localStorage.getItem(CH_LIFE_KEY)!=="0"};
+  }catch(e){ return {run:0,best:0,life:true}; }
 }
 function kfAuthorKey(){
   try{
@@ -14469,14 +14480,27 @@ function chSeek(hideId,opts){
       const r=chSeekRecord();
       localStorage.setItem(CH_SEEN_KEY,String(r.n+1));
       if(hit) localStorage.setItem(CH_HIT_KEY,String(r.hit+1));
-      const s=chStreak(), run=hit?s.run+1:0, best=Math.max(s.best,run);
+      const s=chStreak();
+      /* THE SAVE, AND IT IS DECIDED HERE because this is the only place a round's outcome
+         meets the run it lands on. Three cases and they are exhaustive: a find grows the run,
+         a miss on a run worth losing spends the life and holds it, any other miss ends it. */
+      const saved=!hit && s.run>=CH_RUN_SAVE_MIN && s.life;
+      const run=hit ? s.run+1 : (saved ? s.run : 0), best=Math.max(s.best,run);
       localStorage.setItem(CH_RUN_KEY,String(run));
       if(best!==s.best) localStorage.setItem(CH_BEST_KEY,String(best));
+      /* THE LIFE COMES BACK ON A FIND, AND ON A DEATH. On a find because the cost of a save
+         is one round of perfection and they have just paid it; on a death because the next
+         run is a new run and starting it already spent would be a punishment carried across
+         a line the player was told was final. Only the save leaves it spent. */
+      localStorage.setItem(CH_LIFE_KEY, saved?"0":"1");
       /* A RUN COUNTS FROM 1 — that is what streak_board() ranks (`where streak > 0`) and what
          the pill shows. But CELEBRATING one does not: "1 best yet" on somebody's first ever
          find is noise dressed as an achievement, and the same threshold is why a broken run
          only speaks from 2. One rule, both directions. */
-      return {run:run,best:best,broke:hit?0:s.run,record:(run>=2&&run>s.best)};
+      /* `broke` IS THE LENGTH A RUN DIED AT, so a save does not have one: the run is still
+         alive and the card must not print an epitaph for it. `saved` is what that branch
+         reads instead. */
+      return {run:run,best:best,broke:(hit||saved)?0:s.run,record:(run>=2&&run>s.best),saved:saved};
     }catch(_){ return {run:0,best:0,broke:0,record:false}; } };
   try{ window.KAMOSEEK={record:chSeekRecord,min:CH_MIN_SEEKS,streak:chStreak}; }catch(_){}
   const ctl={destroy:()=>{}};
@@ -14630,6 +14654,21 @@ function chSeek(hideId,opts){
     /* Reduced motion keeps the pill and drops the travel. Nothing here encodes state in the
        movement — the colour does that — so removing it costs nothing a player needs. */
     +"@media (prefers-reduced-motion:reduce){.chRun.docked,.chRun.docked.dead,.chRun.docked.pb{animation:none;}}"
+    /* HELD IS ITS OWN COLOUR, and it has to be reachable from both of the others at a glance:
+       gold is a run that is fine, red is a run that is over, and this is the one in between —
+       still yours, one mistake from not being. Amber, and the ring is the loud part because
+       the type is the same size as every other end state.
+       AFTER .chRun.docked on purpose: equal specificity, so this is what wins the border and
+       the shadow the docked rule sets. */
+    +".chRun.held{color:#ffb066;border-color:rgba(255,176,102,.62);"
+      +"box-shadow:0 8px 24px rgba(0,0,0,.45),0 0 0 3px rgba(255,176,102,.18);}"
+    /* ONE PULSE, QUEUED BEHIND THE ENTRANCE like .dead and .pb — a held run arrives with the
+       card and then flinches once. Not a shake: chRunDie's shake is the language of a loss and
+       this is the opposite news. */
+    +".chRun.docked.held{animation:chRunRise .42s cubic-bezier(.2,.9,.25,1.25) both,"
+      +"chRunHold .5s ease-out .42s;}"
+    +"@keyframes chRunHold{0%{transform:none}30%{transform:scale(1.07)}100%{transform:none}}"
+    +"@media (prefers-reduced-motion:reduce){.chRun.docked.held{animation:none;}}"
     +"@keyframes chRunPb{0%{transform:scale(1)}40%{transform:scale(1.16)}100%{transform:scale(1)}}"
     /* ⚠️ LEFT, NOT CENTRED, AND THAT IS THE HINT PILL'S DOING. Both live on the same row —
        bottom 16px + safe-area — and the hint's widest state is the OFFER, which is the longest
@@ -15181,12 +15220,18 @@ function chSeek(hideId,opts){
       runEl.style.display="block";
       return;
     }
+    /* THE FALLEN FIGURE IS FOR A RUN THAT ACTUALLY DIED. A held run is alive — it kept its
+       number — so it keeps the standing one. */
     runEl.innerHTML=(mode==="dead"?RUN_MARK_OUT:RUN_MARK);
     /* AND THE RECORD RIDES ALONG WHILE THE RUN IS LIVE. Chasing a number you cannot see is not
        chasing. Only while it is still ahead: at b<=v the record IS this run, and "6 · best 6"
        prints one number twice — the same rule the break line already follows. */
     runEl.appendChild(document.createTextNode(
         mode==="dead" ? ("Run of "+v+" broken"+(b>v?" · best "+b:""))
+      /* THE SAVE READS AS A RESCUE, NOT AS A SCORE. The number is unchanged from the round
+         before — the whole news is that it did not move when it should have — so the pill
+         has to carry the verb or it looks like nothing happened at all. */
+      : mode==="held" ? ("Run of "+v+" held")
       : mode==="pb"   ? (v+" best yet")
       /* THE WIN SAYS WHAT THE NUMBER MEANS, now that it is no longer standing beside the
          clock. Docked under the card with prose either side of it, a bare numeral is a
@@ -16405,7 +16450,27 @@ function chSeek(hideId,opts){
          A win is not buzzed here — chCelebrate already did it. `sk` is null for "This hide
          is gone", which is neither, so it stays silent. */
       if(sk){
-        if(sk.run>0)          chRunShow(sk.run, sk.record?"pb":"", sk.best);
+        /* THE SAVE IS TESTED FIRST, AND IT HAS TO BE. A saved run still has run>0 — that is
+           the entire point of it — so the win branch below would swallow it and print the
+           number as though the round had been won. */
+        if(sk.saved){
+          chRunShow(sk.run,"held",sk.best);
+          /* THE SUBTITLE IS SPENT ON THE STAKE, not on the reveal. "The kamo was right there"
+             is the right sentence for a loss that cost nothing; this loss cost the one thing
+             the player is carrying, and saying so is what makes the next round expensive. */
+          $$("chSub").textContent="One more miss and it's gone.";
+          /* NOT THE ERROR BUZZ. A broken run gets [40,60,40]/error because something ended;
+             this is a thud, not a verdict, and it must not feel like the loss it just was
+             not. "heavy" is already in this file's vocabulary — see the reveal — so no new
+             style name is being asked of the wrapper. */
+          buzzHaptic([22,44,22],"heavy",2);
+          /* THE NUMBER THAT SAYS WHETHER THE LIFE IS WORTH ITS COST. `at` is the run that was
+             rescued; `broke` on the same population is what it would have been. If saves
+             cluster at 2 and 3 the life is buying nothing anybody would have missed; if the
+             distribution of run_broken `at` moves right after this ships, it worked. */
+          track("run_saved",TP({at:sk.run,src:FEED?"feed":"link"}));
+        }
+        else if(sk.run>0)     chRunShow(sk.run, sk.record?"pb":"", sk.best);
         else if(sk.broke>=2){ chRunShow(sk.broke,"dead",sk.best);
           /* A broken run is the one loss with something behind it, and it gets the error
              buzz — the stake has to be FELT, which is exactly what run_broken's `at`
