@@ -1688,6 +1688,32 @@ try {
         + 'signature is gone or it is being written as HTML, and the value comes off a stranger\'s device');
 }
 
+/* ---- 12-bis. The two properties that separate people from the harness -----------------------
+   `wd` and `page_host` shipped on 2026-08-24 as a probe, with "DELETE THIS ONCE IT HAS ANSWERED"
+   written on them. They answered on 08-26, and the answer is the reason they must now stay: the
+   test suites POST to production Amplitude, `page_host` on every wd:true event is
+   127.0.0.1:<port>, and that traffic is ~80% of seek_opened and feed_opened on a quiet day.
+
+   The arms are 50/50 among people (wd=false: seek 163/171, published 148/127, paywall 141/145).
+   They read 2:1 only because the harness is pinned "off" by design and counted as users. So
+   every experiment in index.html is readable ONLY when the reader filters wd — which makes a
+   one-word deletion here quietly unfalsify five live experiments at once, with no red anywhere.
+
+   Matched on the intent, not the shape: both keys ride on the props object track() builds, and
+   they must sit BEFORE the spread so a caller's own prop can never shadow them. */
+{
+  const m = html.match(/const\s+p\s*=\s*\{([\s\S]{0,200}?)\.\.\.\(props\|\|\{\}\)/);
+  const before = m ? m[1] : '';
+  const has = /\bwd\s*:\s*navigator\.webdriver\s*===\s*true/.test(before)
+           && /\bpage_host\s*:\s*location\.host/.test(before);
+  has
+    ? ok('wd and page_host still ride every web event, ahead of the caller\'s props')
+    : bad('track() no longer stamps wd/page_host before the props spread — the only thing that '
+        + 'tells this project\'s users apart from its own test suites is gone, and every arm '
+        + 'read (gate, banger, open, land, plan, design) silently goes back to reading 2:1 '
+        + 'harness traffic as people. See the note at its declaration in index.html.');
+}
+
 /* ---- 13. The control the paywall sells --------------------------------------------------
    "KAMO+ unlocks the whole range, down to fine detail" is a promise about a slider, made to
    someone deciding whether to pay. A member silently snapped to the three presets looks exactly
