@@ -67,12 +67,12 @@
 -- every retention figure in CLAUDE.md, which is computed over exactly that window. Nobody has
 -- ever seen this happen because the purge has never once succeeded.
 --
--- THIS FILE DOES NOT CHANGE THAT. Changing what gets deleted is not the same job as fixing how,
--- and quietly dropping the FKs would be a schema decision taken on the way past. What it does
--- is make the cost VISIBLE: every run records `attempts_cascaded` and `traces_cascaded`, so the
--- first night is a number in `ops_cleanup` rather than a hole discovered in October. If those
--- rows are worth keeping, the fix is `alter table attempts drop constraint attempts_hide_id_fkey`
--- (and the same for seek_traces) — deliberately, in its own migration, before 2026-09-04.
+-- ⚠️ SUPERSEDED THE SAME DAY — see infra/2026-08-26-keep-attempt-history.sql. This file made
+-- the cost visible rather than taking the schema decision on the way past; the answer came back
+-- "keep the history", so both FKs were dropped in their own migration and the two counters were
+-- renamed `attempts_kept` / `traces_kept`, because the identical number now means the opposite
+-- thing. Nothing below is wrong, but the column names here are the old ones and the purge no
+-- longer destroys anything but the hide row and its objects.
 --
 -- `hide_reactions` has NO foreign key, so its rows simply orphan. 1 720 rows today.
 --
