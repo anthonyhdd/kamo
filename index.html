@@ -8982,8 +8982,36 @@ function track(event,props){
    * ("sent_cta_tapped carries host=127.0.0.1:33713"), which is what that assertion is for. These
    * two sit BEFORE the spread as well, so no event can ever be shadowed by the probe.
    *
-   * DELETE THIS ONCE IT HAS ANSWERED. It is a probe, not instrumentation: it earns its place for
-   * as long as the split is unexplained and not one day longer. */
+   * ── IT ANSWERED, ON 2026-08-26, AND THE ANSWER PROMOTES IT ────────────────────────────────
+   * It was not the harness pin firing on real devices, and it was not a storage throw. It is
+   * that THE TEST SUITES TALK TO PRODUCTION AMPLITUDE. `page_host` on every single `wd:true`
+   * event is `127.0.0.1:<ephemeral port>` — hundreds of distinct ports, one per boot of a
+   * suite's own server. Not a scraper, not a bot, not a browser lying about itself: us.
+   *
+   * Crossed with the arms over 08-24 → 08-26 the split stops being a mystery and becomes two
+   * clean populations, and only one of them is people:
+   *
+   *      wd=false   seek 163/171   published 148/127   paywall 141/145   <- a coin, exactly
+   *      wd=true    seek 1284/91   published 104/0     paywall 0/0       <- the pin, working
+   *
+   * So THE ARMS WERE NEVER BROKEN. Every experiment in this file is 50/50 among people. The
+   * 2:1 reads that keep getting reported are harness traffic being counted as users, and it is
+   * loudest exactly where the suites do the most work: ~80% of `seek_opened` and `feed_opened`
+   * on a quiet day, against ~27% of `hide_published` and ~18% of `hide_sent`.
+   *
+   * ⚠️ SO THIS IS NOT A PROBE ANY MORE AND MUST NOT BE DELETED. `wd` is now the only thing
+   * separating people from the harness in this project's analytics, and five live experiments
+   * are unreadable without it: EVERY arm read filters `wd is False`. `(none)` is not "unknown
+   * and probably fine" — it is a page load older than 2026-08-24 11:06Z still running from
+   * cache, so it mixes both populations and has to be excluded too. check.mjs fails by name if
+   * either property leaves this payload.
+   *
+   * THE REAL REPAIR IS UPSTREAM and is deliberately not done here: chWebTrack should refuse to
+   * POST under webdriver, with an opt-in for test-carrier-dom and test-variantprop-dom, which
+   * are the only two suites that assert on the wire rather than on `window.__tr`. It is not
+   * done here because it drops `seek_opened` and `feed_opened` by ~80% on the day it ships, and
+   * shipping a discontinuity that size into the middle of a live experiment is how a real
+   * result gets read as a collapse. Land it between experiments, and annotate the date. */
   const p={wd:navigator.webdriver===true,page_host:location.host,
            ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
