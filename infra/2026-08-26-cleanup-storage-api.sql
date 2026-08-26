@@ -483,10 +483,60 @@ begin
   return jsonb_build_object('status', 'dispatched', 'run', v_run, 'candidates', v_n);
 end $$;
 
+-- ── AND THE CHECK THAT PUTS jobid's HONESTY BACK ────────────────────────────────────────────
+--
+-- Dispatching over pg_net means job 1 can no longer fail in front of pg_cron: it reads SUCCESS
+-- whatever happens downstream. That quietly removed the one check anybody actually runs — the
+-- `select … from cron.job_run_details where jobid = 1` that found this bug in the first place.
+--
+-- So the truth goes back where it was already being looked for. A second job reads the last run
+-- and RAISES if it was not clean, twenty minutes after the purge — long after a sweep that used
+-- its whole 90 s budget has closed. ITS jobid goes red; job 1 stays green because job 1 only
+-- queues a request. `cron.job_run_details` is meaningful again, with no new tool to check.
+--
+-- This is not an alert and does not pretend to be one — it is a status somebody has to go and
+-- read, which is exactly what failed for twenty nights. The webhook below is what actually
+-- reaches a human, and it is one UPDATE whenever there is somewhere to send it.
+create or replace function public.cleanup_assert_healthy()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare r public.ops_cleanup;
+begin
+  select * into r from public.ops_cleanup order by id desc limit 1;
+
+  if r.id is null then
+    raise exception 'kamo cleanup: no run has ever been recorded';
+  end if;
+
+  -- The dispatcher stopped firing: job disabled, dropped, or erroring before it can write a
+  -- row. 26 hours so a daily job is never flagged for being a few minutes late.
+  if r.started_at < now() - interval '26 hours' then
+    raise exception 'kamo cleanup: nothing has run since % UTC',
+      to_char(r.started_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI');
+  end if;
+
+  -- Dispatched and never closed: the Edge Function is undeployed, unreachable, or its secret
+  -- stopped matching. This is the shape twenty silent nights had.
+  if r.status = 'dispatched' then
+    raise exception 'kamo cleanup: run % dispatched at % UTC and never reported back',
+      r.id, to_char(r.started_at at time zone 'UTC', 'HH24:MI');
+  end if;
+
+  -- `disabled` is the kill switch and a deliberate act, so it is not a failure.
+  if r.status not in ('ok', 'nothing_to_do', 'disabled') then
+    raise exception 'kamo cleanup: run % finished % — % rows deleted, % objects left orphaned, % still waiting. %',
+      r.id, r.status, r.rows_deleted, r.orphaned, coalesce(r.remaining, -1), coalesce(r.error, '');
+  end if;
+end $$;
+
 -- ── who may call what ───────────────────────────────────────────────────────────────────────
 -- The Edge Function reaches these over PostgREST with the service role key; anon and
 -- authenticated have no business with any of them. `hides` is what they delete.
 revoke all on function public.cleanup_expired_hides()                             from public, anon, authenticated;
+revoke all on function public.cleanup_assert_healthy()                            from public, anon, authenticated;
 revoke all on function public.cleanup_ping(text, bigint)                          from public, anon, authenticated;
 revoke all on function public.cleanup_claim_batch(text, bigint, integer)          from public, anon, authenticated;
 revoke all on function public.cleanup_settle_batch(text, bigint, text[], integer, text[]) from public, anon, authenticated;
@@ -506,6 +556,10 @@ grant execute on function public.cleanup_close_run(text, bigint, text, text, jso
 
 -- PostgREST resolves an RPC out of a cached schema; a fresh function it has not seen comes
 -- back looking exactly like an auth failure. notify-creator lost a diagnostic cycle to that.
+select cron.unschedule('kamo-cleanup-check')
+ where exists (select 1 from cron.job where jobname = 'kamo-cleanup-check');
+select cron.schedule('kamo-cleanup-check', '40 3 * * *', $c$select public.cleanup_assert_healthy()$c$);
+
 notify pgrst, 'reload schema';
 
 commit;
@@ -527,9 +581,12 @@ commit;
 --        ('shared_secret', (select value from private.push_config where key = 'shared_secret'))
 --      on conflict (key) do update set value = excluded.value;
 --
--- 3. Give it a channel. ⚠️ STILL NOT DONE — as of 2026-08-26 neither this nor the photo probe
---    has a webhook, so both degrade to `raise warning` in the Postgres log, which is the exact
---    "nobody reads it" failure this file was written about. One UPDATE closes it:
+-- 3. OPTIONAL — give it somewhere to shout. Not done, and nothing depends on it: without a URL
+--    the alerts land as `raise warning` in the Postgres log, and the failure is still caught by
+--    `kamo-cleanup-check` turning jobid 3 red. A webhook is what turns "go and look" into
+--    "you are told". Any URL that accepts a POST works; Discord renders the `content` key
+--    as-is, which is why the photo probe picked it. Empty here falls back to the probe's, so
+--    arming either arms both.
 --
 --      update public.ops_cleanup_config set webhook_url = 'https://discord.com/api/webhooks/…';
 --
@@ -576,8 +633,16 @@ commit;
 -- ⚠️ Do NOT rehearse by backdating rows with `source is not null`. Those are somebody's hides.
 --
 -- ── READING IT AFTERWARDS ───────────────────────────────────────────────────────────────────
--- ⚠️ `cron.job_run_details` for jobid 1 reads SUCCESS from tonight whatever happens, because the
--- work left over pg_net. It is no longer the signal. These are:
+-- ⚠️ jobid 1 reads SUCCESS from tonight whatever happens — it only queues the request. The job
+-- to read is **jobid 3, `kamo-cleanup-check`**, which is red exactly when the last run was not
+-- clean, and carries the reason in `return_message`:
+--
+--      select start_time, status, left(return_message, 200)
+--        from cron.job_run_details
+--       where jobid = (select jobid from cron.job where jobname = 'kamo-cleanup-check')
+--       order by start_time desc limit 5;
+--
+-- The full detail is still the table:
 --
 --      select started_at, status, candidates, rows_deleted, objects_removed,
 --             attempts_cascaded, traces_cascaded, orphaned, remaining, stopped_for, left(error,120)
