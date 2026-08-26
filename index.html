@@ -8063,9 +8063,20 @@ function brandTap(){ if(brandLongPressed){ brandLongPressed=false; return; }   /
    opens Apple's sheet. A cancel or a failure left that "…" on screen for the full 45s of its
    own safety timer — a dead control on the screen App Review is told to test, for three
    quarters of a minute, after the one gesture that means "no thanks".
-   Registered by the seek screen while it is up (see __kamoHintBuyEnded there) and a no-op
-   everywhere else, so nothing outside a live hunt is touched. */
-const hintBuyEnded=()=>{ try{ if(window.__kamoHintBuyEnded) window.__kamoHintBuyEnded(); }catch(_){} };
+   Registered by the seek screen while it is up (see the hint registry there) and a no-op
+   everywhere else, so nothing outside a live hunt is touched.
+   ⚠️ EVERY MOUNTED ROUND IS ASKED, NOT THE LAST ONE TO MOUNT. These were single globals
+   until 2026-08-26 and the feed mounts several rounds at once, so the newest slide owned
+   the slot and the round that had actually opened Apple's sheet was never called. See the
+   registry for the production trace. Detached rounds are dropped here rather than by an
+   unmount hook, because a round can leave the DOM by paths — feed recycling, a swipe taken
+   mid-purchase — that never run one. */
+const hintRounds=()=>(window.__kamoHintRounds||(window.__kamoHintRounds=[]));
+const hintFanout=(k)=>{ const L=hintRounds();
+  for(let i=L.length-1;i>=0;i--){ const h=L[i];
+    if(!h||!h.el||!h.el.isConnected){ L.splice(i,1); continue; }
+    try{ h[k]&&h[k](); }catch(_){} } };
+const hintBuyEnded=()=>{ try{ hintFanout("ended"); }catch(_){} };
 window.KAMO.buyDone=()=>{ setPwBuyLoading(false); hintBuyEnded(); };
 /* `setPrice` (singular) was defined here and never injected by ANY native build — the
    wrapper only ever calls setPrices. Removed rather than left as a decoy. */
@@ -8188,7 +8199,7 @@ window.KAMO.setAnalyticsUserId=(id)=>{ chUserId=(id||"").toString().trim(); };
    exist inside the seek closure. No hunt open (they bought, then swiped away) is not an
    error and not a loss — the webhook credits the wallet regardless, and the next hunt reads
    the balance. */
-window.KAMO.hintsPurchased=()=>{ try{ if(window.__kamoHintsBought) window.__kamoHintsBought(); }catch(_){} };
+window.KAMO.hintsPurchased=()=>{ try{ hintFanout("bought"); }catch(_){} };
 window.KAMO.setAppLink=(u)=>{ if(u) appLink=String(u); };
 /* WHERE A TAPPED NOTIFICATION LANDS. "Someone found your hide / see how" opened the camera,
    which is the screen with the least to do with what just happened — the notification
@@ -10381,6 +10392,7 @@ function confettiBurst(originEl){
    left; the constant stays, because a number this hard-won belongs somewhere it can be found
    and argued with rather than inlined into the one call site. */
 const CH_RET_OFF=38;
+
 
 /* WAIT FOR THE ID THE SHARE IS ABOUT TO NEED — bounded, and never on the web path.
    chUpload() is fire-and-forget: it encodes a full-size JPEG, uploads it, then calls
@@ -15911,14 +15923,13 @@ function chSeek(hideId,opts){
        worst sentence on this screen. */
     const hintIdle=()=>{ hintBtn.classList.remove("spent"); hintBtn.textContent=hintIdleLabel; };
 
-    /* NO PRICE ON THIS LABEL, AND THAT IS DELIBERATE. The page can only state a price that
-       came from StoreKit — setPrices() carries `weekly` and `lifetime` and nothing else, so
-       the pack's localized price does not exist on this side at all. Printing "$2.99" here
-       would be a hardcoded guess that is wrong in every storefront that is not the US, which
-       is the same pricing misstatement the paywall's per-day line is hidden to avoid. Apple's
-       own sheet is one tap away and states the real price, in the user's currency, always.
-       Sending the pack price through setPrices() needs App.js, i.e. a build and a review; when
-       that ships, this label is where it goes. */
+    /* NO PRICE ON THIS LABEL, AND IT IS NO LONGER "because the page hasn't got one".
+       It has had one since 1.1.6 — setPrices() carries `hints` — and the append was measured
+       and reverted: see hintLabelFor(), where the 4.6× fall in tap rate is written down with
+       its numbers. A hardcoded "$2.99" would additionally be wrong in every storefront that
+       is not the US, the same misstatement the paywall's per-day line is hidden to avoid.
+       Apple's own sheet is one tap away and states the real price, in the user's currency,
+       before a cent moves. */
     function offerPackAfterUse(){
       hintEmpty=true;
       hintIdleLabel=hintLabelFor(0,false);
@@ -15934,7 +15945,8 @@ function chSeek(hideId,opts){
        paid for, or about to open Apple's sheet. The third case is the one that matters: a
        player tapped a button that said "Hint" and got a purchase sheet, having never been
        told a pack existed, what was in it or what it cost. Three states, three sentences,
-       and the price appears the moment a build sends it (see hintPackPrice). */
+       and the third one names what it sells without quoting a price at it (see hintLabelFor
+       for the measurement that settled that). */
     const HINT_PACK_SIZE=5;
     /* THE FREE ONE IS NAMED, and that is the whole first tap. It read "1 Hint", which is a
        quantity and says nothing about cost — so the only thing this product gives away for
@@ -16122,18 +16134,39 @@ function chSeek(hideId,opts){
         showHint("Your hints are on the way — tap Check again in a moment",3200);
       } finally { hintPolling=false; }
     };
-    window.__kamoHintsBought=pollHintCredit;
-
-    /* THE SHEET IS GONE AND NOTHING WAS BOUGHT — native says so on every path that is not a
-       success: userCancelled injects buyDone(), and every failure and unavailability injects
-       a toast through window.KAMO.hint. Both now reach here, so the button comes back at once
-       instead of sitting on "…" until the 45s timer. That timer stays as the backstop for the
-       one case with no callback at all (the app killed with the sheet up).
-       Never while polling: a credit in flight owns the button, and a stray toast arriving
-       mid-poll must not hand back a control that is about to say "5 left". */
-    window.__kamoHintBuyEnded=()=>{
-      if(!hintPending||hintPolling) return;
-      hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle();
+    /* ⚠️ A REGISTRY, NOT A SLOT — AND THE SLOT IS WHAT TOOK MONEY AND GAVE NOTHING BACK.
+       These two hooks were single globals, `window.__kamoHintsBought` and
+       `window.__kamoHintBuyEnded`, assigned by every round as it mounted. THE FEED MOUNTS
+       SEVERAL ROUNDS AT ONCE — the same fact that stops drawHintZone() reaching for the
+       document-wide $$() — so the last slide to mount owned both hooks. A player who bought
+       a pack on the slide in front of them had native call hintsPurchased(), which reached
+       a DIFFERENT round's poll, whose closure has hintBuyStarted=false, and it returned on
+       its first guard. No claim, no credit, no sentence on screen: the purchase completed,
+       the webhook credited the wallet keyed on the RevenueCat id, and the device that paid
+       went on reading its own empty one. That is the "paid and got nothing" screen this
+       whole module is written to prevent, reached on the happy path.
+       MEASURED IN PRODUCTION 2026-08-26, on the founder's own phone: hint_intent stamped
+       21:28:23, a grant of five landed 21:28:31 with claimed_by null, and the buyer's
+       wallet was still 0 — every one of hint_claim's four conditions satisfied, and the
+       claim simply never ran.
+       FAN-OUT, AND THE GUARDS ALREADY DECIDE WHO ANSWERS. `hintBuyStarted` is precisely
+       "this is the round that paid", so asking every mounted round makes exactly one act
+       and the others return on the line they already had. Nothing about the guards changes;
+       only the number of rounds that get to run them. */
+    const hintHooks={
+      el: hintBtn,
+      bought: pollHintCredit,
+      /* THE SHEET IS GONE AND NOTHING WAS BOUGHT — native says so on every path that is not a
+         success: userCancelled injects buyDone(), and every failure and unavailability injects
+         a toast through window.KAMO.hint. Both reach here, so the button comes back at once
+         instead of sitting on "…" until the 45s timer. That timer stays as the backstop for
+         the one case with no callback at all (the app killed with the sheet up).
+         Never while polling: a credit in flight owns the button, and a stray toast arriving
+         mid-poll must not hand back a control that is about to say "5 left". */
+      ended: ()=>{
+        if(!hintPending||hintPolling) return;
+        hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle();
+      },
     };
 
     /* ═══ THE HINT MODAL ═══ see hintArm's note for why this screen exists at all.
@@ -16192,6 +16225,11 @@ function chSeek(hideId,opts){
     hintBtn.onclick=()=>{ haptic(8); if(hintEmpty) (hintArm==="on"?hpOpen():offerHintPack()); else takeHint(); };
     if(hintsOn()){
       w.appendChild(hintBtn); track("hint_offered",TP({}));
+      /* AFTER THE APPEND, AND ONLY HERE. The fan-out prunes on `el.isConnected`, so a round
+         registered before its button reaches the DOM would be dropped by the first call that
+         went looking for it. And a round with hints off has no button, therefore no sheet to
+         open and nothing to be told about — registering it would only lengthen the list. */
+      hintRounds().push(hintHooks);
       /* WHAT THEY BOUGHT, ON THE BUTTON THAT SOLD IT. A pack is five hints spread over five
          different hides, so the four that are left are spent on screens that never saw the
          purchase — and until now every one of those screens said a flat "Hint", which is the
