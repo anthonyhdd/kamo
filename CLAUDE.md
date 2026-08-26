@@ -200,12 +200,16 @@ Four things about the purge that are not obvious from any one file:
   and 27 912 of them are the reveal frames of *live* hides — unreferenced by construction. Such
   a sweep takes the payoff frame off every current hide. The genuinely unreferenced population
   is 2 110 objects / 167 MB, and the query that isolates it is at the foot of the migration.
-- **⚠️ `attempts` and `seek_traces` are `ON DELETE CASCADE` off `hides`.** From 2026-09-04 the
-  purge starts destroying the attempt history of everything older than thirty days — the
-  evidence behind every retention figure above, computed over exactly that window. This has
-  never happened because the job has never worked. The migration does not change it; it
-  *records* it, as `attempts_cascaded` / `traces_cascaded` per run. If those rows are worth
-  keeping, drop the two FKs deliberately, before 2026-09-04.
+- **The play history now outlives the hide, deliberately** (`2026-08-26-keep-attempt-history.sql`).
+  `attempts` and `seek_traces` cascaded off `hides`, so the newly-working purge would have
+  destroyed the evidence behind every retention figure above — computed over exactly the
+  thirty-day window being purged. Both FKs were dropped; the indexes stayed. Nothing was given
+  up doing it: `submit_attempt` and `save_seek_trace` are the only write paths and both already
+  check the hide more strictly than the FK did. Each run reports `attempts_kept` / `traces_kept`.
+  ⚠️ The cost is that both tables grow forever — ~127 MB/year for `attempts`, ~600 MB/year for
+  `seek_traces`. If space bites, window `seek_traces`; never trim `attempts`. And any GLOBAL
+  count over either table now includes rows whose hide is gone, which is the point — but a query
+  that joins to `hides` to filter will silently drop them.
 - **⚠️ `jobid = 1` reads SUCCESS from now on whatever happens.** pg_net is fire-and-forget, so
   cron only sees "request queued". **Read `jobid 3, kamo-cleanup-check` instead** — it runs at
   03:40 and raises when the last run was not clean, so `cron.job_run_details` means something
