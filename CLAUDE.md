@@ -207,9 +207,11 @@ Four things about the purge that are not obvious from any one file:
   *records* it, as `attempts_cascaded` / `traces_cascaded` per run. If those rows are worth
   keeping, drop the two FKs deliberately, before 2026-09-04.
 - **⚠️ `jobid = 1` reads SUCCESS from now on whatever happens.** pg_net is fire-and-forget, so
-  cron only sees "request queued". The record that means something is `public.ops_cleanup` — a
-  row per night, opened at dispatch and closed by the Edge Function, so a run that never reports
-  back stays visibly `dispatched` and the *next* night's dispatch alerts on it.
+  cron only sees "request queued". **Read `jobid 3, kamo-cleanup-check` instead** — it runs at
+  03:40 and raises when the last run was not clean, so `cron.job_run_details` means something
+  again, with the reason in `return_message`. The full detail is `public.ops_cleanup`: a row per
+  night, opened at dispatch and closed by the Edge Function, so a run that never reports back
+  stays visibly `dispatched` and both the check and the next dispatch catch it.
 
 Two properties are load-bearing and `scripts/test-edge-cleanup.mjs` is what stops them
 regressing: the `hides` rows are deleted **even when the bucket refuses** (a refused path goes
@@ -220,9 +222,10 @@ and played 7 times; the old function would have deleted that file and left a liv
 nothing. 323 `img_path` values are shared this way, because a re-hide reuses its source object.
 
 Applied and proven 2026-08-26: 36 ms per hide at `batch_size 200` (165 ms at 10 — the per-batch
-overhead is the cost, so don't lower it). ⚠️ **Neither this nor the photo probe has a webhook**,
-so both alert by `raise warning` into the Postgres log — one `update … set webhook_url` closes
-the last gap in the thing this was written to fix.
+overhead is the cost, so don't lower it). Neither this nor the photo probe has a webhook, so
+their alerts land as `raise warning` in the Postgres log; nothing depends on it, because the
+03:40 check is what makes a bad night visible. A webhook only turns "go and look" into "you are
+told", and it is one `update … set webhook_url` whenever there is somewhere to send it.
 
 `create_hide` has **four overloads** (6, 8, 9 and 10 arguments) and that is deliberate. This file
 deploys on push and the database does not, so during a deploy both are live: a page loaded a
