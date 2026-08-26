@@ -1309,6 +1309,24 @@ try {
   bad('THE HINT IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
 }
 
+/* ---- 11e0. The screen between the tap and Apple's sheet ---------------------------------
+   The hint pack has sold nothing under either label it has worn — priced on the button (2.4%
+   tap it) or unpriced (11.9% tap it, then 91% cancel at a sheet they meet cold). This arm is
+   the third design and the suite covers the four ways it could ship looking right and still
+   sell nothing: a buy button that cannot be reached by a thumb, an await ahead of StoreKit
+   that spends the gesture's activation, a demo ellipse computed from the real region, and a
+   control arm that quietly acquires a modal of its own. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-hintmodal-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-hintmodal-dom.mjs', 'HINT MODAL TEST', out)
+    : ok('the hint modal names its price, keeps the buy on the fast path and never leaks the region (node scripts/test-hintmodal-dom.mjs)');
+} catch (e) {
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('\u2717'));
+  bad('THE HINT MODAL IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
+}
+
 /* ---- 11e1. The device id, which is the hint wallet's key --------------------------------
    hintOwner() keys the wallet on `chUserId || ("dev:"+chDeviceId())`, and chUserId is empty
    for the whole live population — 152 wallets have spent a hint and ZERO were keyed on one.
