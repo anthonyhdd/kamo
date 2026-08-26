@@ -3563,6 +3563,42 @@ let bangerArm;
  * KILL: rollout to 0 and push, about two minutes, no build. A stored arm keeps its side.
  * Same coin discipline as gateArm and bangerArm — stored wins, webdriver pins "off" so no
  * other suite in scripts/ has a card open itself mid-test, storage-throw sits the device out. */
+/* ═══ THE HINT MODAL — a screen between the tap and Apple's sheet ══════════════════════
+ *
+ * Two designs have been tried on this door, both end at zero sales, and they fail in DIFFERENT
+ * places — which is the whole reason for a third:
+ *
+ *   button with no price   11.9% tap it, and then meet Apple's sheet cold. 91% cancel there.
+ *   button with the price   2.4% tap it. Measured 08-21 -> 08-25 on 1.1.6 against 1.1.5 on the
+ *                           SAME days and the same web code, so it is the binary and not the
+ *                           audience: 08-21 9.0% vs 3.7%, 08-22 15.3% vs 0.8%.
+ *
+ * Nobody has ever put a screen between them. That is what this arm is: the tap goes back to
+ * being cheap — the button says "Hint" and nothing else — and the selling happens on a screen,
+ * so Apple's sheet is met warm. The stop rule sits at the END of the chain on purpose: a modal
+ * that opens more sheets and closes none has only moved the cancellation one screen later, so
+ * if "on" does not CLOSE more purchases per offer than "off", it goes.
+ *
+ * IT IS SAFE TO TAKE THE SCREEN, and that is not true anywhere else in this app: limit_s
+ * stopped being sent when the chrono was found to be amputating 41% of rounds, so there is no
+ * clock left for a full-screen to steal from the round it interrupts.
+ *
+ * KILL: rollout to 0 and push, about two minutes, no build. A stored arm keeps its side. */
+const HINT_MODAL_ROLLOUT=50;
+let hintArm;
+{
+  const s=lsGet("kamo_hint_modal_arm");
+  if(s==="on"||s==="off") hintArm=s;
+  /* Pinned for the harness, same as every arm above and for the same reason: a coin here would
+     put a full-screen over half the runs of every other seeker suite in scripts/.
+     test-hintmodal-dom.mjs seeds the arm it wants. */
+  else if(navigator.webdriver) hintArm="off";
+  else {
+    hintArm=(Math.random()*100<HINT_MODAL_ROLLOUT)?"on":"off";
+    lsSet("kamo_hint_modal_arm",hintArm);
+  }
+}
+
 const REPLY_OPEN_ROLLOUT=50;
 let openArm;
 {
@@ -8535,7 +8571,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -9013,7 +9049,7 @@ function track(event,props){
    * shipping a discontinuity that size into the middle of a live experiment is how a real
    * result gets read as a collapse. Land it between experiments, and annotate the date. */
   const p={wd:navigator.webdriver===true,page_host:location.host,
-           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,emit:"web"};
+           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -14685,6 +14721,42 @@ function chSeek(hideId,opts){
        state that used to be a single glyph can be eight characters wide — and a pill that wraps
        inside itself is the shape of a mistake, which is the lesson the two end states already
        learned at 17px. */
+    /* ── THE HINT MODAL. Full-screen inside the ROUND (w), never on document.body: the feed
+       mounts several rounds at once, so a body-level overlay would hang this hide's offer over
+       whichever slide happens to be in front. Same reason the hint zone takes img.parentElement
+       rather than $$("chFrame"). */
+    +".hpWrap{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(4,6,10,.88);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);}"
+    +".hpCard{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:stretch;gap:13px;text-align:center;}"
+    /* THE HERO IS THEIR OWN PICTURE, AND IT IS BLURRED FOR A REASON. Nobody has ever seen a
+       hint before paying for one, which is a poor way to sell the only consumable in this app.
+       Their own photo makes the demo about the round they are actually stuck on — and the blur
+       is what makes it legal: a sharp frame under a real-sized ellipse would hand the answer
+       over for free. The blur removes the information and keeps the recognition. */
+    +".hpHero{position:relative;width:100%;aspect-ratio:4/5;border-radius:18px;overflow:hidden;background:#0b0f14;}"
+    +".hpShot{position:absolute;inset:-16px;background:#0b0f14 center/cover no-repeat;filter:blur(11px) saturate(.8) brightness(.82);}"
+    /* FIXED FRACTIONS, AND reg IS NEVER READ HERE. The demo ellipse is placed by percentage and
+       has no access to this hide's region at all, so there is no version of this screen that
+       can leak the answer — not through a rounding error, not through a later refactor. It
+       borrows .chHintZone so what is shown IS what is sold, down to the falloff. */
+    /* ⚠️ IT DOES NOT BORROW .chHintZone, AND THAT IS NOT A STYLE PREFERENCE. It did, on the
+       grounds that showing exactly what is sold is the honest thing — and test-hint-dom went
+       red on the first run, because that suite asks the document for `.chHintZone` to prove a
+       zone is only ever drawn after a spend. It found this one, sitting in a hidden wrap, and
+       was right to: a decoration indistinguishable from a paid result is a decoration that
+       will eventually be mistaken for one, by a test or by a person. So the paint is copied
+       and the name is not. If .chHintZone's gradient is retuned, retune this with it — what is
+       shown still has to be what is sold. */
+    +".hpZone{position:absolute;left:50%;top:46%;width:46%;height:34%;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);"
+    +"background:radial-gradient(closest-side,rgba(4,6,10,0) 0%,rgba(4,6,10,0) 48.6%,rgba(255,255,255,.16) 49.4%,rgba(255,255,255,.16) 50.6%,rgba(4,6,10,.06) 52%,rgba(4,6,10,.30) 64%,rgba(4,6,10,.64) 82%,rgba(4,6,10,.82) 100%);"
+    +"box-shadow:0 0 0 9999px rgba(4,6,10,.82);}"
+    +".hpTitle{font-family:var(--display);font-weight:800;font-size:23px;line-height:1.16;letter-spacing:-.4px;color:#fff;}"
+    +".hpSub{font-size:14px;line-height:1.45;color:rgba(255,255,255,.62);}"
+    +".hpBuy{width:100%;padding:16px;border-radius:16px;border:0;background:#fff;color:#04120c;font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.2px;cursor:pointer;}"
+    +".hpBuy:disabled{opacity:.55;}"
+    /* A DOOR THAT CLOSES. A screen you cannot leave cleanly turns a refusal into a delete, and
+       this one interrupts somebody mid-round who did not ask for it. */
+    +".hpSkip{background:none;border:0;color:rgba(255,255,255,.5);font-size:13px;padding:6px;cursor:pointer;}"
+    +".hpClose{position:absolute;top:calc(10px + var(--safe-t));right:12px;width:38px;height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(4,6,10,.5);color:#fff;font-size:20px;line-height:1;cursor:pointer;}"
     +".chRun{white-space:nowrap;}"
     /* THE ZERO STATE. Quieter than a live run on purpose: it is a target, not a stake, and
        giving it the same weight would tell somebody at 0 that they are mid-something. */
@@ -15045,6 +15117,19 @@ function chSeek(hideId,opts){
        would offer to react to nothing. Feed only: a link round is one photo from one person
        who is waiting for an answer, not a surface to browse. */
     +(FEED?'<div class="chRx" id="chRx"></div>':'')
+    /* Built with the round and torn down with it — ctl.destroy() removes w, so the modal cannot
+       outlive the hide it is selling against. Hidden until the wallet is empty AND the arm is
+       on; on the control arm this markup is inert and never shown. */
+    +'<div class="hpWrap" id="hpWrap" style="display:none">'
+      +'<button class="hpClose" id="hpClose" type="button" aria-label="Close">\u00d7</button>'
+      +'<div class="hpCard">'
+        +'<div class="hpHero"><div class="hpShot"></div><div class="hpZone"></div></div>'
+        +'<div class="hpTitle"></div>'
+        +'<div class="hpSub"></div>'
+        +'<button class="hpBuy" id="hpBuy" type="button"></button>'
+        +'<button class="hpSkip" id="hpSkip" type="button">Keep looking</button>'
+      +'</div>'
+    +'</div>'
     +'<div id="chFoot"></div>';
   HOST.appendChild(w);
   /* SCOPED TO THIS ROUND'S WRAPPER, not to the document. The feed keeps a neighbouring
@@ -15866,7 +15951,13 @@ function chSeek(hideId,opts){
     const hintLabelFor=(bal,free)=>{
       if(free) return bal>0 ? "Free hint · "+bal+" left" : "Free hint";
       if(bal>0) return "Hint · "+bal+" left";
-      return "Get "+HINT_PACK_SIZE+" hints"+(hintPackPrice?" · "+hintPackPrice:"");
+      /* ⚠️ ON THE MODAL ARM THIS LABEL IS BYTE-IDENTICAL TO 1.1.5's, and that is the point of
+         the experiment rather than an oversight. 1.1.5 never received prices.hints, so the
+         string it showed WAS "Get 5 hints" with no price — the exact condition that measured
+         11.9%. Reproducing it verbatim means the only difference between the two arms is the
+         screen that comes after the tap, which is the one thing being tested. Invent a
+         friendlier label here and the arm stops answering the question it was opened for. */
+      return "Get "+HINT_PACK_SIZE+" hints"+((hintArm!=="on"&&hintPackPrice)?" · "+hintPackPrice:"");
     };
     /* THE RECEIPT, NOT A CONTROL. Once this hide's hint is drawn the button can never do
        anything again — the server answers `already` to a second ask — so it stops being
@@ -16045,7 +16136,60 @@ function chSeek(hideId,opts){
       hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle();
     };
 
-    hintBtn.onclick=()=>{ haptic(8); if(hintEmpty) offerHintPack(); else takeHint(); };
+    /* ═══ THE HINT MODAL ═══ see hintArm's note for why this screen exists at all.
+       RESOLVED THROUGH w, NEVER THROUGH $$(). Every id in this markup exists once per MOUNTED
+       ROUND, and the feed mounts several at a time — a document-wide lookup here would wire
+       this hide's buy button to a slide three rows down. The ids are kept for the harness and
+       for aria; the code closes over these five refs and nothing else. */
+    const hpWrap=w.querySelector(".hpWrap"), hpShot=w.querySelector(".hpShot"),
+          hpTitle=w.querySelector(".hpTitle"), hpSub=w.querySelector(".hpSub"),
+          hpBuy=w.querySelector(".hpBuy"), hpSkip=w.querySelector(".hpSkip"),
+          hpClose=w.querySelector(".hpClose");
+    /* PRICED AGAINST THE RUN, NOT AGAINST THE DOLLAR. A hint is not help, it is insurance on a
+       streak somebody does not want to lose, and by this point the round already knows exactly
+       what is at stake — chStreak() carries the run, the record and whether the one life is
+       still there. Three states, because a run of 0 has nothing to insure and telling somebody
+       with nothing to lose that they might lose it is the kind of sentence that sells nothing.
+       EVERY NUMBER INTERPOLATES. Rule 5c in check.mjs forbids a figure typed into copy that
+       sells, and this is copy that sells. */
+    const hpHeadline=()=>{
+      const st=chStreak();
+      if(st.run>=CH_RUN_SAVE_MIN&&st.life) return st.run+" in a row. A wrong tap spends your life.";
+      if(st.run>=1&&!st.life) return st.run+" in a row, and the life is gone.";
+      return "This one is not giving it up.";
+    };
+    const hpOpen=()=>{
+      /* The blur lives in CSS; this only points at the picture. img is this round's closure —
+         the same one the real zone hangs off — so the hero can never show another hide. */
+      try{ if(img&&img.src) hpShot.style.backgroundImage="url("+JSON.stringify(img.src)+")"; }catch(_){}
+      hpTitle.textContent=hpHeadline();
+      hpSub.textContent=HINT_PACK_SIZE+" hints. Each one shrinks where it can be.";
+      /* ⚠️ THE PRICE LIVES HERE, AND hintLabelFor() IS THE WRONG SOURCE FOR IT. That helper
+         strips the price on this arm — which is correct for the ROUND's button, whose whole job
+         is to stop asking for a decision — and reusing it here shipped a screen that sold a
+         paid pack without ever naming the amount, then opened Apple's sheet on it. That is the
+         cold sheet this modal exists to abolish, rebuilt one layer deeper. The screen is the
+         one place the figure belongs. Interpolated from what the wrapper sent, never typed:
+         prices.hints only arrives from 1.1.6, and on anything older the button names what it
+         sells and lets Apple's sheet state the amount. */
+      hpBuy.textContent="Get "+HINT_PACK_SIZE+" hints"+(hintPackPrice?" · "+hintPackPrice:"");
+      hpWrap.style.display="flex";
+      track("hint_modal_shown",TP({run:chStreak().run,priced:!!hintPackPrice}));
+    };
+    const hpDismiss=(via)=>{ hpWrap.style.display="none"; track("hint_modal_dismissed",TP({via:via})); };
+    /* ⚠️ NOT ONE await BEFORE offerHintPack(). StoreKit and navigator.share both spend the user
+       activation this tap granted, and the first await spends it first — the rule already
+       stated at #ssInvite, and the defect 1e927b9 fixed for this exact pack. Hiding the wrap is
+       a synchronous style write, so the call still lands inside the gesture's own task. */
+    hpBuy.onclick=()=>{ haptic(8); hpWrap.style.display="none"; offerHintPack(); };
+    hpSkip.onclick=()=>{ haptic(4); hpDismiss("skip"); };
+    hpClose.onclick=()=>{ haptic(4); hpDismiss("close"); };
+    /* Tap-outside dismisses, and it is guarded on the target being the wrap itself: without
+       that guard every tap inside the card closes the screen, which is how the share sheet's
+       backdrop was found to be swallowing the reveal. */
+    hpWrap.onclick=(e)=>{ if(e.target===hpWrap) hpDismiss("backdrop"); };
+
+    hintBtn.onclick=()=>{ haptic(8); if(hintEmpty) (hintArm==="on"?hpOpen():offerHintPack()); else takeHint(); };
     if(hintsOn()){
       w.appendChild(hintBtn); track("hint_offered",TP({}));
       /* WHAT THEY BOUGHT, ON THE BUTTON THAT SOLD IT. A pack is five hints spread over five
