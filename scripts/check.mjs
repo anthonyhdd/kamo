@@ -13,13 +13,76 @@
  *
  *   node scripts/check.mjs
  */
-import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, openSync, closeSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+/* ═══ ONE GATE AT A TIME, AND THIS IS NOT TIDINESS ═══════════════════════════════════════════
+ *
+ * 2026-08-27: two check.mjs runs overlapped on one machine and EIGHT suites went red at once —
+ * the share sheet measuring an animation that had not settled, a card that "animates to 458px
+ * and settles at 25px", the feed's paging racing itself, the reply loop, the challenges panel.
+ * Not one of them was a real defect. Both runs were mine, and I spent the next twenty minutes
+ * proving a change that added a single .sql file had not broken the share sheet.
+ *
+ * That is the expensive shape of this failure. A red gate that means nothing still has to be
+ * investigated, and the second time it happens the honest reading — "probably the machine" —
+ * is indistinguishable from the reading that ships a bug. The gate protects a file that reaches
+ * every user on push; it cannot be the thing that teaches people to re-run until green.
+ *
+ * Every suite here drives a real browser at real timings, so N runs on one box do not take N
+ * times as long — they take longer than that AND lie. So the second run refuses instead. A pid
+ * that is no longer alive is a crash, not a peer: the lock is taken over rather than obeyed,
+ * because a stale file must never be able to stop the gate from running at all.
+ *
+ * ⚠️ AND THE TAKEOVER IS THE PRIMARY MECHANISM, NOT A NICETY. The handlers below cannot be
+ * relied on: this file spends almost all of its wall time inside execFileSync, and Node cannot
+ * run a signal handler while it is blocked in a synchronous call — so a ctrl-C or a kill during
+ * any suite leaves the lock file behind, every time. Verified rather than assumed: killed
+ * mid-run, the file survives with a dead pid in it, and the next run takes it over and starts
+ * normally. The handlers still earn their place for the cases that are NOT blocked, but if the
+ * stale check is ever removed the first interrupted run wedges the gate shut for good.
+ */
+{
+  const LOCK = join(tmpdir(), 'kamo-check.lock');
+  /* ⚠️ EPERM MEANS ALIVE, AND THE FIRST VERSION OF THIS READ IT AS DEAD. `process.kill(pid, 0)`
+     throws two different things: ESRCH for "no such process", EPERM for "it exists and is not
+     yours". Catching both as "gone" makes the lock steal itself from any owner running under
+     another user — and it is how this was caught: the red-check pointed the lock at pid 1,
+     launchd, which is emphatically alive, and the gate walked straight past it. */
+  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+  /* ⚠️ A CEILING AS WELL AS A PID, BECAUSE A PID IS NOT UNIQUE FOREVER. If a run is killed and
+     its number is later handed to an unrelated process, alive() says true about a gate that
+     ended hours ago and this lock wedges the gate SHUT — which is a worse outcome than the
+     overlap it exists to prevent, and one nobody would think to look for. A full run is about
+     twenty minutes, so anything still holding after ninety is not running: it is a ghost. */
+  const STALE_MS = 90 * 60 * 1000;
+  let held = false;
+  for (let attempt = 0; attempt < 2 && !held; attempt++) {
+    try { closeSync(openSync(LOCK, 'wx')); writeFileSync(LOCK, process.pid + ' ' + Date.now()); held = true; }
+    catch {
+      const [rawPid, rawAt] = readFileSync(LOCK, 'utf8').trim().split(/\s+/);
+      const owner = parseInt(rawPid, 10);
+      const at = parseInt(rawAt, 10);
+      const fresh = !at || (Date.now() - at) < STALE_MS;
+      if (owner && owner !== process.pid && alive(owner) && fresh) {
+        console.error(`\n\u2717 another check.mjs is already running (pid ${owner}).\n`
+          + '  Two gates on one machine make each other fail: on 2026-08-27 an overlap turned\n'
+          + '  eight suites red at once and not one of them was a real defect. Wait for it, or\n'
+          + `  kill it — then delete ${LOCK} if it did not clean up after itself.`);
+        process.exit(1);
+      }
+      try { unlinkSync(LOCK); } catch {}   /* the owner is gone: a crash, not a peer */
+    }
+  }
+  const release = () => { try { if (readFileSync(LOCK, 'utf8').trim().split(/\s+/)[0] === String(process.pid)) unlinkSync(LOCK); } catch {} };
+  process.on('exit', release);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { release(); process.exit(130); });
+}
+
 const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
 
 let failed = 0;
