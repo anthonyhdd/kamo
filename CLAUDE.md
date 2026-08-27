@@ -176,6 +176,61 @@ Supabase and deploying does not touch this repo, so diff the two before believin
 Its reaction line printed the emoji three times (twice bracketing the title, once in the
 subtitle) until a real lock screen showed what that looks like — 2026-08-25, now one.
 
+### The nightly purge ran twenty times and deleted nothing (2026-08-26)
+
+`cleanup_expired_hides()` — pg_cron job 1, `20 3 * * *` — opened with a direct
+`delete from storage.objects`. Supabase has since put `storage.protect_delete()` in front of
+that table, so it raises, and being the *first* statement it took the `delete from hides`
+underneath with it: **20 runs since 2026-08-07, 0 successes**, nothing ever purged. Nobody
+noticed, because the only place it was written down is `cron.job_run_details`.
+
+The trigger is right and `infra/2026-08-26-cleanup-storage-api.sql` does not go round it —
+deleting the storage *row* never deleted the *bytes*, so the old function could not have shrunk
+the bucket even on a night it worked. The work moves to `infra/edge-cleanup-hides.ts` over
+pg_net. **First expiry is 2026-09-04**, with 10 679 hides due inside three weeks, so the window
+to get this right closes then.
+
+Four things about the purge that are not obvious from any one file:
+
+- **A hide is 2.48 objects.** `chUploadReveal()` posts `<base>_b.jpg` and `<base>_w.jpg` beside
+  the photo — the seeker's snap and A/B flip — at names derived from `img_path` and stored in no
+  column. They are 27 918 of the bucket's 48 371 objects and more than half its bytes. Anything
+  that deletes a hide must delete all three, or the bucket keeps growing at 60% speed.
+- **⚠️ Never sweep storage on "no `hides` row names this object".** 30 028 objects match that,
+  and 27 912 of them are the reveal frames of *live* hides — unreferenced by construction. Such
+  a sweep takes the payoff frame off every current hide. The genuinely unreferenced population
+  is 2 110 objects / 167 MB, and the query that isolates it is at the foot of the migration.
+- **The play history now outlives the hide, deliberately** (`2026-08-26-keep-attempt-history.sql`).
+  `attempts` and `seek_traces` cascaded off `hides`, so the newly-working purge would have
+  destroyed the evidence behind every retention figure above — computed over exactly the
+  thirty-day window being purged. Both FKs were dropped; the indexes stayed. Nothing was given
+  up doing it: `submit_attempt` and `save_seek_trace` are the only write paths and both already
+  check the hide more strictly than the FK did. Each run reports `attempts_kept` / `traces_kept`.
+  ⚠️ The cost is that both tables grow forever — ~127 MB/year for `attempts`, ~600 MB/year for
+  `seek_traces`. If space bites, window `seek_traces`; never trim `attempts`. And any GLOBAL
+  count over either table now includes rows whose hide is gone, which is the point — but a query
+  that joins to `hides` to filter will silently drop them.
+- **⚠️ `jobid = 1` reads SUCCESS from now on whatever happens.** pg_net is fire-and-forget, so
+  cron only sees "request queued". **Read `jobid 3, kamo-cleanup-check` instead** — it runs at
+  03:40 and raises when the last run was not clean, so `cron.job_run_details` means something
+  again, with the reason in `return_message`. The full detail is `public.ops_cleanup`: a row per
+  night, opened at dispatch and closed by the Edge Function, so a run that never reports back
+  stays visibly `dispatched` and both the check and the next dispatch catch it.
+
+Two properties are load-bearing and `scripts/test-edge-cleanup.mjs` is what stops them
+regressing: the `hides` rows are deleted **even when the bucket refuses** (a refused path goes
+to `ops_cleanup_orphans` and is retried later, never forgotten), and an object shared with a
+*surviving* hide is never touched. That second one is not theoretical — it fired on the very
+first live run. One of the two blocked hides shared its photo with `557ad8f202004d35`, public
+and played 7 times; the old function would have deleted that file and left a live hide showing
+nothing. 323 `img_path` values are shared this way, because a re-hide reuses its source object.
+
+Applied and proven 2026-08-26: 36 ms per hide at `batch_size 200` (165 ms at 10 — the per-batch
+overhead is the cost, so don't lower it). Neither this nor the photo probe has a webhook, so
+their alerts land as `raise warning` in the Postgres log; nothing depends on it, because the
+03:40 check is what makes a bad night visible. A webhook only turns "go and look" into "you are
+told", and it is one `update … set webhook_url` whenever there is somewhere to send it.
+
 `create_hide` has **four overloads** (6, 8, 9 and 10 arguments) and that is deliberate. This file
 deploys on push and the database does not, so during a deploy both are live: a page loaded a
 minute ago calls the old signature. Add an overload, never change one. `get_hide` is the
