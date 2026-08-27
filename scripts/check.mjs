@@ -1387,6 +1387,24 @@ try {
   bad('THE HINT IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
 }
 
+/* ---- 11d8. A kamo may not hang off the edge of the board --------------------------------
+   Half a body cut off by the side of the frame is not a hiding place, it is a hide nobody can
+   win: the part that identifies a figure may be the part that is not there. The suite measures
+   the RENDERED ALPHA of #gl — the same surface chGeom() reads the published answer key from —
+   rather than world coordinates, because a coordinate assertion would only prove the clamp
+   agrees with itself. It also asserts the guard is not a cage: a target well inside the frame
+   has to be honoured untouched. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edgeguard-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-edgeguard-dom.mjs', 'EDGE GUARD TEST', out)
+    : ok('a shoved kamo stops whole inside the frame, and a legal move still lands (node scripts/test-edgeguard-dom.mjs)');
+} catch (e) {
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('\u2717'));
+  bad('THE EDGE GUARD IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
+}
+
 /* ---- 11d9. The feed is the home now ------------------------------------------------------
    85% of returning devices open on the feed. That is one line on the boot path of a file that
    reaches every user on push, so the suite is less about the feature than about the four ways
