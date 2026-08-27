@@ -3599,6 +3599,47 @@ let hintArm;
   }
 }
 
+/* ═══ THE FEED IS THE HOME, FOR 85 OF EVERY 100 RETURNING DEVICES ══════════════════════════
+ *
+ * Founder's call, 2026-08-27, and it is a rollout rather than an experiment on purpose: at
+ * ~130 publishes a day a 50/50 would need about three weeks to settle, which is longer than
+ * the decision is worth waiting for.
+ *
+ * ⚠️ SO WHY IS THERE A HOLDOUT AT ALL. Because the alternative reading — "the week after
+ * against the week before" — is worthless right now, and specifically so. The week before
+ * contains a 15-hour upload outage (54% of that day's hides written with no photo), the
+ * landing arm shipped and killed inside 36 hours, TikTok spend cut to zero on the 23rd, the
+ * hint modal shipped on the 26th, and installs falling 940/day -> 150/day, which changes the
+ * AUDIENCE and not just the volume. Comparing across that is comparing a paid, broken week to
+ * an organic, repaired one. The 15% that keep the camera are the only group that eats the same
+ * ads, the same outages and the same modal as everybody else.
+ *
+ * BE HONEST ABOUT WHAT 15% BUYS: ~20 publishes a day, so only a swing bigger than roughly 20%
+ * is visible. That is the point. A 5% difference should not change this decision; a 30%
+ * collapse in creation should, and should be visible in days rather than never.
+ *
+ * ⚠️ home_arm AND NOT open_arm. `open_arm` already means the reply card — it was this
+ * experiment's name for 52 minutes on 2026-08-22 before 0ecd4eb took the property for
+ * something else, which is exactly how the first attempt at this question died with no
+ * reading at all. One question, one name, and this one is not shared.
+ *
+ * KILL: rollout to 0 and push, about two minutes, no build. A stored arm keeps its side.
+ * FINISH: rollout to 100 and the holdout is gone the same way. */
+const HOME_FEED_ROLLOUT=85;
+let homeArm;
+{
+  const s=lsGet("kamo_home_arm");
+  if(s==="feed"||s==="camera") homeArm=s;
+  /* Pinned for the harness, and this one earns it more than most: a coin here would open the
+     feed over half the runs of EVERY suite in scripts/, not just the feed's own. */
+  else if(navigator.webdriver) homeArm="camera";
+  else if(HOME_FEED_ROLLOUT<=0) homeArm="camera";
+  else {
+    homeArm=(Math.random()*100<HOME_FEED_ROLLOUT)?"feed":"camera";
+    lsSet("kamo_home_arm",homeArm);
+  }
+}
+
 const REPLY_OPEN_ROLLOUT=50;
 let openArm;
 {
@@ -9060,7 +9101,7 @@ function track(event,props){
    * shipping a discontinuity that size into the middle of a live experiment is how a real
    * result gets read as a collapse. Land it between experiments, and annotate the date. */
   const p={wd:navigator.webdriver===true,page_host:location.host,
-           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,emit:"web"};
+           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,home_arm:homeArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -17817,7 +17858,17 @@ function chFeed(opts){
        photo you most want gone. One report already pulls a hide for everybody
        (n_reported = 0 in the filter), so this is the fastest lever in the product and it
        was behind the slowest gesture. Right-hand side, away from the ✕. */
-    +'<div class="kfBar"><button class="kfClose" id="kfClose" aria-label="Close">✕</button>'
+    /* ⚠️ A CAMERA, NOT A ✕, AND ON BOTH ARMS. At 85% this control is the ONLY door to creation
+       for most of the fleet, and a ✕ names the thing it leaves rather than the thing it opens —
+       somebody who has never noticed the camera underneath has no reason to press it. It ships
+       to the holdout too, deliberately: shipping the affordance inside the arm would move two
+       things at once and settle neither, and the destination is the compose screen on BOTH
+       arms anyway, so the glyph is honest either way. The circle, the size and the position are
+       untouched — this is a relabel, not a relayout. */
+    +'<div class="kfBar"><button class="kfClose kfCam" id="kfClose" aria-label="New kamo" title="New kamo">'
+      +'<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      +'<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2a1 1 0 0 0 .83-.45l.94-1.4A1 1 0 0 1 9.3 4.7h5.4a1 1 0 0 1 .83.45l.94 1.4A1 1 0 0 0 17.3 7h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>'
+      +'<circle cx="12" cy="13" r="3.4"/></svg></button>'
     /* NEXT TO THE ✕, NOT OPPOSITE IT. On the right it landed on top of the round's own clock
        chip, which sits in that corner on every slide — the count showed through the flag. */
     +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button>'
@@ -19370,7 +19421,27 @@ function bootCamera(){
   setTimeout(()=>bootCamera.decide(),700);
 }
 if(CH_SEEK){ chSeek(); }
-else bootCamera();
+/* ⚠️ A SHARE LINK OUTRANKS THE HOME, and this branch order is the whole of that rule. Somebody
+   handed a specific hide is not a session to redirect: chSeek() stays first, and no rollout of
+   this gets to replace a sender's kamo with a feed of strangers. */
+else {
+  /* THE CAMERA BOOTS ON BOTH ARMS. The variable is what is in FRONT, never whether the camera
+     exists — closing the feed lands on the same compose screen the holdout started on. An arm
+     that also took the camera away would be a different product, not a different door. */
+  bootCamera();
+  if(homeArm==="feed"){
+    /* RETURNING DEVICES ONLY, and at 85% this matters more than it did at 50: a first launch
+       keeps the hero, the priming line and the permission sheet. Diverting it would land a
+       stranger on other people's photographs with nothing telling them this is a camera, and
+       would raise a permission prompt behind a feed being read.
+       ⚠️ WRAPPED, AND THE CATCH IS THE POINT. This file reaches every user on push and a throw
+       on the boot line is a blank app for all of them at once. Anything that goes wrong —
+       chFeed unreachable, storage refusing, the feed failing to build — lands on exactly what
+       shipped yesterday, which is bootCamera() having already run one line above. The rollout
+       may cost us the door; it must not cost us the app. test-feedhome-dom asserts it. */
+    try{ if(camEverAsked()) chFeed({src:"launch"}); }catch(e){}
+  }
+}
 /* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone
    wrong"; at 600ms this also covers the ordinary first-launch case — the permission sheet
    is up, nothing will settle until it is answered, and the user should be reading the hero
