@@ -70,7 +70,19 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
-async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false }) {
+/* ⚠️ A PHOTO WITH A SIZE. JPG above is a placeholder a few pixels tall — fine for every other
+   case in this file, and useless here: the frame rendered 3px high and the card 10px, so the
+   first version of this assertion was measuring the harness rather than the layout. The exact
+   trap the send hit-test carries a note about. 600x800 of flat grey gives the frame real
+   geometry to be covered by. */
+/* ⚠️ THE SHAPE OF THE SCREEN, NOT JUST A SIZE. The first attempt used a 600x800 photo,
+   which letterboxes into a 390x844 viewport at 390x520 with 162px of black above and
+   below -- so cy=0.92 landed at y=640, ABOVE the card, and the assertion failed against
+   correct code. An image the viewport's own shape fills it, and cy then means on screen
+   what it means in the answer key. Two false diagnoses today came from measuring the
+   harness instead of the layout; this is the fix for both. */
+const BIG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAYYAAANMCAIAAADXDp1JAAAIBUlEQVR42u3UoQ0AAAgEsR8dgWBsZsAhmnSCE5fqAXgiEgCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCWpAFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJakAWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlSQBYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZakAmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlqQCYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWJAFgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFiSCoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWJIKgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYkgSAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAFwtCOGXsyEGUNgAAAABJRU5ErkJggg==', 'base64');
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
@@ -79,18 +91,19 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
        path, an object still replicating, a tunnel. See the block at the end of this file. */
     if (deadPhoto) return route.fulfill({ status: 404, body: 'x' });
     if (!frames && (u.includes('_b.jpg') || u.includes('_w.jpg'))) return route.fulfill({ status: 404, body: 'x' });
-    route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG });
+    route.fulfill(big ? { status: 200, contentType: 'image/png', body: BIG }
+                      : { status: 200, contentType: 'image/jpeg', body: JPG });
   });
-  await page.addInitScript(({ hit, pct, others, name }) => {
+  await page.addInitScript(({ hit, pct, others, name, cy }) => {
     window.__calls = [];
     window.__rpc = (fn, body) => {
       window.__calls.push([fn, body]);
       if (fn === 'get_hide') return Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 3, n_found: 1, limit_s: null, max_taps: null, name });
       if (fn === 'submit_attempt') return Promise.resolve({ hit, tries: 4, missed: 3, secs: 9, pct, others });
-      if (fn === 'reveal_hide') return Promise.resolve({ cx: 0.5, cy: 0.5, r: 0.1 });
+      if (fn === 'reveal_hide') return Promise.resolve({ cx: 0.5, cy: cy, r: 0.1 });
       return Promise.resolve(null);
     };
-  }, { hit, pct, others, name });
+  }, { hit, pct, others, name, cy });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(700);
   return page;
@@ -449,6 +462,46 @@ console.log('\nA PHOTO THAT NEVER ARRIVES SAYS SO, AND FILES NOTHING');
     ? ok('and the broken image is taken off the card rather than left to draw its own error')
     : bad(`the failed <img> is still display:${glyph} — the browser paints a broken-image glyph over the card`);
   await page.close();
+}
+
+/* ═══ THE CARD MOVES OFF THE ANSWER ═══════════════════════════════════════════════════════════
+   Founder, 2026-08-27, from a real round: the kamo was hidden low, the ending card sat on top of
+   it, and the reveal revealed nothing. The payoff of the round is seeing where it was.
+
+   ⚠️ THE FIRST VERSION READ h.cy AND WOULD HAVE SHIPPED INERT. get_hide does not carry the
+   answer — cx/cy/r arrive only from reveal_hide, after the round is over, because the answer
+   must never ship alongside the puzzle. Reading h.cy found undefined and returned, which leaves
+   exactly the same trace as "the card is already clear". This suite is what caught it, because
+   its get_hide seed is honest about what the server actually returns. */
+{
+  console.log('\nTHE ENDING CARD DOES NOT SIT ON THE ANSWER');
+  const lift = async (cy) => {
+    const page = await boot({ hit: false, frames: true, cy, big: true });
+    /* ⚠️ THE ROUND HAS TO END. boot() only loads it — the first version of this measured a
+       #chFoot that was 10px tall because no card had ever been written, and reported the
+       feature broken. Give up is the shortest honest path to an ending with a reveal. */
+    await page.evaluate(() => document.getElementById('chQuit').click());
+    await page.waitForTimeout(3400);
+    const v = await page.evaluate(() => {
+      const f = document.getElementById('chFoot');
+      const t = f && getComputedStyle(f).transform;
+      if (!t || t === 'none') return 0;
+      const m = /matrix\(.*,\s*(-?[\d.]+)\)$/.exec(t);
+      return m ? Math.round(Math.abs(parseFloat(m[1]))) : 0;
+    });
+    await page.close();
+    return v;
+  };
+  const low = await lift(0.92);
+  const high = await lift(0.18);
+  low > 0
+    ? ok(`a kamo hidden low pushes the card off it (${low}px)`)
+    : bad('a kamo at cy=0.92 is behind the ending card and the card did not move — the reveal '
+        + 'reveals nothing, which is the whole payoff of the round');
+  high === 0
+    ? ok('and a kamo up top leaves the card exactly where it belongs')
+    : bad(`a kamo at cy=0.18 is nowhere near the card and it moved anyway (${high}px) — the card `
+        + 'is bottom-anchored for a reason and must not wander');
 }
 
 await browser.close(); server.close();
