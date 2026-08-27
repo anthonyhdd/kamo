@@ -4749,8 +4749,11 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
    stays off the toast itself; the dismiss listener sits on the document instead so a tap
    through it still reaches the shutter underneath. */
 let chToastEl=null, chToastT=null;
-function chSessionToast(played,found){
-  if(!played) return;
+/* THE MESSAGE SURFACE, PULLED OUT OF THE SESSION LINE THAT OWNED IT. It was one function that
+   built a stylesheet, an element, a dismiss listener and two timers, and then hardcoded the one
+   sentence it existed to say — so a second thing worth saying had no way to say it without
+   copying all four. chSessionToast keeps its exact behaviour and now goes through here. */
+function chToastShow(title,sub){
   try{
     if(!document.getElementById("chToastCss")){
       const st=document.createElement("style"); st.id="chToastCss";
@@ -4762,18 +4765,23 @@ function chSessionToast(played,found){
       document.head.appendChild(st);
     }
     if(chToastEl){ try{ chToastEl.remove(); }catch(_){} clearTimeout(chToastT); document.removeEventListener("pointerdown",chToastTap,true); }
-    const rec=(window.KAMOSEEK&&window.KAMOSEEK.record)?window.KAMOSEEK.record():{n:0,hit:0};
-    const min=(window.KAMOSEEK&&window.KAMOSEEK.min)||5;
-    const pct=rec.n>=min ? Math.round(100*rec.hit/rec.n) : null;
     const el=document.createElement("div"); el.id="chToast";
-    el.innerHTML="<b></b>"+(pct!==null?"<span></span>":"");
-    el.querySelector("b").textContent=found+" found · "+played+" played";
-    if(pct!==null) el.querySelector("span").textContent=pct+"% lifetime · "+rec.hit+" found";
+    el.innerHTML="<b></b>"+(sub?"<span></span>":"");
+    el.querySelector("b").textContent=title;
+    if(sub) el.querySelector("span").textContent=sub;
     document.body.appendChild(el); chToastEl=el;
     requestAnimationFrame(()=>el.classList.add("on"));
     chToastT=setTimeout(chToastDismiss,3400);
     document.addEventListener("pointerdown",chToastTap,true);
   }catch(_){}
+}
+function chSessionToast(played,found){
+  if(!played) return;
+  const rec=(window.KAMOSEEK&&window.KAMOSEEK.record)?window.KAMOSEEK.record():{n:0,hit:0};
+  const min=(window.KAMOSEEK&&window.KAMOSEEK.min)||5;
+  const pct=rec.n>=min ? Math.round(100*rec.hit/rec.n) : null;
+  chToastShow(found+" found · "+played+" played",
+              pct!==null ? pct+"% lifetime · "+rec.hit+" found" : null);
 }
 function chToastTap(){ chToastDismiss(); }
 function chToastDismiss(){
@@ -9178,6 +9186,34 @@ function didCkGet(){
 /* Two years, and `secure` only where the page is on https — a Secure cookie is dropped
    outright over http, which is every local test server this repo runs. SameSite=Lax so the
    id survives a friend's share link arriving from Messages or a browser's own referrer. */
+/* ═══ HAS THIS DEVICE EVER BOUGHT A PACK ═══════════════════════════════════════════════════
+ *
+ * The wallet knows the balance and nothing else, so a player who has bought once and spent it
+ * all is shown the same button as somebody who has never heard of the pack: "Get 5 hints", to
+ * a person who already knows exactly what five hints are. Re-purchase is the one segment that
+ * has ever paid, and it was being addressed as a stranger.
+ *
+ * WHY NOT ASK THE SERVER. hint_state returns {balance, free_available}; widening a
+ * set-returning function's row type means dropping and recreating it, and this page deploys on
+ * push while the database does not — so for a while a live page would be calling a signature
+ * that no longer exists. That is the trade get_hide had to make and it is not worth making for
+ * a label. This is a hint, not an entitlement: nothing is unlocked by it and nothing is lost if
+ * it is wrong.
+ *
+ * TWO STORES, THE SAME LADDER THE DEVICE KEY USES, and for the same reason — localStorage on
+ * this app dies (that is what 8fbe383 was). ⚠️ THE FAILURE MODE IS TODAY'S BEHAVIOUR: a device
+ * that loses both stores reads false and gets the stranger's label, which is exactly what it
+ * gets now. It can never read true for somebody who has not bought, because the only writer is
+ * the branch where a grant has just been claimed. */
+const HINT_BOUGHT_KEY="kamo_hint_bought";
+function hintEverBought(){
+  try{ if(localStorage.getItem(HINT_BOUGHT_KEY)==="1") return true; }catch(_){}
+  try{ return /(?:^|;\s*)kamo_hint_bought=1/.test(document.cookie||""); }catch(_){ return false; }
+}
+function hintMarkBought(){
+  try{ localStorage.setItem(HINT_BOUGHT_KEY,"1"); }catch(_){}
+  try{ document.cookie="kamo_hint_bought=1; path=/; max-age=63072000; samesite=lax"+(location.protocol==="https:"?"; secure":""); }catch(_){}
+}
 function didCkPut(d){
   try{ document.cookie="kamo_did="+encodeURIComponent(d)+"; path=/; max-age=63072000; samesite=lax"+(location.protocol==="https:"?"; secure":""); }catch(e){}
 }
@@ -16017,7 +16053,16 @@ function chSeek(hideId,opts){
          11.9%. Reproducing it verbatim means the only difference between the two arms is the
          screen that comes after the tap, which is the one thing being tested. Invent a
          friendlier label here and the arm stops answering the question it was opened for. */
-      return "Get "+HINT_PACK_SIZE+" hints"+((hintArm!=="on"&&hintPackPrice)?" · "+hintPackPrice:"");
+      /* ⚠️ "MORE", NOT "HINTS", TO SOMEBODY WHO HAS BOUGHT BEFORE. An empty wallet has two very
+         different owners: a stranger, and the one segment in this app that has ever paid. They
+         were reading the same sentence. One word separates them, and it is the word that says
+         "you know what these are" rather than explaining the product to a customer.
+         APPLIED ON BOTH ARMS, symmetrically. The modal experiment compares tap rates on the
+         stranger's label — which stays byte-identical to 1.1.5's — and a third condition that
+         lands on both arms alike cannot bias that comparison. */
+      const tail = (hintArm!=="on"&&hintPackPrice) ? " · "+hintPackPrice : "";
+      if(hintEverBought()) return "Get "+HINT_PACK_SIZE+" more"+tail;
+      return "Get "+HINT_PACK_SIZE+" hints"+tail;
     };
     /* THE RECEIPT, NOT A CONTROL. Once this hide's hint is drawn the button can never do
        anything again — the server answers `already` to a second ask — so it stops being
@@ -16157,6 +16202,26 @@ function chSeek(hideId,opts){
                who has just PAID, and the balance is what they are owed a sight of. A credit
                that lands at zero is a webhook that has not finished, not a spend. */
             if(r.balance>0) markSpent(r.balance); else { hintBtn.textContent="✓ Hint revealed"; hintBtn.classList.add("spent"); hintBtn.disabled=true; }
+            /* ⚠️ EVERY PURCHASE IN THIS APP GETS A MOMENT — EXCEPT THIS ONE. Trial and lifetime
+               both land on showKamoPlus(): a burst, a haptic, a line that names the plan they
+               bought. A hint pack landed on a button quietly changing to "✓ 4 hints left" on a
+               screen they were about to leave. Same money, same decision, no acknowledgement.
+
+               A BURST ON THE BUTTON, NOT ON THE FRAME. confettiBurst() is anchored, and the
+               anchor is the whole difference: the FIND owns the frame (see its call site) and
+               that celebration is the payoff this round is for. A purchase seconds earlier must
+               not spend it first. Button-sized, local, over in about a second.
+
+               AND NO ARITHMETIC IN THE COPY. This said "5 hints added / 4 left" — true, and it
+               asks somebody to do a subtraction at the exact moment you are trying to make them
+               feel good. What they need is the reward and the one fact the button can never fit:
+               that the rest survive this hide. The figure interpolates; rule 5c forbids a number
+               typed into copy that sells, and a receipt for a sale is copy that sells. */
+            hintMarkBought();
+            try{ haptic(20); }catch(_){}
+            try{ confettiBurst(hintBtn); }catch(_){}
+            try{ chToastShow(HINT_PACK_SIZE+" hints unlocked",
+                             "They keep for your next kamos"); }catch(_){}
             /* NOT COUNTED WHEN THE SERVER SAYS `already`. Bought from the post-use offer, this
                hide's hint was spent a moment ago and hint_spend returns the same zone without
                touching the wallet — so the pack lands intact, and a second hint_used here would
