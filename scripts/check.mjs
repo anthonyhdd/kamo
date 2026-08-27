@@ -1172,6 +1172,21 @@ try {
   bad('CHALLENGE LINK HEAD BROKEN:\n' + why(e));
 }
 
+/* ---- 7-bis. The nightly purge ----------------------------------------------------------------
+   infra/edge-cleanup-hides.ts is the arm that deletes a hide's photo, and the only reason it
+   exists is that the SQL version failed twenty nights running and told nobody: one refused
+   delete aborted every deletion behind it. Nothing on the page can see this file and nothing in
+   the database forces it to stay honest, so the properties that must never regress — rows go
+   even when the bucket refuses, refused paths are written down, an already-gone object is not
+   an error, objects die before the rows that name them — are asserted here. Chained for the
+   same reason as the two above: one command before a push. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edge-cleanup.mjs')], { stdio: 'pipe' });
+  ok('the nightly purge survives a bucket that says no (node scripts/test-edge-cleanup.mjs for the detail)');
+} catch (e) {
+  bad('NIGHTLY PURGE BROKEN:\n' + why(e));
+}
+
 /* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
    Everything above reads the file. Two bugs shipped this week that reading the file could not
    see: the preview card was whitelisted in the short sheet's CSS while nothing ever added the
