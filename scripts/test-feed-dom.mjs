@@ -1008,7 +1008,14 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
      holds. Emptying the seed here is how the test can tell those two apart. */
   await page.evaluate(() => { window.__seed.feed_page = []; window.__rpc.length = 0; });
   await page.evaluate(() => { const b = document.getElementById('chBlk'); if (b) b.click(); });
-  await page.waitForTimeout(900);
+  /* ⚠️ THE BLOCK IS A ROUND TRIP, AND 900ms WAS A GUESS ABOUT IT. block_author has to answer,
+     the tag has to be stored, the tail has to be torn down and the feed asked again — and this
+     slept through all of it and then counted. It is the single flakiest assertion in this repo:
+     red twice on the CI runner in one day, on a branch that added a .sql file and on one that
+     added a comment, while passing 4 runs out of 4 locally. Wait for the tear-down to have
+     happened; the count below then measures the outcome instead of the clock. */
+  await page.waitForFunction(() => document.querySelectorAll('.kfSlide').length === 1,
+    null, { timeout: 10000 }).catch(() => {});
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('kamo_blocked') || '[]'));
   Array.isArray(stored) && stored.length === 1 && stored[0] === 'tag_abc123'
