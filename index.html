@@ -4801,6 +4801,47 @@ function ndc(cx,cy){ const r=stage.getBoundingClientRect(); return new THREE.Vec
 function screenToWorld(cx,cy){ ray.setFromCamera(ndc(cx,cy),camera3); const pt=new THREE.Vector3(); plane.constant=0; ray.ray.intersectPlane(plane,pt); return pt; }
 function pickChar(cx,cy){ ray.setFromCamera(ndc(cx,cy),camera3); const all=characters.flatMap(c=>c.meshes); const hits=ray.intersectObjects(all,false); if(!hits.length) return -1;
   let o=hits[0].object; while(o){ const i=characters.findIndex(c=>c.group===o); if(i>=0) return i; o=o.parent; } return -1; }
+/* ═══ A KAMO MAY NOT HANG OFF THE EDGE ═══════════════════════════════════════════════════════
+ *
+ * Founder, 2026-08-27, with a screenshot: half a body cut off by the side of the frame. It is
+ * not a hiding place, it is a hide nobody can win — the part that identifies a figure may be
+ * the part that is not there — and it leaves a seeker staring at an edge.
+ *
+ * CLAMPED IN WORLD SPACE, NOT PROJECTED PER FRAME. The drag already works in world units on a
+ * fixed plane (screenToWorld pins z), so the safe rectangle only has to be converted ONCE per
+ * move: the same conversion the drag itself uses, on the canvas corners inset by a margin.
+ * Projecting the figure's eight bbox corners every pointermove would be the same answer at
+ * sixty times the cost, and would fight the lerp that smooths _tx/_ty.
+ *
+ * THE HALF-EXTENTS COME FROM THE RIG, not from a guess: Box3 around the group, minus its own
+ * position, is exactly how far the body reaches from the point being dragged. Measured on
+ * every move because a pose change mid-drag is legal and changes the reach.
+ *
+ * ⚠️ AND IT NEVER FIGHTS A BOARD TOO SMALL FOR THE FIGURE. If the safe rectangle is narrower
+ * than the body — a huge character, a short viewport — clamping to [min,max] with min>max would
+ * snap it to a corner and make the control feel broken. In that case the axis is centred
+ * instead, which is the only honest position when nothing fits. */
+function chKeepOnBoard(c){
+  try{
+    /* ⚠️ stage, NOT glCanvas. ndc() — and therefore screenToWorld, and therefore the drag
+       itself — normalises against stage's box. Insetting a different element's rectangle
+       would put the safe margin in the wrong place the moment the two ever differ. */
+    if(!c||!c.group||typeof stage==="undefined"||!stage) return;
+    const r=stage.getBoundingClientRect(); if(!r.width||!r.height) return;
+    const M=14;                                   // a thumb's worth of breathing room
+    const a=screenToWorld(r.left+M,r.top+M), b=screenToWorld(r.right-M,r.bottom-M);
+    if(!a||!b) return;
+    const box=new THREE.Box3().setFromObject(c.group);
+    if(!isFinite(box.min.x)||!isFinite(box.max.x)) return;
+    const p=c.group.position;
+    const hxL=p.x-box.min.x, hxR=box.max.x-p.x;   // the rig is not symmetric about its origin
+    const hyD=p.y-box.min.y, hyU=box.max.y-p.y;
+    const xMin=Math.min(a.x,b.x)+hxL, xMax=Math.max(a.x,b.x)-hxR;
+    const yMin=Math.min(a.y,b.y)+hyD, yMax=Math.max(a.y,b.y)-hyU;
+    c._tx = (xMin<=xMax) ? Math.min(Math.max(c._tx,xMin),xMax) : (xMin+xMax)/2;
+    c._ty = (yMin<=yMax) ? Math.min(Math.max(c._ty,yMin),yMax) : (yMin+yMax)/2;
+  }catch(_){}
+}
 let dragStartWorld=null, dragStartPos=null;
 function onDown(e){
   if(mode!=="compose") return; glCanvas.setPointerCapture?.(e.pointerId);
@@ -4822,7 +4863,9 @@ function onMove(e){
   const dx=e.clientX-downX, dy=e.clientY-downY;
   if(pointers.size>=2 && sel()){ clearTimeout(lpTimer); const p=[...pointers.values()]; const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); sel().group.scale.setScalar(Math.max(0.3,Math.min(3.5,scaleStart*(d/pinchStart)))); const a=Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x); sel().group.rotation.y=rotBaseY+(a-rotStart); return; }
   if(!moved && Math.hypot(dx,dy)>10){ moved=true; clearTimeout(lpTimer); if(sel()){ dragging=true; dragStartWorld=screenToWorld(e.clientX,e.clientY); dragStartPos=sel().group.position.clone(); } }
-  if(dragging && sel()){ const c=sel(); const w=screenToWorld(e.clientX,e.clientY); c._tx=dragStartPos.x+(w.x-dragStartWorld.x); c._ty=dragStartPos.y+(w.y-dragStartWorld.y); }
+  if(dragging && sel()){ const c=sel(); const w=screenToWorld(e.clientX,e.clientY);
+    c._tx=dragStartPos.x+(w.x-dragStartWorld.x); c._ty=dragStartPos.y+(w.y-dragStartWorld.y);
+    chKeepOnBoard(c); }
 }
 function onUp(e){
   clearTimeout(lpTimer); pointers.delete(e.pointerId);
@@ -15433,7 +15476,74 @@ function chSeek(hideId,opts){
      it (see ending()) and a genuinely new player with no record — and docking an invisible
      div would push the flip button one slot down for nothing. The display check is the one
      honest reading of "does this pill currently exist for the player". */
-  const chRunDock=()=>{ if(!runEl||!ended||REPLAY||runEl.style.display==="none") return;
+    /* ═══ THE CARD MOVES OFF THE ANSWER ═══════════════════════════════════════════════════
+       Founder, 2026-08-27, from a real round: the kamo was hidden low, the ending card sat on
+       top of it, and the reveal revealed nothing. The payoff of the whole round is seeing
+       where it was, and the screen that celebrates it was covering it.
+
+       ⚠️ "LIFT IT A BIT" DOES NOT WORK, AND THAT IS WHY THIS IS ARITHMETIC RATHER THAN A
+       CONSTANT. The card is bottom-anchored, so nudging it up just slides the same rectangle
+       onto a different part of the photograph — the figure is only freed once the card's
+       BOTTOM clears the figure's TOP. So the lift is derived from where the answer actually
+       is, and it is applied only when the card genuinely overlaps it.
+
+       CAPPED, because the alternative to covering the answer is not covering the answer with
+       the card somewhere off the top of the screen. If the figure sits so high that clearing
+       it would push the card past the ceiling, we take what the ceiling allows: strictly more
+       of the answer visible than before, never a control the thumb cannot reach. */
+/* ⚠️ NOT h.cy — THE HIDE DOES NOT CARRY THE ANSWER, AND THAT IS THE POINT. get_hide returns
+   the photo and the terms; cx/cy/r arrive only from reveal_hide, after the round is over, so
+   the answer never ships alongside the puzzle. The first version of chFootClear read h.cy,
+   found undefined, returned, and would have shipped a feature that did nothing at all —
+   silently, because "no answer yet" and "the card is already clear" leave the same trace.
+   Set on every path that reveals, read here, null until then. */
+let chAnswer=null;
+const chFootClear=()=>{
+    try{
+      const foot=$$("chFoot"); if(!foot) return;
+      /* ⚠️ WATCH THE BOX, DO NOT GUESS WHEN IT SETTLES. chRunDock fires the moment #chFoot's
+         markup is replaced, but the card is still growing then — buttons, the run pill docking,
+         a reply row — and measuring at that instant reads a 10px strip pinned to the bottom,
+         which is never in front of anything. One observer per round, re-entrant by
+         construction: this only ever writes a transform, and a transform does not change the
+         border box the observer watches. */
+      try{
+        if(!foot.__kfWatch && typeof ResizeObserver==="function"){
+          foot.__kfWatch=new ResizeObserver(()=>{ try{ chFootClear(); }catch(_){} });
+          foot.__kfWatch.observe(foot);
+        }
+      }catch(_){}
+      foot.style.transform="";                       // always measure from rest
+      /* ⚠️ chAnswer, NEVER h. The hide does not carry its own answer — get_hide returns the
+         photo and the terms, and cx/cy/r arrive only from reveal_hide once the round is over,
+         so the answer never ships beside the puzzle. Two drafts of this read h.cy, found
+         undefined, and produced NaN geometry that silently declined to move anything. */
+      if(!chAnswer||typeof chAnswer.cy!=="number") return;
+      const im=$$("chFrame")&&$$("chFrame").querySelector("img");
+      if(!im||!im.offsetHeight) return;
+      const ir=im.getBoundingClientRect(), fo=foot.getBoundingClientRect();
+      if(!fo.height) return;
+      const rad=(typeof chAnswer.r==="number"?chAnswer.r:0.10);
+      const figTop=ir.top+Math.max(0,chAnswer.cy-rad)*ir.height;
+      const figBot=ir.top+Math.min(1,chAnswer.cy+rad)*ir.height;
+      if(figBot<=fo.top+2) return;                   // the card is already clear of it
+      /* THE CARD'S BOTTOM MUST CLEAR THE FIGURE'S TOP. Nudging a bottom-anchored card "up a
+         bit" only slides the same rectangle onto a different part of the photograph. */
+      const need=fo.bottom-figTop+14;
+      const safeT=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t"))||0;
+      const room=fo.top-(72+safeT);                  // never past the ceiling
+      const lift=Math.max(0,Math.min(need,room));
+      if(lift>=6) foot.style.transform="translateY("+(-Math.round(lift))+"px)";
+    }catch(_){}
+  };
+  const chRunDock=()=>{
+    /* ⚠️ FIRST AND UNCONDITIONAL. chRunDock is called after every write that replaces #chFoot's
+       markup — which is exactly, and only, when the card's box has changed and the answer may
+       have gone behind it. Every early return below is about the PILL; none of them means the
+       card did not move. Deferred a frame because the pill is about to be prepended and the
+       measurement has to happen after that, not before. */
+    try{ requestAnimationFrame(chFootClear); }catch(_){ try{ chFootClear(); }catch(__){} }
+    if(!runEl||!ended||REPLAY||runEl.style.display==="none") return;
     const foot=$$("chFoot"); if(!foot) return;
     if(foot.firstChild!==runEl) foot.prepend(runEl);
   };
@@ -16513,6 +16623,9 @@ function chSeek(hideId,opts){
            (cx,cy) is a find. The counters, the percentile and the creator's notification all
            belong to people who did not already know where to tap. */
         try{ const g=await chRpc("reveal_hide",{p_id:HID});
+          /* AND RE-MEASURE. The card is written before this await resolves, so the first pass
+             through chFootClear ran with no answer to protect. */
+          try{ if(g&&typeof g.cy==="number"){ chAnswer=g; requestAnimationFrame(chFootClear); } }catch(_){}
              if(g) res={hit:Math.hypot(x-g.cx,y-g.cy)<=g.r,tries:0,missed:0,secs:0,pct:null,others:0};
         }catch(_){}
       } else {
@@ -16668,6 +16781,9 @@ function chSeek(hideId,opts){
       if(lost){
         try{
           const g=await chRpc("reveal_hide",{p_id:HID});
+          /* AND RE-MEASURE. The card is written before this await resolves, so the first pass
+             through chFootClear ran with no answer to protect. */
+          try{ if(g&&typeof g.cy==="number"){ chAnswer=g; requestAnimationFrame(chFootClear); } }catch(_){}
           if(g&&g.cx!=null){
             /* ⚠️ ONE CIRCLE, NOT TWO. With the body on screen the player's own ring earns its
                place — the flip against the revealed frame shows exactly how far off they were,
@@ -16799,6 +16915,19 @@ function chSeek(hideId,opts){
        maintain and diverge. */
     function ending(head,sub,eopts){
       chLive=false;   // the hunt is over — see the declaration for what reads this
+      /* ⚠️ ASK WHERE THE KAMO WAS, AND ONLY NOW. On the modern path the reveal swaps in the _b
+         frame — the body is simply THERE — and the client never learns cx/cy at all. The two
+         existing reveal_hide calls are a REPLAY re-judge and a legacy hide with no frames, so
+         chFootClear had nothing to protect on the one path almost every round takes, and would
+         have shipped doing nothing at all.
+         NOTHING LEAKS. The round is over and the revealed frame is already on screen showing
+         the body; reveal_hide is the sanctioned post-round call and this is a post-round call.
+         NOT AWAITED, because the card must not wait on the network to be written — the answer
+         arrives late and re-measures itself. Skipped when REPLAY or a legacy loss has already
+         set it. */
+      if(!chAnswer){ try{ chRpc("reveal_hide",{p_id:HID}).then(g=>{
+        if(g&&typeof g.cy==="number"){ chAnswer=g; try{ requestAnimationFrame(chFootClear); }catch(_){} }
+      }).catch(()=>{}); }catch(_){} }
       /* BEFORE the chRunShow calls below, which is the whole of its contract: they read it to
          decide dress and placement, and chRunDock() reads it again after the card is written. */
       ended=true;
@@ -19645,7 +19774,11 @@ if(location.search.includes("debug")){
      the idle it is already playing. */
   window.HIDEY={ charPos:()=>{ const c=sel(); return c?{x:+c.group.position.x.toFixed(2),y:+c.group.position.y.toFixed(2),tx:c._tx,ty:c._ty,svx:c._svx,sx:+c.charG.scale.x.toFixed(2),sy:+c.charG.scale.y.toFixed(2),poseIdx:c.poseIdx,clip:c.mixer?"mixer":"rig"}:null; },
     step:(n)=>{ for(let i=0;i<(n||1);i++){ characters.forEach(lerpChar); } renderer.render(scene,camera3); },
-    setTarget:(x,y)=>{ const c=sel(); if(c){ c._tx=x; c._ty=y; } },
+    /* ⚠️ THE SAME CLAMP AS A REAL DRAG, ON PURPOSE. This hook exists so tests can move the
+       figure without synthesising pointer events; if it skipped chKeepOnBoard it would
+       describe a product that does not exist, and every assertion written through it would
+       be about the hook rather than about the rule. */
+    setTarget:(x,y)=>{ const c=sel(); if(c){ c._tx=x; c._ty=y; chKeepOnBoard(c); } },
     setBg:(url)=>{ photo.onload=()=>syncPreviewFit(); photo.src=url; photo.style.display="block"; cam.style.display="none"; bgKind="photo"; enterCompose(); },
     pose:(i)=>{ if(sel()) setPoseInstant(sel(),i); }, capture, score:()=>currentScore,
     reveal:buildReveal, chars:()=>characters.length, poses:POSES.map(p=>p.label),
