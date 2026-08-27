@@ -1324,6 +1324,26 @@ try {
   bad('THE HINT IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
 }
 
+/* ---- 11d9. The feed is the home now ------------------------------------------------------
+   85% of returning devices open on the feed. That is one line on the boot path of a file that
+   reaches every user on push, so the suite is less about the feature than about the four ways
+   it can be quietly catastrophic: the feed failing taking the app with it, a share link being
+   diverted to strangers' photographs, a first launch losing its hero and its permission sheet,
+   and the 15% holdout leaking — which would empty the only contemporary control group there
+   is. Plus the ✕ that became a camera in the same breath: at 85% it is the ONLY creation door
+   most of the fleet has, and this app has twice shipped a button that was present, visible,
+   correctly sized and untappable. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-feedhome-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-feedhome-dom.mjs', 'FEED HOME TEST', out)
+    : ok('the feed is home, the holdout holds, a share link outranks it and the app survives the feed failing (node scripts/test-feedhome-dom.mjs)');
+} catch (e) {
+  const streams = ((e.stdout || '') + '\n' + (e.stderr || '')).toString();
+  const lines = streams.split('\n').filter((l) => l.includes('\u2717'));
+  bad('THE FEED HOME IS BROKEN:\n' + (lines.length ? lines.join('\n') : streams.trim().split('\n').slice(-12).join('\n')));
+}
+
 /* ---- 11e0. The screen between the tap and Apple's sheet ---------------------------------
    The hint pack has sold nothing under either label it has worn — priced on the button (2.4%
    tap it) or unpriced (11.9% tap it, then 91% cancel at a sheet they meet cold). This arm is
