@@ -203,10 +203,15 @@ console.log('\nWIN — percentile spoken, same snap');
      is exactly the kind of number a hardcoded wait gets wrong the first time somebody tunes
      the animation. Both windows are asserted by waiting for the condition instead. */
   const layers = await page.waitForFunction(() => document.querySelectorAll('.kConfetti').length === 1,
-    null, { timeout: 2500 }).then(() => true).catch(() => false);
+    /* 2500 was the ceiling until 2026-08-27 and it went red on the CI runner while passing
+       4/4 locally. The condition was already polled — the note above is right — so the defect
+       was never the sampling, it was a ceiling tuned on a fast idle machine. A polled wait that
+       succeeds in 200ms costs 200ms no matter what this number says; the only thing raising it
+       can do is stop a loaded runner from being called a bug. */
+    null, { timeout: 8000 }).then(() => true).catch(() => false);
   layers ? ok('one confetti layer is thrown')
          : bad(`${await page.evaluate(() => document.querySelectorAll('.kConfetti').length)} confetti `
-             + 'layers within 2.5s of the find — expected exactly 1');
+             + 'layers within 8s of the find — expected exactly 1');
 
   /* AND IT HAS TO LEAVE. The canvas sits at z-index 95, above the ending card's own buttons.
      One left behind is an invisible sheet over every control on the screen — the loop's most
@@ -267,9 +272,18 @@ console.log('\nGIVE UP — explicit, immediate reveal, same ending');
 {
   const page = await boot({ hit: false, frames: true });
   await page.evaluate(() => document.getElementById('chQuit').click());
-  await page.waitForTimeout(900);
-  const src = await page.evaluate(() => document.querySelector('#chFrame img').src);
-  src.includes('_b.jpg') ? ok('give up → immediate reveal') : bad('no reveal on give-up: ' + src);
+  /* ⚠️ WAITED ON, NOT SLEPT THROUGH. This was waitForTimeout(900) followed by a read, and 900ms
+     is a guess about how long a decode takes on whatever machine is running — fine on a Mac
+     with nothing else on it, not fine on the CI runner, where it went red twice in one day on
+     branches that could not touch this code (a .sql file, and a comment). The failure it
+     produced was also actively misleading: it printed the frame's REAL URL, which reads like a
+     network stub that failed to intercept, and cost an hour of looking for one. The swap is an
+     event; wait for the event. The generous ceiling costs nothing when it passes in 200ms. */
+  const revealed = await page.waitForFunction(
+    () => { const i = document.querySelector('#chFrame img'); return !!(i && i.src.includes('_b.jpg')); },
+    null, { timeout: 8000 }).then(() => true).catch(() => false);
+  const src = await page.evaluate(() => { const i = document.querySelector('#chFrame img'); return i ? i.src : '(no img)'; });
+  revealed ? ok('give up → immediate reveal') : bad('no reveal on give-up after 8s: ' + src);
   /^Lost in \d+\.\d+s$/.test(await txt(page, 'chHead')) ? ok('same ending as a miss') : bad('head: ' + await txt(page, 'chHead'));
   const cs = await calls(page);
   !cs.includes('submit_attempt') ? ok('giving up files no attempt') : bad('give-up filed an attempt');
