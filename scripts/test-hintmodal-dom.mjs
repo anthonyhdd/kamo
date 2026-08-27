@@ -221,19 +221,24 @@ const modalUp = (p) => p.evaluate(() => { const w = document.querySelector('.hpW
     : bad(`the modal's buy button reads ${JSON.stringify(buy)} — it must carry the price the `
         + 'wrapper sent. The round button drops it on purpose; the screen is where it belongs.');
 
-  /* ── ④ THE DEMO MUST NOT BE THE ANSWER ──────────────────────────────────────────────────
-     The hero borrows .chHintZone so what is shown is what is sold, which is exactly why it
-     has to be proven that it is NOT drawn from this hide's region. Percentages, not reg. */
-  const geom = await p.evaluate(() => {
-    const z = document.querySelector('.hpZone');
-    if (!z) return null;
-    return { left: z.style.left, top: z.style.top, w: z.style.width, h: z.style.height,
-             inline: z.getAttribute('style') || '' };
-  });
-  (geom && geom.left === '' && geom.inline === '')
-    ? ok('the demo ellipse carries no inline geometry at all — it cannot have come from reg')
-    : bad(`the demo ellipse has inline geometry (${JSON.stringify(geom)}). Anything computed `
-        + 'here is one refactor away from being the real region, which gives the kamo away free.');
+  /* ── ④ NOTHING ON THIS SCREEN IS DRAWN FROM THE ROUND ───────────────────────────────────
+     This used to assert that the demo ellipse carried no inline geometry, because the screen
+     showed a blurred copy of the player's own photo with a lit region over it and the whole
+     risk was that the region came from `reg`. The hero was removed on 2026-08-27 (it read as
+     a black slab in a card with no other black in it), and with it the risk — so the
+     assertion becomes the stronger one it could never be while a demo existed: there is no
+     ellipse, no photo, and no inline background anywhere in the card. A guarantee kept by
+     absence cannot be broken by a refactor that recomputes something. */
+  const leak = await p.evaluate(() => ({
+    zone: !!document.querySelector('.hpZone'),
+    hero: !!document.querySelector('.hpHero, .hpShot'),
+    bg: [...document.querySelectorAll('.hpCard, .hpCard *')]
+          .some((e) => /background-image/i.test(e.getAttribute('style') || '')),
+  }));
+  (!leak.zone && !leak.hero && !leak.bg)
+    ? ok('nothing on the screen is painted from the round — no ellipse, no photo, no inline background')
+    : bad(`the screen still paints something from the round (${JSON.stringify(leak)}). Anything `
+        + 'drawn from this hide is one refactor away from being the answer, given away free.');
 
   /* ── ⑤ A THUMB REACHES THE BUY, ACROSS ITS WHOLE WIDTH ──────────────────────────────────
      The send was lost twice to a button that was present, sized, on screen and untappable.
