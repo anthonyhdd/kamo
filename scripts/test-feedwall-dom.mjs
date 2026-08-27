@@ -55,7 +55,21 @@ const has=(page,id)=>page.evaluate(i=>!!document.getElementById(i),id);
 /* rounds: what the seeker writes to localStorage after a round. wrapper: stub ReactNativeWebView. */
 async function open(rounds,wrapper){
   const page=await browser.newPage({viewport:{width:390,height:844}});
-  page.on('pageerror',e=>bad('PAGE ERROR: '+e.message));
+  /* ⚠️ ONLY WHILE THE PAGE IS STILL OURS. The note below already explains that case B clicks
+     "Get KAMO" and sends the page at kamo.onelink.me, and that a document is created for that
+     navigation even though it cannot complete offline. It guarded the seeding against that
+     document — and left this listener wide open to it. On 2026-08-27 the gate went red with
+     "PAGE ERROR: Unexpected identifier 'loading'", which is not a string that exists in any
+     inline script of index.html: it came from whatever the browser managed to parse at the
+     other end, and was reported as a defect in this app. The suite passed alone, so it read
+     as one more timing flake and it is not one — it is an error attributed to the wrong
+     document, and it will come back at random until the attribution is fixed.
+     A flag rather than an origin check, because pageerror carries no URL: nothing after the
+     deliberate departure belongs to us, and every assertion this file makes has already run
+     by then. */
+  let ours = true;
+  page.leaveApp = () => { ours = false; };
+  page.on('pageerror', e => { if (ours) bad('PAGE ERROR: ' + e.message); });
   await page.route('**/storage/v1/object/hides/**', r=>r.fulfill({status:200,body:'{}'}));
   await page.addInitScript(([n,w])=>{
     /* ⚠️ GUARDED, AND THE REASON IS THE ONE ASSERTION IN THIS FILE THAT NAVIGATES AWAY.
@@ -115,6 +129,9 @@ async function open(rounds,wrapper){
   if(wall){
     const tried=[];
     page.on('request',r=>{ const u=r.url(); if(/apps\.apple\.com|onelink/i.test(u)) tried.push(u); });
+    /* From here the page is leaving for the store, and nothing it throws is ours — see the
+       pageerror listener. Every assertion above has already run. */
+    page.leaveApp();
     await page.evaluate(()=>{
       const b=[...document.querySelectorAll('#kfWall button')].find(x=>/Get KAMO/i.test(x.textContent));
       b.click(); });

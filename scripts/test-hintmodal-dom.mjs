@@ -306,6 +306,100 @@ const modalUp = (p) => p.evaluate(() => { const w = document.querySelector('.hpW
   await p.close();
 }
 
+/* ── ⑥-bis THE PACK IS FIVE, AND THE BUTTON ONLY EVER SAYS ONE ───────────────────────────────
+   What a buyer sees when the credit lands is the zone they wanted and a label reading
+   "✓ 4 hints left" on a screen they are leaving. The two facts that make the pack worth 0.99
+   rather than one hint worth 0.20 -- that FIVE arrived, and that the rest survive this hide --
+   were never stated anywhere. 296 of the 331 wallets that have ever spent a hint spent exactly
+   one, ever. */
+{
+  console.log('\n— the receipt —');
+  const p = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await servePhoto(p, true);
+  await p.addInitScript(([h]) => {
+    window.__hintsLive = true;
+    window.__seed = { get_hide: h, save_seek_trace: null,
+                      hint_state: { balance: 0, free_available: false },
+                      hint_intent: { ok: true }, hint_claim: { claimed: true },
+                      /* the pack landed and one was spent on this hide: 5 bought, 4 left */
+                      hint_spend: { region: { cx: .5, cy: .5, r: .12 }, balance: 4, used: 'ok' } };
+    window.__price = '$0.99'; window.__caps = { hints: true }; window.__uid = 'rc_user_1';
+    try { localStorage.setItem('kamo_hint_modal_arm', 'on'); } catch (e) {}
+    window.__posted = [];
+    window.ReactNativeWebView = { postMessage(m) { try { window.__posted.push(JSON.parse(m)); } catch (e) {} } };
+  }, [HIDE]);
+  await p.goto(base + '?h=abc123', { waitUntil: 'load' });
+  await p.waitForTimeout(900);
+  await p.click('#chHint');           // empty wallet -> the modal
+  await p.waitForTimeout(400);
+  await p.click('.hpBuy');            // -> StoreKit
+  await p.waitForTimeout(300);
+  /* ⚠️ hintsPurchased(), NOT hint(). window.KAMO.hint is the wrapper's TOAST channel and it
+     ends the buy — it hands the button back. The credit poll is started by
+     window.KAMO.hintsPurchased(), which fans out to every mounted round and lets the guards
+     decide which one paid. Getting this wrong made the first version of this test fail against
+     correct code, which is the shape of a test that would have been "fixed" by deleting it. */
+  await p.evaluate(() => { try { window.KAMO.hintsPurchased(); } catch (e) {} });
+  const shown = await p.waitForFunction(() => {
+    const t = document.getElementById('chToast'); return !!(t && t.textContent.trim());
+  }, null, { timeout: 8000 }).then(() => true).catch(() => false);
+  if (!shown) bad('nothing was said when the pack landed — the buyer is told "4 left" on a button '
+               + 'and never that five arrived or that they survive this hide');
+  else {
+    const said = await p.evaluate(() => {
+      const t = document.getElementById('chToast');
+      return { b: (t.querySelector('b') || {}).textContent || '', s: (t.querySelector('span') || {}).textContent || '' };
+    });
+    /\b5\b/.test(said.b) ? ok(`it names what arrived (${JSON.stringify(said.b)})`)
+                         : bad(`the moment does not name the pack size: ${JSON.stringify(said.b)}`);
+    /* ⚠️ AND NO ARITHMETIC. The first version said "5 added / 4 left", which is true and asks
+       for a subtraction at the moment you are trying to make somebody feel good. The line has
+       one job beyond the reward: the fact the button can never fit. */
+    (/next kamos/.test(said.s) && !/\b\d/.test(said.s))
+      ? ok(`and that the rest keep, without making them do sums (${JSON.stringify(said.s)})`)
+      : bad(`the second line should state that the balance survives this hide and carry no `
+          + `figures: ${JSON.stringify(said.s)}`);
+    const burst = await p.evaluate(() => document.querySelectorAll('.kConfetti,.particle').length > 0);
+    burst ? ok('and a burst fires on the button — the same acknowledgement trial and lifetime get')
+          : bad('no burst on the purchase. Trial and lifetime both land on showKamoPlus() with a '
+              + 'burst, a haptic and a line naming the plan; the pack got a quiet label change.');
+  }
+  /* ── ⑥-ter AND THE NEXT EMPTY WALLET IS NOT A STRANGER'S ── */
+  const label = await p.evaluate(() => {
+    try { localStorage.setItem('kamo_hint_bought', '1'); } catch (e) {}
+    return typeof hintEverBought === 'function' ? 'fn' : 'scoped';
+  }).catch(() => 'scoped');
+  await p.close();
+
+  const q = await hunt2({ arm: 'on' });
+  const stranger = await btn(q);
+  stranger && stranger.text === 'Get 5 hints'
+    ? ok('a stranger is still offered "Get 5 hints"')
+    : bad(`stranger label is ${JSON.stringify(stranger && stranger.text)}`);
+  await q.close();
+
+  const r = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await servePhoto(r, true);
+  await r.addInitScript(([h]) => {
+    window.__hintsLive = true;
+    window.__seed = { get_hide: h, save_seek_trace: null,
+                      hint_state: { balance: 0, free_available: false },
+                      hint_intent: { ok: true }, hint_claim: { claimed: false, reason: 'no_grant' } };
+    window.__price = '$0.99'; window.__caps = { hints: true }; window.__uid = 'rc_user_1';
+    try { localStorage.setItem('kamo_hint_modal_arm', 'on'); localStorage.setItem('kamo_hint_bought', '1'); } catch (e) {}
+    window.ReactNativeWebView = { postMessage() {} };
+  }, [HIDE]);
+  await r.goto(base + '?h=abc123', { waitUntil: 'load' });
+  await r.waitForTimeout(900);
+  const back = await btn(r);
+  back && back.text === 'Get 5 more'
+    ? ok('somebody who has bought before is offered "Get 5 more", not the product explained again')
+    : bad(`a returning buyer reads ${JSON.stringify(back && back.text)} — the one segment in this `
+        + 'app that has ever paid is still being addressed as a stranger.');
+  await r.close();
+  void label;
+}
+
 /* ── ⑦ a screen you cannot leave turns a refusal into a delete ──────────────────────────── */
 {
   console.log('\n— it can be left —');
