@@ -8674,7 +8674,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -11228,7 +11228,20 @@ $("#heroStart").onclick=async e=>{
      be pointless — iOS never re-prompts — so the button stops pretending and does the one
      thing that can actually restore the camera. */
   if(b0.dataset.settings==="1"){
-    track("hero_tap",{action:"open_settings"});
+    /* ⚠️ ITS OWN NAME, NOT AN `action` ON hero_tap. 111 people a week reach camera_denied
+       AFTER a tap — iOS answers a blocked getUserMedia with NotAllowedError instantly and
+       forever, so for them this button is the ONLY remaining route back to a working camera.
+       It was counted as one branch of hero_tap, which is three unrelated controls under one
+       name: there was no way to ask how many took it, and none at all to ask whether it
+       WORKED. Now settings_opened -> camera_granted is a funnel, and the question "does
+       sending somebody to iOS settings ever bring them back" has an answer.
+       ⚠️ WEB_ONLY, because a new name through the bridge is dropped in silence by the
+       allow-list compiled into every shipped binary — it would measure nothing until the next
+       App Store review, which is exactly the population this is about.
+       REPLACES rather than joins the hero_tap line: two names for one tap is the defect
+       purchase_initiated already shipped once. hero_tap keeps its other actions; from
+       2026-08-27 it simply no longer carries this one. */
+    track("settings_opened",{});
     postNative({type:"open-settings"});
     return;
   }
