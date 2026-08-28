@@ -8807,7 +8807,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -14640,6 +14640,59 @@ function chHomeIdle(){
    re-armed — and a card that reopens itself over a user who just closed it is the worst
    version of this experiment. */
 let khAutoOpened=false;
+/* ═══ A REPLY THAT WAITED IS OPENED, NOT ANNOUNCED ════════════════════════════════════════
+ *
+ * ⚠️ THE FEED BECOMING HOME SILENTLY TURNED THE REPLY DELIVERY OFF. chReplyCheck's openArm
+ * branch opens the player card over an idle launch, and chHomeIdle() returns false the moment
+ * `kfState` exists — the feed outranks it, correctly, because taking the screen from a feed
+ * somebody opened is an interruption. But since 2026-08-27 the feed IS the launch for 85 of
+ * every 100 returning devices, so kfState is set before the reply check even resolves (it runs
+ * at 1200ms; the feed opens on the boot line). The auto-open has not fired for them since.
+ * Nothing threw and nothing logged: the guard did exactly what it was written to do, to a
+ * screen that had changed underneath it.
+ *
+ * SO THE REPLY IS NOT ANNOUNCED OVER THE FEED — IT IS THE FEED'S FIRST SLIDE. chFeed already
+ * takes `first`, which is how "See it live" lands you on your own hide. A reply is a round
+ * somebody built and addressed to one person; putting it in front of that person is delivery,
+ * not an interruption, and it is the only tile in the tray that carries an action. 1138 replies
+ * in 30 days, 891 of them with no push token behind them — this is the channel that reaches
+ * the other 78%.
+ *
+ * ⚠️ BOUNDED, BECAUSE THIS SITS ON THE BOOT PATH. One small RPC over ids the device already
+ * holds, raced against CH_REPLY_WAIT_MS; whatever happens the feed opens. A device that never
+ * published skips the call entirely and waits for nothing. The failure mode is the feed opening
+ * exactly as it did yesterday.
+ *
+ * ⚠️ AND ONLY FOR A REPLY NEWER THAN WHAT THIS DEVICE HAS ALREADY SEEN. replySeenAt() is the
+ * same high-water mark the dot uses, so a reply cannot be delivered twice and a feed cannot
+ * reopen every launch on a round already played. */
+const CH_REPLY_WAIT_MS=700;
+async function chFeedFromLaunch(){
+  let first="";
+  try{
+    const ids=(chMine()||[]);
+    if(ids.length){
+      const rows=await Promise.race([
+        chRpcRows("my_replies",{p_ids:ids}).catch(()=>null),
+        new Promise(r=>setTimeout(()=>r(null),CH_REPLY_WAIT_MS))
+      ]);
+      if(rows&&rows.length){
+        const newest=String(rows[0].created_at||"");
+        if(newest&&newest>replySeenAt()&&rows[0].id) first=String(rows[0].id);
+      }
+    }
+  }catch(e){}
+  /* ⚠️ THE OPEN FIRST, THE TELEMETRY AFTER, AND NEVER IN THE SAME try. The first draft put
+     track() above the call inside one block, with a catch that fell back to a plain feed — so
+     when the tracking threw (it reached for TP(), which is a const inside another closure and
+     not in scope here) the catch swallowed it and silently opened a feed WITHOUT the reply.
+     The feature degraded to nothing, no error surfaced, and "nothing threw on the boot path"
+     stayed green. A measurement must never be able to cost the thing it measures. */
+  try{
+    chFeed(first?{src:"launch",first:first}:{src:"launch"});
+  }catch(e){ try{ chFeed({src:"launch"}); }catch(_){} }
+  try{ if(first) track("reply_opened_first",{n:1,emit:"web"}); }catch(e){}
+}
 async function chReplyCheck(){
   /* No published hides means nothing can ever have answered — a free answer, no round trip. */
   const ids=chMine(); if(!ids.length){ chSetHasReplies(false); return; }
@@ -19886,7 +19939,7 @@ else {
        chFeed unreachable, storage refusing, the feed failing to build — lands on exactly what
        shipped yesterday, which is bootCamera() having already run one line above. The rollout
        may cost us the door; it must not cost us the app. test-feedhome-dom asserts it. */
-    try{ if(camEverAsked()) chFeed({src:"launch"}); }catch(e){}
+    try{ if(camEverAsked()) chFeedFromLaunch(); }catch(e){}
   }
 }
 /* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone

@@ -143,23 +143,29 @@ const HROWS = [{ id: 'a1', img_path: 'x.jpg', cx: .5, cy: .5, r: .12, secs: 9, n
 
 /* Boots the app at the root, the way a returning device does. The arm is SEEDED and never
    rolled: a coin in here would put the subject of this suite on stage half the time. */
-async function boot({ arm = 'feed', everAsked = true, seek = false, feedFails = false } = {}) {
+async function boot({ arm = 'feed', everAsked = true, seek = false, feedFails = false, replies = null, mine = null } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   const errs = [];
   page.on('pageerror', e => errs.push(String(e.message).slice(0, 140)));
-  await page.addInitScript(([a, ea, ff, rows]) => {
+  await page.addInitScript(([a, ea, ff, rows, rep, mn]) => {
     window.__seed = {
       feed_page: ff ? undefined : rows,
       get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: 'tony' },
       set_hide_public: null,
     };
+    /* my_replies is seeded only when a case is about it: left undefined, the stub falls
+       through and the launch takes the no-reply path, which is most opens. */
+    if (rep !== null) window.__seed.my_replies = rep;
     try {
       if (a) localStorage.setItem('kamo_home_arm', a);
       if (ea) localStorage.setItem('kamo_cam_asked', '1');
       else localStorage.removeItem('kamo_cam_asked');
+      /* chMine() is what decides whether the launch asks at all — a device that never
+         published skips the round trip entirely. */
+      if (mn) localStorage.setItem('kamo_hides', JSON.stringify(mn));
     } catch (e) {}
-  }, [arm, everAsked, feedFails, HROWS]);
+  }, [arm, everAsked, feedFails, HROWS, replies, mine]);
   await page.goto(base + (seek ? '?h=abc123' : ''), { waitUntil: 'load' });
   await page.waitForTimeout(1400);
   page.__errs = errs;
@@ -228,9 +234,17 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
      have taught the next reader that the check is noise. */
   const i = real.indexOf('if(CH_SEEK){ chSeek(); }');
   const blk = i < 0 ? '' : real.slice(i, i + 2200);
-  const shaped = /bootCamera\(\)\s*;/.test(blk)
-    && blk.indexOf('bootCamera()') < blk.indexOf('chFeed({src:"launch"})')
-    && /try\s*\{[^}]*chFeed\(\{src:"launch"\}\)[^}]*\}\s*catch/.test(blk);
+  /* ⚠️ ANCHORED ON THE CALL, NOT ON ITS ARGUMENTS. This matched the literal
+     chFeed({src:"launch"}) until 2026-08-29, when the launch gained a step — it now asks
+     whether a reply is waiting and opens the feed ON it. The assertion went red against
+     correct code, which is how a guard starts reading as noise. What it protects is the
+     SHAPE, so it is written against the shape: the camera boots first, and whatever opens
+     the feed is inside a try. Renaming that call again must not cost a red. */
+  const call = /(chFeedFromLaunch\(\)|chFeed\(\{src:"launch"[^)]*\}\))/;
+  const m = blk.match(call);
+  const shaped = !!m && /bootCamera\(\)\s*;/.test(blk)
+    && blk.indexOf('bootCamera()') < blk.indexOf(m[0])
+    && new RegExp('try\\s*\\{[^}]*' + m[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^}]*\\}\\s*catch').test(blk);
   shaped
     ? ok('bootCamera() still runs BEFORE the feed, and the feed call is still wrapped')
     : bad('the boot line lost its shape — either bootCamera() no longer runs first, or the '
@@ -299,6 +313,55 @@ if (process.env.SHOT) {
   await p.screenshot({ path: process.env.SHOT });
   await p.close();
   console.log('  · screenshot -> ' + process.env.SHOT);
+}
+
+/* ── ⑤ a reply that waited is the feed's first slide, not a grey dot ───────────────────── */
+{
+  console.log('\n— a reply that waited is opened, not announced —');
+  /* ⚠️ THE REGRESSION THIS FIXES WAS INVISIBLE. chReplyCheck opens the player card over an
+     idle launch, and chHomeIdle() returns false the moment kfState exists — the feed outranks
+     it, correctly, because taking the screen from a feed somebody opened is an interruption.
+     But since 2026-08-27 the feed IS the launch for 85 of every 100 returning devices, so
+     kfState is set before the reply check resolves. The auto-open stopped firing for them and
+     nothing threw: the guard did exactly what it was written to do, to a screen that had
+     changed underneath it. 1138 replies in 30 days, 891 with no push token behind them. */
+  const REPLY = { id: 'replyhide0000001', reply_to: 'mine000000000001', name: 'po',
+                  img_path: 'x.jpg', created_at: '2099-01-01T00:00:00Z' };
+  const p = await boot({ arm: 'feed', mine: ['mine000000000001'], replies: [REPLY] });
+  const asked = await p.evaluate(() => (window.__rpc || []).some(c => c[0] === 'my_replies'));
+  asked ? ok('the launch asks whether anything is waiting') : bad('my_replies was never called on the boot path');
+
+  /* ⚠️ ASSERTED ON THE FETCH, NOT ON "my_replies was called". A first version checked only
+     that the launch asked and that a feed appeared — both of which stay true when the reply
+     is thrown away — so disabling the whole feature left it green. chFeed({first}) seeds
+     slide 0 by fetching that hide BY ID, exactly as the tray tile does, so the id going over
+     the wire is the behaviour. */
+  const seeded = await p.evaluate((id) => (window.__rpc || [])
+    .some(c => c[0] === 'get_hide' && c[1] && String(c[1].p_id || c[1].id || '') === id), REPLY.id);
+  seeded
+    ? ok('the waiting reply is fetched by id and seeded as slide 0 — it is opened, not announced')
+    : bad('the launch never fetched the waiting reply: it opened an ordinary feed and left the '
+        + 'reply behind a grey dot, which is the regression this exists to prevent');
+  (await p.evaluate(() => !!document.querySelector('.kfBar')))
+    ? ok('and the feed still opens') : bad('the feed did not open on the reply path');
+  await p.close();
+
+  /* NO REPLY, NO ROUND TRIP, NO CHANGE. A device that never published must not pay for this
+     on every launch, and the ordinary open has to look exactly like it did yesterday. */
+  const q = await boot({ arm: 'feed', mine: null, replies: [] });
+  const askedNone = await q.evaluate(() => (window.__rpc || []).some(c => c[0] === 'my_replies'));
+  askedNone === false
+    ? ok('a device that never published skips the call entirely')
+    : bad('my_replies was called for a device with no hides of its own');
+  (await feedUp(q)) ? ok('and its feed opens exactly as before') : bad('the no-reply launch lost its feed');
+  await q.close();
+
+  /* AN EMPTY ANSWER IS NOT A REPLY. The high-water mark and the empty list must both land on
+     the ordinary feed rather than on a first slide that does not exist. */
+  const r = await boot({ arm: 'feed', mine: ['mine000000000001'], replies: [] });
+  (await feedUp(r)) ? ok('an empty answer still opens the ordinary feed') : bad('an empty my_replies broke the launch');
+  r.__errs.length === 0 ? ok('and nothing threw on the boot path') : bad('boot errors: ' + JSON.stringify(r.__errs.slice(0, 2)));
+  await r.close();
 }
 
 await browser.close();
