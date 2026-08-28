@@ -5272,6 +5272,79 @@ function computeScore(){
   for(let i=0;i<md.length;i+=4){ if(md[i+3]>128){ fig++; if(pd[i+3]>128) painted++; } }
   if(!fig) return 0; return Math.max(0,Math.min(100,Math.round(painted/fig*100)));
 }
+/* ═══ IS THE KAMO ACTUALLY HIDDEN? ════════════════════════════════════════════════════════
+   `coverage` above answers a different question — how much of the figure carries paint — and
+   it is 100 for 92.9% of hides made in the last seven days, because dragging the brush across
+   the whole figure in ANY colour satisfies it. Paint it the cream of the wall behind you,
+   stand it in front of a dark hoodie, and it scores a perfect hundred while glowing.
+
+   Found 2026-08-28 from a founder screenshot and then proven off the bytes: hide
+   99711286d1ca0eb6 is a flat unpainted white silhouette in the middle of its own photograph,
+   and its row says coverage 100. Its child inherits that photo, so the round-2 seeker meets
+   two visible figures and the obvious one is not the answer.
+
+   ⚠️ MEASUREMENT ONLY. Nothing reads this to refuse anything — founder's call, 2026-08-28:
+   measure first, block nothing. It goes into hides.conceal so a threshold can be picked
+   against n_found/n_attempts, which is the ground truth for "too easy", rather than guessed.
+
+   ⚠️ AND IT IS NOT computeScore() REDEFINED. That number crosses the bridge and the native
+   side gates the App Store review prompt on it (storeReview.js: MIN_SCORE = 30, >= 85 picks
+   "Nice hide") in a build we cannot recut. Two numbers, two jobs.
+
+   EDGE CONTRAST, NOT INTERIOR DISTANCE — and that is the whole design. A "% hidden" built on
+   board-vs-blur INSIDE the silhouette already existed here and was removed as noise: it
+   punished the shading pass and moved when the light moved, because it compared a lit figure
+   against a global idea of the scene. What makes a shape pop is its BOUNDARY. Sampling pairs
+   that straddle the silhouette compares each painted pixel with the actual pixels it sits
+   against, a few pixels away — so an evenly-lit scene and a dramatic one score the same, and
+   shading the figure to match its surroundings now HELPS the number instead of hurting it.
+
+   Luma-weighted, because the eye finds a green/grey edge far more readily than a blue one. */
+const CH_CONCEAL_EDGE = 110;   // mean straddling-pair distance that reads as fully exposed
+function computeConceal(){
+  if(!maskCanvas||!board) return null;
+  const W=board.width,H=board.height,step=Math.max(3,Math.round(Math.min(W,H)/140));
+  const sw=Math.max(1,Math.ceil(W/step)), sh=Math.max(1,Math.ceil(H/step));
+  let md,bd;
+  /* board is the composite that chBlob() encodes and publishes — photo, paint and figure —
+     and maskCanvas is in the same coordinate space, which is what makes the pairing legal. */
+  try{ md=_sampleData(maskCanvas,sw,sh,W,H); bd=_sampleData(board,sw,sh,W,H); }catch(e){ return null; }
+  if(!md||!bd) return null;
+  return concealFromSamples(md,bd,sw,sh);
+}
+/* THE ARITHMETIC, PULLED OUT SO IT CAN BE EXERCISED WITHOUT A CAMERA. Same reason
+   chCreateForms() is its own function: a number that decides nothing today but is meant to
+   decide something later has to be checkable now, and stubbing a board canvas, a mask canvas
+   and a paint layer to reach it is the kind of setup that makes a test get skipped.
+   Two arrays in, one number out — scripts/test-conceal-dom.mjs feeds it flat colours. */
+function concealFromSamples(md,bd,sw,sh){
+  const inside=(x,y)=>md[((y*sw+x)<<2)+3]>128;
+  let n=0,sum=0;
+  for(let y=1;y<sh-1;y++) for(let x=1;x<sw-1;x++){
+    if(!inside(x,y)) continue;
+    let r2=0,g2=0,b2=0,c=0;
+    const take=(xx,yy)=>{ const j=((yy*sw+xx)<<2); r2+=bd[j]; g2+=bd[j+1]; b2+=bd[j+2]; c++; };
+    if(!inside(x-1,y)) take(x-1,y);
+    if(!inside(x+1,y)) take(x+1,y);
+    if(!inside(x,y-1)) take(x,y-1);
+    if(!inside(x,y+1)) take(x,y+1);
+    if(!c) continue;                              // interior pixel, no boundary to straddle
+    const i=((y*sw+x)<<2);
+    const dr=bd[i]-r2/c, dg=bd[i+1]-g2/c, db=bd[i+2]-b2/c;
+    sum+=Math.sqrt(0.30*dr*dr+0.59*dg*dg+0.11*db*db);
+    n++;
+  }
+  /* A silhouette too small to have a countable rim tells us nothing; a null is honest and the
+     column is nullable for exactly this. Never a 0 — that would read as "fully exposed". */
+  if(n<8) return null;
+  return Math.max(0,Math.min(100,Math.round(100-(sum/n)/CH_CONCEAL_EDGE*100)));
+}
+/* REACHABLE FROM A COLD LOAD, and deliberately next to the function rather than in one of the
+   screen-scoped debug objects: window.HIDEY only exists once compose has been entered and
+   window.KAMOREPLY only on the seeker path, so a test of pure arithmetic would have had to
+   drive a whole camera flow to reach two array arguments. Kept adjacent so the hook cannot
+   drift away from what it exposes. */
+try{ window.KAMO=window.KAMO||{}; window.KAMO.conceal=(md,bd,sw,sh)=>concealFromSamples(md,bd,sw,sh); }catch(_){}
 function roundSeconds(){ return Math.max(1,Math.round((roundMs||(roundStartedAt?Date.now()-roundStartedAt:0))/1000)); }
 /* showScore() IS GONE WITH #scoreChip (founder, 2026-08-15). It printed "X% hidden · Ns" over
    the reveal — a scorecard, on the one screen whose whole job is to get the photo sent. There
@@ -12498,7 +12571,7 @@ window.KAMOREPLY={
   label:()=>{ updateInviteBtn(); const b=document.getElementById("ssInvite"); return b?b.textContent:null; },
   /* What chUpload() would send, without needing a painted board and a storage round trip to
      find out. Same function the publish path calls — not a copy of it. */
-  forms:()=>chCreateForms({p_img_path:"x.jpg",p_cx:0.5,p_cy:0.5,p_r:0.1,p_secs:9,p_coverage:80},getHandle()),
+  forms:(conceal)=>chCreateForms({p_img_path:"x.jpg",p_cx:0.5,p_cy:0.5,p_r:0.1,p_secs:9,p_coverage:80},getHandle(),conceal),
 };
 /* WHETHER THIS ROUND'S PUBLISH HAS FAILED, read by the share sheet's headline. It is round
    state and it is cleared with the round: a new hide starts as unpublished-but-fine, not as
@@ -12642,7 +12715,7 @@ function kfAuthorKey(){
    and a storage round trip — which is precisely why the thing it decides (does the reply
    carry its address?) would have failed silently. As a function it is one assertion in
    scripts/test-reply-dom.mjs. */
-function chCreateForms(base,who){
+function chCreateForms(base,who,conceal){
   const signed={...base,p_limit_s:null,p_max_taps:null,p_name:who||null};
   const forms=[];
   /* WIDEST FIRST, and this rung is wider than "signed + reply": it carries the author key, so
@@ -12690,6 +12763,17 @@ function chCreateForms(base,who){
      ADDED, NEVER EDITED. The server clamps to the five-word vocabulary and nulls anything else
      (infra/2026-08-16-hide-source.sql) — this is an anonymous client, and a hide is worth more
      than a taxonomy. */
+  /* THE 16-ARGUMENT RUNG — whether the kamo is actually hidden, on top of everything the
+     15-argument rung carries. See computeConceal(): `coverage` counts painted pixels and says
+     100 for a figure glowing in the middle of the frame, so this measures the contrast across
+     the silhouette instead. Measurement only — nothing refuses a hide on it.
+     ⚠️ PASSED SEPARATELY, NOT PUT IN `base`. Everything in base is spread into `signed` and
+     therefore into EVERY rung below, and a p_conceal riding down to the 15-argument form makes
+     it a 16-argument call that matches no overload — every fallback would fail at once and the
+     hide would publish nothing at all. It joins on this line and nowhere else.
+     ADDED, NEVER EDITED, and guarded on being a real number so a browser that cannot read the
+     canvas climbs down and publishes exactly as it does today. */
+  if(key&&slot&&slot.id&&lq&&photoSrc&&typeof conceal==="number") forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq,p_source:photoSrc,p_conceal:conceal});
   if(key&&slot&&slot.id&&lq&&photoSrc) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq,p_source:photoSrc});
   if(key&&slot&&slot.id&&lq) forms.push({...signed,p_reply_to:chReplyTo||null,p_author_key:key,p_id:slot.id,p_streak:(runNow>0?runNow:null),p_lqip:lq});
   if(key&&slot&&slot.id&&runNow>0) forms.push({...signed,p_reply_to:chReplyTo,p_author_key:key,p_id:slot.id,p_streak:runNow});
@@ -13021,7 +13105,10 @@ async function chUpload(){
        a form turns out to be unavailable: a reply that publishes without its address is still
        a playable hide, and an unsigned hide is still a hide. Nothing here may end with no row
        at all — that is the only outcome the sender would actually notice. */
-    const forms=chCreateForms(base,who);
+    /* Computed here rather than inside chCreateForms: it is a real pixel scan of the board,
+       and the board is only the finished composite at publish time. */
+    const conceal=computeConceal();
+    const forms=chCreateForms(base,who,conceal);
     /* ⚠️ A NULL ANSWER IS NOT A ROW, AND IT USED TO END THE LADDER AS IF IT WERE ONE.
        This assigned chId and broke on the first call that did not THROW — so a 200 carrying
        `null` (a server-side guard, an RLS-filtered RETURNING, an overload that resolves to
@@ -16685,9 +16772,17 @@ function chSeek(hideId,opts){
         /* WRONG, OR WRONG ONE? On a chain the photo carries every earlier round's figure, and
            the answer key is only the latest — so a player who genuinely spots a camouflaged
            person gets told they failed. The server checks a miss against the ancestors and
-           names the one they hit. Nothing about the current answer is revealed: this can only
-           confirm a figure they already found with their own eyes, which is the whole
-           difference between "you are wrong" and "you found the wrong one". */
+           names the one they hit, which is the whole difference between "you are wrong" and
+           "you found the wrong one".
+
+           ⚠️ THIS COMMENT USED TO CLAIM "nothing about the current answer is revealed", AND
+           IT WAS NEVER TRUE. snapReveal(true) runs above, before this branch can know whether
+           the miss hit an ancestor — so the answer is flipped in and waved on BOTH paths, as
+           it must be: the round is over the moment a buzz lands, and every other ending pays
+           the player off with the reveal. What the sentence below used to say was "The new
+           one is still in there", printed underneath the new one, in white, waving at them.
+           A screen cannot both show the answer and claim it is hidden. The picture is the
+           part worth keeping, so the sentence is the part that changed. */
         if(res&&res.old_round){
           /* SAY THE TRUE THING, AND SAY IT TO THE RIGHT PERSON.
              The first version of this line claimed the old figure had "already been found" —
@@ -16704,7 +16799,7 @@ function chSeek(hideId,opts){
                     : res.old_name ? "@"+res.old_name+"'s, from round "+res.old_round
                     : "the one from round "+res.old_round;
           ending("Wrong kamo.",
-                 "That's "+whose+". The new one is still in there.",
+                 "That's "+whose+". Here's the new one.",
                  {rehide:true,camoSrc:camoSrc});
         } else {
           /* THE LOSS NAMES ITS CLOCK, because the win always did ("Found in 3.2s") and the
