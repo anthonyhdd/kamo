@@ -7564,10 +7564,60 @@ const HANDLE_ADJ=["Mossy","Dusty","Amber","Slate","Umber","Olive","Ashen","Hazel
 const HANDLE_NOUN=["Fox","Moth","Gecko","Heron","Lynx","Squid","Owl","Crab","Toad","Viper",
   "Mantis","Skink","Ermine","Otter","Wren","Adder","Newt","Hare","Stoat","Pika",
   "Quail","Snipe","Raven","Vole"];
+/* ═══ THE NAME HAS TO BE ONE PERSON ══════════════════════════════════════════════════════
+   24 × 24 is 576 names, and measured on 2026-08-28 over 30 days: 575 OF THEM WERE IN USE, at
+   6.03 devices each, worst case 15 devices answering to one name, 565 of 575 shared. The
+   generator was saturated — every new arrival collided by construction — and a name six people
+   share is a label, not an identity. Nothing that ranks, credits or addresses a player can work
+   on top of that, which is most of what a name is for.
+
+   ⚠️ TWO CHARACTERS, BECAUSE THAT IS ALL THERE IS. create_hide stores left(name, 16) and the
+   longest pair is "DriftingMantis" at 14, so a longer discriminator is silently truncated BY
+   THE SERVER and the collisions come straight back — invisibly, on the one side we cannot see
+   from here. Base 36 buys 1296 of them inside those two characters: 746 496 combinations
+   against ~3800 devices, where a decimal pair would have given 57 600 and roughly 125 expected
+   collisions. Expect around ten instead, which a board can live with.
+
+   ⚠️ DERIVED FROM THE DEVICE KEY, NOT RANDOM, and that is what makes it a fix rather than a
+   reshuffle: the same device always resolves to the same suffix, so a name survives a cleared
+   store, a reinstall and the migration below without becoming somebody else. Random would mint
+   a fresh identity every time the page could not read localStorage. */
+function handleDisc(){
+  let k=""; try{ k=kfAuthorKey()||""; }catch(e){}
+  /* No key (private mode, storage refused) means no stable identity to derive from — a random
+     suffix is still better than a bare collision, and this device cannot be ranked anyway. */
+  if(!k) k=String(Math.floor(Math.random()*1296))+"x";
+  let h=0; for(let i=0;i<k.length;i++){ h=(h*31+k.charCodeAt(i))>>>0; }
+  return (h%1296).toString(36).padStart(2,"0");
+}
+const HANDLE_AUTO_RE=new RegExp("^(?:"+HANDLE_ADJ.join("|")+")(?:"+HANDLE_NOUN.join("|")+")$");
 function mintHandle(){
   const a=HANDLE_ADJ[Math.floor(Math.random()*HANDLE_ADJ.length)];
   const n=HANDLE_NOUN[Math.floor(Math.random()*HANDLE_NOUN.length)];
-  return cleanHandle(a+n);
+  return cleanHandle(a+n+handleDisc());
+}
+/* THE 3466 DEVICES ALREADY CARRYING A SHARED NAME, upgraded the one moment it is safe: they
+   keep the name they have been wearing and gain the two characters that make it theirs, so
+   "SilentFox" becomes "SilentFox7k" — recognisable to anyone who has seen it, and no longer
+   answering for five other people.
+   ⚠️ ONLY A NAME THIS GENERATOR MINTED. A handle somebody TYPED is theirs, collision or not,
+   and appending two characters to it would be renaming a person who chose. The regex is
+   anchored on both ends against the two word lists, so "po", "tony" and every deliberate name
+   fall straight through.
+   ⚠️ AND IT DOES NOT REPUBLISH ANYTHING. setHandle(v, byUser) is the path that re-signs live
+   hides; this writes the storage key alone, so old rows keep the name they were published
+   under and only the next hide carries the upgrade. A rename storm across every hide a device
+   ever made is not a migration, it is an outage with a friendly name. */
+function upgradeHandle(){
+  try{
+    const h=getHandle();
+    if(!h||!HANDLE_AUTO_RE.test(h)) return h;
+    const up=cleanHandle(h+handleDisc());
+    if(up===h) return h;
+    try{ localStorage.setItem(HANDLE_KEY,up); }catch(e){ return h; }
+    track("handle_upgraded",{});
+    return up;
+  }catch(e){ return getHandle(); }
 }
 /* THE ONLY FUNCTION THAT MAY INVENT ONE, and getHandle() deliberately still cannot.
    getHandle() is read on render paths — the home headline, the preview card, the share text —
@@ -7589,7 +7639,11 @@ function ssNameShown(){
   return ssNamePreview;
 }
 function ensureHandle(){
-  const h=getHandle(); if(h) return h;
+  /* Every publish passes here, so it is where the shared names get their two characters —
+     100% of devices that post, without a prompt in front of the send button. That button has
+     been broken twice by things merely sitting NEAR it, and the send rate is the guard metric
+     on this whole screen; a naming step in that path would be the third. */
+  const h=upgradeHandle(); if(h) return h;
   /* The preview first, so the name on the sheet and the name on the hide can never differ. */
   const m=setHandle(ssNamePreview||mintHandle());
   /* Empty only if localStorage refused the write; the caller then publishes unsigned exactly
@@ -7669,6 +7723,12 @@ window.KAMO.notifAskResult=function(outcome){
   if(/^(denied_recovery|already_denied)/.test(o)) showHint("iOS only asks once — Settings has the switch",3000);
   else if(o==="") showHint("Couldn't ask just now — try again",2400);
 };
+/* Minting and the shared-name upgrade, reachable from a test: both are pure functions of the
+   stored name and the device key, and driving them through a real publish would need a painted
+   board and a storage round trip. */
+window.KAMO.mintHandle=function(){ try{ return mintHandle(); }catch(e){ return null; } };
+window.KAMO.upgradeHandle=function(){ try{ return upgradeHandle(); }catch(e){ return null; } };
+
 window.KAMO.setStoredHandle=function(h){
   try{
     /* A STRING, OR NOTHING. cleanHandle() stringifies whatever it is given, so an object
@@ -12680,6 +12740,11 @@ const CH_RUN_KEY="kamo_seek_run", CH_BEST_KEY="kamo_seek_best";
    "0" MEANS SPENT AND EVERYTHING ELSE MEANS AVAILABLE, missing key included — a device that
    has never seen this code starts its next miss with a life rather than without one. */
 const CH_LIFE_KEY="kamo_seek_life", CH_RUN_SAVE_MIN=2;
+/* ⚠️ "0" MEANS SPENT, ANYTHING ELSE — A MISSING KEY INCLUDED — MEANS AVAILABLE. That default
+   is deliberate and load-bearing: a fresh device, a cleared store or a private window must
+   start with its life intact, never already used. Read here as well as in chStreak() because
+   the run pill renders on paths that do not build a streak object. */
+function chLifeSpent(){ try{ return lsGet(CH_LIFE_KEY)==="0"; }catch(e){ return false; } }
 function chStreak(){
   try{
     return {run:parseInt(localStorage.getItem(CH_RUN_KEY)||"0",10)||0,
@@ -15735,6 +15800,20 @@ function chSeek(hideId,opts){
          it stays just the number: that chip has the clock next to it for context, and it is
          an instrument rather than a statement. */
       : ended         ? (v+" in a row"+(b>v?" · best "+b:""))
+      /* ═══ THE LIVE PILL SAYS WHEN A MISS ACTUALLY ENDS IT ═══════════════════════════════
+         The one life is invisible. A player does not know they have it, does not know when
+         they spend it, and therefore does not know that THIS round is the one that costs the
+         run — which is the only moment the round has any stakes at all. The hint modal already
+         says it ("4 in a row, and no life left") but that sentence arrives AFTER the tap, on
+         one arm, to somebody who has already decided.
+         ⚠️ IN THE PILL THAT IS ALREADY THERE, NOT BESIDE IT. Two teaching pills were deleted
+         from this screen for spending 7.2 seconds of a round on text; a third one would be the
+         same mistake wearing a different word. Same element, same position, two words, and
+         only in the state where they are true.
+         AND THE RECORD YIELDS TO IT. "4 · best 7 · last life" is three claims in a chip built
+         for one. Chasing a record matters while nothing is at risk; when something is, what is
+         at risk wins the space. */
+      : (v>=1&&chLifeSpent()) ? (String(v)+" · last life")
                       : (String(v)+(b>v?" · best "+b:""))));
     /* THE POP GOES ON A LIVE COUNT THAT ACTUALLY WENT UP, and on nothing else. Re-showing the
        same number on a re-render would otherwise pulse for no event, which is how an animation

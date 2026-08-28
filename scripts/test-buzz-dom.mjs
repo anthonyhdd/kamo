@@ -82,7 +82,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
    what it means in the answer key. Two false diagnoses today came from measuring the
    harness instead of the layout; this is the fix for both. */
 const BIG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAYYAAANMCAIAAADXDp1JAAAIBUlEQVR42u3UoQ0AAAgEsR8dgWBsZsAhmnSCE5fqAXgiEgCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCWpAFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJakAWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlSQBYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZakAmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlqQCYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWJAFgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFiSCoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWJIKgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYkgSAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAFwtCOGXsyEGUNgAAAABJRU5ErkJggg==', 'base64');
-async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5 }) {
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0 }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
@@ -94,7 +94,15 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
     route.fulfill(big ? { status: 200, contentType: 'image/png', body: BIG }
                       : { status: 200, contentType: 'image/jpeg', body: JPG });
   });
-  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx }) => {
+  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best }) => {
+    /* ⚠️ THE LIFE IS SEEDED EXPLICITLY, ALWAYS. "0" means spent and anything else — a missing
+       key included — means available, so an unseeded break case silently becomes a SAVE case
+       that still renders a pill, and the assertion passes while testing the other mechanic. */
+    try {
+      localStorage.setItem('kamo_seek_run', String(run));
+      localStorage.setItem('kamo_seek_best', String(best));
+      localStorage.setItem('kamo_seek_life', life ? '1' : '0');
+    } catch (e) {}
     window.__calls = [];
     window.__rpc = (fn, body) => {
       window.__calls.push([fn, body]);
@@ -106,11 +114,15 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
       if (fn === 'reveal_hide') return Promise.resolve({ cx: ansCx, cy: cy, r: 0.1 });
       return Promise.resolve(null);
     };
-  }, { hit, pct, others, name, cy, round, oldRound, ansCx });
+  }, { hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(700);
   return page;
 }
+const page0Text = async (page) => page.evaluate(() => {
+  const e = document.querySelector('.chRun');
+  return e && e.style.display !== 'none' ? e.textContent : '';
+});
 const txt = async (page, id) => page.evaluate(i => { const e = document.getElementById(i); return e ? e.textContent : null; }, id);
 const calls = async (page) => page.evaluate(() => window.__calls.map(c => c[0]));
 
@@ -257,6 +269,38 @@ console.log('\nAND ROUND ONE IS LEFT EXACTLY AS IT WAS');
     ? ok('the miss ring survives on a round-1 photo — the body is the answer there')
     : bad('round-1 rings: ' + JSON.stringify(kinds));
   await page.close();
+}
+
+console.log('\nTHE RUN PILL SAYS WHEN A MISS ACTUALLY ENDS IT');
+{
+  /* The one life is invisible: a player does not know they have it, does not know when they
+     spent it, and so does not know that THIS round is the one that costs the run — the only
+     moment the round carries any stake at all. The hint modal says it, but after the tap and
+     on one arm, to somebody who has already decided.
+     ⚠️ IN THE PILL THAT IS ALREADY THERE. Two teaching pills were deleted from this screen for
+     spending 7.2 seconds of a round on text; a third would be the same mistake in new words. */
+  const spent = await boot({ hit: false, frames: true, run: 4, life: false, best: 9 });
+  const pill = await page0Text(spent);
+  /\b4\b/.test(pill) && /last life/i.test(pill)
+    ? ok(`a spent life is named on the live pill ("${pill}")`)
+    : bad(`run pill with the life gone reads ${JSON.stringify(pill)}`);
+  await spent.close();
+
+  const held = await boot({ hit: false, frames: true, run: 4, life: true, best: 9 });
+  const pill2 = await page0Text(held);
+  !/last life/i.test(pill2 || '')
+    ? ok(`an intact life claims nothing ("${pill2}")`)
+    : bad(`the pill cried "last life" while the life was still there: ${JSON.stringify(pill2)}`);
+  await held.close();
+
+  /* NOTHING TO LOSE, NOTHING SAID. Telling somebody with no run that they might lose it is the
+     sentence the hint modal already refuses to print for the same reason. */
+  const none = await boot({ hit: false, frames: true, run: 0, life: false, best: 0 });
+  const pill3 = await page0Text(none);
+  !/last life/i.test(pill3 || '')
+    ? ok('a player with no run is told nothing about losing one')
+    : bad(`a run of 0 was warned about its last life: ${JSON.stringify(pill3)}`);
+  await none.close();
 }
 
 console.log('\nWIN — percentile spoken, same snap');
