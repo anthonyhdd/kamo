@@ -65,6 +65,10 @@ for (const [anchor, patch] of [
      gets longer. Testing only the states that exist today would pin the geometry to the one
      storefront that has no currency symbol. */
   ['let hintPackPrice="";', 'try{ if(window.__price) hintPackPrice=window.__price; }catch(e){}'],
+  /* EVERY EVENT THIS PAGE SENDS, recorded where they are all born. The tap rate the "last
+     life" pill was shipped to move is a ratio over hint_offered and hint_tapped, and a suite
+     that cannot see either one can only assert that a button exists. */
+  ['function track(event,props){', 'try{ (window.__tracked=window.__tracked||[]).push([event,props]); }catch(e){}'],
 ]) {
   if (html.indexOf(anchor) < 0) { console.error('  ✗ anchor missing from index.html: ' + anchor); process.exit(1); }
   html = html.replace(anchor, anchor + patch);
@@ -629,6 +633,52 @@ console.log('\nTHE HINT STAYS OFF UNTIL THE PACK IS APPROVED');
     : bad(`index.html ships HINTS_LIVE=${shipped && shipped[1]} but the recorded intent is `
         + `${INTENDED}. If this was deliberate, move INTENDED in this test and say why; if it `
         + 'was not, an unapproved hint pack is being sold from the live build.');
+}
+
+console.log('\nTHE TAP IS MEASURABLE, AND CARRIES WHAT IS AT STAKE');
+{
+  /* The "last life" pill (2026-08-28) exists to test one thing: does somebody who KNOWS their
+     run ends on a miss reach for a hint more often than somebody with nothing at risk. That is
+     a ratio over two populations, so the stake has to ride BOTH ends of it — and before this
+     change neither end carried it, and the tap had no event of its own at all. Every reading
+     of "do people reach for hints" was reconstructed from hint_used plus hint_modal_shown plus
+     hint_purchase_initiated: three names, two arms, a different shape on each. */
+  /* ⚠️ caps.hints AND a uid, like every other case in this file: the button is gated on the
+     wrapper's capability, so a fixture without it renders no hint at all and every assertion
+     below would have been about the harness. A first version omitted both and read an empty
+     hint_offered as "the event is broken". */
+  const page = await hunt({ caps: { hints: true }, uid: 'user-1',
+                            state: { balance: 2, free_available: false } });
+
+  const offered = await page.evaluate(() =>
+    (window.__tracked || []).filter((t) => t[0] === 'hint_offered').map((t) => t[1]));
+  offered.length === 1 && offered[0] && typeof offered[0].run === 'number' && typeof offered[0].life === 'boolean'
+    ? ok(`the offer carries the stake, so the ratio has a denominator (${JSON.stringify({ run: offered[0].run, life: offered[0].life })})`)
+    : bad('hint_offered props: ' + JSON.stringify(offered));
+
+  await page.evaluate(() => document.getElementById('chHint').click());
+  await page.waitForTimeout(500);
+  const tapped = await page.evaluate(() =>
+    (window.__tracked || []).filter((t) => t[0] === 'hint_tapped').map((t) => t[1]));
+  tapped.length === 1
+    ? ok('one tap emits exactly one hint_tapped')
+    : bad(`a single tap emitted ${tapped.length} hint_tapped events`);
+  tapped[0] && typeof tapped[0].run === 'number' && typeof tapped[0].life === 'boolean'
+    ? ok('and it carries the run and the life, so the two populations are separable')
+    : bad('hint_tapped props: ' + JSON.stringify(tapped[0]));
+
+  /* ⚠️ WEB_ONLY OR IT MEASURES NOTHING. A name the wrapper's compiled allow-list has never
+     heard of is dropped in silence by the bridge, so a brand-new event on the live build is a
+     number that never arrives. check.mjs holds the disjointness; this holds the membership. */
+  /* ⚠️ READ OFF THE SOURCE, NOT THE PAGE. WEB_ONLY is a module-scope const and never reaches
+     window, so asking the page for it returns null and the assertion would be about
+     reachability rather than membership — green or red for the wrong reason. */
+  const setLine = (real.match(/const WEB_ONLY=new Set\(\[[^\]]*\]/) || [''])[0];
+  const routed = /"hint_tapped"/.test(setLine);
+  routed === true
+    ? ok('hint_tapped is routed WEB_ONLY, so the bridge cannot swallow it')
+    : bad('hint_tapped is not in WEB_ONLY — it would be dropped in silence on the live build');
+  await page.close();
 }
 
 await browser.close();
