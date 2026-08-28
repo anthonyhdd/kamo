@@ -494,10 +494,21 @@ console.log('\nA PHOTO THAT NEVER ARRIVES SAYS SO, AND FILES NOTHING');
   };
   const low = await lift(0.92);
   const high = await lift(0.18);
+  /* ⚠️ THE CASE THAT SHIPPED BROKEN. A kamo in the MIDDLE — the founder's screenshot, cy≈0.52 —
+     made the first version throw the card at the ceiling, over the headline and the run pill,
+     to uncover nothing. A bottom-anchored card can only clear something by moving above it, so
+     for anything not near the bottom the required lift is most of the screen. The rule is now
+     the answer key itself: below CH_LIFT_LOW nothing moves, whatever the geometry says. */
+  const middle = await lift(0.52);
   low > 0
     ? ok(`a kamo hidden low pushes the card off it (${low}px)`)
     : bad('a kamo at cy=0.92 is behind the ending card and the card did not move — the reveal '
         + 'reveals nothing, which is the whole payoff of the round');
+  middle === 0
+    ? ok('a kamo in the middle leaves the card alone — it was thrown at the ceiling once')
+    : bad(`a kamo at cy=0.52 moved the card ${middle}px. A bottom-anchored card can only clear `
+        + 'something by rising above it, so for a middle kamo that means the top of the screen — '
+        + 'covering the headline and the run pill to uncover nothing. This shipped once.');
   high === 0
     ? ok('and a kamo up top leaves the card exactly where it belongs')
     : bad(`a kamo at cy=0.18 is nowhere near the card and it moved anyway (${high}px) — the card `
