@@ -15363,6 +15363,30 @@ function chSeek(hideId,opts){
     +".chFlash{position:absolute;inset:0;background:radial-gradient(circle at var(--fx) var(--fy),"
     +"rgba(95,230,164,.45),transparent 60%);animation:chFlash .6s ease-out forwards;}"
     +"@keyframes chFlash{0%{opacity:1}100%{opacity:0}}"
+    /* ═══ THE REVEAL SNAP ═══════════════════════════════════════════════════════════════
+       The reveal is the moment this app is named for — the double-take — and it was a JPEG
+       swap. The frames already carry the payoff; what was missing is the IMPACT that tells a
+       player something just happened, on a screen where the only other motion is a two-frame
+       wave arriving 360ms later.
+       ⚠️ ON THE FRAME, NOT ON THE PHOTO. Scaling the <img> would move the kamo away from the
+       ring drawn at its own coordinates, and away from the marks already pinned to the frame.
+       The whole frame punches, so everything inside it keeps its relationship.
+       SHORT AND ONCE. 460ms, forwards, self-removing — a reveal that keeps moving competes
+       with the thing it is revealing. */
+    +".chFrame.chSnap{animation:chSnap .46s cubic-bezier(.22,1,.36,1);}"
+    +"@keyframes chSnap{0%{transform:scale(1)}20%{transform:scale(1.035)}100%{transform:scale(1)}}"
+    +".chBoom{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;"
+    +"border:2px solid rgba(255,255,255,.92);box-shadow:0 0 34px rgba(255,255,255,.30);"
+    +"pointer-events:none;animation:chBoom .8s cubic-bezier(.15,.75,.25,1) forwards;}"
+    +"@keyframes chBoom{0%{transform:scale(.45);opacity:.95}100%{transform:scale(12);opacity:0}}"
+    /* REDUCED MOTION GETS THE EVENT, NOT THE TRAVEL — the same rule confettiBurst follows.
+       A bloom that fades up and out is pure opacity: no scale, no expansion, nothing the
+       setting is about, and it still says "the picture just changed". */
+    +"@media (prefers-reduced-motion: reduce){"
+    +".chFrame.chSnap{animation:none;}"
+    +".chBoom{animation:chBoomStill .5s ease-out forwards;width:220px;height:220px;margin:-110px 0 0 -110px;"
+    +"border:0;background:radial-gradient(circle,rgba(255,255,255,.30),transparent 68%);}"
+    +"@keyframes chBoomStill{0%{opacity:0}30%{opacity:1}100%{opacity:0}}}"
     +".chSpark{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;"
     +"background:var(--mint);animation:chSpark .8s cubic-bezier(.15,.8,.3,1) forwards;}"
     +"@keyframes chSpark{0%{transform:translate(0,0) scale(1);opacity:1}"
@@ -15560,6 +15584,33 @@ function chSeek(hideId,opts){
 
   /* Self-removing on purpose: the ending card mounts a moment later, and an effect layer
      that outlived it would sit over the CTA. 900ms covers the longest of the three. */
+  /* THE IMPACT ON THE FLIP. `at` is in the PICTURE's normalised coordinates (0..1), the same
+     space the answer key and the reticle use — never pixels, because the photo is cover-fitted
+     and its own pixel space is routinely wider than the frame it sits in (a tap at viewport
+     x=60 reads x*img.offsetWidth = 195 on a 390pt screen; that is the bug the find's confetti
+     carried). Mapped through the image's client rect, which is the one conversion that
+     survives the crop. Centre of the frame when the answer is not known yet — on a miss the
+     answer arrives from reveal_hide a moment later and the whole picture has changed anyway. */
+  function chRevealSnap(at){
+    try{
+      const fr=$$("chFrame"); if(!fr) return;
+      fr.classList.remove("chSnap"); void fr.offsetWidth; fr.classList.add("chSnap");
+      setTimeout(()=>{ try{ fr.classList.remove("chSnap"); }catch(_){} },520);
+      let bx=null,by=null;
+      try{
+        const im=fr.querySelector("img");
+        if(im&&im.offsetWidth&&at&&typeof at.x==="number"){
+          const ir=im.getBoundingClientRect(), fb=fr.getBoundingClientRect();
+          bx=(ir.left-fb.left)+at.x*ir.width; by=(ir.top-fb.top)+at.y*ir.height;
+        }
+      }catch(_){}
+      if(bx===null||!isFinite(bx)){ bx=fr.clientWidth/2; by=fr.clientHeight/2; }
+      const b=document.createElement("div"); b.className="chBoom";
+      b.style.left=Math.round(bx)+"px"; b.style.top=Math.round(by)+"px";
+      fr.appendChild(b);
+      setTimeout(()=>{ try{ b.remove(); }catch(_){} },900);
+    }catch(_){}
+  }
   function chCelebrate(host,x,y){
     try{
       if(!host) return;
@@ -16936,7 +16987,8 @@ function chSeek(hideId,opts){
            already here; making it wait for two image loads is what made the ending feel slow.
            ending() is synchronous, so it always finishes before the .then() below can run,
            and the flip button can never be wiped by the innerHTML that builds the card. */
-        const frames=snapReveal(false);
+        /* THE TAP IS THE ANSWER ON A FIND — no round trip needed to know where to hit. */
+        const frames=snapReveal(false,{x:x,y:y});
         /* ④ — the chrono noted, now it speaks: rank among everyone who buzzed this hide
            before (misses count as slower — they never found it at all). Silent when there
            is nobody to compare against yet. */
@@ -16959,7 +17011,16 @@ function chSeek(hideId,opts){
         img.classList.remove("chShake"); void img.offsetWidth; img.classList.add("chShake");
         track("seek_failed",TP({reason:"miss",ms:ms,old_round:(res&&res.old_round)|0}));
         sendTrace("miss");
-        const frames=snapReveal(true);
+        /* ⚠️ FROM THE TAP ON A MISS TOO, AND NOT FROM THE ANSWER. The first version fired this
+           from the frame's centre, reasoning that a miss does not know where the kamo is yet —
+           reveal_hide is launched without awaiting. Founder, 2026-08-29: the picture does not
+           switch instantly, so an impact blooming in the middle while the player is still
+           looking at the spot they touched reads as belonging to nothing.
+           The impact is feedback on THEIR GESTURE, not an announcement of the answer. Firing it
+           where the finger landed is true on every path, needs no round trip, and is the only
+           one of the three choices that is never arbitrary. Where the kamo actually was is what
+           the revealed frame and the answer ring are for, a beat later. */
+        const frames=snapReveal(true,{x:x,y:y});
         /* WRONG, OR WRONG ONE? On a chain the photo carries every earlier round's figure, and
            the answer key is only the latest — so a player who genuinely spots a camouflaged
            person gets told they failed. The server checks a miss against the ancestors and
@@ -17018,7 +17079,11 @@ function chSeek(hideId,opts){
       trace.end={ms:ms,x:-1,y:-1};
       track("seek_failed",TP({reason:"giveup",ms:ms}));
       sendTrace("giveup");
-      const frames=snapReveal(true);
+      /* THE GIVE-UP IS THE ONE PATH WITH NO GESTURE ON THE PICTURE — the player pressed a
+         button at the bottom of the screen and never pointed at anything. The frame's centre
+         is the honest origin here precisely because there is nothing to be faithful to; a
+         buzz has a finger to answer, this does not. */
+      const frames=snapReveal(true,null);
       /* Giving up is still a loss with a clock on it — the seconds were spent looking.
          Same line as the miss, same singular: see the note there on "The kamo".
          `giveup` IS NOT A DECORATION. It is the flag chNoteSeek reads to refuse this round a
@@ -17046,7 +17111,7 @@ function chSeek(hideId,opts){
        The cost is one wasted 404 on a LEGACY hide (published before these frames existed,
        where neither file is there). That is a shrinking population — hides expire at 30 days
        — and the request is concurrent, so it costs latency to nobody. */
-    async function snapReveal(lost){
+    async function snapReveal(lost,snapAt){
       const base=camoSrc.replace(/\.jpg$/,"");
       const load=(u)=>new Promise(res0=>{ const m=new Image(); m.onload=()=>res0(u); m.onerror=()=>res0(null); m.src=u; });
       let bSrc=null, wSrc=null;
@@ -17065,6 +17130,10 @@ function chSeek(hideId,opts){
            only needs `_b`; holding it back for a frame that is not drawn for another 360ms
            was spending the whole wave round trip on the moment that matters most. */
         img.src=bSrc; revealedSrc=bSrc; flipped=true;
+        /* THE SNAP RIDES THE FLIP, not the wave: the swap is the instant the picture changes,
+           and the wave is 360ms of afterwards. Wrapped on its own so a decoration can never
+           cost the reveal it decorates — the same rule the launch's telemetry learned. */
+        try{ chRevealSnap(snapAt); }catch(_){}
         /* ═══ AND ON A CHAIN, SAY WHICH ONE IT WAS ═════════════════════════════════════════
            The revealed frame un-paints the CURRENT kamo, and on a chain that is not enough to
            identify it: the photograph also carries every earlier round's figure, and one of
