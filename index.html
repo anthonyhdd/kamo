@@ -15489,37 +15489,44 @@ function chSeek(hideId,opts){
      it (see ending()) and a genuinely new player with no record — and docking an invisible
      div would push the flip button one slot down for nothing. The display check is the one
      honest reading of "does this pill currently exist for the player". */
-    /* ═══ THE CARD MOVES OFF THE ANSWER ═══════════════════════════════════════════════════
-       Founder, 2026-08-27, from a real round: the kamo was hidden low, the ending card sat on
-       top of it, and the reveal revealed nothing. The payoff of the whole round is seeing
-       where it was, and the screen that celebrates it was covering it.
-
-       ⚠️ "LIFT IT A BIT" DOES NOT WORK, AND THAT IS WHY THIS IS ARITHMETIC RATHER THAN A
-       CONSTANT. The card is bottom-anchored, so nudging it up just slides the same rectangle
-       onto a different part of the photograph — the figure is only freed once the card's
-       BOTTOM clears the figure's TOP. So the lift is derived from where the answer actually
-       is, and it is applied only when the card genuinely overlaps it.
-
-       CAPPED, because the alternative to covering the answer is not covering the answer with
-       the card somewhere off the top of the screen. If the figure sits so high that clearing
-       it would push the card past the ceiling, we take what the ceiling allows: strictly more
-       of the answer visible than before, never a control the thumb cannot reach. */
-/* ⚠️ NOT h.cy — THE HIDE DOES NOT CARRY THE ANSWER, AND THAT IS THE POINT. get_hide returns
-   the photo and the terms; cx/cy/r arrive only from reveal_hide, after the round is over, so
-   the answer never ships alongside the puzzle. The first version of chFootClear read h.cy,
-   found undefined, returned, and would have shipped a feature that did nothing at all —
-   silently, because "no answer yet" and "the card is already clear" leave the same trace.
-   Set on every path that reveals, read here, null until then. */
-let chAnswer=null;
-const chFootClear=()=>{
+    /* ═══ THE CARD MOVES OFF THE ANSWER — ONLY WHEN THE ANSWER IS REALLY UNDER IT ═════════════
+   *
+   * Founder, 2026-08-27, with a kamo hidden low and the ending card sitting on top of it: the
+   * reveal revealed nothing, which is the payoff the whole round exists for.
+   *
+   * ⚠️ AND THE FIRST VERSION OF THIS WAS WORSE THAN THE BUG. It asked for the card's BOTTOM to
+   * clear the figure's TOP, which is the only way a bottom-anchored card can uncover something
+   * by moving up — and for any figure that is not right at the bottom, satisfying it throws the
+   * card at the ceiling. Shipped, it lifted a card off a kamo sitting in the MIDDLE of the
+   * screen and parked it over the headline and the run pill, covering two things to uncover
+   * nothing. A cure that is worse than the disease, and it reached production.
+   *
+   * SO THE TRIGGER IS THE ANSWER KEY, NOT THE GEOMETRY. cy is a normalised number the server
+   * sends; it needs no mapping, no zoom, no letterboxing, and cannot be wrong by a factor. Only
+   * a kamo in the bottom band moves anything at all. The screen measurements are still used —
+   * but only to decide HOW FAR, never WHETHER, so a mistake there can no longer produce a
+   * lift out of nothing.
+   *
+   * AND THE CEILING IS A REFUSAL, NOT A CLAMP. If clearing the figure would push the card past
+   * CH_LIFT_MAX of the viewport it does not lift at all: a card over the headline is a worse
+   * screen than a card over part of a kamo, and half a lift buys nothing. */
+  /* ⚠️ NOT h.cy — THE HIDE DOES NOT CARRY THE ANSWER, AND THAT IS THE POINT. get_hide returns
+     the photo and the terms; cx/cy/r arrive only from reveal_hide, after the round is over, so
+     the answer never ships alongside the puzzle. Set on every path that reveals, read below,
+     null until then.
+     ⚠️ AND IT IS DECLARED HERE, NOT IMPLIED. Deleting this line while rewriting the comment
+     above it cost a round: ending() reads chAnswer, a bare read of an undeclared name throws
+     ReferenceError rather than yielding undefined, and ending() then stopped half-built — no
+     flip button, no second half of the card. The reveal died on a missing `let`. */
+  let chAnswer=null;
+  const CH_LIFT_LOW = 0.72;   // only a kamo whose CENTRE is in the bottom quarter counts
+  const CH_LIFT_MAX = 0.34;   // and never move the card more than a third of the screen
+  const chFootClear=()=>{
     try{
       const foot=$$("chFoot"); if(!foot) return;
-      /* ⚠️ WATCH THE BOX, DO NOT GUESS WHEN IT SETTLES. chRunDock fires the moment #chFoot's
-         markup is replaced, but the card is still growing then — buttons, the run pill docking,
-         a reply row — and measuring at that instant reads a 10px strip pinned to the bottom,
-         which is never in front of anything. One observer per round, re-entrant by
-         construction: this only ever writes a transform, and a transform does not change the
-         border box the observer watches. */
+      /* Watch the box rather than guess when it settles: chRunDock fires when the markup is
+         replaced, but buttons, the run pill and a reply row are still landing. Re-entrant by
+         construction — this only writes a transform, which does not change the border box. */
       try{
         if(!foot.__kfWatch && typeof ResizeObserver==="function"){
           foot.__kfWatch=new ResizeObserver(()=>{ try{ chFootClear(); }catch(_){} });
@@ -15527,11 +15534,10 @@ const chFootClear=()=>{
         }
       }catch(_){}
       foot.style.transform="";                       // always measure from rest
-      /* ⚠️ chAnswer, NEVER h. The hide does not carry its own answer — get_hide returns the
-         photo and the terms, and cx/cy/r arrive only from reveal_hide once the round is over,
-         so the answer never ships beside the puzzle. Two drafts of this read h.cy, found
-         undefined, and produced NaN geometry that silently declined to move anything. */
+      /* chAnswer, never h: the hide does not carry its own answer — cx/cy/r arrive only from
+         reveal_hide, once the round is over, so the answer never ships beside the puzzle. */
       if(!chAnswer||typeof chAnswer.cy!=="number") return;
+      if(chAnswer.cy < CH_LIFT_LOW) return;          // not low enough to be worth moving anything
       const im=$$("chFrame")&&$$("chFrame").querySelector("img");
       if(!im||!im.offsetHeight) return;
       const ir=im.getBoundingClientRect(), fo=foot.getBoundingClientRect();
@@ -15540,13 +15546,9 @@ const chFootClear=()=>{
       const figTop=ir.top+Math.max(0,chAnswer.cy-rad)*ir.height;
       const figBot=ir.top+Math.min(1,chAnswer.cy+rad)*ir.height;
       if(figBot<=fo.top+2) return;                   // the card is already clear of it
-      /* THE CARD'S BOTTOM MUST CLEAR THE FIGURE'S TOP. Nudging a bottom-anchored card "up a
-         bit" only slides the same rectangle onto a different part of the photograph. */
-      const need=fo.bottom-figTop+14;
-      const safeT=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t"))||0;
-      const room=fo.top-(72+safeT);                  // never past the ceiling
-      const lift=Math.max(0,Math.min(need,room));
-      if(lift>=6) foot.style.transform="translateY("+(-Math.round(lift))+"px)";
+      const need=fo.bottom-figTop+14;                // card bottom above the figure's top
+      if(need>innerHeight*CH_LIFT_MAX) return;       // ⚠️ refuse, do not half-lift
+      if(need>=6) foot.style.transform="translateY("+(-Math.round(need))+"px)";
     }catch(_){}
   };
   const chRunDock=()=>{
