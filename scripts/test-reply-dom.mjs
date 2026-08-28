@@ -246,6 +246,24 @@ console.log('\nAND THE ADDRESS REACHES THE SERVER');
     ? ok(`it falls back to a plain hide rather than to nothing (${forms.length} forms)`)
     : bad('fallback ladder: ' + JSON.stringify(forms));
 
+
+  /* ═══ p_conceal NEVER LEAKS INTO A RUNG BELOW THE WIDEST ══════════════════════════════════
+     The concealment measure (2026-08-28) is carried by a SIXTEENTH overload. Everything in
+     `base` is spread into every rung, so passing it that way would have turned the 15-argument
+     form into a 16-argument call matching no overload — and the 14, 13, 12 below it too. Every
+     fallback fails at once and the publish ends with no row, the one outcome a sender notices.
+     ⚠️ THIS FIXTURE CANNOT REACH THE TOP RUNG — it has no slot, no lqip and no photoSrc, so the
+     15 and 16-argument forms are not built and zero carriers is the CORRECT answer here. What
+     it can prove is the half that matters for the failure above: handing chCreateForms a
+     measurement must not change the rungs this fixture DOES build. check.mjs holds the other
+     half statically, asserting p_conceal appears on exactly one line and it is the widest. */
+  const withC = await page.evaluate(() => window.KAMOREPLY.forms(42));
+  const leaked = withC.filter((f) => 'p_conceal' in f);
+  leaked.length === 0 && withC.length === forms.length
+    ? ok(`a measurement leaves the reachable rungs untouched (${withC.length} forms, none carrying it)`)
+    : bad(`p_conceal leaked into ${leaked.length} of ${withC.length} rungs that must not carry it: `
+        + JSON.stringify(withC.map((f) => Object.keys(f).length)));
+
   /* AND WHO MADE IT. Without a key on the row there is no blocking at all — feed_page's
      block clause passes author_key IS NULL straight through, so an unkeyed hide is one no
      viewer can ever get rid of. It rides the widest rung only: the narrower overloads have
@@ -301,7 +319,15 @@ console.log('\nFINDING AN OLD FIGURE IS NOT "YOU MISSED"');
     head: document.getElementById('chHead').textContent,
     sub: document.getElementById('chSub').textContent,
   }));
-  t.head === 'Wrong kamo.' && /@tony's, from round 2/.test(t.sub) && /still in there/.test(t.sub)
+  /* ⚠️ THE SECOND HALF OF THIS LINE CHANGED ON 2026-08-28, AND NOT BY DRIFT. It used to
+     require "still in there". snapReveal() runs on the miss branch before the code can know
+     the tap hit an ancestor, so the answer is already flipped in and waving by the time this
+     subtitle is written — the sentence was promising concealment over a picture of the
+     answer, and the founder hit it in a real round. What this block is actually FOR is the
+     first two clauses: a wrong-one tap is NAMED, with its round and its author, instead of
+     being scored as a failure. That intent is untouched. check.mjs holds the other side of
+     it, refusing any concealment claim on this line. */
+  t.head === 'Wrong kamo.' && /@tony's, from round 2/.test(t.sub) && /Here's the new one/.test(t.sub)
     ? ok(`a wrong-one tap is named, not failed ("${t.sub}")`)
     : bad('old-find ending reads ' + JSON.stringify(t));
   await page.close();

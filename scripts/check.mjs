@@ -529,6 +529,70 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
           + 'the value changes, and it is a paid claim:\n    ' + offenders.join('\n    '))
       : ok('no paywall copy quotes a number — every figure is read from its constant');
 
+    /* ═══ THE "WRONG KAMO" LINE NEVER CLAIMS THE KAMO IS STILL HIDDEN ═══════════════════
+       Founder, 2026-08-28, from a real round: a full-size kamo waving in white in the middle
+       of the photograph, over the sentence "The new one is still in there."
+
+       Both halves were doing what they were written to do. A buzz ends the round, so every
+       ending flips the reveal frames in — snapReveal() is called on the miss branch BEFORE
+       the code can know whether the tap hit an ancestor, and on the hit branch too. The
+       "wrong kamo" copy sat beside a comment claiming the current answer is withheld on that
+       path. It never was. The sentence promised concealment over a picture of the answer.
+
+       SCOPED TO THAT ONE LINE, deliberately. A first version of this check scanned every
+       string in the file and went red on the notification copy — "@x's kamo is still hidden",
+       "Still nothing hidden" — which is about the reader's OWN unfound hide and is perfectly
+       true. The line that cannot say it is the one printed under the reveal, and it is
+       identified by the `whose` interpolation that names the ancestor's author. */
+    {
+      const CLAIMS = /still in there|still hidden|still out there|keep looking|have another look/i;
+      const wrongOne = stripC(html)
+        .split('\n')
+        .filter((l) => l.includes('+whose+') || l.includes('${whose}'));
+      if (!wrongOne.length) {
+        bad('THE "WRONG KAMO" LINE IS GONE — this check is anchored on the `whose` '
+          + 'interpolation that names the ancestor\'s author. If the copy moved, move this too.');
+      } else {
+        const liars = wrongOne.filter((l) => CLAIMS.test(l)).map((l) => l.trim().slice(0, 110));
+        liars.length
+          ? bad('THE "WRONG KAMO" LINE TELLS THE PLAYER THE KAMO IS STILL HIDDEN, and '
+              + 'snapReveal() has already flipped it in above — the sentence is printed under '
+              + 'a picture of the answer:\n    ' + liars.join('\n    '))
+          : ok('the "wrong kamo" line does not claim the kamo is still hidden');
+      }
+    }
+
+    /* ═══ p_conceal RIDES THE WIDEST RUNG AND NOTHING ELSE ════════════════════════════════
+       chCreateForms() is a fallback ladder, and everything in `base` is spread into EVERY
+       rung. The concealment measure (2026-08-28) is carried by a sixteenth create_hide
+       overload, so a p_conceal that reached the 15-argument form would make it a
+       16-argument call matching no overload — and the 14, 13 and 12 below it too. Every
+       fallback fails at once and the publish ends with no row at all, which is the one
+       outcome a sender actually notices.
+       Asserted here rather than in test-reply-dom because that fixture has no slot, no lqip
+       and no photoSrc, so it cannot build the top rung at all — it proves the measurement
+       does not disturb the rungs it CAN reach, and this proves where the measurement sits. */
+    {
+      const ladder = block('function chCreateForms(') || '';
+      const rungs = ladder.split('\n').filter((l) => /forms\.push\(/.test(l));
+      const carriers = rungs.filter((l) => /p_conceal/.test(l));
+      if (!rungs.length) {
+        bad('chCreateForms() HAS NO forms.push() LINES — the ladder moved; move this check too.');
+      } else if (carriers.length !== 1) {
+        bad(`p_conceal IS ON ${carriers.length} OF ${rungs.length} RUNGS, must be exactly one — `
+          + 'every rung below the widest would become a call matching no create_hide overload, '
+          + 'so all the fallbacks fail together and the hide publishes nothing.');
+      } else if (!/p_source/.test(carriers[0])) {
+        bad('p_conceal IS NOT ON THE WIDEST RUNG — it must ride the form that already carries '
+          + 'p_source, or it is silently on a narrower overload that does not accept it.');
+      } else if (rungs.indexOf(carriers[0]) !== 0) {
+        bad('p_conceal IS NOT ON THE FIRST RUNG TRIED — the ladder is widest-first, so a '
+          + 'measurement below the top is a measurement that never gets sent.');
+      } else {
+        ok('p_conceal rides the widest create_hide form alone, tried first');
+      }
+    }
+
     /* And the constants those templates interpolate must actually exist. A rename would
        otherwise turn a promise into "undefined seconds to paint". */
     const refs = new Set();
@@ -1878,6 +1942,23 @@ try {
     : ok('Undo takes back one stroke and Clear takes back all of them (node scripts/test-undo-dom.mjs)');
 } catch (e) {
   bad('UNDO OR CLEAR IS BROKEN:\n' + why(e));
+}
+
+/* IS THE KAMO ACTUALLY HIDDEN? — the measure added 2026-08-28, and the reason it has a suite
+   on the day it lands. `coverage` has meant "how much of the figure carries paint" all along
+   while reading like "how hidden it is", and nothing ever checked it: 92.9% of hides over the
+   preceding week report exactly 100, which makes the >= 70 floors in create_hide, feed_page
+   and get_hide guards whose condition is always true. A measurement nobody exercises is how
+   that happened, so this one is exercised on colours we choose before it is trusted on
+   photographs we do not. It gates nothing yet — founder's call, measure first, block nothing —
+   which is precisely why it must be right before a threshold is ever read off it. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-conceal-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-conceal-dom.mjs', 'CONCEAL TEST', out)
+    : ok('concealment is measured at the silhouette, and refuses to guess (node scripts/test-conceal-dom.mjs)');
+} catch (e) {
+  bad('THE CONCEALMENT MEASURE IS BROKEN:\n' + why(e));
 }
 
 /* ---- 13-bis-2. The reveal has to show the figure where the answer says it is ------------
