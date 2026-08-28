@@ -663,6 +663,63 @@ console.log('\nTHE CELEBRATION ERUPTS FROM THE KAMO, NOT FROM THE MIDDLE OF THE 
         + 'nailed to the frame, so a kamo in a corner is celebrated in the middle of the photo');
 }
 
+console.log('\nTHE REVEAL LANDS — the flip is an event, not a swap');
+{
+  /* The reveal is the moment this app is named for, and it was a JPEG swap: the frames carry
+     the payoff but nothing said "something just happened". The snap rides the flip itself, not
+     the wave that arrives 360ms later.
+     ⚠️ ON THE FRAME, NOT THE PHOTO. Scaling the <img> would slide the kamo away from the ring
+     drawn at its own coordinates and from the marks pinned to the frame. */
+  const page = await boot({ hit: true, pct: 60, others: 4, frames: true, big: true });
+  await page.mouse.move(120, 400); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
+  await page.waitForTimeout(240);
+  const hit = await page.evaluate(() => {
+    const fr = document.getElementById('chFrame');
+    const b = fr && fr.querySelector('.chBoom');
+    return { snapped: !!(fr && fr.classList.contains('chSnap')),
+             boom: !!b, left: b ? Math.round(parseFloat(b.style.left)) : null,
+             mid: fr ? Math.round(fr.clientWidth / 2) : null };
+  });
+  hit.snapped ? ok('the frame punches on the flip') : bad('no .chSnap on the frame after the reveal');
+  hit.boom ? ok(`and a shockwave is drawn (x=${hit.left})`) : bad('no .chBoom in the frame');
+  /* FROM THE KAMO ON A FIND: the tap IS the answer, so no round trip is needed to aim it. */
+  hit.boom && hit.left !== null && Math.abs(hit.left - hit.mid) > 20
+    ? ok('fired from the kamo, not from the middle of the frame')
+    : bad(`the shockwave fired at x=${hit.left} against a frame centre of ${hit.mid} — it is `
+        + 'not being aimed at the thing that was found');
+
+  /* AND IT LEAVES. A reveal that keeps moving competes with what it is revealing, and a class
+     left on the frame would re-run the punch on the next render. */
+  await page.waitForTimeout(900);
+  const after = await page.evaluate(() => {
+    const fr = document.getElementById('chFrame');
+    return { snapped: !!(fr && fr.classList.contains('chSnap')), boom: !!(fr && fr.querySelector('.chBoom')) };
+  });
+  (!after.snapped && !after.boom)
+    ? ok('both the punch and the shockwave clear themselves')
+    : bad(`the reveal effect outstayed itself: ${JSON.stringify(after)}`);
+  await page.close();
+
+  /* ⚠️ AND A MISS FIRES FROM THE TAP, NOT FROM THE CENTRE. The first version reasoned that a
+     miss does not know the answer yet, so it centred the impact. Founder, 2026-08-29: the
+     picture does not switch instantly, so a bloom in the middle while the player is still
+     looking at the spot they touched belongs to nothing. The impact answers the GESTURE; where
+     the kamo was is the revealed frame's job, a beat later. */
+  const miss = await boot({ hit: false, frames: true, big: true });
+  await miss.mouse.move(300, 300); await miss.mouse.down(); await miss.waitForTimeout(80); await miss.mouse.up();
+  await miss.waitForTimeout(240);
+  const mb = await miss.evaluate(() => {
+    const fr = document.getElementById('chFrame');
+    const b = fr && fr.querySelector('.chBoom');
+    return { left: b ? Math.round(parseFloat(b.style.left)) : null, mid: fr ? Math.round(fr.clientWidth / 2) : null };
+  });
+  mb.left !== null && Math.abs(mb.left - 300) <= 20
+    ? ok(`a miss bursts where the finger landed (x=${mb.left})`)
+    : bad(`a miss burst at x=${mb.left} for a tap at x=300 (frame centre ${mb.mid}) — the `
+        + 'impact is not answering the gesture that caused it');
+  await miss.close();
+}
+
 await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} failure(s)` : '\n✓ the one-buzz seeker behaves');
 process.exit(failed ? 1 : 0);
