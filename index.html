@@ -16010,9 +16010,19 @@ function chSeek(hideId,opts){
        to be told what they are looking at once; by the second photo the only thing that
        differs between slides is who made it, and repeating the sentence spends the widest
        line on the screen saying what they already know. */
+    /* ⚠️ "A NEW KAMO", NOT "A KAMO", ONCE THE PHOTO IS A CHAIN. "Send one back" hands the
+       answered hide's own camouflaged photograph to the next round, so the figures ACCUMULATE:
+       by round four the picture holds four hidden people and exactly one of them is the answer.
+       The sub has printed "Round 4" since the chain existed, and a number is not a rule — it
+       never said that the others are there, still less that touching one ends your round.
+       Founder, 2026-08-28, on a round-2 photo: "I saw an image with 2 figures and I couldn't
+       know which one to tap." He was right, and nothing on that screen could have told him.
+       One word carries it, on the widest line, before the tap rather than after. */
+    const chain=(h.round|0)>1;
     $$("chHead").textContent = (OPT.firstInFeed||!FEED)
-      ? (h.name ? "@"+h.name+" hid a kamo here" : "Someone hid a kamo here")
-      : (h.name ? "@"+h.name : "Someone hid a kamo here");
+      ? (h.name ? "@"+h.name+" hid a "+(chain?"new ":"")+"kamo here"
+                : "Someone hid a "+(chain?"new ":"")+"kamo here")
+      : (h.name ? "@"+h.name : "Someone hid a "+(chain?"new ":"")+"kamo here");
 /* WHICH ROUND THIS IS, and it is not decoration. "Send one back" hands the answered hide's
        own camouflaged photo to the next round, so a chain accumulates figures: by round six the
        picture holds six hidden people. Saying so is what makes that legible instead of eerie —
@@ -16874,6 +16884,39 @@ function chSeek(hideId,opts){
            only needs `_b`; holding it back for a frame that is not drawn for another 360ms
            was spending the whole wave round trip on the moment that matters most. */
         img.src=bSrc; revealedSrc=bSrc; flipped=true;
+        /* ═══ AND ON A CHAIN, SAY WHICH ONE IT WAS ═════════════════════════════════════════
+           The revealed frame un-paints the CURRENT kamo, and on a chain that is not enough to
+           identify it: the photograph also carries every earlier round's figure, and one of
+           those can be far more obvious than the answer. Founder's round, 2026-08-28 — the
+           big grey figure in the middle was @OchreHare's from round 1 (cx 0.499/0.429) and the
+           answer was small, top-left, behind the subtitle (cx 0.221/0.228). The wave tells
+           them apart, and a wave is invisible to anyone not already watching for it.
+
+           ⚠️ ONE CIRCLE, NOT TWO — the same rule the legacy branch below carries, and for the
+           same founder report (2026-08-21, "why u put 2 circles and don't show the body").
+           The miss ring is REPLACED, never joined: two rings differing only by border colour
+           is a legend nobody was given. What is lost is "how far off you were", and on a chain
+           that was never the useful question — the player was not off by a distance, they were
+           on a different person.
+
+           ROUND 1 IS UNTOUCHED. One figure, one revealed body, and the miss ring earns its
+           place there exactly as before: the flip shows how close the tap came. */
+        if(lost&&(h.round|0)>1){
+          const nameIt=(g)=>{ try{
+            if(!g||g.cx==null||!$$("chFrame")) return;
+            try{ if(missMark){ missMark.remove(); missMark=null; } }catch(_){}
+            const mk2=document.createElement("div"); mk2.className="chMark hit";
+            mk2.style.left=(g.cx*img.offsetWidth)+"px"; mk2.style.top=(g.cy*img.offsetHeight)+"px";
+            $$("chFrame").appendChild(mk2);
+          }catch(_){} };
+          /* chAnswer is usually already here — ending() asks for it without awaiting so
+             chFootClear has something to keep the card off. Ask only if it is not. */
+          if(chAnswer&&chAnswer.cx!=null) nameIt(chAnswer);
+          else { try{ chRpc("reveal_hide",{p_id:HID}).then(g=>{
+                   if(g&&typeof g.cy==="number"){ chAnswer=g; try{ requestAnimationFrame(chFootClear); }catch(_){} }
+                   nameIt(g);
+                 }).catch(()=>{}); }catch(_){} }
+        }
         /* The snap is the double-take — one frame, invisible to visible — and it earns the
            heaviest impact the engine has. Same note as chCelebrate on why this is ungated. */
         buzzHaptic([28,50,28],"heavy");

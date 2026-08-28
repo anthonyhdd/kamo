@@ -82,7 +82,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
    what it means in the answer key. Two false diagnoses today came from measuring the
    harness instead of the layout; this is the fix for both. */
 const BIG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAYYAAANMCAIAAADXDp1JAAAIBUlEQVR42u3UoQ0AAAgEsR8dgWBsZsAhmnSCE5fqAXgiEgCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCWpAFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJakAWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlSQBYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZakAmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlqQCYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWJAFgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFiSCoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWJIKgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYkgSAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAFwtCOGXsyEGUNgAAAABJRU5ErkJggg==', 'base64');
-async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false }) {
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5 }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
@@ -94,16 +94,19 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
     route.fulfill(big ? { status: 200, contentType: 'image/png', body: BIG }
                       : { status: 200, contentType: 'image/jpeg', body: JPG });
   });
-  await page.addInitScript(({ hit, pct, others, name, cy }) => {
+  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx }) => {
     window.__calls = [];
     window.__rpc = (fn, body) => {
       window.__calls.push([fn, body]);
-      if (fn === 'get_hide') return Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 3, n_found: 1, limit_s: null, max_taps: null, name });
-      if (fn === 'submit_attempt') return Promise.resolve({ hit, tries: 4, missed: 3, secs: 9, pct, others });
-      if (fn === 'reveal_hide') return Promise.resolve({ cx: 0.5, cy: cy, r: 0.1 });
+      if (fn === 'get_hide') return Promise.resolve({ img_path: 'x.jpg', secs: 9, n_attempts: 3, n_found: 1, limit_s: null, max_taps: null, name, round });
+      /* `old_round` is what the server sends when a miss landed on an ANCESTOR's figure — the
+         player found a real camouflaged person, just not this round's. */
+      if (fn === 'submit_attempt') return Promise.resolve({ hit, tries: 4, missed: 3, secs: 9, pct, others,
+        old_round: oldRound || undefined, old_name: oldRound ? 'OchreHare' : undefined, old_id: oldRound ? 'someoneelse0000' : undefined });
+      if (fn === 'reveal_hide') return Promise.resolve({ cx: ansCx, cy: cy, r: 0.1 });
       return Promise.resolve(null);
     };
-  }, { hit, pct, others, name, cy });
+  }, { hit, pct, others, name, cy, round, oldRound, ansCx });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(700);
   return page;
@@ -190,6 +193,69 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
   await page.waitForTimeout(300);
   const n = await page.evaluate(() => window.__calls.filter(c => c[0] === 'submit_attempt').length);
   n === 1 ? ok('no second buzz, ever') : bad('a second buzz got through: ' + n);
+  await page.close();
+}
+
+console.log('\nA CHAIN SAYS WHICH KAMO, BEFORE THE TAP AND AFTER IT');
+{
+  /* THE FOUNDER'S ROUND, 2026-08-28. A round-2 photograph carries round 1's figure too, and
+     that one was the big obvious grey shape dead centre (cx 0.499/0.429) while the answer was
+     small and top-left (cx 0.221/0.228). He tapped the obvious one and could not have known:
+     the headline said "hid a kamo" and the sub said "Round 2", which is a number, not a rule. */
+  const page = await boot({ hit: false, frames: true, round: 2, oldRound: 1, ansCx: 0.22, cy: 0.23 });
+  (await txt(page, 'chHead')) === '@tony hid a new kamo here'
+    ? ok('before the tap, the headline says the kamo is a NEW one')
+    : bad('chain headline: ' + await txt(page, 'chHead'));
+
+  await page.mouse.move(195, 500); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
+  await page.waitForTimeout(1800);
+
+  (await txt(page, 'chHead')) === 'Wrong kamo.'
+    ? ok('a tap on an ancestor is named, not scored as a plain failure')
+    : bad('ending head: ' + await txt(page, 'chHead'));
+
+  /* ⚠️ ONE CIRCLE, NOT TWO — founder, 2026-08-21, "why u put 2 circles and don't show the
+     body". The miss ring must be REPLACED by the answer ring, never joined by it: two rings
+     differing only in border colour is a legend nobody was given. */
+  const marks = await page.evaluate(() => {
+    const f = document.getElementById('chFrame');
+    return [...f.querySelectorAll('.chMark')].map((m) => ({
+      hit: m.classList.contains('hit'), left: m.style.left, top: m.style.top,
+    }));
+  });
+  marks.length === 1 && marks[0].hit
+    ? ok('exactly one ring is left on the photo, and it is the answer')
+    : bad(`${marks.length} ring(s) on the frame: ` + JSON.stringify(marks));
+
+  /* AND IT SITS ON THE ANSWER, not on the figure that was tapped. Asserted against the frame's
+     own width so a letterboxed fixture cannot make this pass by accident. */
+  const placed = await page.evaluate(() => {
+    const m = document.querySelector('#chFrame .chMark.hit');
+    const im = document.querySelector('#chFrame img');
+    if (!m || !im || !im.offsetWidth) return null;
+    return { x: parseFloat(m.style.left) / im.offsetWidth, y: parseFloat(m.style.top) / im.offsetHeight };
+  });
+  placed && Math.abs(placed.x - 0.22) < 0.02 && Math.abs(placed.y - 0.23) < 0.02
+    ? ok(`the ring lands on the answer (${placed.x.toFixed(2)}, ${placed.y.toFixed(2)}), not on the tap`)
+    : bad('answer ring at ' + JSON.stringify(placed) + ', expected ~0.22/0.23');
+  await page.close();
+}
+
+console.log('\nAND ROUND ONE IS LEFT EXACTLY AS IT WAS');
+{
+  /* One figure, one revealed body: the miss ring earns its place because the flip against the
+     revealed frame shows how close the tap came. Nothing above may touch this. */
+  const page = await boot({ hit: false, frames: true, round: 1 });
+  (await txt(page, 'chHead')) === '@tony hid a kamo here'
+    ? ok('a first-round photo still says "a kamo", with no chain wording')
+    : bad('round-1 headline: ' + await txt(page, 'chHead'));
+  await page.mouse.move(195, 500); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
+  await page.waitForTimeout(1800);
+  const kinds = await page.evaluate(() => [...document.querySelectorAll('#chFrame .chMark')]
+    .map((m) => (m.classList.contains('hit') ? 'hit' : 'miss')));
+  kinds.length === 1 && kinds[0] === 'miss'
+    ? ok('the miss ring survives on a round-1 photo — the body is the answer there')
+    : bad('round-1 rings: ' + JSON.stringify(kinds));
   await page.close();
 }
 
