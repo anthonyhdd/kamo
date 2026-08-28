@@ -10558,11 +10558,18 @@ function chCopy(text){
  * and an effect layer left behind would sit over the CTA — pointer-events:none keeps it from
  * eating a tap even during the burst, and the loop removes the canvas the moment the last
  * piece dies rather than on a timer that could be wrong. */
-function confettiBurst(originEl){
+/* ⚠️ `at` OVERRIDES THE ELEMENT'S CENTRE, and on the find that is the whole difference. The
+   burst was anchored on #chFrame, which is the PHOTOGRAPH — so the celebration for finding a
+   kamo erupted from the middle of the picture rather than from the kamo, however far off in
+   a corner it actually was. chCelebrate's flash, ring and sparks have always landed on the
+   tap; the confetti was the one piece still aimed at the frame. Viewport coordinates, the
+   same ones chCelebrate is handed, so the two effects share an origin instead of arguing
+   about one. The element stays the fallback: every other caller passes a button. */
+function confettiBurst(originEl,at){
   try{
     const r = originEl && originEl.getBoundingClientRect ? originEl.getBoundingClientRect() : null;
-    const ox = r ? r.left + r.width/2 : window.innerWidth/2;
-    const oy = r ? r.top + r.height/2 : window.innerHeight/2;
+    const ox = (at&&typeof at.x==="number") ? at.x : (r ? r.left + r.width/2 : window.innerWidth/2);
+    const oy = (at&&typeof at.y==="number") ? at.y : (r ? r.top + r.height/2 : window.innerHeight/2);
     /* REDUCED MOTION GETS A CELEBRATION TOO, just not a moving one. Returning early left those
        users with a screen that said "Found you" and did nothing — the setting asks for less
        movement, not for less feedback. A mint bloom that fades up and out is pure opacity: no
@@ -10574,6 +10581,7 @@ function confettiBurst(originEl){
         +"width:320px;height:320px;border-radius:50%;pointer-events:none;z-index:95;opacity:0;"
         +"background:radial-gradient(circle,rgba(95,230,164,.42),rgba(95,230,164,.14) 45%,transparent 70%);"
         +"transition:opacity .28s ease-out";
+      b.dataset.ox=String(Math.round(ox)); b.dataset.oy=String(Math.round(oy));
       document.body.appendChild(b);
       requestAnimationFrame(()=>{ b.style.opacity="1";
         setTimeout(()=>{ b.style.transitionDuration=".5s"; b.style.opacity="0";
@@ -10587,6 +10595,13 @@ function confettiBurst(originEl){
     /* Above .chPP (90) and the share sheet (58) — it has to read over whatever it is
        celebrating, and it is the only thing in the app that sits this high. */
     c.style.cssText="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:95";
+    /* ⚠️ THE ORIGIN, WRITTEN DOWN, because it cannot be read back off the result. This layer is
+       a full-screen canvas: its bounding box is the viewport whatever it draws, so a test that
+       measured the element would report the middle of the screen for every burst — which is
+       exactly the bug this pair of attributes was added to catch (the find's confetti was
+       anchored on the photograph rather than on the kamo, and no assertion could see it). Two
+       numbers, both paths, no behaviour. */
+    c.dataset.ox=String(Math.round(ox)); c.dataset.oy=String(Math.round(oy));
     document.body.appendChild(c);
     const g=c.getContext("2d");
     /* The app's own mint twice, then white and a warm gold for the sparkle a single hue never
@@ -16901,7 +16916,20 @@ function chSeek(hideId,opts){
         mk.className="chMark hit stay";
         chCelebrate($$("chFrame"),fx,fy);
         $$("chFrame").classList.add("found");
-        confettiBurst($$("chFrame"));
+        /* FROM THE KAMO, NOT FROM THE MIDDLE OF THE PICTURE. fx/fy are frame-relative (that is
+           what chCelebrate wants, it appends into the frame); the confetti is fixed-position
+           and needs the viewport, so the frame's own box is added back. */
+        /* ⚠️ OFF THE IMAGE'S BOX, NOT OFF fx/fy. fx is x*img.offsetWidth — the picture's own
+           pixel space — and the photo is cover-fitted, so it is routinely wider than the frame
+           it sits in: a tap at viewport x=60 produced fx=195 on a 390pt screen. Adding the
+           frame's origin to that lands the burst near the middle whatever the player did. The
+           image's client rect is the one mapping that survives the crop, and it is the same
+           one chFootClear uses to keep the card off the answer. */
+        { let cx=null,cy=null;
+          try{ const im=$$("chFrame")&&$$("chFrame").querySelector("img");
+               if(im&&im.offsetWidth){ const ir=im.getBoundingClientRect();
+                 cx=ir.left+x*ir.width; cy=ir.top+y*ir.height; } }catch(_){}
+          confettiBurst($$("chFrame"),(typeof cx==="number"&&isFinite(cx))?{x:cx,y:cy}:null); }
         track("seek_found",TP({ms:ms,pct:(res.pct==null?-1:res.pct),others:res.others|0}));
         sendTrace("hit");
         /* NOT AWAITED — see the note on snapReveal(). The card is built from `res`, which is
