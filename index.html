@@ -8807,7 +8807,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -16628,7 +16628,7 @@ function chSeek(hideId,opts){
          sells and lets Apple's sheet state the amount. */
       hpBuyTxt.textContent="Get "+HINT_PACK_SIZE+" hints"+(hintPackPrice?" · "+hintPackPrice:"");
       hpWrap.style.display="flex";
-      track("hint_modal_shown",TP({run:chStreak().run,priced:!!hintPackPrice}));
+      track("hint_modal_shown",TP({run:chStreak().run,life:!!chStreak().life,priced:!!hintPackPrice}));
     };
     const hpDismiss=(via)=>{ hpWrap.style.display="none"; track("hint_modal_dismissed",TP({via:via})); };
     /* ⚠️ NOT ONE await BEFORE offerHintPack(). StoreKit and navigator.share both spend the user
@@ -16643,9 +16643,30 @@ function chSeek(hideId,opts){
        backdrop was found to be swallowing the reveal. */
     hpWrap.onclick=(e)=>{ if(e.target===hpWrap) hpDismiss("backdrop"); };
 
-    hintBtn.onclick=()=>{ haptic(8); if(hintEmpty) (hintArm==="on"?hpOpen():offerHintPack()); else takeHint(); };
+    /* ⚠️ THE TAP HAD NO EVENT OF ITS OWN, and every reading of "do people reach for hints"
+       was reconstructed from its consequences — hint_used when the wallet had one, plus
+       hint_modal_shown or hint_purchase_initiated when it did not. Three names, two arms and a
+       different shape on each: the one number everybody quotes was a sum over paths that do
+       not answer for the same thing. One name for one gesture, fired before the branch, so the
+       tap rate is a division and not an argument.
+       WEB_ONLY, because a name the compiled allow-list has never heard of is dropped in
+       silence by the bridge — a new event on the live build measures nothing at all. */
+    hintBtn.onclick=()=>{ haptic(8);
+      { let st; try{ st=chStreak(); }catch(e){ st={run:0,life:true}; }
+        track("hint_tapped",TP({run:st.run|0,life:!!st.life,empty:!!hintEmpty})); }
+      if(hintEmpty) (hintArm==="on"?hpOpen():offerHintPack()); else takeHint(); };
     if(hintsOn()){
-      w.appendChild(hintBtn); track("hint_offered",TP({}));
+      /* ⚠️ THE OFFER CARRIES THE STAKE, OR THE TAP RATE CANNOT BE SPLIT BY IT. The question
+         the "last life" pill was shipped to answer is whether somebody who KNOWS their run is
+         about to end reaches for a hint more often than somebody with nothing at risk — and
+         that is a ratio over two populations, so the stake has to ride the DENOMINATOR too.
+         Without it there is one undifferentiated offer count and the experiment has no arms.
+         `life` is the run's one life, not the wallet: "is a miss final for this player right
+         now". `run` is there because a run of 0 has nothing to lose and belongs in neither
+         population — the modal already refuses to speak to it for the same reason. */
+      w.appendChild(hintBtn);
+      { let st; try{ st=chStreak(); }catch(e){ st={run:0,life:true}; }
+        track("hint_offered",TP({run:st.run|0,life:!!st.life,empty:!!hintEmpty})); }
       /* AFTER THE APPEND, AND ONLY HERE. The fan-out prunes on `el.isConnected`, so a round
          registered before its button reaches the DOM would be dropped by the first call that
          went looking for it. And a round with hints off has no button, therefore no sheet to
