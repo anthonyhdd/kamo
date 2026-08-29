@@ -12807,6 +12807,25 @@ function kfAuthorKeyRO(){
    board owns it, computed server-side over one UTC day, and a second local notion of today
    would be a second answer to the same question. */
 const CH_RUN_KEY="kamo_seek_run", CH_BEST_KEY="kamo_seek_best";
+/* ═══ ONE PASS A DAY ══════════════════════════════════════════════════════════════════════
+ * The give-up used to cost the run outright, and that was right for the reason written on
+ * chNoteSeek: an exit that costs nothing is a slower swipe, and the feed lock only creates a
+ * stake if leaving is expensive. A player who quits free on a hard hide gets the next easy
+ * find for nothing, every round, and the lock is friction rather than a wager.
+ * A DAILY CAP CLOSES EXACTLY THAT DOOR. One pass is not "free every other round" — it is one,
+ * and the second give-up of the same day costs the run exactly as it always did. The stake
+ * survives; what goes away is the round that was simply unplayable for you.
+ * ⚠️ UTC, NOT THE PHONE'S DAY. chNoteSeek's note is explicit that "today" is owned by
+ * streak_board(), computed server-side over one UTC day, and that a second local notion of
+ * today would be a second answer to the same question. This is that same day or it is a bug
+ * waiting for somebody to fly somewhere.
+ * ⚠️ AND IT IS NOT THE RUN'S LIFE. The life softens an honest miss — "I looked and I was
+ * wrong". This forgives a round nobody played. Spending one must never spend the other, or a
+ * player pays twice for two different things. */
+const CH_PASS_KEY="kamo_giveup_day";
+function chPassDay(){ try{ return new Date().toISOString().slice(0,10); }catch(e){ return ""; } }
+function chPassLeft(){ try{ return lsGet(CH_PASS_KEY)!==chPassDay(); }catch(e){ return false; } }
+function chPassSpend(){ try{ localStorage.setItem(CH_PASS_KEY,chPassDay()); }catch(e){} }
 /* ONE LIFE PER RUN, AND THE RUN IS WHAT MOST PEOPLE NEVER GET TO KEEP. The median best run
    in the whole base is 3: a single miss sent the number to zero, which is the one mechanic
    shape that teaches a player there is nothing left to come back for. So the first miss on a
@@ -15042,7 +15061,7 @@ function chSeek(hideId,opts){
      ⚠️ A LIFE ON THE GIVE-UP REOPENS THAT DOOR BY THE BACK. Hard hide, quit for free, next
      easy find hands the life straight back — the exit is free every other round and the lock
      is a slower swipe again. test-feedlock-dom ③ is the assertion that caught this. */
-  const chNoteSeek=(hit,gaveUp)=>{ try{
+  const chNoteSeek=(hit,gaveUp,passed)=>{ try{
       const r=chSeekRecord();
       localStorage.setItem(CH_SEEN_KEY,String(r.n+1));
       if(hit) localStorage.setItem(CH_HIT_KEY,String(r.hit+1));
@@ -15051,14 +15070,22 @@ function chSeek(hideId,opts){
          meets the run it lands on. Three cases and they are exhaustive: a find grows the run,
          a miss on a run worth losing spends the life and holds it, any other miss ends it. */
       const saved=!hit && !gaveUp && s.run>=CH_RUN_SAVE_MIN && s.life;
-      const run=hit ? s.run+1 : (saved ? s.run : 0), best=Math.max(s.best,run);
+      /* THE PASS IS SPENT BY THE CALLER, NOT HERE — chNoteSeek runs once per round and must
+         stay a pure reading of what the round was. It is told whether the pass covered this
+         give-up; deciding it here would make the writer read the calendar, and a re-entry
+         would burn a second day. `passed` neither grows the run nor ends it: the round simply
+         did not happen. */
+      const run=hit ? s.run+1 : ((saved||passed) ? s.run : 0), best=Math.max(s.best,run);
       localStorage.setItem(CH_RUN_KEY,String(run));
       if(best!==s.best) localStorage.setItem(CH_BEST_KEY,String(best));
       /* THE LIFE COMES BACK ON A FIND, AND ON A DEATH. On a find because the cost of a save
          is one round of perfection and they have just paid it; on a death because the next
          run is a new run and starting it already spent would be a punishment carried across
          a line the player was told was final. Only the save leaves it spent. */
-      localStorage.setItem(CH_LIFE_KEY, saved?"0":"1");
+      /* ⚠️ A PASS LEAVES THE LIFE EXACTLY WHERE IT WAS. Writing "1" here would hand the life
+         back to somebody who had already spent it, which is the free-exit door the daily cap
+         exists to keep shut — quit once, get the life back, miss for free. Untouched. */
+      if(!passed) localStorage.setItem(CH_LIFE_KEY, saved?"0":"1");
       /* A RUN COUNTS FROM 1 — that is what streak_board() ranks (`where streak > 0`) and what
          the pill shows. But CELEBRATING one does not: "1 best yet" on somebody's first ever
          find is noise dressed as an achievement, and the same threshold is why a broken run
@@ -15066,7 +15093,7 @@ function chSeek(hideId,opts){
       /* `broke` IS THE LENGTH A RUN DIED AT, so a save does not have one: the run is still
          alive and the card must not print an epitaph for it. `saved` is what that branch
          reads instead. */
-      return {run:run,best:best,broke:(hit||saved)?0:s.run,record:(run>=2&&run>s.best),saved:saved};
+      return {run:run,best:best,broke:(hit||saved||passed)?0:s.run,record:(run>=2&&run>s.best),saved:saved,passed:!!passed};
     }catch(_){ return {run:0,best:0,broke:0,record:false}; } };
   try{ window.KAMOSEEK={record:chSeekRecord,min:CH_MIN_SEEKS,streak:chStreak}; }catch(_){}
   const ctl={destroy:()=>{}};
@@ -15285,6 +15312,25 @@ function chSeek(hideId,opts){
        again — a localized price is appended to that label the moment a build sends one. Opposite
        corners cannot collide however long either label grows, and the suite asserts the gap. */
     +".chQuit{position:absolute;left:12px;bottom:calc(16px + var(--safe-b));z-index:5;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.72);font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}"
+    /* ═══ THE DAY'S ONE SKIP, VISIBLY THE ONLY ONE ══════════════════════════════════════════
+       A pass nobody knows about is not a mechanic, it is a surprise — the decision in front of
+       the player is unchanged unless the screen says the first exit of the day costs nothing.
+       So the free state is a different object: mint, brighter, and breathing.
+       ⚠️ THE BREATH IS OPACITY AND NOTHING ELSE. This pill sits at the bottom-left corner of a
+       photograph somebody is searching, and a control that MOVES there pulls the eye off the
+       hunt — which is the one thing this screen may never do. It glows; it does not travel.
+       And it stops for reduced motion, where a steady mint pill says the same thing. */
+    +".chQuit.free{color:var(--mint);border-color:rgba(95,230,164,.45);background:rgba(6,26,18,.6);"
+    +"animation:chPassBreathe 2.6s ease-in-out infinite;}"
+    +"@keyframes chPassBreathe{0%,100%{box-shadow:0 0 0 0 rgba(95,230,164,0);}"
+    +"50%{box-shadow:0 0 16px 2px rgba(95,230,164,.28);}}"
+    /* SPENDING IT IS AN EVENT. The pill flashes once and goes — the only feedback that the
+       thing the player just used was finite. Forwards, self-removing with the button. */
+    +".chQuit.spent{animation:chPassSpend .5s ease-out forwards;}"
+    +"@keyframes chPassSpend{0%{transform:scale(1);opacity:1;box-shadow:0 0 22px 4px rgba(95,230,164,.5);}"
+    +"60%{transform:scale(1.08);opacity:1;}100%{transform:scale(.92);opacity:0;}}"
+    +"@media (prefers-reduced-motion: reduce){.chQuit.free{animation:none;box-shadow:0 0 14px 1px rgba(95,230,164,.24);}"
+    +".chQuit.spent{animation:none;opacity:0;}}"
     /* Same pill as the give-up button, opposite corner, mint because it is the only control
        on this screen that helps rather than ends. */
     /* KAMO'S TITLE FACE, NOT THE BODY ONE. Every control the player is meant to reach for —
@@ -16319,7 +16365,14 @@ function chSeek(hideId,opts){
        which is the point. It already does the right thing on a link (seek_failed{giveup}, the
        trace, and ending({rehide:true}) which breaks the run), so the feed gets the same one
        rather than a second implementation of the same idea. */
-    const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit"; quit.textContent="I give up";
+    const quit=document.createElement("button"); quit.className="chQuit"; quit.id="chQuit";
+    /* THE PASS IS NAMED BEFORE IT IS SPENT, or it is not a mechanic — it is a surprise. A
+       player who does not know the first exit of the day is free has the same decision in
+       front of them as before, and one who has already used it must not be told a lie. Two
+       states, and the free one carries the class that lights it. */
+    const quitLabel=()=>{ if(chPassLeft()){ quit.classList.add("free"); return "Skip this one · 1 today"; }
+                          quit.classList.remove("free"); return "I give up"; };
+    quit.textContent=quitLabel();
     w.appendChild(quit);
 
     /* ===== THE HINT — one free a day, then a pack ====================================
@@ -17136,10 +17189,21 @@ function chSeek(hideId,opts){
     quit.onclick=async()=>{
       if(done) return; done=true;
       clearInterval(clock); clockEl.style.display="none";
-      quit.remove(); try{ hintBtn.remove(); }catch(_){} closeAim(false);
+      /* THE PILL SPENDS ITSELF IN VIEW when it was the free one — removing it instantly would
+         make the day's only skip the least visible thing that happened on this screen. 500ms,
+         then gone; every other exit removes it at once exactly as before. */
+      if(quit.classList.contains("free")){
+        try{ quit.classList.add("spent"); }catch(_){}
+        setTimeout(()=>{ try{ quit.remove(); }catch(_){} },520);
+      } else quit.remove();
+      try{ hintBtn.remove(); }catch(_){} closeAim(false);
       const ms=elapsed();
       trace.end={ms:ms,x:-1,y:-1};
-      track("seek_failed",TP({reason:"giveup",ms:ms}));
+      /* SPENT HERE, ONCE, AND ONLY IF IT IS ACTUALLY BEING USED. Read before the write so the
+         same round cannot both see a pass and burn tomorrow's. */
+      const passed=chPassLeft();
+      if(passed) chPassSpend();
+      track("seek_failed",TP({reason:"giveup",ms:ms,passed:passed}));
       sendTrace("giveup");
       /* THE GIVE-UP IS THE ONE PATH WITH NO GESTURE ON THE PICTURE — the player pressed a
          button at the bottom of the screen and never pointed at anything. The frame's centre
@@ -17151,8 +17215,13 @@ function chSeek(hideId,opts){
          `giveup` IS NOT A DECORATION. It is the flag chNoteSeek reads to refuse this round a
          life: the two losses reach ending() with the same head and the same subtitle, on
          purpose, so nothing else here can tell them apart. See the note on chNoteSeek. */
-      ending("Lost in "+(ms/1000).toFixed(1)+"s","The kamo was right there.",
-             {rehide:true,camoSrc:camoSrc,giveup:true});
+      /* TWO ENDINGS, BECAUSE THEY ARE TWO DIFFERENT EVENTS. A spent pass is not a loss and
+         must not be dressed as one — printing "Lost in 6.2s" over a run that is still standing
+         is the app telling a player something untrue about their own record. The seconds are
+         dropped with it: time is the score, and a round that did not count has none. */
+      ending(passed ? "Skipped." : ("Lost in "+(ms/1000).toFixed(1)+"s"),
+             passed ? "Your run is safe. One skip a day." : "The kamo was right there.",
+             {rehide:true,camoSrc:camoSrc,giveup:true,passed:passed});
       frames.then(f=>{ if(f) armFlipUI(); });
     };
 
@@ -17432,7 +17501,7 @@ function chSeek(hideId,opts){
          can DO and is empty until setNativeCaps lands. This one is true from the first frame,
          which is what a button rendered on first paint needs. */
       const APP=!!window.ReactNativeWebView;
-      const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(won,!!(eopts&&eopts.giveup)) : null;
+      const sk=(eopts&&eopts.rehide&&!REPLAY) ? chNoteSeek(won,!!(eopts&&eopts.giveup),!!(eopts&&eopts.passed)) : null;
       $$("chHead").textContent=head;
       $$("chSub").textContent=sub||"";
       /* THE RUN SPEAKS ON THE CARD TOO, because the pill is about to leave with the round.
@@ -17679,7 +17748,11 @@ function chSeek(hideId,opts){
       }
       /* The feed is told the moment this card exists, so it can drop the swipe hint before
          the pill and the card's own buttons occupy the same 40 pixels. */
-      if(OPT.onEnded) try{ OPT.onEnded(won); }catch(_){}
+      /* THE SECOND ARGUMENT IS THE SKIP. The feed's only "this round is over" signal used to
+         carry one bit — won or not — and a skipped round is neither: the run is intact, the
+         slide is released, and the player asked to move on rather than to read a result. The
+         feed advances on it; a link round has nowhere to advance to and ignores it. */
+      if(OPT.onEnded) try{ OPT.onEnded(won,{passed:!!(eopts&&eopts.passed)}); }catch(_){}
       /* ③ BEAT ONE, AND THE BIGGEST: 63% of everybody who opens KAMO opens it on a challenge
          link, plays exactly this round, and meets no locked control in their entire visit.
          This is the moment the round is OVER — the answer is revealed, the card is up — so
@@ -18907,7 +18980,26 @@ function chFeed(opts){
       /* AND THE HINT PILL GETS OUT OF THE CARD'S WAY — see kfLiftHint. */
       /* AND THE SLIDE IS RELEASED HERE — the one callback every ending goes through, which is
          why the lock hangs off `answered` rather than off any particular outcome. */
-      onEnded:(won)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; kfLiftHint(s); kfLockSync(); },
+      onEnded:(won,info)=>{ S.answered=true; if(won) S.found++; if(s.bell) s.bell.style.display="none"; kfLiftHint(s); kfLockSync();
+        /* THE DAY'S SKIP MOVES THE FEED ITSELF. The player did not ask for a verdict, they
+           asked to leave — making them then swipe is asking twice for one decision.
+           ⚠️ AFTER THE CARD HAS BEEN READ, NOT INSTEAD OF IT. Jumping immediately would hide
+           the one sentence that says the run survived, which is the entire point of the
+           mechanic; 1100ms is long enough to read "Your run is safe" and short enough that it
+           still feels like leaving. And only ever DOWN, one slide, if there is one: a feed
+           that reorders itself under a thumb is worse than a swipe.
+           Guarded on the feed still being the live one — 1100ms is long enough for the player
+           to have closed it, and scrolling a dead overlay is a throw on a timer. */
+        try{
+          if(info&&info.passed) setTimeout(()=>{
+            try{
+              if(kfState!==S) return;
+              const n=S.active+1;
+              if(n>0&&n<S.slides.length){ S.slides[n].el.scrollIntoView({block:"start",behavior:"smooth"}); activate(n); }
+            }catch(_){}
+          },1100);
+        }catch(_){}
+      },
       onClose:()=>close(true),          // "Hide one in this photo" leaves the feed entirely
       /* "Hide another one", on your own hide only. The non-silent close is the point: it is
          the exit that actually puts the camera back (see close()), which is what the button

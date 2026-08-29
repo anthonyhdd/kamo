@@ -85,12 +85,18 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
 }));
 
 /** Boot the feed. `photo:false` serves no picture at all, which is the chPhotoDead path. */
-async function feed({ photo = true, run = 0 } = {}) {
+async function feed({ photo = true, run = 0, passSpent = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r =>
     photo ? r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }) : r.fulfill({ status: 404, body: 'x' }));
   await page.addInitScript((a) => {
     if (a.run) localStorage.setItem('kamo_seek_run', String(a.run));
+    /* ⚠️ SEEDED EXPLICITLY, LIKE THE RUN'S LIFE. The day's skip is available unless the stored
+       day IS today, so an unseeded case is always the FREE one — a "second give-up" test that
+       forgot this would quietly be a first give-up, pass, and assert nothing. UTC, because
+       that is the day the product uses (see CH_PASS_KEY). */
+    if (a.ps) { try { localStorage.setItem('kamo_giveup_day', new Date().toISOString().slice(0, 10)); } catch (e) {} }
+    else { try { localStorage.removeItem('kamo_giveup_day'); } catch (e) {} }
     /* Past the 5-round floor, so the run is a real one rather than a number the counter has
        not started trusting yet. */
     localStorage.setItem('kamo_seeks', '20');
@@ -101,7 +107,7 @@ async function feed({ photo = true, run = 0 } = {}) {
       submit_attempt: { hit: false, tries: 1, missed: 1, secs: 9, pct: null, others: 0 },
       save_seek_trace: null, reveal_hide: { cx: 0.5, cy: 0.5, r: 0.1 }, log_skip: null,
     };
-  }, { r: ROWS(3), run });
+  }, { r: ROWS(3), run, ps: passSpent });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
   await page.evaluate(() => document.getElementById('btnFeed').click());
@@ -175,25 +181,75 @@ console.log('\n② THE BUZZ RELEASES IT');
   await page.close();
 }
 
-console.log('\n③ THE EXIT EXISTS, AND IT COSTS THE RUN');
+console.log('\n③ THE EXIT EXISTS, IT IS FREE ONCE A DAY, AND IT COSTS THE RUN AFTER THAT');
 /* Without a button this is a trap: there is no clock to end the round and no gesture to leave
    it. With a button that costs nothing it is a slower swipe. It has to be both — reachable and
-   expensive — or the lock does not create a stake, it just creates friction. */
+   expensive — or the lock does not create a stake, it just creates friction.
+   ⚠️ THIS BLOCK USED TO ASSERT THAT EVERY GIVE-UP BREAKS THE RUN, and that changed on
+   2026-08-29. A DAILY CAP IS NOT THE FREE EXIT THE OLD RULE REFUSED: "free every other round"
+   hands the life straight back on the next easy find and the lock becomes a slower swipe
+   again, which is what chNoteSeek's note is about. ONE a day is bounded — the second give-up
+   of the same day costs the run exactly as it always did, and that is asserted below, because
+   it is the half that keeps the stake real. */
 {
   const page = await feed({ run: 4 });
   const a = await state(page);
-  a.quit ? ok('"I give up" is mounted in the feed') : bad('no give-up in the feed — a locked slide with no clock is a dead end');
+  a.quit ? ok('an exit is mounted in the feed') : bad('no give-up in the feed — a locked slide with no clock is a dead end');
   a.run === '4' ? ok('with a run of 4 going in') : bad(`run seeded wrong: ${a.run}`);
+
+  /* NAMED BEFORE IT IS SPENT. A pass the player cannot see is not a mechanic: the decision in
+     front of them is unchanged unless the screen says the first exit of the day is free. */
+  const label = await page.evaluate(() => {
+    const q = document.querySelector('.chS.chIn #chQuit');
+    return q ? { text: q.textContent, free: q.classList.contains('free') } : null;
+  });
+  label && label.free && /1 today/i.test(label.text)
+    ? ok(`the day's skip announces itself ("${label.text}")`)
+    : bad('the free exit is not named: ' + JSON.stringify(label));
+
+  await page.evaluate(() => document.querySelector('.chS.chIn #chQuit').click());
+  await page.waitForTimeout(900);
+  const b = await state(page);
+  b.run === '4'
+    ? ok('the first skip of the day leaves the run standing')
+    : bad(`the day's pass still broke the run: kamo_seek_run=${b.run}`);
+  b.locked[0] === false ? ok('and the slide is released') : bad('skipping did not release the slide');
+
+  /* AND IT MOVES THE FEED ITSELF. The player did not ask for a verdict, they asked to leave;
+     making them swipe afterwards is asking twice for one decision. ⚠️ WITHOUT A SWIPE — the
+     assertion is worthless if the test performs the gesture it is meant to prove unnecessary.
+     After the card has been read, not instead of it: the jump waits 1100ms so "Your run is
+     safe" is on screen long enough to be the reason the run survived. */
+  await page.waitForTimeout(1500);
+  const c = await state(page);
+  c.top > 0
+    ? ok(`and the feed advances on its own (scrollTop ${Math.round(c.top)}) — no second gesture`)
+    : bad('after the day\'s skip the feed sat still, so leaving still costs a swipe on top of '
+        + 'the decision to leave');
+  await page.close();
+}
+
+console.log('\n③b AND THE SECOND ONE THE SAME DAY COSTS THE RUN');
+/* The half that keeps the exit expensive. Without this the cap is decoration and the feed lock
+   is back to being friction: quit free on anything hard, take the next easy find for nothing. */
+{
+  const page = await feed({ run: 4, passSpent: true });
+  const label = await page.evaluate(() => {
+    const q = document.querySelector('.chS.chIn #chQuit');
+    return q ? { text: q.textContent, free: q.classList.contains('free') } : null;
+  });
+  label && !label.free && /give up/i.test(label.text)
+    ? ok(`with the pass gone it is the old exit again ("${label.text}")`)
+    : bad('a spent pass still advertises itself as free: ' + JSON.stringify(label));
 
   await page.evaluate(() => document.querySelector('.chS.chIn #chQuit').click());
   await page.waitForTimeout(900);
   const b = await state(page);
   b.run === '0'
-    ? ok('giving up breaks the run — the loss is real, which is what a hint is bought against')
-    : bad(`the run survived a give-up: kamo_seek_run=${b.run}`);
-  b.locked[0] === false ? ok('and the slide is released') : bad('giving up did not release the slide');
+    ? ok('giving up a second time breaks the run — the loss is real, which is what a hint is bought against')
+    : bad(`the run survived a second give-up on the same day: kamo_seek_run=${b.run}`);
   await swipe(page);
-  (await state(page)).top > 0 ? ok('so the feed moves on') : bad('still stuck after giving up');
+  (await state(page)).top > 0 ? ok('so the feed still moves on') : bad('still stuck after giving up');
   await page.close();
 }
 
