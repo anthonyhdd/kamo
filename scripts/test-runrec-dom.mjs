@@ -91,6 +91,12 @@ async function breakRun(run, best, width, life = false, how = 'miss') {
          happened to still read a pill. "0" is spent; anything else, missing included, is a
          life in hand. */
       localStorage.setItem('kamo_seek_life', l ? '1' : '0');
+      /* ⚠️ AND THE DAY'S SKIP IS SEEDED SPENT, FOR EXACTLY THE SAME REASON. Since 2026-08-29
+         the FIRST give-up of a UTC day leaves the run standing, so an unseeded give-up case is
+         a pass case wearing a break case's name — it would read "Skipped." where it expects an
+         epitaph and pass or fail for the wrong reason. The free path has its own coverage in
+         test-feedlock-dom ③; everything here is about what an exit costs once it is gone. */
+      localStorage.setItem('kamo_giveup_day', new Date().toISOString().slice(0, 10));
     } catch (e) {}
   }, [run, best, life]);
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
@@ -318,9 +324,13 @@ console.log('\nA RUN WORTH LOSING SURVIVES ITS FIRST MISS');
      find hands the life straight back, and the exit is free every other round. Caught by
      test-feedlock-dom ③ on the feed; asserted here too, on the link, because this is where the
      rule lives and a suite about the run should not need the feed's suite to defend it. */
+  /* ⚠️ THE DAY'S ONE SKIP IS ALREADY SPENT HERE (seeded in breakRun). A daily cap is not the
+     free exit this rule refuses: "free every other round" hands the life back on the next easy
+     find, ONE a day is bounded. What is asserted here is the second one, which is the half
+     that keeps the exit expensive. */
   const r = await breakRun(4, 6, 390, true, 'giveup');
   r.err ? bad(r.err)
-    : r.text === 'Run of 4 broken · best 6' ? ok('giving up breaks the run even with a life in hand')
+    : r.text === 'Run of 4 broken · best 6' ? ok('giving up breaks the run even with a life in hand, once the day\'s skip is gone')
     : bad(`a give-up with a life reads ${JSON.stringify(r.text)}`);
   r.stored && r.stored.run === '0' ? ok('and the run is zero in storage') : bad(`a give-up left run=${r.stored && r.stored.run}`);
   r.stored && r.stored.life === '1' ? ok('and the life is not spent on it either — it was never offered') : bad(`life after a give-up reads ${JSON.stringify(r.stored && r.stored.life)}`);

@@ -82,7 +82,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
    what it means in the answer key. Two false diagnoses today came from measuring the
    harness instead of the layout; this is the fix for both. */
 const BIG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAYYAAANMCAIAAADXDp1JAAAIBUlEQVR42u3UoQ0AAAgEsR8dgWBsZsAhmnSCE5fqAXgiEgCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCWpAFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJakAWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlSQBYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZakAmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlqQCYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWJAFgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFiSCoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWJIKgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYkgSAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAFwtCOGXsyEGUNgAAAABJRU5ErkJggg==', 'base64');
-async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0, reduced = false }) {
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0, reduced = false, passLeft = false }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
@@ -94,11 +94,19 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
     route.fulfill(big ? { status: 200, contentType: 'image/png', body: BIG }
                       : { status: 200, contentType: 'image/jpeg', body: JPG });
   });
-  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best }) => {
+  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft }) => {
     /* ⚠️ THE LIFE IS SEEDED EXPLICITLY, ALWAYS. "0" means spent and anything else — a missing
        key included — means available, so an unseeded break case silently becomes a SAVE case
        that still renders a pill, and the assertion passes while testing the other mechanic. */
     try {
+      /* ⚠️ THE DAY'S SKIP IS SEEDED SPENT UNLESS A CASE ASKS FOR IT, exactly like the run's
+         life. Since 2026-08-29 the FIRST give-up of a UTC day leaves the run standing and ends
+         with "Skipped." instead of an epitaph — so every case here that uses the give-up as a
+         cheap way to reach an ending would silently become a pass case, and the one that reads
+         the headline would compare against the wrong sentence. Spent by default keeps every
+         existing assertion meaning what it was written to mean. */
+      if (passLeft) localStorage.removeItem('kamo_giveup_day');
+      else localStorage.setItem('kamo_giveup_day', new Date().toISOString().slice(0, 10));
       localStorage.setItem('kamo_seek_run', String(run));
       localStorage.setItem('kamo_seek_best', String(best));
       localStorage.setItem('kamo_seek_life', life ? '1' : '0');
@@ -114,7 +122,7 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
       if (fn === 'reveal_hide') return Promise.resolve({ cx: ansCx, cy: cy, r: 0.1 });
       return Promise.resolve(null);
     };
-  }, { hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best });
+  }, { hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(700);
   return page;
@@ -718,6 +726,66 @@ console.log('\nTHE REVEAL LANDS — the flip is an event, not a swap');
     : bad(`a miss burst at x=${mb.left} for a tap at x=300 (frame centre ${mb.mid}) — the `
         + 'impact is not answering the gesture that caused it');
   await miss.close();
+}
+
+console.log('\nTHE DAY HAS ONE SKIP, AND IT DOES NOT COST THE RUN');
+{
+  /* The give-up used to cost the run outright, and that was right: an exit that costs nothing
+     is a slower swipe, and the feed lock only creates a stake if leaving is expensive. A DAILY
+     CAP IS NOT THAT FREE EXIT — the second give-up of the same day costs the run exactly as it
+     always did (asserted in test-feedlock-dom ③b). What one pass buys is the round that was
+     simply unplayable, without pretending it was a loss. */
+  const page = await boot({ hit: false, frames: true, run: 4, passLeft: true });
+  const label = await page.evaluate(() => {
+    const q = document.getElementById('chQuit');
+    return q ? { text: q.textContent, free: q.classList.contains('free') } : null;
+  });
+  label && label.free && /1 today/i.test(label.text)
+    ? ok(`the pass is named before it is spent ("${label.text}")`)
+    : bad('the free exit is not announced: ' + JSON.stringify(label));
+
+  await page.evaluate(() => document.getElementById('chQuit').click());
+  await page.waitForTimeout(1400);
+  const head = await txt(page, 'chHead'), sub = await txt(page, 'chSub');
+  /* ⚠️ NOT "Lost in 6.2s". Printing a loss over a run that is still standing is the app
+     telling a player something untrue about their own record, and the seconds go with it:
+     time is the score, and a round that did not count has none. */
+  head === 'Skipped.'
+    ? ok('a spent pass is not dressed as a loss')
+    : bad(`the skip ending reads ${JSON.stringify(head)} — a run that survived was announced as a defeat`);
+  /Your run is safe/i.test(sub || '')
+    ? ok(`and it says why ("${sub}")`)
+    : bad(`the skip subtitle is ${JSON.stringify(sub)} — it never tells the player the run held`);
+
+  const stored = await page.evaluate(() => ({
+    run: localStorage.getItem('kamo_seek_run'),
+    life: localStorage.getItem('kamo_seek_life'),
+    day: localStorage.getItem('kamo_giveup_day'),
+  }));
+  stored.run === '4' ? ok('the run is untouched in storage') : bad(`the pass moved the run to ${stored.run}`);
+  stored.day ? ok('and the day is stamped, so tomorrow is the next one') : bad('the pass was never recorded — it is free every round');
+  await page.close();
+
+  /* ⚠️ AND IT DOES NOT HAND THE LIFE BACK — asserted on a run whose life is ALREADY GONE,
+     because that is the only state where the difference is visible. Writing the life on this
+     path would be the free exit by the back door: quit once, get the life returned, miss for
+     free afterwards, which is precisely the loop chNoteSeek's note refuses.
+     (A first version wrote `stored.life !== '1' || true`, which is an assertion that cannot
+     fail. It is the exact fault this file spends its comments warning about.) */
+  const spent = await boot({ hit: false, frames: true, run: 4, life: false, passLeft: true });
+  await spent.evaluate(() => document.getElementById('chQuit').click());
+  await spent.waitForTimeout(1400);
+  const after = await spent.evaluate(() => ({
+    run: localStorage.getItem('kamo_seek_run'), life: localStorage.getItem('kamo_seek_life'),
+  }));
+  after.life === '0'
+    ? ok('a spent life stays spent through the pass — the two are not the same currency')
+    : bad(`the pass handed the life back (kamo_seek_life=${after.life}), which makes the next `
+        + 'miss free as well — the free-exit loop by the back door');
+  after.run === '4'
+    ? ok('and the run still stands with no life behind it')
+    : bad(`the pass failed to hold a run with no life: run=${after.run}`);
+  await spent.close();
 }
 
 await browser.close(); server.close();
