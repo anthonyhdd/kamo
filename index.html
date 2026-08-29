@@ -169,14 +169,20 @@
      so the row keeps its old relationship to the shutter's centre line rather than acquiring a
      new one. */
   body.nav-on .camBtn{bottom:calc(150px + var(--safe-b)) !important;}
-  /* THE SESSION RECAP, THIRD ITEM MEASURED AGAINST FURNITURE THAT MOVED. chToastShow prints
-     "0 of 1 found" on the camera when a feed session ends; it was pinned at bottom:126px,
-     which cleared a shutter living at 30 by 18px. The bar lifted the shutter to 128 and the
-     recap printed itself INSIDE the capture ring — the founder's photograph, 2026-08-29. The
-     shutter's top is 206 with the bar up; 224 cleared it by 12px, which is 'not
-     overlapping' rather than 'not crowded' — the distinction the Capture label already cost
-     this screen once — so 236. It hangs off the same body
-     class as the lift that caused it so the two cannot drift apart again. */
+  /* THE TOAST, THIRD ITEM MEASURED AGAINST FURNITURE THAT MOVED. #chToast was pinned at
+     bottom:126px, which cleared a shutter living at 30 by 18px. The bar lifted the shutter to
+     128 and the toast printed itself INSIDE the capture ring — the founder's photograph,
+     2026-08-29. The shutter's top is 206 with the bar up; 224 cleared it by 12px, which is
+     "not overlapping" rather than "not crowded" — the distinction the Capture label already
+     cost this screen once — so 236, hung off the same body class as the lift that caused it
+     so the two cannot drift apart again.
+     ⚠️ THE CALLER THAT WAS PHOTOGRAPHED HERE IS GONE, AND THE RULE STAYS ANYWAY. That was the
+     session recap, removed the same day at the founder's request. The only caller left is the
+     hint-pack unlock, which fires inside a round and therefore never over a shutter — so today
+     this rule guards nothing that actually happens. It is kept because #chToast is a SHARED
+     surface with one fixed position, and that position's default is still measured against a
+     shutter that has not lived at 30 since the tab bar shipped: the next thing worth saying on
+     the camera screen would land on the capture button, exactly as the recap did. */
   #chToast{position:fixed;left:50%;bottom:calc(126px + var(--safe-b));transform:translateX(-50%) translateY(10px);z-index:70;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 18px;border-radius:14px;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font-family:var(--display);pointer-events:none;opacity:0;transition:opacity .38s cubic-bezier(.22,1,.36,1),transform .38s cubic-bezier(.22,1,.36,1);}
   #chToast.on{opacity:1;transform:translateX(-50%) translateY(0);}
   body.nav-on #chToast{bottom:calc(236px + var(--safe-b));}
@@ -4876,27 +4882,25 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   teachHint("Reposition, then recapture");
 }
 
-/* ===== SESSION RECAP TOAST =====
-   Lands on the camera the moment a feed session that actually played something ends —
-   close() calls this after root.remove(), so it never depends on FROM_REVEAL's
-   backToCompose() branch and shows up whichever way the feed was covering the camera.
-   BOTH NUMBERS ALREADY EXISTED. `found`/`played` are new (S.found, wired through
-   chSeek's onEnded(won) — see the feed's S.round=chSeek(...) call), but the lifetime
-   line is chSeekRecord() (kamo_seeks / kamo_seek_hits), which has been written on every
-   real round since the streak shipped and has never been shown anywhere — window.KAMOSEEK
-   exists for exactly this. CH_MIN_SEEKS still gates it: under 5 lifetime rounds the second
-   line is silent rather than printing a false 0% or 100%, same rule the counter was built
-   under.
-   NON-BLOCKING, ON PURPOSE. The feed's whole exit is "the swipe IS the exit" — no confirm,
-   no gate. This cannot become a second one bolted onto the camera: it fades in, holds, fades
-   out on its own, and the first tap anywhere on the camera dismisses it early. pointer-events
-   stays off the toast itself; the dismiss listener sits on the document instead so a tap
-   through it still reaches the shutter underneath. */
+/* ===== THE MESSAGE TOAST =====
+   ⚠️ THE SESSION RECAP THAT BORN THIS IS GONE — REMOVED 2026-08-29, founder's call. It printed
+   "N found · M played" on the camera when a feed session ended, with a lifetime line under it,
+   and the verdict on it was "je le comprends pas je suis pas sûr qu'il soit utile". The copy
+   was fixed first — "0 of 1 found", one number out of another, which only a session can mean —
+   and the answer was still no. A line nobody asked for, over a viewfinder, is furniture.
+   NOTHING WAS MEASURED AWAY WITH IT. Both numbers ride `feed_closed` now (played, found), so
+   the question "how did that session go" is still answerable — in Amplitude, where somebody
+   can actually compare it, rather than for 3.4 seconds on a phone.
+   ⚠️ AND THE SURFACE STAYS, because it was never the recap's. chToastShow was pulled OUT of
+   that function precisely so a second thing worth saying would not have to copy a stylesheet,
+   an element, a dismiss listener and two timers; the hint-pack unlock uses it today and is now
+   the only caller. Its rules are unchanged and still earn their keep: non-blocking (it fades
+   in, holds, and fades out on its own — the feed's whole exit is "the swipe IS the exit", and
+   nothing bolted onto the camera may become a second gate), and pointer-events off the toast
+   with the dismiss listener on the document, so a tap through it still reaches what is under it.
+   window.KAMOSEEK survives too: chSeekRecord()'s lifetime counters (kamo_seeks /
+   kamo_seek_hits) fed the second line and are read by the tests and the run pill besides. */
 let chToastEl=null, chToastT=null;
-/* THE MESSAGE SURFACE, PULLED OUT OF THE SESSION LINE THAT OWNED IT. It was one function that
-   built a stylesheet, an element, a dismiss listener and two timers, and then hardcoded the one
-   sentence it existed to say — so a second thing worth saying had no way to say it without
-   copying all four. chSessionToast keeps its exact behaviour and now goes through here. */
 function chToastShow(title,sub){
   try{
     /* ⚠️ THE STYLESHEET IS NOT INJECTED HERE ANY MORE — see the main <style>. It was built
@@ -4915,20 +4919,6 @@ function chToastShow(title,sub){
     chToastT=setTimeout(chToastDismiss,3400);
     document.addEventListener("pointerdown",chToastTap,true);
   }catch(_){}
-}
-function chSessionToast(played,found){
-  if(!played) return;
-  const rec=(window.KAMOSEEK&&window.KAMOSEEK.record)?window.KAMOSEEK.record():{n:0,hit:0};
-  const min=(window.KAMOSEEK&&window.KAMOSEEK.min)||5;
-  const pct=rec.n>=min ? Math.round(100*rec.hit/rec.n) : null;
-  /* ⚠️ IT HAD NO SUBJECT, AND THE FOUNDER READ IT AS THE HIDE'S SCORE. "0 found · 1 played"
-     lands on the CAMERA, seconds after a feed session ends, next to a photograph of a room —
-     nothing on that screen says the two numbers are about the rounds you just played rather
-     than about the kamo you are looking at. "0 of 1 found" cannot be read the other way: one
-     number is out of the other, which only a session can mean. The second line labels what it
-     counts instead of trailing "lifetime" off a bare percentage. */
-  chToastShow(found+" of "+played+" found",
-              pct!==null ? rec.hit+" found all time · "+pct+"% hit rate" : null);
 }
 function chToastTap(){ chToastDismiss(); }
 function chToastDismiss(){
@@ -19494,12 +19484,6 @@ function chFeed(opts){
     kfHidden=true;
     root.style.visibility="hidden"; root.style.pointerEvents="none";
     try{ if(S.round&&S.round.hold) S.round.hold(true); }catch(_){}
-    /* THE RECAP STILL FIRES, BUT ONLY WHEN THE ROUND IS OVER. It is the seeker's one piece of
-       restitution and holding the feed must not delete it — but a player who steps away MID
-       round is coming back to that round, and "0 of 1 found" printed over their shoulder is a
-       verdict on something still in progress. S.answered is exactly "this round is resolved".
-       Once per session either way: a thumb bouncing between two tabs is not four sessions. */
-    try{ if(!S.recapped&&S.played&&S.answered){ S.recapped=true; chSessionToast(S.played,S.found); } }catch(_){}
   };
   S.resume=()=>{
     if(!kfHidden) return;
@@ -19554,8 +19538,17 @@ function chFeed(opts){
     try{ if(S.round) S.round.destroy(); }catch(_){}
     try{ io.disconnect(); }catch(_){}
     try{ root.remove(); }catch(_){}
-    if(!silent) track("feed_closed",{played:S.played,slides:S.slides.length,from:FROM_REVEAL?"reveal":"camera"});
-    if(!silent) try{ chSessionToast(S.played,S.found); }catch(_){}
+    /* ⚠️ `found` RIDES THIS NOW, AND THAT IS WHERE THE DELETED RECAP WENT. S.found was written
+       on every ending and read by exactly one thing: a toast on the camera that the founder
+       could not parse and asked to have removed. Dropping the toast without moving the number
+       would have made S.found write-only — a counter nothing reads is a counter that quietly
+       stops being right. A property is free on an event that already flows.
+       ⚠️ AND THIS EVENT GOT RARER ON 2026-08-29, which anyone reading its volume has to know.
+       The camera tab used to close the feed and fire this; it HOLDS the session now (see
+       S.toCamera), so feed_closed no longer counts "left the feed for the camera" — that is
+       nav_tapped{to:"cam",from:"feed"}. What still fires it is a session genuinely ending:
+       a capture, a reply, the empty state's CTA, or a feed opened from the reveal. */
+    if(!silent) track("feed_closed",{played:S.played,found:S.found,slides:S.slides.length,from:FROM_REVEAL?"reveal":"camera"});
     /* THE SAME PAIR RETAKE USES (#cfYes): exitFinished() takes the reveal down, backToCompose()
        puts the camera back and — the part that matters beyond the navigation — releases the
        round's full-retina canvases, ~100MB of them. Reaching the camera by any other route
