@@ -936,7 +936,71 @@ console.log('\nTHE RUN PILL IS THE DOOR TO THE DAY\'S BOARD');
   dressed && !/loading/i.test(dressed.chase || '')
     ? ok('and nothing is left saying "loading"')
     : bad('the chase line still reads: ' + JSON.stringify(dressed && dressed.chase));
+
+  /* ⚠️ WHAT IS SHAREABLE IS NOT THE RANK. "I'm #8 on KAMO" is a brag with no content — about
+     the sender, and giving the reader nothing to be curious about. The number at the TOP is
+     the fact that makes a stranger open a link, and the sender's own row is the contrast that
+     makes the message theirs.
+     AND THE LEADER IS NEVER NAMED: a handle in somebody else's group chat is a person who did
+     not agree to be there. The number is the story and it belongs to nobody. */
+  const sharing = await page.evaluate(async () => {
+    const b = document.getElementById('chBoardShare');
+    if (!b || b.style.display === 'none') return null;
+    let sent = null;
+    navigator.share = (o) => { sent = o.text; return Promise.resolve(); };
+    b.click();
+    await new Promise((r) => setTimeout(r, 300));
+    return { label: b.textContent, text: sent };
+  });
+  sharing ? ok(`the board offers a share ("${sharing.label}")`) : bad('no share button on a populated board');
+  sharing && /40 kamos in a row/.test(sharing.text || '')
+    ? ok("it leads with the day's best, which is the part a stranger would open")
+    : bad('share text: ' + JSON.stringify(sharing && sharing.text));
+  sharing && /I\u2019m on 6|I’m on 6/.test(sharing.text || '')
+    ? ok('and carries the sender as the contrast, not the headline')
+    : bad('the sender is missing from: ' + JSON.stringify(sharing && sharing.text));
+  sharing && !/PewterOwln7/.test(sharing.text || '')
+    ? ok('the leader is never named — a handle in a stranger\'s chat did not consent to be there')
+    : bad('the share names another player: ' + JSON.stringify(sharing && sharing.text));
   await page.close();
+
+  /* ═══ AND THE EMPTY BOARD IS THE BEST OFFER OF THE DAY ══════════════════════════════════
+     Every UTC midnight this list is wiped, so this is the screen the first players of the day
+     meet. It used to read "Nobody has a run yet today" — a fact, asking for nothing. What is
+     true of it is rarer: the top is unclaimed and two finds take it. So it SHOWS the prize. */
+  /* ⚠️ THE PILL HAS TO EXIST TO BE TAPPED. At run 0 with no record it is display:none — there
+     is nothing true to print — so a fixture with an empty board AND an empty player cannot
+     reach this screen at all. A run of 3 against a board that returns nothing is the real
+     case anyway: the day just reset, or every find was on a hide below the floor. */
+  const fresh = await boot({ hit: false, frames: true, run: 3, best: 5, board: [] });
+  await fresh.mouse.move(200, 500); await fresh.mouse.down(); await fresh.waitForTimeout(80); await fresh.mouse.up();
+  await fresh.waitForTimeout(1600);
+  await fresh.evaluate(() => document.querySelector('.chRun') && document.querySelector('.chRun').click());
+  await fresh.waitForTimeout(700);
+  const empty = await fresh.evaluate(() => {
+    const w = document.querySelector('.chBoardWrap');
+    if (!w) return null;
+    const g = w.querySelector('.chRow.ghost');
+    return {
+      chase: (w.querySelector('#chBoardChase') || {}).textContent,
+      ghost: g ? { who: g.querySelector('.chRowWho').textContent,
+                   medal: g.querySelector('.chRowN').className,
+                   run: g.querySelector('.chRowRun').textContent } : null,
+      share: !!(w.querySelector('#chBoardShare') && w.querySelector('#chBoardShare').style.display !== 'none'),
+    };
+  });
+  empty && empty.ghost && empty.ghost.who === 'You?' && /m1/.test(empty.ghost.medal)
+    ? ok('an empty board shows the prize — a gold chip with your name on it')
+    : bad('empty state: ' + JSON.stringify(empty));
+  empty && !/nobody/i.test(empty.chase || '') && /yours/i.test(empty.chase || '')
+    ? ok(`and offers it rather than reporting an absence ("${empty.chase}")`)
+    : bad('empty headline: ' + JSON.stringify(empty && empty.chase));
+  /* NOTHING TO SEND WHEN THERE IS NOTHING TO SEND. A share button on an empty board would
+     offer to broadcast a zero. */
+  empty && !empty.share
+    ? ok('and offers no share, because there is nothing yet to send')
+    : bad('the empty board offered a share');
+  await fresh.close();
 }
 
 await browser.close(); server.close();
