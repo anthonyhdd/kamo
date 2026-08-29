@@ -593,32 +593,6 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       }
     }
 
-    /* ═══ THE SESSION RECAP SAYS WHOSE NUMBERS THEY ARE ══════════════════════════════════
-       chSessionToast prints on the CAMERA, seconds after a feed session ends, over a
-       photograph of a room. It read "0 found · 1 played" — two bare numbers with no subject,
-       next to a kamo, and the founder read them as the score of the hide on screen (2026-08-29:
-       "je le comprends pas je suis pas sûr qu'il soit utile"). "0 of 1 found" cannot be read
-       that way: one number out of another is a tally of rounds and nothing else.
-       ASSERTED ON THE SOURCE, DELIBERATELY. The DOM suite builds the element by hand to measure
-       where it lands, so it cannot also check what it says — it would be reading back a string
-       the test itself wrote. This reads the function. */
-    {
-      const fn = block('function chSessionToast(') || '';
-      if (!fn) {
-        bad('chSessionToast() IS GONE — if the recap was removed on purpose, remove this check '
-          + 'with it; if it was renamed, this stopped guarding the copy.');
-      } else if (!/"\s*of\s*"/.test(fn)) {
-        bad('THE RECAP IS BACK TO A SUBJECTLESS PAIR OF NUMBERS. It prints on the camera beside '
-          + "a kamo, so \"N found · M played\" reads as that kamo's score. It must say one "
-          + 'number OUT OF another — "0 of 1 found" — which only a session can mean.');
-      } else if (!/all time/.test(fn)) {
-        bad('THE LIFETIME LINE LOST ITS LABEL. A bare percentage trailing the word "lifetime" '
-          + 'was the other half of what nobody could parse; both numbers say what they count.');
-      } else {
-        ok('the session recap reads as a tally out of a total, both numbers labelled');
-      }
-    }
-
     /* And the constants those templates interpolate must actually exist. A rename would
        otherwise turn a promise into "undefined seconds to paint". */
     const refs = new Set();

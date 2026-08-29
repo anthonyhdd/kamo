@@ -654,21 +654,25 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   await p.close();
 }
 
-/* ── ③d THE RECAP LANDS ON THE CAMERA, AND MUST NOT LAND ON THE SHUTTER ────────────────── */
+/* ── ③d THE TOAST MUST NEVER LAND ON THE SHUTTER ───────────────────────────────────────── */
 {
-  console.log('\n— the session recap clears the capture button —');
+  console.log('\n— the message toast clears the capture button —');
   /* Same class of bug, third instance on one screen: #chToast was pinned at bottom:126px,
-     which cleared a shutter at 30. The bar moved the shutter to 128 and the recap printed
+     which cleared a shutter at 30. The bar moved the shutter to 128 and the toast printed
      itself inside the capture ring — the founder's photograph, 2026-08-29.
-     ⚠️ WHAT IS UNDER TEST HERE IS THE CSS RULE, AND THE PROBE SAYS SO OUT LOUD. chSessionToast
-     is module-scoped and only fires when a feed session actually played a round, which this
-     fixture cannot stage without seeding a whole session — so the element is built by hand
-     with the id the stylesheet targets. That makes the GEOMETRY real (the rule is the app's,
-     the shutter is the app's, the bar is the app's) and the COPY fake, which is why the copy
-     is asserted in check.mjs against the source instead of here. A test that read back a
-     string this file had just written would be asserting nothing.
-     The rule itself is now in the main <style> rather than injected on first use, which is
-     what makes it readable at all on a camera that has never opened the feed. */
+     ⚠️ THE CALLER THAT WAS PHOTOGRAPHED IS GONE. That was the session recap, removed the same
+     day at the founder's request; the hint-pack unlock is the only caller left and it fires
+     inside a round, never over a shutter. So this asserts a rule nothing currently trips —
+     deliberately, because #chToast is a SHARED surface with one fixed position whose default
+     is still measured against a shutter that moved, and the next thing worth saying on the
+     camera would land on the button exactly as the recap did.
+     ⚠️ WHICH IS ALSO WHY THE ELEMENT IS BUILT BY HAND, AND THE PROBE SAYS SO OUT LOUD. There
+     is no caller to stage. That makes the GEOMETRY real — the rule is the app's, the shutter
+     is the app's, the bar is the app's — and nothing else is claimed: this block asserts
+     placement and says nothing about any copy, because a test that read back a string it had
+     just written would be asserting nothing.
+     The rule itself lives in the main <style> rather than being injected on first use, which
+     is what makes it readable at all on a camera that has never opened the feed. */
   const p = await boot({ arm: 'camera' });
   await p.waitForTimeout(400);
   const geo = await p.evaluate(() => {
