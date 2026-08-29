@@ -237,16 +237,23 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
     ? ok('and no Close button, because the bar already is the way out')
     : bad(`the board shows a Close (${closeShown}) beside a tab bar that does the same thing`);
 
-  /* AND BACK. The camera tab closes the board and the feed underneath it. */
+  /* AND BACK. The camera tab shuts the board and gets the feed out of the way.
+     ⚠️ "OUT OF THE WAY" IS NOT "CLOSED" ANY MORE, AND THE DIFFERENCE IS THE POINT. This read
+     `!document.querySelector('.kfBar')` — the feed's DOM being gone — which was true because
+     the camera tab destroyed the session. That destruction was a free skip past a locked hide
+     (see ①c), so the feed is now HELD: its DOM stays, its round stays, and it is hidden. The
+     property this block actually cares about is unchanged — the camera is what you are
+     looking at — so it is asserted on what is VISIBLE rather than on what exists. */
   await f.evaluate(() => document.querySelector('#kNav [data-tab="cam"]').click());
   await f.waitForTimeout(600);
-  const home = await f.evaluate(() => ({
-    board: !!document.querySelector('.chBoardWrap.show'),
-    feed: !!document.querySelector('.kfBar'),
-    board_el: !!document.getElementById('board'),
-  }));
-  (!home.board && !home.feed && home.board_el)
-    ? ok('the camera tab lands on the capture screen, with the board and the feed closed')
+  const home = await f.evaluate(() => {
+    const r = document.getElementById('kfeed');
+    return { board: !!document.querySelector('.chBoardWrap.show'),
+             feedShown: !!(r && getComputedStyle(r).visibility !== 'hidden'),
+             board_el: !!document.getElementById('board') };
+  });
+  (!home.board && !home.feedShown && home.board_el)
+    ? ok('the camera tab lands on the capture screen, with the board shut and the feed out of the way')
     : bad('after the camera tap: ' + JSON.stringify(home));
   (await seen(f)).shown ? ok('and the bar is still there') : bad('the bar vanished on the camera screen');
   await f.close();
@@ -282,6 +289,166 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   const back = await p.evaluate(() => !!document.getElementById('board'));
   back ? ok('and the camera is still underneath, ready to be tabbed back to')
        : bad('the feed tap took the camera down with it');
+  await p.close();
+}
+
+/* ── ①c THE FEED IS HELD, NOT REBUILT — WHICH IS WHAT KEEPS THE RUN HONEST ─────────────── */
+{
+  console.log('\n— tabbing to the camera and back keeps the same hide —');
+  /* ⚠️ THIS IS A STREAK EXPLOIT, NOT A COSMETIC ONE, AND THAT IS WHY IT IS HERE RATHER THAN
+     IN A FEED SUITE. FEED_LOCK exists because a streak you can keep by scrolling is not a
+     streak: once a slide is engaged you cannot swipe past it, you find it or you press "I
+     give up", and giving up costs the run everywhere except the one free pass a day.
+     The tab bar drove straight through all of that. Camera called kfState.close(), which
+     destroyed the round — no find, no give-up, no cost — and Feed built a fresh session that
+     drew a different hide. An unlimited free skip, one tap wide, on the screen the whole
+     mechanic lives on. Founder, 2026-08-29: "sinon trop facile de continuer un streak".
+     Three things have to hold, and the second is the one a lazy test would miss. */
+  const p = await boot({ arm: 'feed' });
+  await p.waitForTimeout(900);
+  const wall0 = Date.now();
+  const before = await p.evaluate(() => {
+    const s = document.querySelector('.kfSlide .chS') || document.querySelector('.chS');
+    const c = document.getElementById('chClock');
+    return { hide: s ? (s.dataset.hid || null) : null,
+             slides: document.querySelectorAll('.kfSlide').length,
+             scroll: (document.getElementById('kfScroll') || {}).scrollTop,
+             photo: (document.querySelector('.chFrame img') || {}).src || null,
+             /* ⚠️ THE IDENTITY OF THE ROUND, WHICH IS THE PROPERTY THAT ACTUALLY CLOSES THE
+                EXPLOIT. "Same photo" is satisfied by a round that was torn down and rebuilt on
+                the same row — and a rebuilt round is a fresh clock and an unspent lock, which
+                is the free skip wearing a disguise. A marker on the element the round mounted
+                into cannot survive a rebuild: activate() destroys the round and the DOM goes
+                with it. This is also what separates holding by visibility from holding by
+                display:none — at least in theory: the callback's activate() opens with
+                `if(S.round) S.round.destroy()`, so a spurious re-activation rebuilds the round.
+                ⚠️ IN PRACTICE THIS FIXTURE CANNOT TELL THEM APART. display:none passes this
+                assertion too. It sits at slide 0 with two rows, which is where a locked round
+                always is, so neither a lost scroll position nor a re-fired observer has room to
+                happen here. The assertion is still the right one — it catches the rebuild
+                whatever causes it — but it is not evidence for the choice of property. */
+             marked: (() => { const el = document.querySelector('.chS');
+               if (!el) return false; el.dataset.probe = 'keep'; return true; })(),
+             clock: c ? c.textContent : null,
+             run: (() => { try { return localStorage.getItem('kamo_run'); } catch (e) { return 'x'; } })() };
+  });
+  before.photo ? ok('a round is up in the feed to hold onto')
+               : bad('no round mounted in the fixture: ' + JSON.stringify(before));
+
+  await p.click('#kNav [data-tab="cam"]', { timeout: 4000 });
+  await p.waitForTimeout(1300);
+  const away = await p.evaluate(() => {
+    const r = document.getElementById('kfeed');
+    const n = document.getElementById('kNav');
+    /* ⚠️ "NOT ON SCREEN" RATHER THAN "visibility:hidden", ON PURPOSE. A first version read the
+       one property the implementation happens to use, which meant a display:none variant
+       failed HERE — on the wrong assertion, with the wrong message — and the scroll check
+       below, the only one that can tell the two apart, never got to run at all. This asks the
+       question the block is actually about; the scroll assertion does the discriminating. */
+    const cs = r ? getComputedStyle(r) : null;
+    return { alive: !!r,
+             hiddenNow: !r ? 'gone'
+               : (cs.display === 'none' || cs.visibility === 'hidden' || !r.getClientRects().length)
+                 ? 'hidden' : 'shown',
+             /* The camera has to be genuinely in front, not merely underneath something
+                transparent — the whole point is that the player uses the camera. */
+             onCam: [...n.querySelectorAll('[data-tab]')].filter((b) => b.classList.contains('on'))
+               .map((b) => b.dataset.tab).join(',') };
+  });
+  away.alive && away.hiddenNow === 'hidden'
+    ? ok('the feed is held rather than destroyed')
+    : bad('the feed was ' + (away.alive ? 'left visible (' + away.hiddenNow + ')' : 'DESTROYED')
+        + ' — a destroyed round is a free skip past a locked hide');
+  away.onCam === 'cam'
+    ? ok('and the camera tab is the one lit')
+    : bad('tab lit while held: ' + JSON.stringify(away.onCam));
+
+  await p.click('#kNav [data-tab="feed"]', { timeout: 4000 });
+  /* ⚠️ SHORT ON PURPOSE. A long settle here is time the clock is legitimately running again,
+     and the first version's 700ms wait ate most of the margin it was testing — it reported a
+     product bug (2.4s → 3.1s over a 1.3s hold) that was entirely the harness's own wait. The
+     comparison below is against measured wall time for the same reason: a constant threshold
+     is a guess about machine speed. */
+  await p.waitForTimeout(120);
+  const wall1 = Date.now();
+  const back = await p.evaluate(() => {
+    const c = document.getElementById('chClock');
+    return { photo: (document.querySelector('.chFrame img') || {}).src || null,
+             scroll: (document.getElementById('kfScroll') || {}).scrollTop,
+             slides: document.querySelectorAll('.kfSlide').length,
+             feeds: document.querySelectorAll('#kfeed').length,
+             sameRound: (() => { const el = document.querySelector('.chS');
+               return !!(el && el.dataset.probe === 'keep'); })(),
+             vis: (() => { const r = document.getElementById('kfeed'); if (!r) return 'gone';
+               const c = getComputedStyle(r);
+               return (c.display === 'none' || c.visibility === 'hidden') ? 'hidden' : 'shown'; })(),
+             clock: c ? c.textContent : null };
+  });
+  back.vis === 'shown'
+    ? ok('and Feed gives it straight back')
+    : bad('the feed did not come back: ' + JSON.stringify(back));
+  back.photo && back.photo === before.photo
+    ? ok('on the SAME hide — the one thing the founder asked for')
+    : bad('the hide changed across a tab round-trip: ' + JSON.stringify({ was: before.photo, now: back.photo }));
+  /* ⚠️ AND THE SCROLLER KEPT ITS PLACE. This is why the hold is visibility and not
+     display:none: the slide you are on IS the scrollTop, and display:none drops it on most
+     engines — which would put the feed back at slide 0 and reproduce the reported bug in a
+     different costume, while the "same hide" assertion above still passed on slide 0 being
+     the same slide 0. */
+  /* ⚠️ NOT "the scroller kept its place" — THAT ASSERTION WAS VACUOUS AND IT PASSED FOR THE
+     WRONG REASON. A locked round sits on slide 0, so scrollTop is 0 both sides of the trip and
+     `0 === 0` was true of every implementation, including the destroy-and-rebuild it was meant
+     to rule out. This is the question it was reaching for: is this the SAME round, or a new one
+     on the same photograph? A rebuilt round is a fresh clock and an unspent lock. */
+  before.marked
+    ? (back.sameRound
+        ? ok('and it is the SAME round, not a new one built on the same photograph')
+        : bad('the round was torn down and rebuilt across the trip — same hide, but a fresh '
+            + 'clock and an unspent lock, which is the free skip with better manners'))
+    : bad('could not mark the round to check its identity');
+  back.feeds === 1
+    ? ok('and there is still exactly one feed, not a second one stacked on it')
+    : bad(back.feeds + ' feed roots in the document');
+
+  /* ⚠️ THE CLOCK IS THE HALF A LAZY TEST WOULD MISS. Holding the DOM is not enough: the round
+     measures from image decode to the tap, that number is filed as p_ms and becomes best_ms —
+     a hide's PUBLIC record, printed on the re-send as "fastest 4.1s". A player who steps away
+     for a minute and comes back and finds it would file a 63-second find and quietly poison
+     the record of somebody else's hide. Held above for 1.3s; anything under half of that is
+     the tick granularity, anything near it is a clock that never stopped. */
+  const t = (v) => { const m = /([\d.]+)s/.exec(String(v || '')); return m ? parseFloat(m[1]) : null; };
+  const t0 = t(before.clock), t1 = t(back.clock);
+  const wall = (wall1 - wall0) / 1000, ran = (t0 !== null && t1 !== null) ? t1 - t0 : null;
+  ran === null
+    ? bad('could not read the round clock: ' + JSON.stringify({ before: before.clock, back: back.clock }))
+    : (ran < wall - 1
+        ? ok(`and the round's clock stopped while it was held (${ran.toFixed(1)}s counted `
+            + `across ${wall.toFixed(1)}s away)`)
+        : bad(`the clock kept running while the feed was held — ${ran.toFixed(1)}s counted `
+            + `across ${wall.toFixed(1)}s away. That lands in p_ms and becomes best_ms, the `
+            + "public record printed on somebody else's hide."));
+
+  /* AND THE SHUTTER REALLY ENDS IT. Held forever, the session would block every chFeed() that
+     comes after a publish — "See it live", the reply return, land_on_own_hide all bail on
+     kfState — so publishing would finish on a feed that silently refused to open. */
+  await p.click('#kNav [data-tab="cam"]', { timeout: 4000 });
+  await p.waitForTimeout(400);
+  /* ⚠️ THROUGH THE BUTTON, NOT THROUGH THE FUNCTION. capture() lives in the module scope of
+     an inline `type="module"` script, so page.evaluate cannot see it — a first version called
+     it directly, threw ReferenceError, and the .catch() around it turned a test that ran
+     nothing into a test that reported a product bug. The DOM handler is reachable from
+     anywhere, which is also how a thumb reaches it. */
+  const fired = await p.evaluate(() => {
+    const st = document.getElementById('start'); if (st) st.style.display = 'none';
+    const b = document.getElementById('shutter'); if (!b) return 'no shutter';
+    b.style.display = 'block'; b.click(); return 'clicked';
+  });
+  await p.waitForTimeout(500);
+  const gone = await p.evaluate(() => document.querySelectorAll('#kfeed').length);
+  fired === 'clicked' && gone === 0
+    ? ok('and pressing the shutter ends the held session for real')
+    : bad(`a held feed survived a capture (${fired}, ${gone} root(s) left) — every chFeed() `
+        + 'after a publish bails on kfState, so "See it live" would open nothing');
   await p.close();
 }
 
