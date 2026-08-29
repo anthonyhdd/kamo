@@ -5301,6 +5301,18 @@ function capture(){
      property of the capture it produced — a separate event would also need a new name on the
      wrapper's allow-list, which no shipped binary knows. Nothing to add anywhere: a property is
      free on an event that already flows. */
+  /* ⚠️ AND THE HELD FEED IS OVER HERE, WHICH IS THE OTHER HALF OF HOLDING IT AT ALL. The tab
+     bar keeps a feed session alive behind the camera so that tabbing across is not a free skip
+     — but pressing the shutter is not glancing at the camera, it is starting a hide, and the
+     round waiting behind it is not being come back to. Left alive it would also block every
+     chFeed() that follows: "See it live" from the reveal, the reply return and
+     land_on_own_hide all bail on kfState, so publishing would have ended on a feed that
+     silently refused to open.
+     close(true) — SILENT ON PURPOSE. It still files the skip (kfNoteSkip runs either way, so
+     the abandoned round is recorded exactly as scrolling past it would be), and it skips both
+     the session recap, which has no business over a shutter that has just fired, and the
+     backToCompose() branch, which is where this code already is. */
+  try{ if(kfState&&kfHidden&&kfState.close) kfState.close(true); }catch(_){}
   setFraming(false);   // the shutter can still be reached by the aim clock — never enter paint with the reframe surface live
   track("photo_captured",{source:bgKind,origin:photoSrc,framed:bgKind==="photo"&&photoFramed(),zoom:bgKind==="photo"?Math.round(photoFrame.s*100)/100:null,timed:timerArmed("aim"),auto:!!captureWasAuto,aim_given:aimGiven,aim_took:aimStartedAt?Math.round((Date.now()-aimStartedAt)/1000):null});   // auto => the aim clock fired, not the user
   if(timerArmed("aim")&&aimStartedAt) recordAim(aimGiven,(Date.now()-aimStartedAt)/1000,captureWasAuto);
@@ -7096,7 +7108,9 @@ function openPaywall(source,force){
           assumed from the source), and mutually exclusive with it: the sheet's gradient is
           tuned to a green card at the bottom of the screen, this one has to carry copy at
           24% height over whatever is behind. */
-       const ui=(!sh)&&!!(kfState||chLive||document.querySelector(".chS")||(startEl&&startEl.style.display!=="none"));
+       /* kfHidden: with the feed held, the thing under this paywall is the camera — a
+          photograph — which is the branch `sh` and the gradient above are tuned for. */
+       const ui=(!sh)&&!!((kfState&&!kfHidden)||chLive||document.querySelector(".chS")||(startEl&&startEl.style.display!=="none"));
        paywallEl.classList.toggle("pwOverUI",ui); }catch(e){}
   if(pwArm==="full"){ stage.classList.add("pwCover"); document.body.classList.add("pwCover"); }
   /* THE SHEET MUST OUTRANK WHATEVER ASKED FOR IT. #paywall's stylesheet z-index (60) predates
@@ -15313,7 +15327,9 @@ function navShouldShow(){
 function navWhere(){
   try{
     if(document.querySelector(".chBoardWrap.show")) return "board";
-    if(typeof kfState!=="undefined" && kfState) return "feed";
+    /* A HELD FEED IS NOT THE SCREEN IN FRONT — the camera is, and lighting Feed there would
+       point at a tab you are not on. */
+    if(typeof kfState!=="undefined" && kfState && !kfHidden) return "feed";
     return "cam";
   }catch(_){ return "cam"; }
 }
@@ -15339,10 +15355,21 @@ function navGo(tab){
     /* THE BOARD IS A SCREEN NOW, so leaving it is closing it — and the tab you asked for is
        underneath, already in whatever state you left it. */
     try{ const b=document.querySelector(".chBoardWrap.show"); if(b&&b._shut) b._shut(); }catch(_){}
-    if(tab==="feed"){ try{ if(!kfState) chFeed({src:"nav"}); }catch(_){} return; }
-    /* CAMERA. The feed is an overlay over compose, so the way to the camera is to close it —
-       the same door the bar replaced at the top of the feed. */
-    try{ if(kfState&&kfState.close) kfState.close(); }catch(_){}
+    /* ⚠️ RELEASED, NOT REOPENED. A feed that is merely held is the same feed — same slide,
+       same round, same taps already spent — and giving it back is the whole fix. Opening a
+       fresh one here is what drew a different hide. */
+    if(tab==="feed"){
+      try{ if(kfState&&kfHidden&&kfState.resume){ kfState.resume(); return; } }catch(_){}
+      try{ if(!kfState) chFeed({src:"nav"}); }catch(_){}
+      return;
+    }
+    /* CAMERA. The feed is an overlay over compose, so the way to the camera is to get it out
+       of the way — and it is HELD, not closed. Closing destroyed the round, which meant a
+       locked hide could be escaped by tapping Camera and back: no find, no give-up, no cost to
+       the run, and a different hide waiting. Founder, 2026-08-29: "sinon trop facile de
+       continuer un streak". The session ends when the player actually starts something else —
+       see capture() — not when they glance at the camera. */
+    try{ if(kfState){ if(kfState.toCamera) kfState.toCamera(); else if(kfState.close) kfState.close(); } }catch(_){}
   }catch(_){}
   setTimeout(navSync,60);
 }
@@ -15595,7 +15622,14 @@ function chSeek(hideId,opts){
       return {run:run,best:best,broke:(hit||saved||passed)?0:s.run,record:(run>=2&&run>s.best),saved:saved,passed:!!passed};
     }catch(_){ return {run:0,best:0,broke:0,record:false}; } };
   try{ window.KAMOSEEK={record:chSeekRecord,min:CH_MIN_SEEKS,streak:chStreak}; }catch(_){}
-  const ctl={destroy:()=>{}};
+  /* ⚠️ BOTH ARE NO-OPS UNTIL THE ROUND ACTUALLY MOUNTS, AND `hold` HAD TO LEARN THAT THE
+     HARD WAY. The real hold() closes over `held` and syncPause(), which are declared inside
+     the async block below — several hundred lines further down and in a DIFFERENT SCOPE from
+     this object. Defining it up here reads fine and throws a ReferenceError the first time
+     anybody calls it, which on this file is a blank screen for every user at once. So the
+     default is a no-op that is also CORRECT: a round with no clock started has no elapsed
+     time to protect, and holding it is genuinely nothing. */
+  const ctl={destroy:()=>{},hold:()=>{}};
   const st=document.createElement("style");
   st.textContent=
     ".chS{position:fixed;inset:0;height:100dvh;z-index:9000;background:var(--bg);overflow:hidden;font-family:var(--font);color:var(--text);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}"
@@ -16807,7 +16841,15 @@ function chSeek(hideId,opts){
        one tick, and a second MutationObserver over the same overlays is a second thing to
        keep in step with the first. */
     let paused=0, pausedAt=0;
-    const roundBlocked=()=>{ try{ return document.hidden||timerBlocked(); }catch(e){ return false; } };
+    /* ⚠️ HELD IS NOT PAUSED-BY-THE-UI, AND IT IS NOT document.hidden EITHER. The tab bar can
+       take this round off screen while the app stays in the foreground and nothing is layered
+       over it — neither of the two conditions roundBlocked() already knew about. Without this
+       the clock kept running behind the camera, and a player who tabbed away for a minute came
+       back to a round that read 63s: p_ms on the attempt, and best_ms is a hide's public
+       record. Rides the SAME accumulator as the other two rather than a second one, so a hold
+       that overlaps a backgrounded app is counted once. */
+    let held=false;
+    const roundBlocked=()=>{ try{ return held||document.hidden||timerBlocked(); }catch(e){ return false; } };
     const syncPause=()=>{ const b=roundBlocked();
       if(b&&!pausedAt) pausedAt=Date.now();
       else if(!b&&pausedAt){ paused+=Date.now()-pausedAt; pausedAt=0; } };
@@ -16816,6 +16858,19 @@ function chSeek(hideId,opts){
     const elapsed=()=>{ if(!t0) return 0;
       const open=pausedAt?Date.now()-pausedAt:0;
       return Math.max(0,Date.now()-t0-paused-open); };
+    /* ⚠️ HOLD IS THE ALTERNATIVE TO destroy(), AND THAT IS THE WHOLE POINT OF IT. The tab bar
+       used to leave the feed by destroying its round, which handed the player a free skip: a
+       locked hide they could not swipe past and could only leave by paying the run vanished
+       on a tap on Camera, and coming back drew a different one. Founder, 2026-08-29: "sinon
+       trop facile de continuer un streak".
+       So leaving is a HOLD now: the DOM stays, the taps already spent stay spent, and the
+       clock stops. syncPause() is called on the spot rather than waited for — the 100ms tick
+       would get there by itself, but a caller that holds and reads elapsed() in the same
+       breath must not see the millisecond in between.
+       ⚠️ DECLARED HERE, NOT BESIDE ctl.destroy. It closes over `held` and syncPause(), both
+       of which live in this async block; assigned onto ctl up there it would have thrown on
+       first call. See the note on the ctl literal. */
+    ctl.hold=(on)=>{ held=!!on; try{ syncPause(); }catch(_){} };
     /* WHERE THIS HUNT CAME FROM. n_attempts counts every play into one number, so a creator
        reading "12 tried" cannot tell whether their feed is working or their friends are —
        the two things they would act on differently. Carried on the TRACE rather than added to
@@ -19174,6 +19229,13 @@ const KF_CSS=
   +".kfGate button{margin-top:8px;height:44px;border:0;border-radius:999px;background:var(--mint);color:#04120c;font-family:var(--display);font-size:15px;font-weight:800;letter-spacing:-.2px;}";
 
 let kfState=null;
+/* ⚠️ A HELD FEED IS STILL AN OPEN FEED — kfState stays set — AND EVERY READER OF kfState HAD
+   TO BE JUDGED ONE BY ONE AGAINST THAT. Four of them ask "would opening a feed disturb
+   something", and a held session answers yes exactly as a visible one does (land_on_own_hide,
+   the reply return, chHomeIdle, chFeed's own re-entry guard): none of them changed. The two
+   that ask "is the feed the thing ON SCREEN" — navWhere() and the paywall's pwOverUI — are the
+   two that read this flag, because behind a held feed the screen is the camera. */
+let kfHidden=false;
 /* opts.first = a hide id to put in front of the public page, used by the post-send offer
    so somebody who has just published sees THEIR OWN photo in the feed's own frame —
    proof, in the place strangers will meet it, rather than a thumbnail in a grid. */
@@ -19265,7 +19327,19 @@ function kfWebWall(){
   track("feed_gated",{rounds:kfRoundsSeen()});
 }
 function chFeed(opts){
-  if(kfState) return;
+  /* ⚠️ A HELD SESSION IS NOT A REASON TO REFUSE — IT IS A REASON TO REPLACE. The guard used
+     to be flat: a feed is open, do nothing. Once the tab bar started HOLDING feeds behind the
+     camera that became "a feed nobody can see silently eats every call", and the callers are
+     the ones that matter — "See it live" off the reveal, the reply return, land_on_own_hide.
+     Each of those asks for ONE named hide, and answering with the round the player walked away
+     from twenty seconds ago is not an answer.
+     close(true) rather than a bare drop: kfNoteSkip() still runs, so the abandoned round is
+     filed exactly as scrolling past it would be, and `true` skips the recap and the
+     backToCompose() branch — nobody is going to the camera here, they are going to a hide. */
+  if(kfState){
+    if(!kfHidden) return;
+    try{ kfState.close(true); }catch(_){}
+  }
   /* BEFORE ANYTHING ELSE, including the CSS injection and the overlay build: the wall is a
      refusal to open this screen, not a layer on top of an opened one. */
   if(kfWebWalled(opts)){ kfWebWall(); return; }
@@ -19381,6 +19455,58 @@ function chFeed(opts){
      Assigned after close() is declared below — a function declaration, so it is hoisted and
      this line is safe where it stands. */
   S.close=close;
+  /* ⚠️ HELD, NOT CLOSED — see the note on ctl.hold. The tab bar's Camera button used to call
+     close(), which destroyed the round; a locked hide the player could only leave by paying
+     the run was gone for the price of one tap, and Feed drew a different one. That is a free
+     skip, and an unlimited one: the daily pass exists precisely so that leaving a hide costs
+     something once a day and nothing after that.
+     ⚠️ visibility RATHER THAN display:none, AND THE HONEST VERSION OF WHY. The argument is
+     that this root holds a scroll-snap column whose scrollTop IS the slide you are on, and
+     that taking it out of layout risks both that position and the IntersectionObserver's
+     geometry — whose callback opens with `if(S.round) S.round.destroy()`, so a spurious
+     re-activation on the way back would rebuild the round and hand back the free clock this
+     whole change exists to withhold.
+     ⚠️ THAT ARGUMENT IS REASONING, NOT A MEASUREMENT. Both were tried against the suite and
+     display:none passed every assertion too, including the round-identity one written
+     specifically to tell them apart — on a fixture sitting at slide 0 with two rows, which is
+     where a locked round always sits and therefore cannot show a scroll position being lost.
+     So this is the conservative branch, not the proven one: it changes nothing about layout,
+     and the cost of being wrong the other way is the exploit coming back silently. If somebody
+     needs display:none here, the thing to stage first is a feed that is genuinely scrolled.
+     pointer-events is belt and braces: a hidden subtree is already untappable, but this root
+     sits at z-index 9400 over the whole camera screen and that is not a thing to leave to one
+     property. */
+  /* ⚠️ AND HOLDING IS NOT ALWAYS THE RIGHT ANSWER — FROM_REVEAL IS THE EXCEPTION, AND IT IS
+     THE ONE THAT WAS ALREADY REPORTED TWICE. Holding is correct when the feed was opened OVER
+     THE CAMERA, because then the camera really is underneath and the Camera tab really is
+     going back to it. From the reveal it is the opposite: "See it live" is reached from a hide
+     that is finished, published and sent, and the screen behind that feed is its receipt.
+     Merely uncovering it drops the player onto a round that is over — "ça renvoie vers le paint
+     qui nous a fait ouvrir le feed au lieu de diriger vers le screen capture" — which is the
+     whole reason close() grew its exitFinished()+backToCompose() branch. So that path CLOSES.
+     Nothing is given up by the exception: a reveal-opened feed has no run to protect, because
+     the player arrived from their own publish rather than from a locked hide they wanted out
+     of. The bar asks the session what leaving means instead of deciding for it — FROM_REVEAL
+     lives here and nowhere near navGo. */
+  S.toCamera=()=>{ if(FROM_REVEAL) close(); else S.suspend(); };
+  S.suspend=()=>{
+    if(FROM_REVEAL||kfHidden) return;
+    kfHidden=true;
+    root.style.visibility="hidden"; root.style.pointerEvents="none";
+    try{ if(S.round&&S.round.hold) S.round.hold(true); }catch(_){}
+    /* THE RECAP STILL FIRES, BUT ONLY WHEN THE ROUND IS OVER. It is the seeker's one piece of
+       restitution and holding the feed must not delete it — but a player who steps away MID
+       round is coming back to that round, and "0 of 1 found" printed over their shoulder is a
+       verdict on something still in progress. S.answered is exactly "this round is resolved".
+       Once per session either way: a thumb bouncing between two tabs is not four sessions. */
+    try{ if(!S.recapped&&S.played&&S.answered){ S.recapped=true; chSessionToast(S.played,S.found); } }catch(_){}
+  };
+  S.resume=()=>{
+    if(!kfHidden) return;
+    kfHidden=false;
+    root.style.visibility=""; root.style.pointerEvents="";
+    try{ if(S.round&&S.round.hold) S.round.hold(false); }catch(_){}
+  };
   /* THE CLOCK STARTS HERE, and it exists because the last change to this screen could not be
      judged. The feed was made to open on a page fetched at launch instead of one fetched at
      the tap — a whole network round trip removed from the critical path — and the only
@@ -19421,6 +19547,10 @@ function chFeed(opts){
        tap is not double-counted as a thumb going by. */
     try{ kfNoteGate(); }catch(_){}
     kfState=null;
+    /* Whatever state the tab bar left this in, a destroyed session is not hidden — it is
+       gone. Cleared here rather than at every call site, because the ones that matter are the
+       ones nobody remembered to write. */
+    kfHidden=false;
     try{ if(S.round) S.round.destroy(); }catch(_){}
     try{ io.disconnect(); }catch(_){}
     try{ root.remove(); }catch(_){}
