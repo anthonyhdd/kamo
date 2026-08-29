@@ -150,7 +150,7 @@ console.log('\nTHE PILL IS ON TOP OF EVERY SURFACE THAT CAN SEND A MESSAGE');
 }
 {
   const page = await open();
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(1300);
   const g = await onTop(page);
   g.top ? ok('on the feed (#kfeed, z 9400)') : bad(`covered on the feed by ${g.by}`);
@@ -162,7 +162,7 @@ console.log('\nTHE PILL IS ON TOP OF EVERY SURFACE THAT CAN SEND A MESSAGE');
   const page = await open('', (p) => p.addInitScript(() => {
     try { localStorage.setItem('kamo_hides', JSON.stringify(['m1'])); } catch (e) {}
   }));
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(1200);
   await page.evaluate(() => document.getElementById('kfScope').click());
   await page.waitForTimeout(400);
