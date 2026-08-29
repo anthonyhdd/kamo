@@ -90,7 +90,11 @@ const html = real.slice(0, at)
   /* The reveal has to be genuinely UP for "closing the feed leaves it" to mean anything —
      `finished` is what exitFinished()/backToCompose() branch on. */
   + 'reveal(){ finished=true; stage.classList.add("done"); return finished; },'
-  + 'closeFeed(){ const x=document.getElementById("kfClose"); if(x) x.click();'
+  /* ⚠️ THE DOOR MOVED ON 2026-08-29. The feed's top-left circle is gone — the tab bar owns
+     the camera now, and two ways to one screen is a choice nobody asked to make. This helper
+     follows it rather than asserting the old id: what it is FOR is "leaving the feed lands on
+     a usable camera", and that is unchanged. */
+  + 'closeFeed(){ const x=document.querySelector(\'#kNav [data-tab="cam"]\')||document.getElementById("kfClose"); if(x) x.click();'
   + 'return{feed:!!document.getElementById("kfeed"),finished:finished,mode:mode,'
   + 'shutter:getComputedStyle(document.getElementById("shutterWrap")).display}; },'
   + 'tap(){ window.__tracked=[]; const t=track;'

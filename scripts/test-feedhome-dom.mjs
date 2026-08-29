@@ -254,34 +254,57 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
 
 /* ── ⑤ THE ONLY DOOR TO CREATION, AND A THUMB HAS TO REACH IT ────────────────────────────── */
 {
-  console.log('\n— the door out of the feed says camera, and can be pressed —');
+  console.log('\n— the door out of the feed is the camera tab, and can be pressed —');
+  /* ⚠️ THE DOOR MOVED ON 2026-08-29 AND THIS BLOCK FOLLOWED IT RATHER THAN BEING DELETED.
+     It used to guard a 38px circle in the feed's top bar (#kfClose). The tab bar now owns that
+     door and the circle is gone — two ways to one screen, one of them a corner button, is a
+     choice nobody asked to make. What this block protects is unchanged and is the reason it
+     exists: at 85% the feed is the launch, so this is the only route to creation most of the
+     fleet ever sees, and it has to be reachable by a thumb.
+     ⚠️ HIT-TESTED WITH elementFromPoint, NEVER ASSERTED IN THE DOM. This app has lost a button
+     to something merely sitting near it TWICE — the feed's own .kfHint pill on 08-20 (-62% on
+     sends) and the landing arm on 08-22 (halved) — and both shipped with the control present,
+     visible, and untappable. A tab bar pinned to the bottom of every screen is exactly the
+     shape of that failure, so it is tested the only way that catches it. */
   const p = await boot({ arm: 'feed' });
   const door = await p.evaluate(() => {
-    const b = document.getElementById('kfClose');
+    const b = document.querySelector('#kNav [data-tab="cam"]');
     if (!b) return { missing: true };
     const r = b.getBoundingClientRect();
-    if (!r.width || !r.height) return { collapsed: true };
+    if (!r.width || !r.height) return { collapsed: true, why: {
+      nav: !!document.getElementById('kNav'),
+      navDisp: document.getElementById('kNav') && document.getElementById('kNav').style.display,
+      chS: !!document.querySelector('.chS'),
+      kf: !!(window.kfState),
+      start: (() => { const e = document.getElementById('start'); return e ? getComputedStyle(e).display : 'none'; })(),
+      blockers: ['shareSheet','paywall','confirmSheet','kamoPlus','kamoHome']
+        .filter((id) => { const e = document.getElementById(id); return e && e.classList.contains('show'); }),
+    } };
     if (r.y < 0 || r.y + r.height > innerHeight) return { offscreen: Math.round(r.y) };
     const d = el => !el ? 'nothing' : el.id ? '#' + el.id
       : '.' + String(el.className.baseVal || el.className || '').split(' ').filter(Boolean).slice(0, 2).join('.');
     return { svg: !!b.querySelector('svg'), text: (b.textContent || '').trim(), label: b.getAttribute('aria-label'),
+             gone: !document.getElementById('kfClose'),
              rect: { w: Math.round(r.width), h: Math.round(r.height) },
              hits: [[0.5, 0.5], [0.16, 0.5], [0.84, 0.5]].map(([fx, fy]) => {
                const el = document.elementFromPoint(r.x + r.width * fx, r.y + r.height * fy);
                return { at: d(el), ours: !!(el && (el === b || b.contains(el))) }; }) };
   });
-  if (door.missing) bad('#kfClose is gone — the feed has no way out and no way to create');
-  else if (door.collapsed) bad('#kfClose has no box');
-  else if (door.offscreen !== undefined) bad(`#kfClose sits at y=${door.offscreen}, outside the viewport`);
+  if (door.missing) bad('the camera tab is gone — the feed has no way out and no way to create');
+  else if (door.collapsed) bad('the camera tab has no box — ' + JSON.stringify(door.why));
+  else if (door.offscreen !== undefined) bad(`the camera tab sits at y=${door.offscreen}, outside the viewport`);
   else {
     (door.svg && !door.text.includes('✕'))
       ? ok(`it is a camera glyph, not a ✕ (aria-label ${JSON.stringify(door.label)})`)
-      : bad('the door is still a ✕. At 85% this is the only creation door most of the fleet has, '
+      : bad('the door is a ✕. At 85% this is the only creation door most of the fleet has, '
           + 'and a ✕ names what it leaves rather than what it opens.');
+    door.gone
+      ? ok('and the old corner circle is gone, so there is one door and not two')
+      : bad('#kfClose is still in the feed bar next to the tab that replaced it');
     const blocked = door.hits.filter(h => !h.ours);
     blocked.length === 0
       ? ok(`and a thumb reaches it across its whole width (${door.rect.w}x${door.rect.h})`)
-      : bad(`the camera door is covered at ${blocked.length} of 3 points — a thumb lands on `
+      : bad(`the camera tab is covered at ${blocked.length} of 3 points — a thumb lands on `
           + blocked.map(h => h.at).join(', ') + '. This app has lost a button to exactly that '
           + 'twice: the feed\'s own .kfHint pill on 08-20 and #chStage on 08-23.');
   }
@@ -291,9 +314,9 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   const h = await boot({ arm: 'camera' });
   await h.evaluate(() => document.getElementById('btnFeed').click());
   await h.waitForTimeout(800);
-  (await h.evaluate(() => { const b = document.getElementById('kfClose'); return !!(b && b.querySelector('svg')); }))
-    ? ok('the holdout gets the same camera glyph — the arm moves the destination, not the affordance')
-    : bad('the holdout still has a ✕: the arm now changes two things at once and can settle neither');
+  (await h.evaluate(() => { const b = document.querySelector('#kNav [data-tab="cam"]'); return !!(b && b.querySelector('svg')); }))
+    ? ok('the holdout gets the same tab bar — the arm moves the destination, not the affordance')
+    : bad('the holdout has no camera tab: the arm now changes two things at once');
   await h.close();
 }
 

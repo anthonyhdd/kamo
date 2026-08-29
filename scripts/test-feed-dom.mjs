@@ -404,7 +404,8 @@ console.log('\nAND A PLAYER WHO HAS SWIPED IS NOT TAUGHT THE SWIPE AGAIN');
      that is news every time it happens however many hides this player has swiped past. */
   /* Closed through its own ✕ rather than by ripping #kfeed out of the DOM: kfState survives a
      bare remove(), and the next chFeed() would bail as "already open". */
-  await page.evaluate(() => document.getElementById('kfClose').click());
+  /* The camera door moved into the tab bar on 2026-08-29. */
+  await page.evaluate(() => document.querySelector('#kNav [data-tab="cam"]').click());
   await page.waitForTimeout(500);
   await page.evaluate(() => window.__chFeed({ first: 'hide0' }));
   await page.waitForTimeout(1200);
