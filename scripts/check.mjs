@@ -1975,6 +1975,21 @@ try {
   bad('THE ARRIVAL IS BROKEN:\n' + why(e));
 }
 
+/* THE TAB BAR — three screens, and out of the way on every screen that owns its own bottom
+   edge. This is the highest-risk object in the file: a bar pinned to the bottom of everything
+   is the exact shape of the two regressions this product has already paid for (the .kfHint
+   pill on 2026-08-20, -62% on sends; the landing arm on 08-22, halved). The suite hit-tests
+   "Send to a friend" with elementFromPoint rather than asserting it exists, because both of
+   those shipped with the button present, visible and untappable. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-navbar-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-navbar-dom.mjs', 'TAB BAR TEST', out)
+    : ok('the tab bar is on its three screens and clear of the send button (node scripts/test-navbar-dom.mjs)');
+} catch (e) {
+  bad('THE TAB BAR IS BROKEN:\n' + why(e));
+}
+
 /* ---- 13-bis-2. The reveal has to show the figure where the answer says it is ------------
    Two descriptions of one position, built from different material: chGeom() reads the bbox of
    maskCanvas and becomes the (cx,cy,r) the server tests every tap against, while beforeBoard

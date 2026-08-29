@@ -71,7 +71,8 @@ const html = real.slice(0, at)
   /* chFeed() refuses to open twice (`if(kfState) return`), so a block that runs after another
      one has left the feed up would silently read the PREVIOUS block's grid — door() would
      return, the assertions would run, and they would be about stale DOM. */
-  + 'closeFeed(){const c=document.getElementById("kfClose");if(c)c.click();},'
+  /* The camera door is the tab bar's since 2026-08-29; the old corner circle is gone. */
+  + 'closeFeed(){const c=document.querySelector(\'#kNav [data-tab="cam"]\')||document.getElementById("kfClose");if(c)c.click();},'
   /* THE BOX'S CLICK LEAVES THE CARD NOW (2026-08-15) — it opens the My-kamos grid, so a real
      click here would destroy the list this block is about to read. What survives in place is
      the khOpenNext path, which is the one a "somebody found your hide" notification takes
