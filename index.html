@@ -15174,30 +15174,96 @@ function chSeek(hideId,opts){
        stray touch mid-hunt cannot reach it at all rather than being caught and ignored. */
     +".chRun.tap{pointer-events:auto;cursor:pointer;}"
     +".chRun.tap::after{content:' ›';opacity:.55;}"
-    +".chBoardWrap{position:fixed;inset:0;z-index:9400;display:none;align-items:flex-end;"
-    +"background:rgba(2,4,8,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}"
+    /* ═══ THE SAME SHEET EVERY OTHER MODAL IN THIS APP IS ═══════════════════════════════════
+       The first version was a flat black card, and next to the hint pack or the paywall it
+       read as a different product — a data table that happened to slide up. Founder: "design
+       it like the other modals, don't make the top black."
+       So it is the same object: the green-dark gradient, the 26px top corners, the light
+       hairline, the pwUp entrance, and the mint glow breathing at the top. The glow is the
+       part that matters — it is what stops a sheet reading as a hole in the screen, and it is
+       exactly the top edge that was black. Values copied from .hpCard rather than approximated,
+       so the two cannot drift into looking almost-alike, which is worse than either. */
+    +".chBoardWrap{position:fixed;inset:0;z-index:9400;display:none;align-items:flex-end;justify-content:center;"
+    +"background:rgba(3,5,8,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}"
     +".chBoardWrap.show{display:flex;}"
-    +".chBoardCard{width:100%;max-height:86dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;"
-    +"background:var(--bg);border-radius:22px 22px 0 0;padding:20px 16px calc(20px + var(--safe-b));"
-    +"box-shadow:0 -18px 60px rgba(0,0,0,.6);animation:chBoardUp .26s cubic-bezier(.2,.8,.3,1);}"
-    +"@keyframes chBoardUp{from{transform:translateY(26px);opacity:0}to{transform:none;opacity:1}}"
-    +".chBoardTitle{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.5px;margin:0 0 2px;}"
+    +".chBoardCard{position:relative;width:100%;max-width:460px;max-height:86dvh;overflow-y:auto;"
+    +"-webkit-overflow-scrolling:touch;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);"
+    +"border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);"
+    +"box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:24px 20px calc(20px + var(--safe-b));"
+    +"animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}"
+    /* The glow, and the reason the top is not black. Same radial and same breath as .hpCard. */
+    +".chBoardCard::before{content:'';position:absolute;left:0;right:0;top:0;height:210px;pointer-events:none;"
+    +"border-top-left-radius:26px;border-top-right-radius:26px;"
+    +"background:radial-gradient(72% 130px at 50% -6%, rgba(95,230,164,.22), transparent 70%);"
+    +"animation:pwGlow 3.8s ease-in-out infinite;}"
+    /* Everything rides above the glow — the same lift .hpCard gives its own children, without
+       which the gradient paints over the first rows. */
+    +".chBoardCard>*{position:relative;z-index:1;}"
+    +".chBoardHead{display:flex;align-items:baseline;gap:10px;margin:0 0 2px;}"
+    +".chBoardTitle{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.3px;line-height:1.18;color:#fff;margin:0;}"
+    /* ⚠️ THE DEADLINE IS THE MECHANIC, NOT DECORATION. The board resets at midnight UTC, and a
+       reset nobody can see is a reset nobody plays against — it is what turns a table into a
+       clock somebody comes back to. It is also the honest reading of "Today": without it the
+       title is a claim with no boundary. */
+    +".chBoardLeft{font-size:12px;font-weight:700;color:rgba(255,255,255,.42);font-variant-numeric:tabular-nums;margin-left:auto;}"
     /* THE CHASE, NOT THE RANK. "#37" is a verdict; "2 more and you pass @x" is a thing to do
        tonight. With 60 players a day and the low ranks dense, the next person is almost always
        one or two runs away — which is why this line can be honest and still be short. */
-    +".chBoardChase{font-size:15px;color:var(--mint);font-weight:700;margin:0 0 14px;}"
+    +".chBoardChase{font-size:15px;color:var(--mint);font-weight:700;margin:0 0 14px;"
+    +"animation:chChaseIn .42s cubic-bezier(.2,.8,.3,1) both;}"
+    +"@keyframes chChaseIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}"
     +".chBoardSub{font-size:13px;color:rgba(255,255,255,.5);margin:0 0 14px;}"
-    +".chRow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;}"
+    /* THEY ARRIVE, THEY DO NOT APPEAR. Everything else in this app has weight — the kamo
+       falls, the confetti bursts, the pill takes the punch — and a list that simply exists
+       between two frames reads as a page render. Staggered off an index so the eye travels
+       down the board once, then stops; capped in JS at 10 rows so the last one is never
+       waiting on a queue. */
+    +".chRow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;"
+    +"animation:chRowIn .34s cubic-bezier(.2,.8,.3,1) both;}"
+    +"@keyframes chRowIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}"
+    /* YOUR ROW IS THE ANSWER TO THE ONLY QUESTION THIS SCREEN IS OPENED FOR, so it does more
+       than tint: it breathes once, after the others have landed, and scrollIntoView puts it
+       there without a gesture. */
     +".chRow.me{background:rgba(95,230,164,.12);outline:1px solid rgba(95,230,164,.35);}"
-    +".chRowN{width:30px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:rgba(255,255,255,.45);font-size:14px;}"
+    +".chRow.me{animation:chRowIn .34s cubic-bezier(.2,.8,.3,1) both,chRowMine 1.1s ease-out .5s 1;}"
+    +"@keyframes chRowMine{0%{box-shadow:0 0 0 0 rgba(95,230,164,0)}"
+    +"35%{box-shadow:0 0 22px 3px rgba(95,230,164,.42)}100%{box-shadow:0 0 0 0 rgba(95,230,164,0)}}"
+    /* THE KAMO GLYPH, the same one the run pill carries. A bare numeral says nothing about
+       what was counted; this is the app's own word for a run. */
+    /* ⚠️ THE GLYPH IS GONE FROM THE ROWS, and putting it there at all was the mistake. At 11px
+       it read as a smudge and at 15px as a beige blob wedged between the name and the number —
+       a mark nobody can recognise is noise beside the one figure on the line that matters.
+       The kamo belongs on the run PILL, where it is large and alone and means something. It
+       survives here once, in the header, where it can be read and does the same job for the
+       whole column. Checked on a rendered board both times; there was no other way to know. */
+    +".chBoardTitle svg{width:15px;height:auto;fill:#ffd9a0;vertical-align:-1px;margin-right:7px;opacity:.9;}"
+    +"@media (prefers-reduced-motion: reduce){.chRow,.chRow.me,.chBoardChase,.chBoardCard{animation:none;}}"
+    /* ⚠️ THE RANK IS THE SKELETON OF A LEADERBOARD AND IT WAS A GREY 14px NUMERAL. A medal on
+       the first three is the one convention every reader already owns — it gives the list a
+       top without a word of explanation, and it is what separates a board from a log. */
+    +".chRowN{flex:0 0 24px;height:24px;line-height:24px;text-align:center;border-radius:50%;"
+    +"font-variant-numeric:tabular-nums;font-weight:800;color:rgba(255,255,255,.42);font-size:13px;}"
+    +".chRowN.m1{background:linear-gradient(180deg,#f6d372,#c99a26);color:#241a04;}"
+    +".chRowN.m2{background:linear-gradient(180deg,#e6ecf2,#a8b2bd);color:#1a1f24;}"
+    +".chRowN.m3{background:linear-gradient(180deg,#e3ab74,#a9702f);color:#241505;}"
     +".chRowWho{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:15px;}"
-    +".chRowRun{font-family:var(--display);font-weight:800;font-size:18px;color:#ffd9a0;font-variant-numeric:tabular-nums;}"
+    /* ⚠️ ONE STRONG RIGHT EDGE. The number floated mid-row with the meta beyond it, so the eye
+       had no column to run down — which is the only thing a leaderboard is for. The run is now
+       hard right and the largest thing on the line; everything else yields to it. */
+    +".chRowRun{flex:0 0 auto;min-width:34px;text-align:right;font-family:var(--display);font-weight:800;"
+    +"font-size:21px;color:#ffd9a0;font-variant-numeric:tabular-nums;letter-spacing:-.5px;}"
     /* Quiet, because they are context and not the score: how many rounds it took, and how many
        hints it cost. Shown on every row — the tiebreak already ranks on efficiency, so hiding
        it would leave two identical-looking rows in a deliberate order nobody could read. */
-    +".chRowMeta{font-size:12px;color:rgba(255,255,255,.38);font-variant-numeric:tabular-nums;min-width:66px;text-align:right;}"
+    /* Immediately LEFT of the run, not beyond it: context reads before the figure it explains,
+       and it stops competing with the number for the edge of the row. */
+    +".chRowMeta{font-size:12px;color:rgba(255,255,255,.34);font-variant-numeric:tabular-nums;text-align:right;margin-left:auto;}"
     +".chBoardGap{height:1px;background:rgba(255,255,255,.10);margin:8px 34px;}"
-    +".chBoardClose{display:block;width:100%;margin-top:16px;padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:transparent;color:rgba(255,255,255,.75);font-family:var(--font);font-weight:700;font-size:15px;}"
+    /* ⚠️ THE LEAST INTERESTING CONTROL WAS THE BIGGEST OBJECT ON THE SCREEN — a full-width
+       14px-padded slab under a board about other people's runs. It is a way out, not an
+       action: the sheet already closes on a tap outside, so this is the fallback for a thumb
+       that cannot reach there. Sized like one. */
+    +".chBoardClose{display:block;margin:14px auto 0;padding:9px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:transparent;color:rgba(255,255,255,.55);font-family:var(--font);font-weight:700;font-size:14px;}"
     /* Opaque on purpose. The translucent fill it replaces sat over an unknown photograph, so
        its contrast was whatever the picture underneath happened to be — legible on a dark room,
        washed out on a bright wall, which is the lesson .chMark already carries. A solid chip is
@@ -16048,17 +16114,39 @@ function chSeek(hideId,opts){
     let wrap=null;
     try{
       wrap=document.createElement("div"); wrap.className="chBoardWrap show";
-      wrap.innerHTML='<div class="chBoardCard"><div class="chBoardTitle">Today\u2019s runs</div>'
-        +'<div class="chBoardChase" id="chBoardChase">Loading\u2026</div>'
+      wrap.innerHTML='<div class="chBoardCard">'
+        +'<div class="chBoardHead"><div class="chBoardTitle">'+RUN_MARK+'Today\u2019s runs</div>'
+        +'<div class="chBoardLeft" id="chBoardLeft"></div></div>'
+        /* ⚠️ NOT "Loading…". A placeholder is not a state: this screen is opened to answer one
+           question, and the honest thing to show while the answer is in flight is the question
+           itself. It is also the sentence that will be replaced, so nothing jumps. */
+        +'<div class="chBoardChase" id="chBoardChase">Counting today\u2019s runs\u2026</div>'
         +'<div id="chBoardRows"></div>'
         +'<button type="button" class="chBoardClose" id="chBoardClose">Close</button></div>';
       document.body.appendChild(wrap);
-      const shut=()=>{ try{ wrap.remove(); }catch(_){} chBoardBusy=false; };
+      const shut=()=>{ try{ clearInterval(wrap._tk); }catch(_){} try{ wrap.remove(); }catch(_){} chBoardBusy=false; };
       wrap.querySelector("#chBoardClose").onclick=shut;
       /* TAP OUTSIDE CLOSES, and the card stops the event so a tap inside never does. The share
          sheet shipped for weeks without this because its container was pointer-events:none in
          every state and nobody could tell the difference from a screenshot. */
       wrap.onclick=(e)=>{ if(e.target===wrap) shut(); };
+      /* Every other control in this app answers a touch — 91 haptic calls elsewhere, and this
+         screen had none. A sheet that arrives without a tick reads as a page, not a place. */
+      try{ haptic(10); }catch(_){}
+      /* ⚠️ THE DEADLINE, TICKING. Midnight UTC is when every run on this board is wiped, and
+         a reset nobody can see is a reset nobody plays against. Cleared with the sheet, so a
+         board closed and reopened does not leave a timer running behind it. */
+      const left=wrap.querySelector("#chBoardLeft");
+      const tick=()=>{ try{
+        if(!left||!left.isConnected) return;
+        const now=new Date();
+        const end=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1);
+        const ms=Math.max(0,end-now.getTime());
+        const h=Math.floor(ms/3600000), m=Math.floor(ms/60000)%60;
+        left.textContent="resets in "+(h>0?h+"h "+m+"m":m+"m");
+      }catch(_){} };
+      tick(); const tk=setInterval(tick,30000);
+      wrap._tk=tk;
       track("board_opened",{});
     }catch(_){ chBoardBusy=false; return; }
     (async()=>{
@@ -16096,19 +16184,24 @@ function chSeek(hideId,opts){
     if(myRank) for(let d=-CH_BOARD_AROUND;d<=CH_BOARD_AROUND;d++) keep.add(myRank+d);
     const shown=rows.filter(r=>keep.has(r.rank|0));
     body.innerHTML="";
-    let last=0;
-    shown.forEach(r=>{
+    let last=0, mineEl=null;
+    shown.forEach((r,i)=>{
       const n=r.rank|0;
       if(last&&n>last+1){ const g=document.createElement("div"); g.className="chBoardGap"; body.appendChild(g); }
       last=n;
       const row=document.createElement("div"); row.className="chRow"+(r.me?" me":"");
-      const rk=document.createElement("div"); rk.className="chRowN"; rk.textContent=n;
+      const rk=document.createElement("div");
+      rk.className="chRowN"+(n<=3?" m"+n:""); rk.textContent=n;
       const who=document.createElement("div"); who.className="chRowWho";
       /* textContent, ALWAYS. This is a handle another person typed, rendered on a stranger's
          device — the third of the three places the name is narrowed (see cleanHandle and
          create_hide). innerHTML here would be the whole trust boundary undone. */
       who.textContent=r.me?"You":("@"+(r.who||"someone"));
-      const run=document.createElement("div"); run.className="chRowRun"; run.textContent=r.streak|0;
+      /* THE GLYPH THEN THE NUMBER, the same pair the run pill carries. RUN_MARK is markup we
+         author, never anything a player typed — the handle two lines below is the string that
+         has to go through textContent, and it does. */
+      const run=document.createElement("div"); run.className="chRowRun";
+      run.textContent=String(r.streak|0);
       const meta=document.createElement("div"); meta.className="chRowMeta";
       /* ROUNDS FIRST because it is the tiebreak the ranking already uses — two rows showing
          the same number sit in a deliberate order, and without this nobody can read why.
@@ -16116,9 +16209,25 @@ function chSeek(hideId,opts){
          a scoreboard of who needed help, and hints are the one thing in this product with
          measured demand. */
       meta.textContent=(r.rounds|0)+" rounds"+((r.hints|0)>0?" \u00b7 "+(r.hints|0)+"h":"");
-      row.appendChild(rk); row.appendChild(who); row.appendChild(run); row.appendChild(meta);
+      /* Staggered so the eye travels the board once. Capped, because a delay that keeps
+         growing turns the last rows into a queue somebody waits through. */
+      row.style.animationDelay=(Math.min(i,9)*0.035).toFixed(3)+"s";
+      /* who, then meta, then the run: the figure owns the right edge and everything else
+         yields to it. Appended in reading order so the DOM matches what the eye does. */
+      row.appendChild(rk); row.appendChild(who); row.appendChild(meta); row.appendChild(run);
       body.appendChild(row);
+      if(r.me) mineEl=row;
     });
+    /* ⚠️ AND YOUR ROW IS PUT IN FRONT OF YOU. This screen is opened to answer one question;
+       making somebody scroll a list to find the answer is asking them to do the work the
+       screen exists to do. After the stagger has landed, so it does not fight the entrance,
+       and only when the row is actually off-screen — scrolling a list that is already showing
+       the answer is a jolt for nothing. */
+    if(mineEl) setTimeout(()=>{ try{
+      const cr=mineEl.getBoundingClientRect();
+      if(cr.top<0||cr.bottom>innerHeight) mineEl.scrollIntoView({block:"center",behavior:"smooth"});
+      haptic(8);
+    }catch(_){} },520);
   }
   const chRunShow=(n,mode,best)=>{ if(!runEl||REPLAY) return;
     const v=n|0, b=best|0;
