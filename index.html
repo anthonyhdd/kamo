@@ -17026,9 +17026,22 @@ function chSeek(hideId,opts){
     stage.addEventListener("pointerup",up);
     stage.addEventListener("pointercancel",up);
 
-    function sendTrace(why){
+    /* `extra` MERGES INTO THE TRACE, and it exists because a fact that only reaches Amplitude
+       is a fact nobody can read the same day: Amplitude has no current day in hourly, so the
+       night a mechanic ships is exactly the night its own numbers are unavailable. The night of
+       2026-08-29 recorded 100 give-ups and no way to tell which of them were the day's free
+       skip — the split lived only in seek_failed{passed}. The trace is jsonb and
+       save_seek_trace stores it verbatim (no key whitelist, checked), so a field costs nothing
+       and is queryable immediately.
+       ⚠️ ANYTHING PUT HERE IS PUBLIC-ISH TELEMETRY ON A ROW ANY CREATOR CAN REPLAY. Facts about
+       the ROUND belong here; nothing about the person does. */
+    function sendTrace(why,extra){
       if(traceSent) return; traceSent=true;
-      try{ trace.why=why; chRpc("save_seek_trace",{p_id:HID,p_trace:trace}).catch(()=>{}); }catch(_){}
+      try{
+        trace.why=why;
+        if(extra) for(const k in extra) trace[k]=extra[k];
+        chRpc("save_seek_trace",{p_id:HID,p_trace:trace}).catch(()=>{});
+      }catch(_){}
     }
 
     /* (x,y) ARE ALREADY THE PICTURE'S OWN COORDINATES, 0..1 — retMove computed them at the
@@ -17204,7 +17217,10 @@ function chSeek(hideId,opts){
       const passed=chPassLeft();
       if(passed) chPassSpend();
       track("seek_failed",TP({reason:"giveup",ms:ms,passed:passed}));
-      sendTrace("giveup");
+      /* WHICH KIND OF GIVE-UP, readable in Postgres the same minute. Without it the two are
+         one number and the mechanic cannot be judged: a free skip and a run-breaking quit are
+         opposite events wearing the same word. */
+      sendTrace("giveup",{passed:passed});
       /* THE GIVE-UP IS THE ONE PATH WITH NO GESTURE ON THE PICTURE — the player pressed a
          button at the bottom of the screen and never pointed at anything. The frame's centre
          is the honest origin here precisely because there is nothing to be faithful to; a

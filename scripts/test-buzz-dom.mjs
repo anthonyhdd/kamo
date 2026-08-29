@@ -764,6 +764,21 @@ console.log('\nTHE DAY HAS ONE SKIP, AND IT DOES NOT COST THE RUN');
   }));
   stored.run === '4' ? ok('the run is untouched in storage') : bad(`the pass moved the run to ${stored.run}`);
   stored.day ? ok('and the day is stamped, so tomorrow is the next one') : bad('the pass was never recorded — it is free every round');
+
+  /* ⚠️ AND THE SPLIT REACHES POSTGRES, NOT ONLY AMPLITUDE. A free skip and a run-breaking quit
+     are opposite events wearing the same word, and on the night the mechanic shipped they were
+     one number: `passed` went to seek_failed and Amplitude has no current day in hourly, so
+     100 give-ups could not be split for a whole day. The trace is jsonb and save_seek_trace
+     stores it verbatim, so the flag is queryable the minute it lands. */
+  const sent = await page.evaluate(() => (window.__calls || [])
+    .filter((c) => c[0] === 'save_seek_trace').map((c) => c[1] && c[1].p_trace));
+  sent.length === 1 && sent[0] && sent[0].why === 'giveup'
+    ? ok('the round files one trace, and it says how it ended')
+    : bad('save_seek_trace payloads: ' + JSON.stringify(sent).slice(0, 160));
+  sent[0] && sent[0].passed === true
+    ? ok('and the trace records that the day\'s skip covered it — readable without Amplitude')
+    : bad(`the trace carries passed=${JSON.stringify(sent[0] && sent[0].passed)} — a free skip `
+        + 'and a broken run are the same row again');
   await page.close();
 
   /* ⚠️ AND IT DOES NOT HAND THE LIFE BACK — asserted on a run whose life is ALREADY GONE,
