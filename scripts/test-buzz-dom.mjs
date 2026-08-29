@@ -887,6 +887,55 @@ console.log('\nTHE RUN PILL IS THE DOOR TO THE DAY\'S BOARD');
   withH.length === 2
     ? ok('hints show only on the rows that used any')
     : bad('hint annotations: ' + JSON.stringify(shown && shown.metas));
+
+  /* ═══ AND IT HAS TO SPEAK THE APP'S LANGUAGE ══════════════════════════════════════════════
+     The first version of this screen was a data table in a sheet: one animation, no haptic,
+     a bare numeral, and no sign of the thing that makes a daily board work. The app it lives
+     in has 91 haptic calls and twenty named animations. */
+  const dressed = await page.evaluate(() => {
+    const w = document.querySelector('.chBoardWrap');
+    if (!w) return null;
+    const rows = [...w.querySelectorAll('.chRow')];
+    return {
+      /* ⚠️ THE DEADLINE IS THE MECHANIC. The board wipes at midnight UTC, and a reset nobody
+         can see is a reset nobody plays against — it is what turns a table into a clock. */
+      left: (w.querySelector('#chBoardLeft') || {}).textContent,
+      /* ⚠️ ONCE, IN THE HEADER — not on every row. Putting the mark beside each number was the
+         mistake: at 11px it read as a smudge and at 15px as a beige blob wedged between the
+         name and the figure. A glyph nobody can recognise is noise next to the one number on
+         the line that matters. Checked on a rendered board twice; there was no other way. */
+      glyphs: rows.filter((r) => r.querySelector('svg')).length,
+      titleGlyph: !!w.querySelector('.chBoardTitle svg'),
+      medals: [...w.querySelectorAll('.chRowN')].slice(0, 4).map((e) => e.className),
+      total: rows.length,
+      /* Staggered, and capped: a delay that keeps growing makes the last rows a queue. */
+      delays: rows.map((r) => r.style.animationDelay),
+      chase: (w.querySelector('#chBoardChase') || {}).textContent,
+    };
+  });
+  dressed && /resets in \d+[hm]/.test(dressed.left || '')
+    ? ok(`the reset is on screen and ticking ("${dressed.left}")`)
+    : bad(`no deadline: ${JSON.stringify(dressed && dressed.left)} — the daily wipe is the whole `
+        + 'mechanic and nothing says when it lands');
+  dressed && dressed.titleGlyph && dressed.glyphs === 0
+    ? ok('the kamo mark appears once, in the header, where it is big enough to read')
+    : bad(`glyphs: title ${dressed && dressed.titleGlyph}, rows ${dressed && dressed.glyphs} — `
+        + 'a mark too small to recognise is noise beside the number');
+  /* THE MEDALS ARE THE HIERARCHY. Without them rank 1 with a run of 40 looks like rank 10 with
+     4, and the list reads as a log rather than a board. */
+  dressed && JSON.stringify(dressed.medals) === JSON.stringify(['chRowN m1', 'chRowN m2', 'chRowN m3', 'chRowN'])
+    ? ok('the top three are medalled and the fourth is not')
+    : bad('rank chips: ' + JSON.stringify(dressed && dressed.medals));
+  const ds = (dressed && dressed.delays) || [];
+  ds.length && ds[0] === '0s' && parseFloat(ds[ds.length - 1]) > 0
+    && ds.every((d) => parseFloat(d) <= 0.35)
+    ? ok(`the rows arrive staggered and the stagger is capped (last ${ds[ds.length - 1]})`)
+    : bad('row delays: ' + JSON.stringify(ds));
+  /* NOT "Loading…" — a placeholder is not a state. Asserted on the FINAL text, so this also
+     proves the in-flight sentence was replaced rather than left behind. */
+  dressed && !/loading/i.test(dressed.chase || '')
+    ? ok('and nothing is left saying "loading"')
+    : bad('the chase line still reads: ' + JSON.stringify(dressed && dressed.chase));
   await page.close();
 }
 
