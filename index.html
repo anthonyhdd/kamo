@@ -161,6 +161,27 @@
      Geometrically they did not overlap, which is exactly why the first version passed: "not
      overlapping" is not "not crowded", and only a photograph of a real device showed it. */
   body.nav-on #shutterWrap{bottom:calc(128px + var(--safe-b)) !important;}
+  /* ⚠️ AND THE ROW BESIDE IT, WHICH WAS LEFT BEHIND AND WENT UNTAPPABLE. .camBtn sits at
+     bottom:52px and the bar occupies 12→~68, so the picker's 44px hit pad — the invisible one
+     that exists precisely because the visible button is 23px — lay UNDER a bar at z-index 9500.
+     Present, visible, correctly padded, and losing every tap in its lower half: the third time
+     this app has shipped that exact shape. Lifted by 98px, the same distance the shutter moved,
+     so the row keeps its old relationship to the shutter's centre line rather than acquiring a
+     new one. */
+  body.nav-on .camBtn{bottom:calc(150px + var(--safe-b)) !important;}
+  /* THE SESSION RECAP, THIRD ITEM MEASURED AGAINST FURNITURE THAT MOVED. chToastShow prints
+     "0 of 1 found" on the camera when a feed session ends; it was pinned at bottom:126px,
+     which cleared a shutter living at 30 by 18px. The bar lifted the shutter to 128 and the
+     recap printed itself INSIDE the capture ring — the founder's photograph, 2026-08-29. The
+     shutter's top is 206 with the bar up; 224 cleared it by 12px, which is 'not
+     overlapping' rather than 'not crowded' — the distinction the Capture label already cost
+     this screen once — so 236. It hangs off the same body
+     class as the lift that caused it so the two cannot drift apart again. */
+  #chToast{position:fixed;left:50%;bottom:calc(126px + var(--safe-b));transform:translateX(-50%) translateY(10px);z-index:70;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 18px;border-radius:14px;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font-family:var(--display);pointer-events:none;opacity:0;transition:opacity .38s cubic-bezier(.22,1,.36,1),transform .38s cubic-bezier(.22,1,.36,1);}
+  #chToast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+  body.nav-on #chToast{bottom:calc(236px + var(--safe-b));}
+  #chToast b{font-size:14.5px;font-weight:700;color:#fff;letter-spacing:-.2px;}
+  #chToast span{font-size:12px;font-weight:600;color:var(--mint);}
   @media (prefers-reduced-motion: reduce){ .kNav button{transition:none;} }
   .heroWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 30px;margin-bottom:3vh;}
   /* block, not swap: the hero logo is the first thing on screen, and swap renders it in
@@ -311,7 +332,7 @@
      drag reaches #photo underneath instead of moving the character. */
   #stage.framing #gl{pointer-events:none;}
   #stage.framing #shutterWrap,#stage.framing #btnPhoto,#stage.framing #btnPlus,
-  #stage.framing #btnFeed,#stage.framing #btnLight{display:none!important;}
+  #stage.framing #btnLight{display:none!important;}
 
   /* BELOW THE COUNTDOWN PILL, not on top of it. #timerTag used to be a bare 10.5px label;
      turning it into a padded pill grew it to ~26px tall, so at 40px it now runs to ~66px
@@ -460,6 +481,11 @@
   .camBtn svg{width:23px;height:23px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
   .camBtn:active{transform:scale(.94);}
   /* ONE button in this corner — founder's call, 2026-08-12 — and it goes to the LIBRARY.
+     THE CORNER IS THE RIGHT ONE NOW (2026-08-29). It was the left, and the left is where the
+     founder asked for the flash; two controls cannot share a corner without becoming the
+     stack this very note refused. The feed button had just vacated the right corner — the tab
+     bar owns that route now — so the picker took a free slot rather than displacing anything,
+     and the screen came out symmetrical: one control per corner, shutter between them.
      A second thumbnail button that opened the player card lived here for a day and came out:
      two stacked buttons in one corner read as clutter, and the corner's job is the picker.
      iOS-camera convention kept the good half: once a round has finished, the picker wears
@@ -477,7 +503,7 @@
      visible button, which is what iOS does for its own small controls. Nothing else in the
      corner competes for those pixels (see the one-button note above), so the invisible pad
      cannot steal a tap from anything. */
-  #btnPhoto{left:24px;width:23px;height:23px;border-radius:8px;}
+  #btnPhoto{right:24px;width:23px;height:23px;border-radius:8px;}
   #btnPhoto svg{width:12px;height:12px;stroke-width:2.2;}
   #btnPhoto::after{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%);}
   #btnPhoto.hasShot{background-size:cover;background-position:center;border-color:rgba(255,255,255,.55);}
@@ -491,37 +517,22 @@
   /* No underlines on Restore / Terms / Privacy here — founder's call. On the photo they read
      as three scratches; white weight alone carries "tappable" on this arm. */
   #paywall.pwFull .pwFine a,#paywall.pwFull .pwFine button{color:rgba(255,255,255,.9);text-decoration:none;}
-  /* THE FEED LIVES IN THE RIGHT CORNER, opposite the picker. Both corners now answer the
-     same question — "I don't want to make one right now" — in the two directions that exist:
-     use a photo you already have, or play somebody else's hide.
-     The torch shifts inboard rather than sharing the slot. It is display:none in the app by
-     construction (TORCH_EXPOSED_TO_WEB is false — see kamo-app/App.js for the camera blackout
-     that killed it), so this only ever separates two visible buttons in a plain browser. */
-  /* THE FIGURE IS DRAWN OFF-CENTRE IN ITS OWN VIEWBOX — it peeks from behind a wall on the
-     left, so its mass sits right of centre and the glyph reads as pushed left in a square
-     button. Nudged back optically rather than by redrawing the path, which is shared. */
-  /* AND IT GLOWS, because it is the only button on this screen that leads somewhere with
-     other people in it. The camera screen is a wall of neutral glass chips — shutter, roll,
-     torch, flip — and the feed reads as one more of them, so the thing that answers "there is
-     something to do here besides make one" is the least visible control on the screen.
-     A RESTING GLOW, NOT A PULSE. An animated button on a camera viewfinder competes with the
-     shot; this is a static mint bloom, brightened on press. The dot that marks new content
-     still owns the "something changed" signal — it is on the same button and a pulsing frame
-     underneath it would drown it. */
-  #btnFeed{right:24px;border-color:rgba(95,230,164,.42);
-    box-shadow:0 0 0 1px rgba(95,230,164,.12),0 0 16px rgba(95,230,164,.28),
-      inset 0 0 12px rgba(95,230,164,.10);}
-  #btnFeed:active{box-shadow:0 0 0 1px rgba(95,230,164,.2),0 0 22px rgba(95,230,164,.42),
-      inset 0 0 12px rgba(95,230,164,.14);}
-  #btnFeed svg{transform:translateX(1.5px);stroke:var(--mint);}
-  #btnFeed .kfDot{position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}
-  /* THE TORCH MOVES OFF THE BOTTOM ROW. It sat at right:80px, so the bottom-right corner
-     held two controls and the feed button — the one that opens everybody else's hides — had
-     to share the only corner a thumb reaches without moving. The torch is a setting, not a
-     destination: it goes above the shutter, where it is still one thumb away and no longer
-     competes. Centred on the shutter's own axis so the column reads as one control stack. */
-  #btnLight{left:50%;transform:translateX(-50%);bottom:calc(150px + var(--safe-b));right:auto;}
-  #btnLight:active{transform:translateX(-50%) scale(.94);}
+  /* ⚠️ #btnFeed IS GONE (2026-08-29), AND THE DELETION IS THE POINT. It was a mint-glowing
+     chip in the bottom-right that opened the feed — built when the feed had no other door.
+     The tab bar has one now, lit, labelled, and on all three screens, so the button was a
+     second route to a destination already on screen: the clutter the founder photographed.
+     Its glow, its new-content dot and kfShowBtn's kfHasContent gate went with it. What that
+     gate bought — "do not offer a room that is empty" — the feed's own empty state now says
+     properly, on the screen where the answer belongs, instead of by hiding the way in. */
+  /* THE TORCH TAKES THE LEFT CORNER, AND IT HAD TO MOVE. It sat centred at bottom:150px, an
+     inch above a shutter that lived at 30 — and then the tab bar lifted the shutter to 128 and
+     the two became the SAME RECTANGLE. The founder's photograph shows a flash icon sitting
+     inside the capture ring. Nothing about the torch changed; the thing it was measured
+     against did, which is what a hard-coded offset costs the second time somebody moves the
+     furniture. It is a .camBtn among .camBtn now: same row, same bottom, one corner each, so
+     the next lift carries it automatically. Left, per the founder — flash left, shutter
+     centre, library right, which is the layout every phone camera already taught the thumb. */
+  #btnLight{left:24px;right:auto;}
   /* torch on = the button itself lights up */
   #btnLight.on{background:var(--mint);border-color:var(--mint);box-shadow:0 0 22px rgba(95,230,164,.55);}
   #btnLight.on svg{stroke:#04120b;fill:#04120b;}
@@ -1144,16 +1155,22 @@
      was never added here, so a paywall opened mid-paint (Pro upsell chips, the brush-size
      lock) showed "N% hidden · ready to challenge" floating over the sales card. Same rule,
      same reason: the round underneath is chrome the paywall has to own the screen from.
-     #btnFeed AND #sizeStar ARE THE SAME OMISSION, and the three together are why the LIST is
+     #btnFeed AND #sizeStar WERE THE SAME OMISSION, and the three together are why the LIST is
      the bug rather than any one id: it is an ALLOW-LIST, so every piece of chrome born after
      2026-08-12 defaults to showing through and stays that way until somebody photographs it.
      #btnFeed arrived 08-13, one day after this rule, a sibling of #btnPhoto which is already
      listed — the paywall left one lone mint button floating on the camera screen. #sizeStar
      is the Pro star beside the size bar: #sizeBar is hidden here, the star was not.
+     ⚠️ #btnFeed ITSELF WAS DELETED 2026-08-29 — the tab bar owns the feed now — so this line
+     lost one of its names. The LESSON outlived it and has moved to the bar: .kNav is chrome
+     born after this rule too, and it is NOT listed here because it hides itself. navShouldShow
+     reads NAV_BLOCKERS and "paywall" is in it, which is the shape this allow-list should have
+     had from the start: the chrome decides whether it belongs on screen, rather than a list
+     somebody has to remember to extend.
      So the fix that lasts is not this line, it is the probe: test-pwfull-dom reads the
-     computed visibility of all three, and the next id somebody forgets fails a test instead
+     computed visibility of what remains, and the next id somebody forgets fails a test instead
      of shipping. */
-  #stage.pwCover #covHud,#stage.pwCover #btnFeed,#stage.pwCover #sizeStar{visibility:hidden!important;}
+  #stage.pwCover #covHud,#stage.pwCover #sizeStar{visibility:hidden!important;}
   /* THE SHEET NEEDS ITS OWN HOOK, because it is not under #stage at all: #stage sits inside
      #app, while #shareSheet is a direct child of <body> alongside #paywall. So neither the
      descendant form nor a sibling `~` can reach it from a class on #stage — the first attempt
@@ -2577,15 +2594,6 @@
     <!-- gallery: the photo path must stay reachable from the camera too, not only the hero -->
     <button id="btnPhoto" class="camBtn" aria-label="Pick a photo" title="Pick a photo">
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.4"/><circle cx="8.6" cy="10.2" r="1.7"/><path d="M21 16.5l-5-4.6L7 19"/></svg>
-    </button>
-    <!-- the feed: everybody else's hides, playable without making one first -->
-    <!-- THE FIGURE, NOT A MAGNIFIER. The loupe said "search", which is not what this button
-         does — it opens a room full of other people's hides. The peeking mark is the one
-         glyph in this app that already means "somebody is hidden in here", and it is the
-         same path the New chip wears in the character picker, verbatim. Painted in stroke
-         like every other .camBtn, which is how it rendered in the top bar it came from. -->
-    <button id="btnFeed" class="camBtn" aria-label="Play other hides" title="Play other hides">
-      <svg viewBox="0 0 24 24"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>
     </button>
     <!-- torch: only shown where it actually works (see setupTorch) -->
     <button id="btnLight" class="camBtn" aria-label="Light" title="Light">
@@ -4791,7 +4799,7 @@ function enterCompose(){
   resetZoom();   // the board is about to be hidden; leave no transform on it for the next round
   sessReset();   // the pre-roll belongs to the hide about to be shot — a Retake starts aiming again, and the old seconds are not that round's
   mode="compose"; startEl.style.display="none"; glCanvas.style.display="block"; board.style.display="none";
-  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none";
+  shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; $("#paintUI").style.display="none";
   /* covHud belongs in this list. It predates the pill (added 2026-08-15, after this array was
      last written) and updateCoverageHud() only ever turns it off from inside paint mode itself
      (mode!=="paint") — this is the ONE path back to compose that never runs through there, so
@@ -4851,7 +4859,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
   mode="compose"; $("#paintUI").style.display="none"; board.style.display="none";
   ["sizeBar","btnDone","btnEdit","btnBack","revealC","revealHandle","revealHint","confirmSheet","covHud"].forEach(id=>{ const el=$("#"+id); if(el){ el.style.display="none"; el.classList&&el.classList.remove("show"); } });   // covHud too — see the note in enterCompose()
   $(".brand").classList.remove("mid"); stage.classList.remove("done");
-  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; kfShowBtn(true); $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
+  glCanvas.style.display="block"; shutterWrap.style.display="block"; $("#btnPhoto").style.display="flex"; $("#btnPlus").style.display=isPro?"none":"flex"; flipBtn.style.display=(bgKind==="cam")?"flex":"none"; updateLightBtn();
   btnFrame.style.display=(bgKind==="photo")?"flex":"none"; setFraming(false);
   if(bgKind==="cam")cam.style.display="block"; else photo.style.display="block";
   syncPreviewFit();   // Retake re-shows the raw element — it must come back framed like the board it replaced
@@ -4891,15 +4899,12 @@ let chToastEl=null, chToastT=null;
    copying all four. chSessionToast keeps its exact behaviour and now goes through here. */
 function chToastShow(title,sub){
   try{
-    if(!document.getElementById("chToastCss")){
-      const st=document.createElement("style"); st.id="chToastCss";
-      st.textContent=
-        "#chToast{position:fixed;left:50%;bottom:calc(126px + var(--safe-b));transform:translateX(-50%) translateY(10px);z-index:70;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 18px;border-radius:14px;background:rgba(4,6,10,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font-family:var(--display);pointer-events:none;opacity:0;transition:opacity .38s cubic-bezier(.22,1,.36,1),transform .38s cubic-bezier(.22,1,.36,1);}"
-        +"#chToast.on{opacity:1;transform:translateX(-50%) translateY(0);}"
-        +"#chToast b{font-size:14.5px;font-weight:700;color:#fff;letter-spacing:-.2px;}"
-        +"#chToast span{font-size:12px;font-weight:600;color:var(--mint);}";
-      document.head.appendChild(st);
-    }
+    /* ⚠️ THE STYLESHEET IS NOT INJECTED HERE ANY MORE — see the main <style>. It was built
+       lazily on first use, which meant the ONE rule that keeps this off the capture button
+       did not exist until the recap had already been shown once, and no DOM test could read
+       it on a camera that had never opened the feed. It now sits beside the other
+       body.nav-on lifts, which is also where the next person moving that furniture will
+       look. */
     if(chToastEl){ try{ chToastEl.remove(); }catch(_){} clearTimeout(chToastT); document.removeEventListener("pointerdown",chToastTap,true); }
     const el=document.createElement("div"); el.id="chToast";
     el.innerHTML="<b></b>"+(sub?"<span></span>":"");
@@ -4916,8 +4921,14 @@ function chSessionToast(played,found){
   const rec=(window.KAMOSEEK&&window.KAMOSEEK.record)?window.KAMOSEEK.record():{n:0,hit:0};
   const min=(window.KAMOSEEK&&window.KAMOSEEK.min)||5;
   const pct=rec.n>=min ? Math.round(100*rec.hit/rec.n) : null;
-  chToastShow(found+" found · "+played+" played",
-              pct!==null ? pct+"% lifetime · "+rec.hit+" found" : null);
+  /* ⚠️ IT HAD NO SUBJECT, AND THE FOUNDER READ IT AS THE HIDE'S SCORE. "0 found · 1 played"
+     lands on the CAMERA, seconds after a feed session ends, next to a photograph of a room —
+     nothing on that screen says the two numbers are about the rounds you just played rather
+     than about the kamo you are looking at. "0 of 1 found" cannot be read the other way: one
+     number is out of the other, which only a session can mean. The second line labels what it
+     counts instead of trailing "lifetime" off a bare percentage. */
+  chToastShow(found+" of "+played+" found",
+              pct!==null ? rec.hit+" found all time · "+pct+"% hit rate" : null);
 }
 function chToastTap(){ chToastDismiss(); }
 function chToastDismiss(){
@@ -5337,7 +5348,7 @@ function capture(){
   bakeBeforeBoard();   // scene + figure, pre-paint — and rebuilt by commitMove(), see there
   flashEl.style.transition="none"; flashEl.style.opacity=".9"; requestAnimationFrame(()=>{ flashEl.style.transition="opacity .5s"; flashEl.style.opacity="0"; }); haptic(20);
   resetZoom();   // every round starts framed as shot — a leftover zoom would silently crop the next hide
-  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; kfShowBtn(false); $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; btnFrame.style.display="none";
+  board.style.display="block"; glCanvas.style.display="none"; cam.style.display="none"; photo.style.display="none"; shutterWrap.style.display="none"; $("#btnPhoto").style.display="none"; $("#btnPlus").style.display="none"; $("#btnLight").style.display="none"; flipBtn.style.display="none"; btnFrame.style.display="none";
   mode="paint"; $("#paintUI").style.display="block"; pushUndo();   // stack already cleared at the top, before the allocations
   /* Reset to the roller on every capture for a non-member. Nothing hands the slider over any
      more now that the free round is gone, but this stays as belt and braces: a small brush
@@ -11554,7 +11565,6 @@ $("#btnPhoto").onclick=e=>{ e.stopPropagation(); haptic(10); pickPhoto(); };
 /* The other way out of "I don't want to make one right now" — see chFeed. stopPropagation
    for the same reason as the picker: the stage under these buttons is the shutter's tap
    target, so a click that bubbles takes a photo on the way past. */
-$("#btnFeed").onclick=e=>{ e.stopPropagation(); haptic(10); chFeed(); };
 /* No pitch key for "plus": the ✦ button is not a refusal, so there is no tool to answer —
    it keeps the generic copy. The source still rides on paywall_viewed.
    THE HOLD GUARD IS THE PASS, not a debounce. bindPassHold below puts the creator-pass door on
@@ -16547,9 +16557,9 @@ function chSeek(hideId,opts){
      the reaction rail hands every seeker a thumb's width below it — one glyph meaning "I
      liked this" and "you are on a run" on the same screen (founder, 2026-08-16). It also
      never said what was being counted. The figure does: four of these in a row IS the run,
-     because a kamo found is the unit the run is made of. Same path as #btnFeed and the New
-     chip, traced from icon.png by scripts/trace-icon.mjs.
-     FILLED, NOT STROKED. #btnFeed strokes it at 23px on a button of its own; at 15px beside a
+     because a kamo found is the unit the run is made of. Same path as the New chip, traced
+     from icon.png by scripts/trace-icon.mjs (#btnFeed carried it too until 2026-08-29).
+     FILLED, NOT STROKED. #btnFeed stroked it at 23px on a button of its own; at 15px beside a
      number the two edges of the outline close up and the figure turns to mush. The New chip
      already carries the filled treatment, so this is the established small-size form.
      THE viewBox IS THE GLYPH'S OWN BOX, not 0 0 24 24: the figure occupies only the left half
@@ -18387,9 +18397,10 @@ function chSeek(hideId,opts){
         /* THE SWIPE HAS TO ANNOUNCE ITSELF OR IT DOES NOT EXIST. Founder, 2026-08-23: "après
            sa manche jouée il puisse scroll pour voir un autre hide". A link round is a `.chS`
            screen with no scroller under it — the feed is a separate overlay — so the gesture
-           he reached for had nothing to move and no button to fall back on either: #btnFeed
-           only exists on the camera screens. In the app that made a challenge opened from the
-           widget a dead end.
+           he reached for had nothing to move and no button to fall back on either — and the
+           tab bar is no help here, because navShouldShow returns false for CH_SEEK: a link
+           round owns the whole screen. In the app that made a challenge opened from the widget
+           a dead end.
            A LINE, NOT A BUTTON, AND THAT IS THE WHOLE POINT. #371 put the feed BEHIND the
            creator's ending screen and #373 killed it the next morning — "the send rate halved".
            What was wrong there was replacing the screen; the card and its buttons stopped being
@@ -18866,7 +18877,6 @@ function kfTakeFirstPage(){
      stops mattering, which is most of the point of the exclusion rung. */
   return c.rows;
 }
-function kfShowBtn(on){ try{ const b=document.getElementById("btnFeed"); if(b) b.style.display=(on&&kfHasContent)?"flex":"none"; }catch(e){} }
 /* Asked once per launch, and only where a feed could be opened at all. Silent on failure: an
    unreachable probe leaves the button hidden, which is the same outcome as an empty feed and
    the safe direction to fail in.
@@ -18919,16 +18929,17 @@ async function kfProbe(){
       kfHasContent=true;
       try{ localStorage.setItem("kamo_feed_has","1"); }catch(e){}
       track("feed_available",{});
-      /* Only reveal it if the camera screen is the thing on screen — the same condition
-         every other caller of kfShowBtn is already gated on. */
-      const sw=document.getElementById("shutterWrap");
-      if(sw&&sw.style.display!=="none") kfShowBtn(true);
+      /* ⚠️ NOTHING IS REVEALED BY THIS ANY MORE, and that is the change. The probe used to
+         raise #btnFeed here; the tab bar carries the feed on every screen now, so the answer
+         only feeds kfHasContent — which still gates the "swipe up for the feed" line at the
+         end of a link round, where there is genuinely no bar. */
     } else {
       /* An explicit empty answer — not a network failure, the catch below owns that case —
-         takes the cached button back down. */
+         clears the cached flag. The way INTO the feed is no longer what this decides: an empty
+         room now answers for itself with the feed's own empty state, which says so on the
+         screen where the question was asked instead of removing the door. */
       kfHasContent=false;
       try{ localStorage.removeItem("kamo_feed_has"); }catch(e){}
-      kfShowBtn(false);
     }
   }catch(e){}
 }
@@ -20822,9 +20833,15 @@ function chFeed(opts){
 }
 /* TEST HOOK, and deliberately not on window.KAMO. That object is the wrapper's bridge
    contract — everything on it is something App.js calls — and a test affordance has no
-   business in a contract. scripts/test-feed-dom.mjs opens the feed the way a phone does, by
-   clicking #btnFeed; what it cannot reach from the DOM is kfApplyVisibility, because the id
-   it acts on lives in a module-scoped `chId` that only exists after a real publish. */
+   business in a contract.
+   ⚠️ AND IT IS LOAD-BEARING FOR THE SUITES NOW, WHICH IT WAS NOT BEFORE. They opened the feed
+   the way a phone did, by clicking #btnFeed — and that button was deleted on 2026-08-29 when
+   the tab bar took the route over. The bar's own handler is module-scoped and unreachable from
+   page.evaluate, so `open` is the only door a test has. That trade is deliberate but it is not
+   free: it means no suite except test-navbar-dom proves the feed is reachable by TAPPING
+   anything, so that one hit-tests the Feed tab for all of them. What this hook could never
+   reach from the DOM is kfApplyVisibility, because the id it acts on lives in a module-scoped
+   `chId` that only exists after a real publish. */
 window.KAMOFEED={ open:chFeed, setVisibility:kfApplyVisibility, wantPublic:kfWantPublic,
   /* The block list is the one piece of feed state with no DOM at all — a tag is deliberately
      never rendered — so a test that could not read it could only assert that a button was
