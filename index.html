@@ -8869,7 +8869,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -16494,10 +16494,16 @@ function chSeek(hideId,opts){
 
     /* Retired rather than hidden: a control that cannot succeed should not sit there looking
        tappable. Same rule the camera-denied screen learned. */
-    function retireHint(label){
+    /* ⚠️ `hold` EXISTS BECAUSE 1400ms IS NOT A MESSAGE. This is a small pill in the corner of a
+       photograph somebody is actively searching: a label that changes and then vanishes inside
+       a second and a half is read by nobody, and the founder's report of it was "it didn't
+       launch and the button disappeared" — the sentence never registered at all. A refusal the
+       player is meant to UNDERSTAND gets long enough to be read; every other retirement keeps
+       the old timing, because there is nothing to take in. */
+    function retireHint(label,hold){
       hintBtn.disabled=true;
       if(label) hintBtn.textContent=label;
-      setTimeout(()=>{ try{ hintBtn.remove(); }catch(_){} },1400);
+      setTimeout(()=>{ try{ hintBtn.remove(); }catch(_){} },hold||1400);
     }
 
     async function takeHint(){
@@ -16527,7 +16533,13 @@ function chSeek(hideId,opts){
          wallet state — only the last one is worth showing a price for. */
       if(r.reason==="hide_too_easy"||r.reason==="no_hide"){
         track("hint_blocked",TP({reason:r.reason}));
-        retireHint(r.reason==="hide_too_easy"?"No hint here":"Hint");
+        /* ⚠️ AND IT SAYS THE FREE ONE IS SAFE, which is the half the player actually cares
+           about. hint_spend returns before it touches the wallet, so nothing was consumed —
+           but the screen used to answer a tap by going blank, and a free hint that appears to
+           vanish is worse than no hint at all. Reachable now only by a client that could not
+           ask the two-argument hint_state; the button is removed on mount otherwise. */
+        retireHint(r.reason==="hide_too_easy"?"This kamo is too big — hint kept":"Hint",
+                   r.reason==="hide_too_easy"?3200:1400);
         return;
       }
       offerHintPack();
@@ -16913,10 +16925,37 @@ function chSeek(hideId,opts){
          find out whether they still have anything. The balance is read once, on mount, and
          only ever decorates the idle label: a spend, a purchase in flight and a drawn zone
          all own the button already and must not be overwritten by a late read. */
+      /* ═══ AND WHETHER THIS ROUND HAS A HINT TO GIVE AT ALL ═══════════════════════════════
+         Founder, live, 2026-08-29: "I tapped free hint, it didn't launch, and the hint button
+         disappeared." Correct server behaviour meeting a client that could not know about it.
+         hint_region() returns NULL when the kamo's radius reaches 0.22 — the zone would swallow
+         the figure and point at it — so hint_spend answers `hide_too_easy` and the button
+         retires. ⚠️ THAT IS ONE HIDE IN THREE: measured over eight days, 23% to 39% of hides
+         published each day carry r >= 0.22. The only way to find out was to spend a tap, wait
+         for a round trip, watch nothing happen and see the control vanish — which on a FREE
+         hint reads as "I just burned my one for today". It does not: hint_spend returns before
+         touching the wallet. Nothing on screen said so.
+         So the button is no longer OFFERED where it cannot work. Same source of truth as the
+         spend (hint_region), so the two can never disagree.
+         ⚠️ THE WIDER CALL FALLS BACK, because the database does not deploy with this file: a
+         page that reaches a server without the two-argument overload keeps exactly today's
+         behaviour — the button, the tap, and the refusal — rather than losing hints entirely,
+         which would be a far worse trade than the bug being fixed. */
       (async()=>{
         try{
-          const st=await chRpc("hint_state",{p_owner:hintOwner()});
+          let st=null;
+          try{ st=await chRpc("hint_state",{p_owner:hintOwner(),p_hide_id:HID}); }catch(_){}
+          if(!st||typeof st.balance!=="number"){
+            try{ st=await chRpc("hint_state",{p_owner:hintOwner()}); }catch(_){}
+          }
           if(!st||typeof st.balance!=="number") return;
+          /* Only ever acts on a definite NO. `undefined` is the older overload answering, and
+             an absent field must never be read as a refusal. */
+          if(st.hintable===false){
+            try{ hintBtn.remove(); }catch(_){}
+            track("hint_unavailable",{reason:"too_big"});
+            return;
+          }
           hintKnownBal=st.balance;
           if(!done) setHintLabel(st.balance,!!st.free_available);
         }catch(_){}
