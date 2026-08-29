@@ -8869,7 +8869,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","board_opened","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -15164,6 +15164,40 @@ function chSeek(hideId,opts){
        it grows the centred message column instead of colliding with anything, at any string
        length and any screen width, and there is nothing left to override per surface. */
     +".chRun{position:static;margin-top:10px;z-index:5;font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.2px;color:#ffd9a0;padding:9px 15px;border-radius:999px;background:#231708;border:1px solid #6b4a1c;box-shadow:0 4px 18px rgba(0,0,0,.45);pointer-events:none;font-variant-numeric:tabular-nums;display:none;}"
+    /* ═══ THE BOARD ══════════════════════════════════════════════════════════════════════════
+       Reached by tapping the run pill, and ONLY once the round is over. During the hunt the
+       pill stays inert on purpose: covering a photograph somebody is searching, while the
+       clock that IS their score keeps running, would be sabotaging the round to advertise a
+       screen about rounds. The moment it opens is the moment the question is live — they have
+       just scored and "where does that put me" is the next thought.
+       ⚠️ THE PILL KEEPS pointer-events:none UNTIL THEN. .tap is added by the ending, so a
+       stray touch mid-hunt cannot reach it at all rather than being caught and ignored. */
+    +".chRun.tap{pointer-events:auto;cursor:pointer;}"
+    +".chRun.tap::after{content:' ›';opacity:.55;}"
+    +".chBoardWrap{position:fixed;inset:0;z-index:9400;display:none;align-items:flex-end;"
+    +"background:rgba(2,4,8,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}"
+    +".chBoardWrap.show{display:flex;}"
+    +".chBoardCard{width:100%;max-height:86dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;"
+    +"background:var(--bg);border-radius:22px 22px 0 0;padding:20px 16px calc(20px + var(--safe-b));"
+    +"box-shadow:0 -18px 60px rgba(0,0,0,.6);animation:chBoardUp .26s cubic-bezier(.2,.8,.3,1);}"
+    +"@keyframes chBoardUp{from{transform:translateY(26px);opacity:0}to{transform:none;opacity:1}}"
+    +".chBoardTitle{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.5px;margin:0 0 2px;}"
+    /* THE CHASE, NOT THE RANK. "#37" is a verdict; "2 more and you pass @x" is a thing to do
+       tonight. With 60 players a day and the low ranks dense, the next person is almost always
+       one or two runs away — which is why this line can be honest and still be short. */
+    +".chBoardChase{font-size:15px;color:var(--mint);font-weight:700;margin:0 0 14px;}"
+    +".chBoardSub{font-size:13px;color:rgba(255,255,255,.5);margin:0 0 14px;}"
+    +".chRow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;}"
+    +".chRow.me{background:rgba(95,230,164,.12);outline:1px solid rgba(95,230,164,.35);}"
+    +".chRowN{width:30px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:rgba(255,255,255,.45);font-size:14px;}"
+    +".chRowWho{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:15px;}"
+    +".chRowRun{font-family:var(--display);font-weight:800;font-size:18px;color:#ffd9a0;font-variant-numeric:tabular-nums;}"
+    /* Quiet, because they are context and not the score: how many rounds it took, and how many
+       hints it cost. Shown on every row — the tiebreak already ranks on efficiency, so hiding
+       it would leave two identical-looking rows in a deliberate order nobody could read. */
+    +".chRowMeta{font-size:12px;color:rgba(255,255,255,.38);font-variant-numeric:tabular-nums;min-width:66px;text-align:right;}"
+    +".chBoardGap{height:1px;background:rgba(255,255,255,.10);margin:8px 34px;}"
+    +".chBoardClose{display:block;width:100%;margin-top:16px;padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:transparent;color:rgba(255,255,255,.75);font-family:var(--font);font-weight:700;font-size:15px;}"
     /* Opaque on purpose. The translucent fill it replaces sat over an unknown photograph, so
        its contrast was whatever the picture underneath happened to be — legible on a dark room,
        washed out on a bright wall, which is the lesson .chMark already carries. A solid chip is
@@ -15982,6 +16016,110 @@ function chSeek(hideId,opts){
      when it motivates: somebody who has just set their record is told so by "best yet" on the
      win, not by an epitaph. */
   const RUN_HOT=5;
+  /* ═══ THE DAY'S BOARD ═════════════════════════════════════════════════════════════════════
+   *
+   * A board was built once and killed — "naze grave". Three things that made it impossible
+   * have since changed, and it is worth being explicit about them, because if any one of them
+   * regresses this screen goes back to being a wall of noise:
+   *
+   *   · A NAME WAS NOT A PERSON. 575 of 576 generated handles were in use, at 6.03 devices
+   *     each, worst case 15. A row reading "SilentFox" could have been any of fifteen people
+   *     and none of them would have recognised it. Fixed 2026-08-29.
+   *   · NOTHING SAID WHAT A RUN WAS WORTH — the one life was invisible and the exit was free.
+   *   · AND IT COULD BE FARMED. `conceal` did not exist, so a run built on trivially visible
+   *     kamos ranked beside one built on hard ones. streak_board_v2 counts only hides above
+   *     the difficulty floor; a miss still breaks a run whatever it was on.
+   *
+   * ⚠️ MEASURED BEFORE IT WAS BUILT: 60 players reach the board on a normal day, and rank 20
+   * needs a streak of 4, which 27% of them already have. That is what makes a global board
+   * defensible here — the usual objection, that the median sees a wall of unreachable
+   * strangers, is a property of large boards. This one is a small room.
+   *
+   * THE HEADLINE IS THE CHASE, NOT THE RANK. "#37" is a verdict and nothing to do with it;
+   * "2 more and you pass @x" is tonight's task. The low ranks are dense, so the next person is
+   * almost always one or two runs away and the sentence stays true without being engineered.
+   *
+   * FIVE, A GAP, THEN YOUR NEIGHBOURS. A top-20 list makes most readers scroll past strangers
+   * to find themselves. The top five is the aspiration, the neighbourhood is the game. */
+  const CH_BOARD_TOP=5, CH_BOARD_AROUND=2;
+  let chBoardBusy=false;
+  function chBoardOpen(){
+    if(chBoardBusy) return; chBoardBusy=true;
+    let wrap=null;
+    try{
+      wrap=document.createElement("div"); wrap.className="chBoardWrap show";
+      wrap.innerHTML='<div class="chBoardCard"><div class="chBoardTitle">Today\u2019s runs</div>'
+        +'<div class="chBoardChase" id="chBoardChase">Loading\u2026</div>'
+        +'<div id="chBoardRows"></div>'
+        +'<button type="button" class="chBoardClose" id="chBoardClose">Close</button></div>';
+      document.body.appendChild(wrap);
+      const shut=()=>{ try{ wrap.remove(); }catch(_){} chBoardBusy=false; };
+      wrap.querySelector("#chBoardClose").onclick=shut;
+      /* TAP OUTSIDE CLOSES, and the card stops the event so a tap inside never does. The share
+         sheet shipped for weeks without this because its container was pointer-events:none in
+         every state and nobody could tell the difference from a screenshot. */
+      wrap.onclick=(e)=>{ if(e.target===wrap) shut(); };
+      track("board_opened",{});
+    }catch(_){ chBoardBusy=false; return; }
+    (async()=>{
+      let rows=null;
+      try{ rows=await chRpcRows("streak_board_v2",{p_day:new Date().toISOString().slice(0,10),
+                                                   p_me:kfAuthorKeyRO()||"",p_limit:60}); }catch(_){}
+      try{ chBoardPaint(wrap,rows); }catch(_){}
+    })();
+  }
+  function chBoardPaint(wrap,rows){
+    const chase=wrap.querySelector("#chBoardChase"), body=wrap.querySelector("#chBoardRows");
+    if(!chase||!body) return;
+    if(!rows||!rows.length){
+      /* AN EMPTY BOARD IS NOT AN ERROR — it is the first minutes of a new UTC day, every day.
+         Saying so turns a dead screen into the most inviting one this product has. */
+      chase.textContent="Nobody has a run yet today.";
+      body.innerHTML="";
+      return;
+    }
+    const mine=rows.filter(r=>r&&r.me)[0]||null;
+    const myRank=mine?(mine.rank|0):0;
+    /* THE ONE ABOVE ME, which is the only row on this screen with anything to do attached. */
+    const above=myRank>1 ? rows.filter(r=>(r.rank|0)===myRank-1)[0] : null;
+    if(!mine) chase.textContent="Find two in a row and you are on the board.";
+    else if(myRank===1) chase.textContent="You are first today.";
+    else if(above){
+      const gap=Math.max(1,(above.streak|0)-(mine.streak|0)+1);
+      chase.textContent=gap+" more in a row and you pass "+(above.who?"@"+above.who:"them")+".";
+    } else chase.textContent="You are "+myRank+" today.";
+    /* THE SLICE: the top, then your neighbourhood, de-duplicated and in rank order. A Set of
+       ranks rather than of rows, because the same row object is not shared between the two
+       lists and comparing them by identity would print duplicates. */
+    const keep=new Set();
+    rows.slice(0,CH_BOARD_TOP).forEach(r=>keep.add(r.rank|0));
+    if(myRank) for(let d=-CH_BOARD_AROUND;d<=CH_BOARD_AROUND;d++) keep.add(myRank+d);
+    const shown=rows.filter(r=>keep.has(r.rank|0));
+    body.innerHTML="";
+    let last=0;
+    shown.forEach(r=>{
+      const n=r.rank|0;
+      if(last&&n>last+1){ const g=document.createElement("div"); g.className="chBoardGap"; body.appendChild(g); }
+      last=n;
+      const row=document.createElement("div"); row.className="chRow"+(r.me?" me":"");
+      const rk=document.createElement("div"); rk.className="chRowN"; rk.textContent=n;
+      const who=document.createElement("div"); who.className="chRowWho";
+      /* textContent, ALWAYS. This is a handle another person typed, rendered on a stranger's
+         device — the third of the three places the name is narrowed (see cleanHandle and
+         create_hide). innerHTML here would be the whole trust boundary undone. */
+      who.textContent=r.me?"You":("@"+(r.who||"someone"));
+      const run=document.createElement("div"); run.className="chRowRun"; run.textContent=r.streak|0;
+      const meta=document.createElement("div"); meta.className="chRowMeta";
+      /* ROUNDS FIRST because it is the tiebreak the ranking already uses — two rows showing
+         the same number sit in a deliberate order, and without this nobody can read why.
+         Hints only when there are any: a "0 hints" on every row would turn a neutral fact into
+         a scoreboard of who needed help, and hints are the one thing in this product with
+         measured demand. */
+      meta.textContent=(r.rounds|0)+" rounds"+((r.hints|0)>0?" \u00b7 "+(r.hints|0)+"h":"");
+      row.appendChild(rk); row.appendChild(who); row.appendChild(run); row.appendChild(meta);
+      body.appendChild(row);
+    });
+  }
   const chRunShow=(n,mode,best)=>{ if(!runEl||REPLAY) return;
     const v=n|0, b=best|0;
     /* ⚠️ IT WAS A SCOREBOARD FOR THE PEOPLE ALREADY WINNING. Hidden at 0, and `best` passed
@@ -16042,6 +16180,7 @@ function chSeek(hideId,opts){
          at risk wins the space. */
       : (v>=1&&chLifeSpent()) ? (String(v)+" · last life")
                       : (String(v)+(b>v?" · best "+b:""))));
+
     /* THE POP GOES ON A LIVE COUNT THAT ACTUALLY WENT UP, and on nothing else. Re-showing the
        same number on a re-render would otherwise pulse for no event, which is how an animation
        stops meaning "you just won one". The end states carry their own (chRunDie, chRunPb). */
@@ -16060,6 +16199,24 @@ function chSeek(hideId,opts){
        distribution whose median is 3 would be inventing granularity the data does not have. */
     const hot=!mode&&v>=RUN_HOT;
     runEl.className="chRun"+(mode?" "+mode:"")+(grew?" up":"")+(hot?" hot":"")+(ended?" docked":"");
+    /* ═══ AND ONCE THE ROUND IS OVER, THE PILL IS THE DOOR TO THE BOARD ═════════════════════
+       ⚠️ AFTER THE className ASSIGNMENT ABOVE, NOT BEFORE IT. The first version added the class
+       where the text is written, and the line above then rebuilt className from scratch and
+       wiped it — the pill stayed untapped while the board still opened (another rule already
+       gives the docked chip pointer-events), so the feature half-worked and only the class
+       assertion caught it.
+       ⚠️ AND ONLY ONCE THE ROUND IS OVER. During the hunt this chip sits above a photograph
+       somebody is searching with the clock that IS their score running underneath: a
+       full-screen board over that is sabotaging the round to advertise a screen about rounds.
+       pointer-events stays none until here, so a stray touch cannot reach it at all rather
+       than being caught and thrown away. It is also the right moment rather than a
+       compromise — they have just scored, and "where does that put me" is the next thought. */
+    try{
+      if(ended||mode==="dead"||mode==="held"||mode==="pb"){
+        runEl.classList.add("tap");
+        runEl.onclick=()=>{ try{ chBoardOpen(); }catch(_){} };
+      } else runEl.onclick=null;
+    }catch(_){}
     /* A SENTENCE LEAVES THE CHIP COLUMN; A CHIP STAYS IN IT. Live, the run is "2" beside the
        clock. At the end it turns into prose — "Run of 2 broken", "7 best yet" — three to four
        times as wide, and lands on the ending headline. The rule above reasons that the two can
@@ -16213,6 +16370,15 @@ function chSeek(hideId,opts){
        `r` — A REPLAY IS A GUARANTEED HIT: the player already knows where it is. It files no
        attempt (see the REPLAY branch in buzz) and it must not build a run either. Flagged here
        so the board can drop it server-side as well. */
+    /* ⚠️ TWO IDENTITIES, AND THEY ARE NOT THE SAME ONE. `k` is the AUTHOR key — what stamps a
+       hide and what the board groups on. `ho` is the HINT WALLET owner (chUserId or
+       dev:deviceId), which is the purchase identity and deliberately separate. Measured
+       2026-08-29: 82 board keys against 23 wallet keys on the same day, with ZERO overlap —
+       so a board could not say how many hints a run had cost without carrying both. It rides
+       the trace for the same reason `passed` does: a fact that only reaches Amplitude cannot
+       be read the day it matters, because Amplitude has no current day in hourly.
+       ⚠️ IT IS AN OPAQUE KEY, not a name or an account — the same one already sent to
+       hint_spend on every tap, and it never leaves the round it describes. */
     const trace={v:1,src:(FEED?"feed":"link"),who:(getHandle()||"").slice(0,16),
                  k:kfAuthorKeyRO(),
                  vw:innerWidth,vh:innerHeight,img:null,s:[],a:[],end:null};
@@ -17078,6 +17244,13 @@ function chSeek(hideId,opts){
       if(traceSent) return; traceSent=true;
       try{
         trace.why=why;
+        /* ⚠️ SET HERE, NOT WHERE THE TRACE IS BUILT. hintOwner is a `const` arrow declared two
+           hundred lines below that object literal, so calling it there is a temporal dead zone
+           — a ReferenceError the surrounding try would swallow, leaving the field empty and the
+           board's hint column permanently zero with nothing to show for it. A function body
+           runs at CALL time, and by then everything is defined. Third time this exact shape has
+           cost something; see the note on chFeedFromLaunch. */
+        try{ trace.ho=hintOwner()||""; }catch(_){ trace.ho=""; }
         if(extra) for(const k in extra) trace[k]=extra[k];
         chRpc("save_seek_trace",{p_id:HID,p_trace:trace}).catch(()=>{});
       }catch(_){}
