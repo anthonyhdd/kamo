@@ -8869,7 +8869,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","board_opened","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -15259,6 +15259,18 @@ function chSeek(hideId,opts){
        and it stops competing with the number for the edge of the row. */
     +".chRowMeta{font-size:12px;color:rgba(255,255,255,.34);font-variant-numeric:tabular-nums;text-align:right;margin-left:auto;}"
     +".chBoardGap{height:1px;background:rgba(255,255,255,.10);margin:8px 34px;}"
+    /* ═══ THE EMPTY BOARD IS THE BEST OFFER OF THE DAY, NOT AN ABSENCE ═════════════════════
+       Every UTC midnight this list is wiped, so this is the screen the first players of the
+       day meet — and it read "Nobody has a run yet today", which reports a fact and asks for
+       nothing. What is actually true is rarer and better: the top of the board is unclaimed
+       and two finds take it. So the state SHOWS the prize rather than describing it — a gold
+       chip, the word You, and a dash where the number goes. Nobody has to imagine it. */
+    +".chRow.ghost{opacity:.85;}"
+    +".chRow.ghost .chRowWho{color:rgba(255,255,255,.6);font-style:normal;}"
+    +".chRow.ghost .chRowRun{color:rgba(255,217,160,.45);}"
+    +".chBoardShare{display:block;width:100%;margin-top:16px;padding:14px;border-radius:14px;border:0;"
+    +"background:var(--mint);color:#04120c;font-family:var(--font);font-weight:800;font-size:15px;}"
+    +".chBoardShare:active{transform:scale(.98);}"
     /* ⚠️ THE LEAST INTERESTING CONTROL WAS THE BIGGEST OBJECT ON THE SCREEN — a full-width
        14px-padded slab under a board about other people's runs. It is a way out, not an
        action: the sheet already closes on a tap outside, so this is the fallback for a thumb
@@ -16122,6 +16134,7 @@ function chSeek(hideId,opts){
            itself. It is also the sentence that will be replaced, so nothing jumps. */
         +'<div class="chBoardChase" id="chBoardChase">Counting today\u2019s runs\u2026</div>'
         +'<div id="chBoardRows"></div>'
+        +'<button type="button" class="chBoardShare" id="chBoardShare" style="display:none"></button>'
         +'<button type="button" class="chBoardClose" id="chBoardClose">Close</button></div>';
       document.body.appendChild(wrap);
       const shut=()=>{ try{ clearInterval(wrap._tk); }catch(_){} try{ wrap.remove(); }catch(_){} chBoardBusy=false; };
@@ -16160,10 +16173,20 @@ function chSeek(hideId,opts){
     const chase=wrap.querySelector("#chBoardChase"), body=wrap.querySelector("#chBoardRows");
     if(!chase||!body) return;
     if(!rows||!rows.length){
-      /* AN EMPTY BOARD IS NOT AN ERROR — it is the first minutes of a new UTC day, every day.
-         Saying so turns a dead screen into the most inviting one this product has. */
-      chase.textContent="Nobody has a run yet today.";
+      /* ⚠️ AN EMPTY BOARD IS NOT AN ERROR AND IT IS NOT A SENTENCE EITHER. It is the screen the
+         first players of every UTC day meet, and what is true of it is rare: the top is
+         unclaimed and two finds take it. The old copy reported that nobody had a run — a fact,
+         asking for nothing. This SHOWS the prize instead: the gold chip, the word You, and a
+         dash where the number will be. Nobody has to imagine what winning looks like. */
+      chase.textContent="The board is empty. Two in a row and it\u2019s yours.";
       body.innerHTML="";
+      const row=document.createElement("div"); row.className="chRow ghost";
+      const rk=document.createElement("div"); rk.className="chRowN m1"; rk.textContent="1";
+      const who=document.createElement("div"); who.className="chRowWho"; who.textContent="You?";
+      const meta=document.createElement("div"); meta.className="chRowMeta"; meta.textContent="be first today";
+      const run=document.createElement("div"); run.className="chRowRun"; run.textContent="\u2013";
+      row.appendChild(rk); row.appendChild(who); row.appendChild(meta); row.appendChild(run);
+      body.appendChild(row);
       return;
     }
     const mine=rows.filter(r=>r&&r.me)[0]||null;
@@ -16223,6 +16246,44 @@ function chSeek(hideId,opts){
        screen exists to do. After the stagger has landed, so it does not fight the entrance,
        and only when the row is actually off-screen — scrolling a list that is already showing
        the answer is a jolt for nothing. */
+    /* ═══ WHAT IS ACTUALLY SHAREABLE HERE ═════════════════════════════════════════════════
+       ⚠️ NOT THE RANK. "I'm #8 on KAMO" is a brag with no content: it is about the sender and
+       gives the reader nothing to be curious about. What is worth sending is the number at the
+       TOP — somebody found forty kamos in a row today, which is the fact that makes a stranger
+       open the link. The sender's own row is the contrast, not the headline, and it is what
+       makes the message theirs rather than an advert.
+       The leader is never named: a handle in somebody's group chat is a person who did not
+       agree to be there. The number is the story and it belongs to nobody. */
+    const top=rows[0];
+    const btn=wrap.querySelector("#chBoardShare");
+    if(btn&&top&&(top.streak|0)>0){
+      btn.style.display="block";
+      btn.textContent=mine?"Send the board":"Send today\u2019s best";
+      btn.onclick=async()=>{
+        const best=top.streak|0;
+        const line=(mine&&!top.me)
+          ? "Someone has found "+best+" kamos in a row on KAMO today. I\u2019m on "+(mine.streak|0)+"."
+          : (top.me ? "I\u2019m top of KAMO today \u2014 "+best+" in a row."
+                    : best+" kamos found in a row on KAMO today.");
+        const text=line+" "+refLink("board","rank"+(mine?(mine.rank|0):0));
+        track("board_share_tapped",{rank:mine?(mine.rank|0):0,best:best});
+        /* The same ladder every other share in this file climbs, and in the same order: the
+           wrapper's real sheet when it exists, navigator.share BEFORE any await because the
+           first one spends the activation this tap granted, then the clipboard. AbortError is
+           a decision, not a failure — it must never fall through and claim a copy. */
+        try{
+          if(nativeCaps&&nativeCaps.invite){ postNative({type:"invite",message:text}); return; }
+        }catch(_){}
+        let shared=false,cancelled=false;
+        try{ if(navigator.share){ await navigator.share({text:text}); shared=true; } }
+        catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
+        if(shared||cancelled) return;
+        const okc=await chCopy(text);
+        const was=btn.textContent;
+        btn.textContent=okc?"Copied \u2014 send it":"Couldn\u2019t copy";
+        setTimeout(()=>{ try{ btn.textContent=was; }catch(_){} },1800);
+      };
+    }
     if(mineEl) setTimeout(()=>{ try{
       const cr=mineEl.getBoundingClientRect();
       if(cr.top<0||cr.bottom>innerHeight) mineEl.scrollIntoView({block:"center",behavior:"smooth"});
