@@ -1961,6 +1961,20 @@ try {
   bad('THE CONCEALMENT MEASURE IS BROKEN:\n' + why(e));
 }
 
+/* THE KAMO ARRIVES RATHER THAN SIMPLY EXISTING — the compose screen's first moment, which was
+   the only one on it with no motion at all while the drag, the limbs and the shutter all have
+   weight. Asserted by driving the spring frame by frame (HIDEY.step) rather than by waiting:
+   the fall's duration is a function of frame rate, so a wall-clock assertion would be about
+   the machine running it. It also proves the landing punch fires ON ARRIVAL and only once. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-arrival-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-arrival-dom.mjs', 'ARRIVAL TEST', out)
+    : ok('the kamo falls in and lands where it belongs (node scripts/test-arrival-dom.mjs)');
+} catch (e) {
+  bad('THE ARRIVAL IS BROKEN:\n' + why(e));
+}
+
 /* ---- 13-bis-2. The reveal has to show the figure where the answer says it is ------------
    Two descriptions of one position, built from different material: chGeom() reads the bbox of
    maskCanvas and becomes the (cx,cy,r) the server tests every tap against, while beforeBoard
