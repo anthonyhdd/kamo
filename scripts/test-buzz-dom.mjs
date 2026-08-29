@@ -40,7 +40,15 @@ if (!chromium) {
 const real = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const anchor = 'async function chRpc(fn,body){';
 if (!real.includes(anchor)) { console.error('anchor missing'); process.exit(1); }
-const html = real.replace(anchor, anchor + 'if(window.__rpc) return window.__rpc(fn,body);');
+let html = real.replace(anchor, anchor + 'if(window.__rpc) return window.__rpc(fn,body);');
+/* ⚠️ THE SECOND DOOR. chRpcRows is not chRpc — PostgREST returns a set-returning function as
+   an ARRAY and chRpc unwraps to the first element, so anything that legitimately wants rows
+   (the day's board) goes through the other one. Stubbing only chRpc sent those calls at the
+   real network, where they failed silently and the screen painted nothing. */
+const anchorRows = 'async function chRpcRows(fn,body){';
+if (!html.includes(anchorRows)) { console.error('anchor missing: chRpcRows'); process.exit(1); }
+html = html.replace(anchorRows, anchorRows
+  + 'if(window.__rpc){ const r=await window.__rpc(fn,body); return Array.isArray(r)?r:(r?[r]:[]); }');
 
 const MIME = { '.js': 'text/javascript', '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json' };
 const server = createServer((rq, rs) => {
@@ -82,7 +90,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
    what it means in the answer key. Two false diagnoses today came from measuring the
    harness instead of the layout; this is the fix for both. */
 const BIG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAYYAAANMCAIAAADXDp1JAAAIBUlEQVR42u3UoQ0AAAgEsR8dgWBsZsAhmnSCE5fqAXgiEgCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCWpAFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJakAWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlSQBYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZakAmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlqQCYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWJAFgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFiSCoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWJIKgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYkgSAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAFwtCOGXsyEGUNgAAAABJRU5ErkJggg==', 'base64');
-async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0, reduced = false, passLeft = false }) {
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0, reduced = false, passLeft = false, board = null }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
@@ -94,7 +102,7 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
     route.fulfill(big ? { status: 200, contentType: 'image/png', body: BIG }
                       : { status: 200, contentType: 'image/jpeg', body: JPG });
   });
-  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft }) => {
+  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft, board }) => {
     /* ⚠️ THE LIFE IS SEEDED EXPLICITLY, ALWAYS. "0" means spent and anything else — a missing
        key included — means available, so an unseeded break case silently becomes a SAVE case
        that still renders a pill, and the assertion passes while testing the other mechanic. */
@@ -111,6 +119,7 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
       localStorage.setItem('kamo_seek_best', String(best));
       localStorage.setItem('kamo_seek_life', life ? '1' : '0');
     } catch (e) {}
+    window.__board = board || [];
     window.__calls = [];
     window.__rpc = (fn, body) => {
       window.__calls.push([fn, body]);
@@ -120,9 +129,10 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
       if (fn === 'submit_attempt') return Promise.resolve({ hit, tries: 4, missed: 3, secs: 9, pct, others,
         old_round: oldRound || undefined, old_name: oldRound ? 'OchreHare' : undefined, old_id: oldRound ? 'someoneelse0000' : undefined });
       if (fn === 'reveal_hide') return Promise.resolve({ cx: ansCx, cy: cy, r: 0.1 });
+      if (fn === 'streak_board_v2') return Promise.resolve(window.__board || []);
       return Promise.resolve(null);
     };
-  }, { hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft });
+  }, { hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft, board });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(700);
   return page;
@@ -801,6 +811,83 @@ console.log('\nTHE DAY HAS ONE SKIP, AND IT DOES NOT COST THE RUN');
     ? ok('and the run still stands with no life behind it')
     : bad(`the pass failed to hold a run with no life: run=${after.run}`);
   await spent.close();
+}
+
+console.log('\nTHE RUN PILL IS THE DOOR TO THE DAY\'S BOARD');
+{
+  const BOARD = [
+    { rank: 1, who: 'PewterOwln7', streak: 40, rounds: 164, hints: 0, me: false },
+    { rank: 2, who: 'FaintSquid72', streak: 19, rounds: 122, hints: 2, me: false },
+    { rank: 3, who: 'UmberPika', streak: 12, rounds: 46, hints: 0, me: false },
+    { rank: 4, who: 'J3Sp3r', streak: 11, rounds: 152, hints: 0, me: false },
+    { rank: 5, who: 'DustyAddersx', streak: 9, rounds: 32, hints: 0, me: false },
+    { rank: 6, who: 'AmberOwlwr', streak: 8, rounds: 15, hints: 0, me: false },
+    { rank: 7, who: 'HiddenStoatf0', streak: 7, rounds: 25, hints: 1, me: false },
+    { rank: 8, who: 'tony', streak: 6, rounds: 16, hints: 0, me: true },
+    { rank: 9, who: 'DimSkinkbw', streak: 5, rounds: 62, hints: 0, me: false },
+    { rank: 10, who: 'RustyMantiszw', streak: 4, rounds: 16, hints: 0, me: false },
+  ];
+  const page = await boot({ hit: false, frames: true, run: 6, board: BOARD });
+
+  /* ⚠️ INERT DURING THE HUNT. This chip sits above a photograph somebody is searching with the
+     clock that IS their score running underneath: a full-screen board over that is sabotaging
+     the round to advertise a screen about rounds. pointer-events stays none until the round
+     ends, so a stray touch cannot reach it at all rather than being caught and thrown away. */
+  const live = await page.evaluate(() => {
+    const el = document.querySelector('.chRun');
+    return el ? { tap: el.classList.contains('tap'), pe: getComputedStyle(el).pointerEvents } : null;
+  });
+  live && !live.tap && live.pe === 'none'
+    ? ok('mid-hunt the pill is not a control at all')
+    : bad('the run pill is tappable during a live round: ' + JSON.stringify(live));
+
+  await page.mouse.move(200, 500); await page.mouse.down(); await page.waitForTimeout(80); await page.mouse.up();
+  await page.waitForTimeout(1600);
+  const after = await page.evaluate(() => {
+    const el = document.querySelector('.chRun');
+    return el ? { tap: el.classList.contains('tap'), pe: getComputedStyle(el).pointerEvents } : null;
+  });
+  after && after.tap && after.pe !== 'none'
+    ? ok('and once the round is over it becomes the door')
+    : bad('the pill never became tappable after the round: ' + JSON.stringify(after));
+
+  await page.evaluate(() => document.querySelector('.chRun').click());
+  await page.waitForTimeout(700);
+  const shown = await page.evaluate(() => {
+    const w = document.querySelector('.chBoardWrap');
+    if (!w) return null;
+    return {
+      chase: (w.querySelector('#chBoardChase') || {}).textContent,
+      ranks: [...w.querySelectorAll('.chRowN')].map((e) => Number(e.textContent)),
+      metas: [...w.querySelectorAll('.chRowMeta')].map((e) => e.textContent),
+      mine: [...w.querySelectorAll('.chRow.me .chRowWho')].map((e) => e.textContent),
+    };
+  });
+  shown ? ok('the board opens') : bad('tapping the pill opened nothing');
+
+  /* THE HEADLINE IS THE CHASE, NOT THE RANK. "#8" is a verdict with nothing to do attached;
+     the rider above is one run away, and saying so is tonight's task. */
+  shown && /pass @HiddenStoatf0/.test(shown.chase || '')
+    ? ok(`it names the next person to pass ("${shown.chase}")`)
+    : bad(`the headline reads ${JSON.stringify(shown && shown.chase)} — it should name the rider above`);
+
+  /* FIVE, A GAP, THEN THE NEIGHBOURHOOD: 1-5 and 6-10 around a rank of 8, de-duplicated. */
+  shown && JSON.stringify(shown.ranks) === JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    ? ok('the top and the neighbourhood are both there, in rank order and de-duplicated')
+    : bad('rows rendered: ' + JSON.stringify(shown && shown.ranks));
+
+  shown && shown.mine.length === 1 && shown.mine[0] === 'You'
+    ? ok('and exactly one row is yours, named as such')
+    : bad('own row: ' + JSON.stringify(shown && shown.mine));
+
+  /* ⚠️ "0 hints" ON EVERY ROW WOULD MAKE A SCOREBOARD OF WHO NEEDED HELP, and hints are the one
+     thing in this product with measured demand — 397 people spent a free one and none bought.
+     The number appears only where there is one. */
+  const withH = ((shown && shown.metas) || []).filter((m) => /h$/.test(m));
+  withH.length === 2
+    ? ok('hints show only on the rows that used any')
+    : bad('hint annotations: ' + JSON.stringify(shown && shown.metas));
+  await page.close();
 }
 
 await browser.close(); server.close();
