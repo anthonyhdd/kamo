@@ -208,6 +208,23 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   JSON.stringify(v && v.on) === JSON.stringify(['board'])
     ? ok('and the board tab is lit while it is up') : bad('lit on the board: ' + JSON.stringify(v && v.on));
 
+  /* ⚠️ AND NOTHING CAN TAKE IT AWAY FROM ITS OWN TAB. Founder, from a real device: "the menu
+     sometimes disappears on the leaderboard." It could not be reproduced here, so the invariant
+     was made unconditional rather than a guess at the cause being shipped — the board returns
+     true before any other test. Asserted by forcing a state that WOULD hide it anywhere else. */
+  const stuck = await f.evaluate(() => {
+    try { window.mode = 'paint'; } catch (e) {}
+    const sh = document.getElementById('shareSheet'); if (sh) sh.classList.add('show');
+    return new Promise((r) => setTimeout(() => {
+      const n = document.getElementById('kNav');
+      if (sh) sh.classList.remove('show');
+      r(n ? getComputedStyle(n).display : 'gone');
+    }, 260));
+  });
+  stuck !== 'none' && stuck !== 'gone'
+    ? ok('paint mode and an open sheet cannot take the bar off the board')
+    : bad(`the bar went ${stuck} on the board — a tab bar that vanishes from its own tab is a trap`);
+
   /* ⚠️ AND NO SECOND WAY OUT. With the bar up, a Close button is a duplicate of the tab that
      is already there and the least interesting control on the screen. It must still exist when
      the bar does NOT — a link round gives the whole app to one hide, the board opens from the
@@ -336,6 +353,7 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
       : '.' + String(el.className.baseVal || el.className || '').split(' ').filter(Boolean).slice(0, 2).join('.');
     return {
       overlap: !(r.bottom <= nr.top || r.top >= nr.bottom),
+      gap: Math.round(nr.top - r.bottom),
       pts: [[0.5, 0.5], [0.5, 0.14], [0.5, 0.86]].map(([fx, fy]) => {
         const el = document.elementFromPoint(r.x + r.width * fx, r.y + r.height * fy);
         return { at: d(el), ours: !!(el && (el === b || b.contains(el))) }; }),
@@ -343,9 +361,14 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   });
   if (sh.missing || sh.collapsed) bad('the shutter could not be measured: ' + JSON.stringify(sh));
   else {
-    !sh.overlap
-      ? ok('the shutter sits clear of the bar')
-      : bad('the shutter and the tab bar share the same band of screen');
+    /* ⚠️ A GAP, NOT MERELY "NO OVERLAP". The first version asserted the two rectangles did not
+       intersect and passed at 86px — where, on a real phone, the word "Capture" under the
+       button sat on the bar's top edge. Not overlapping is not the same as not crowded, and
+       only a photograph of a device showed the difference. */
+    !sh.overlap && sh.gap >= 24
+      ? ok(`the shutter sits clear of the bar with ${sh.gap}px between them`)
+      : bad(`the shutter is ${sh.overlap ? 'overlapping' : 'only ' + sh.gap + 'px above'} the bar `
+          + '— the Capture label lands on it');
     const blocked = sh.pts.filter((h) => !h.ours);
     blocked.length === 0
       ? ok('and a thumb reaches it top, middle and bottom')

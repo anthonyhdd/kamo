@@ -156,7 +156,11 @@
      was covered by the thing meant to navigate to it. Found by reading the two rules against
      each other rather than by looking at a screenshot, because a covered control looks
      perfectly fine in a screenshot — which is how this app lost a button twice. */
-  body.nav-on #shutterWrap{bottom:calc(86px + var(--safe-b)) !important;}
+  /* ⚠️ 86px WAS NOT ENOUGH ON A REAL PHONE. The wrap holds the button AND the "Capture" label
+     under it, so its bottom edge is the label's — and at 86 the word sat on the bar's top edge.
+     Geometrically they did not overlap, which is exactly why the first version passed: "not
+     overlapping" is not "not crowded", and only a photograph of a real device showed it. */
+  body.nav-on #shutterWrap{bottom:calc(128px + var(--safe-b)) !important;}
   @media (prefers-reduced-motion: reduce){ .kNav button{transition:none;} }
   .heroWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 30px;margin-bottom:3vh;}
   /* block, not swap: the hero logo is the first thing on screen, and swap renders it in
@@ -15264,6 +15268,14 @@ function navShouldShow(){
        owns the whole app is a LINK round, which is CH_SEEK and nothing else. Caught by the
        camera-tab hit test reporting no box, with chS true and kfState false. */
     if(CH_SEEK) return false;
+    /* ⚠️ THE BOARD ALWAYS KEEPS ITS BAR, BEFORE ANY OTHER TEST. Founder, from a real device:
+       "the menu sometimes disappears on the leaderboard." I could not reproduce it in the
+       harness — opened from the bar it stays, and the run-pill path needs a run the fixture has
+       no way to seed — so rather than ship a guess at the cause, the invariant is made
+       unconditional: a tab bar that vanishes from its own tab is a trap, and the board is a
+       destination this bar owns. Whatever the state underneath is doing, it gets no vote here.
+       Placed first so nothing below can override it. */
+    if(document.querySelector(".chBoardWrap.show")) return true;
     if(typeof mode!=="undefined" && mode==="paint") return false;
     for(const id of NAV_BLOCKERS){
       const el=document.getElementById(id);
@@ -15391,10 +15403,14 @@ function navMount(){
       +' stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
     const CAM=ico('<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2a1 1 0 0 0 .83-.45l.94-1.4A1 1 0 0 1 9.3 4.7h5.4a1 1 0 0 1 .83.45l.94 1.4A1 1 0 0 0 17.3 7h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.4"/>');
     const HOME=ico('<path d="M3.5 10.4 12 3.6l8.5 6.8V20a1 1 0 0 1-1 1h-4.6v-6H9.1v6H4.5a1 1 0 0 1-1-1z"/>');
-    /* A podium, not a bar chart: three columns close together with the middle tallest, on a
-       short baseline. The first version spread them from x=4 to x=22 with a full-width rule
-       under them, and at 25px that reads as three unrelated ticks rather than as a ranking. */
-    const BOARD=ico('<path d="M7 20V9.5"/><path d="M12 20V4.5"/><path d="M17 20v-7"/><path d="M4.5 20h15"/>');
+    /* ⚠️ A TROPHY, NOT BARS. Three columns at 25px read as three unrelated ticks — a chart
+       glyph, and a chart is not what this screen is. A trophy is the one shape nobody has to
+       decode, it pairs with the gold/silver/bronze chips the board already uses, and it has the
+       character bars do not. Founder's call, and he was right. */
+    const BOARD=ico('<path d="M7.6 4h8.8v5.1a4.4 4.4 0 0 1-8.8 0z"/>'
+      +'<path d="M7.6 5.6H5.3a2.4 2.4 0 0 0 0 4.8h1"/>'
+      +'<path d="M16.4 5.6h2.3a2.4 2.4 0 0 1 0 4.8h-1"/>'
+      +'<path d="M12 13.6V17"/><path d="M10.2 17h3.6l.6 3h-4.8z"/><path d="M8.6 20h6.8"/>');
     navEl=document.createElement("nav");
     navEl.className="kNav"; navEl.id="kNav"; navEl.style.display="none";
     navEl.setAttribute("aria-label","Main");
