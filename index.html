@@ -4039,7 +4039,41 @@ function clearCharacters(){
   characters=[]; selIdx=-1;
 }
 function sel(){ return characters[selIdx]; }
-function spawnHider(){ makeCharacter(0); selIdx=0; }
+/* ═══ THE KAMO ARRIVES, IT DOES NOT SIMPLY EXIST ═══════════════════════════════════════════
+   Everything else on this screen already has weight: the drag is a spring with momentum and an
+   elastic settle, the limbs trail the movement and ease back to rest, the shutter lands a
+   bounded punch. The one moment with no motion at all was the first one — the figure was there
+   between two frames, which is the only event on this screen that reads as a page render
+   rather than as a thing happening.
+   ⚠️ IT REUSES THE SPRING AND THE PUNCH RATHER THAN ADDING A THIRD SYSTEM. Lifting the group
+   and leaving `_ty` at the base means the existing spring does the fall, with the same
+   momentum and the same settle the drag has — one behaviour, not two that must be kept in
+   agreement. `_punch` is the shutter's own decaying squash, re-applied fresh each frame so it
+   can never compound.
+   ⚠️ AND THE LANDING IS AN EVENT, NOT A TIMER. setTimeout would guess at a spring whose
+   duration depends on frame rate; lerpChar fires the punch when the figure has actually
+   arrived. A hitch, a 120Hz screen or a backgrounded tab all land correctly.
+   ⚠️ CAPTURING MID-FALL IS SAFE, and that is worth stating: the answer key is derived from the
+   character's real position, so a shutter pressed at 200ms records the figure exactly where it
+   is drawn. The picture and its answer cannot disagree. */
+/* 1.15 units up, and about 20 frames to come down — a third of a second, which is long enough
+   to read as a fall and short enough that nobody waits for it. CH_DROP_G is per frame, not per
+   second: this function is called once per rendered frame and everything else in it (the
+   spring, the trail, the punch decay) is written the same way. */
+const CH_DROP_H=1.15, CH_DROP_G=0.0058;
+function spawnHider(){
+  const c=makeCharacter(0); selIdx=0;
+  try{
+    if(!c||!c.group) return;
+    /* Reduced motion asks for less travel, and a fall is travel. The figure simply is where it
+       belongs — the same posture confettiBurst takes with its bloom. */
+    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    c._ty=c.group.position.y;              // the base, which is where the spring is pulling to
+    c._tx=c.group.position.x;
+    c.group.position.y+=CH_DROP_H;         // and it starts above it
+    c._svy=0; c._dropping=true;
+  }catch(_){}
+}
 
 const REST={spine:[0,0,0],head:[0,0,0],shL:[0,0,.14],shR:[0,0,-.14],elL:[0,0,0],elR:[0,0,0],hipL:[0,0,0],hipR:[0,0,0],knL:[0,0,0],knR:[0,0,0],rootDY:0};
 const POSES=[
@@ -4071,7 +4105,23 @@ function lerpChar(char){ const s=0.18; const g=char.group;
   if(char._svx===undefined){ char._svx=0; char._svy=0; }
   if(char._tx===undefined){ char._tx=g.position.x; char._ty=g.position.y; }
   char._svx=(char._svx+(char._tx-g.position.x)*0.4)*0.7; char._svy=(char._svy+(char._ty-g.position.y)*0.4)*0.7;
-  g.position.x+=char._svx; g.position.y+=char._svy;
+  /* ⚠️ THE FALL IS NOT THE SPRING, AND ASSUMING IT WAS SHIPPED A DROP NOBODY COULD SEE. The
+     spring above is tuned for a finger: the target sits a few hundredths away and it closes
+     that in a frame or two, which is exactly right for a drag. Handed a distance of 1.15 it
+     does the same thing — measured in a browser, the figure went from 1.15 to -0.05 in THREE
+     frames, about 50ms. The arithmetic was correct and the animation did not exist.
+     So the drop integrates its own gravity and hands over to the spring on landing. ~20 frames
+     to fall, which is a third of a second and readable; the spring then owns the settle, so
+     the two never fight over the same axis. */
+  if(char._dropping){
+    char._dropV=(char._dropV||0)+CH_DROP_G;
+    g.position.y-=char._dropV;
+    char._svy=0;                                   // the spring does not get a say mid-fall
+    if(g.position.y<=char._ty){ g.position.y=char._ty; char._dropV=0; }
+  } else {
+    g.position.y+=char._svy;
+  }
+  g.position.x+=char._svx;
   // no motion stretch — keep the character's true scale while dragging; just ease back to base (1)
   const cg=char.charG;
   if(char._pfx){ cg.scale.x/=char._pfx; cg.scale.y/=char._pfy; }   // undo last frame's capture-pop so the spring eases the clean base
@@ -4081,6 +4131,18 @@ function lerpChar(char){ const s=0.18; const g=char.group;
   let _pfx=1,_pfy=1;
   if(char._punch>0.002){ _pfx=1+char._punch*0.38; _pfy=1+char._punch*0.52; char._punch*=0.78; } else char._punch=0;
   cg.scale.x*=_pfx; cg.scale.y*=_pfy; char._pfx=_pfx; char._pfy=_pfy;
+  /* THE LANDING. Fired when the figure has actually arrived rather than after a guessed
+     delay — the spring's duration depends on the frame rate, and a timer would punch mid-air
+     on a 120Hz screen and long after the fact on a stalled one. Cleared first, so a drop can
+     only ever land once. */
+  /* THE LANDING. An event, not a timer: the fall's length depends on the frame rate, so a
+     setTimeout would punch mid-air on a 120Hz screen and long after the fact on a stalled one.
+     Cleared before the punch is set, so a figure resting on its base cannot re-punch every
+     frame — which would be a kamo that never stops shaking. */
+  if(char._dropping && g.position.y<=char._ty+0.0001){
+    char._dropping=false; char._dropV=0; char._punch=Math.max(char._punch||0,0.55);
+    try{ haptic(8); }catch(_){}
+  }
   /* The v2 body is DRIVEN, not posed: the mixer owns every bone, so the rest-pose easing
      and the drag sway below would fight it frame by frame. It keeps the position spring
      and the capture pop above (they act on group/charG, not on bones). */
@@ -20182,6 +20244,10 @@ if(location.search.includes("debug")){
        describe a product that does not exist, and every assertion written through it would
        be about the hook rather than about the rule. */
     setTarget:(x,y)=>{ const c=sel(); if(c){ c._tx=x; c._ty=y; chKeepOnBoard(c); } },
+    /* The arrival, driveable. The boot spawn happens while the page is still loading and has
+       long since settled by the time a test can look at it, so the drop is unobservable from
+       outside without a way to ask for another one. Same call the compose screen makes. */
+    respawn:()=>{ try{ clearCharacters(); spawnHider(); }catch(_){} },
     setBg:(url)=>{ photo.onload=()=>syncPreviewFit(); photo.src=url; photo.style.display="block"; cam.style.display="none"; bgKind="photo"; enterCompose(); },
     pose:(i)=>{ if(sel()) setPoseInstant(sel(),i); }, capture, score:()=>currentScore,
     reveal:buildReveal, chars:()=>characters.length, poses:POSES.map(p=>p.label),
