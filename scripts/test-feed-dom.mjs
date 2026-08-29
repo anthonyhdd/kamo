@@ -150,8 +150,13 @@ async function open(rows, extra, before) {
   }, { r: rows, extra: extra || null });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
-  /* The real entry point: the button on the camera screen, clicked the way a thumb does. */
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  /* ⚠️ NOT A TAP ANY MORE, AND THAT IS A REAL LOSS. This clicked #btnFeed — the camera
+     screen's own button, the way a thumb reached it — until that button was deleted on
+     2026-08-29 and the tab bar took the route over. The bar's handler is module-scoped, so
+     from page.evaluate the test hook is the only door left. Every suite that opens a feed now
+     opens it this way, which means NONE of them prove the feed is reachable by tapping
+     anything; test-navbar-dom hit-tests the Feed tab on their behalf. */
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(800);
   return page;
 }
@@ -236,7 +241,7 @@ console.log('\nTHE FEED OPENS ON THE PAGE THE PROBE ALREADY FETCHED');
   await page.waitForFunction(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length >= 1, null, { timeout: 6000 });
   const before = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length);
 
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForSelector('.kfSlide', { timeout: 6000 });
   const after = await page.evaluate(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length);
 
@@ -292,7 +297,7 @@ console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
      measured the network path and reported cached=false. The assertion below caught it, which
      is the only reason this comment exists rather than a wrong number in a report. */
   await page.waitForFunction(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length >= 1, null, { timeout: 8000 });
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   /* decode() resolves on its own schedule, so the wait is on the event landing rather than on
      a clock — a fixed sleep would either flake or hide a regression that made it slower. */
   await page.waitForFunction(() => true);
@@ -446,7 +451,7 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
   }, ROWS(3));
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForFunction(() => (window.__rpc || []).filter(c => c[0] === 'feed_page').length >= 1, null, { timeout: 8000 });
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(1500);
   const clock = () => page.evaluate(() => {
     const e = [...document.querySelectorAll('.kfSlide *')].find(x => /^\d+(\.\d+)?s$/.test((x.textContent || '').trim()));
@@ -1155,7 +1160,7 @@ console.log('\nA CLEARED FEED REOPENS INSTEAD OF SAYING IT IS EMPTY');
   }, rows);
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   /* WAITED FOR, NEVER SLEPT ON. The lap costs a SECOND feed_page round trip after the first
      one comes back empty, so a fixed sleep here is a test that goes red on a slow morning —
      which it did, once, in the gate. Wait for the thing being asserted, with a ceiling. */
@@ -1177,6 +1182,17 @@ console.log('\nA CLEARED FEED REOPENS INSTEAD OF SAYING IT IS EMPTY');
 
 console.log('\nDAY ONE — AN EMPTY FEED IS AN INVITATION, NOT A BLACK SCREEN');
 {
+  /* ⚠️ THIS BLOCK CARRIES A GUARANTEE THAT USED TO LIVE SOMEWHERE ELSE, AND IT MATTERS MORE
+     NOW THAN IT DID. #btnFeed shipped visible on day one and led every user to "Nothing here
+     yet." — nothing was public and the 3191 existing hides stay private by design — so the fix
+     at the time was to HIDE THE DOOR: a launch probe set kfHasContent and kfShowBtn took the
+     button down while the room was empty. The suite below this one asserted exactly that.
+     The button was deleted on 2026-08-29 when the tab bar took the feed over, and a tab cannot
+     appear and disappear with a network probe. So the dead end is reachable again, on purpose,
+     and this state is the ONLY thing standing between a user and a blank screen. That is the
+     better place for the answer to live — it says why the room is empty and what fills it, on
+     the screen where the question was asked, rather than removing the way in and leaving
+     somebody to wonder where the feed went. */
   const page = await open([]);
   const txt = await page.evaluate(() => {
     const m = document.getElementById('kfMid');
@@ -1184,9 +1200,34 @@ console.log('\nDAY ONE — AN EMPTY FEED IS AN INVITATION, NOT A BLACK SCREEN');
   });
   /^Nothing here yet\./.test(txt) ? ok('the empty feed says so and offers the way out ("' + txt.slice(0, 34) + '…")')
     : bad('empty feed rendered ' + JSON.stringify(txt.slice(0, 80)));
-  const cta = await page.evaluate(() => !!document.getElementById('kfCta'));
+  /* NOT "the CTA exists" ANY MORE. An exit nobody can land on is the dead end under a nicer
+     name, and the card sits under a bar that is fixed over the same screen at z-index 9500 —
+     this app has shipped a present, visible, untappable button three times. */
+  const cta = await page.evaluate(() => {
+    const b = document.getElementById('kfCta'); if (!b) return null;
+    const r = b.getBoundingClientRect();
+    const el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    const d = !el ? 'nothing' : el.id ? '#' + el.id : '.' + String(el.className || '').split(' ')[0];
+    return { reached: !!(el && (el === b || b.contains(el))), at: d };
+  });
   cta ? ok('and it carries a button rather than a dead end') : bad('no CTA on the empty state');
+  cta && cta.reached
+    ? ok('and a thumb actually lands on it')
+    : bad('"Make a hide" is covered by ' + (cta ? cta.at : 'nothing to measure')
+        + ' — the only exit from an empty feed');
   await page.close();
+
+  /* THE OTHER DIRECTION, which the deleted probe used to own: one public hide and the card is
+     gone. It was asserted by checking that a button existed, which was true whatever the feed
+     contained; this reads the slides. */
+  const full = await open([{ id: 'h0', img_path: 'p0.jpg', name: 'tony', n_attempts: 0, n_found: 0,
+                             cx: .5, cy: .5, r: .12, secs: 9, created_at: '2026-08-13T10:00:00Z' }]);
+  const filled = await full.evaluate(() => ({
+    card: !!document.querySelector('.kfCard'), slides: document.querySelectorAll('.kfSlide').length }));
+  filled.slides > 0 && !filled.card
+    ? ok('and one public hide replaces the invitation with the feed itself')
+    : bad('a feed with a row is still showing the empty state: ' + JSON.stringify(filled));
+  await full.close();
 }
 
 console.log('\nPUBLIC IS A DEFAULT, NOT A POLICY');
@@ -1230,33 +1271,6 @@ console.log('\nPUBLIC IS A DEFAULT, NOT A POLICY');
     bad('KAMOFEED.setVisibility is not reachable');
   }
   await page.close();
-}
-
-console.log('\nTHE BUTTON WAITS FOR THE FEED TO EXIST');
-{
-  /* Shipped visible, and on day one it led every user to "Nothing here yet." — nothing is
-     public yet and the 3191 existing hides stay private by design, so the button was a
-     button that went nowhere. The gate is a launch probe, and both directions matter: hidden
-     while the feed is empty, and revealed by itself the day it is not, with no deploy. */
-  const empty = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-  await empty.addInitScript(() => { window.__seed = { feed_page: [] }; });
-  await empty.goto(base, { waitUntil: 'load' });
-  await empty.waitForTimeout(2200);   // the probe fires at 1200ms
-  const hidden = await empty.evaluate(() => getComputedStyle(document.getElementById('btnFeed')).display);
-  hidden === 'none'
-    ? ok('an empty feed hides its button rather than offering a dead end')
-    : bad('button display with an empty feed: ' + hidden);
-  await empty.close();
-
-  const full = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-  await full.addInitScript(() => { window.__seed = { feed_page: [{ id: 'h0', img_path: 'p0.jpg', name: 'tony', n_attempts: 0, n_found: 0, created_at: '2026-08-13T10:00:00Z' }] }; });
-  await full.goto(base, { waitUntil: 'load' });
-  await full.waitForTimeout(2200);
-  const ready = await full.evaluate(() => window.KAMOFEED && document.getElementById('btnFeed') ? { probe: true } : null);
-  ready
-    ? ok('and one public hide is enough to bring it back — no deploy needed')
-    : bad('the probe never resolved');
-  await full.close();
 }
 
 console.log('\nTHE ROUND\'S CHROME NEVER COVERS THE FEED\'S CONTROLS');
@@ -1343,7 +1357,7 @@ console.log('\nTHE SWIPE HINT CLEARS THE ENDING CARD');
   }, ROWS(4));
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(800);
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(1000);
 
   const pill = await page.evaluate(() => !!document.getElementById('kfHint'));

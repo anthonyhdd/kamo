@@ -91,7 +91,7 @@ async function open({ rows, best, seen } = {}) {
   }, { rows: rows, best: best || null, seen: seen || null });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(900);
   return page;
 }

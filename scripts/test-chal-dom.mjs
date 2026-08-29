@@ -99,7 +99,7 @@ async function open({ mine, replies, seen, hasReplies } = {}) {
   }, { mine: mine || null, replies: replies || null, seen: seen || null, hasReplies: !!hasReplies, feed: FEED });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(800);
   return page;
 }

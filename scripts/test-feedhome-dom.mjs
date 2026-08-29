@@ -312,7 +312,7 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   /* And it is on the holdout too — shipping the affordance inside the arm would move two
      things at once and settle neither. */
   const h = await boot({ arm: 'camera' });
-  await h.evaluate(() => document.getElementById('btnFeed').click());
+  await h.evaluate(() => window.KAMOFEED.open());
   await h.waitForTimeout(800);
   (await h.evaluate(() => { const b = document.querySelector('#kNav [data-tab="cam"]'); return !!(b && b.querySelector('svg')); }))
     ? ok('the holdout gets the same tab bar — the arm moves the destination, not the affordance')
