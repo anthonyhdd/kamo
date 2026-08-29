@@ -322,8 +322,18 @@ console.log('\n③ THE SERVER REFUSES — NOTHING IS SOLD, THE CONTROL RETIRES')
   await p.click('#chHint');
   await p.waitForTimeout(300);
   const b = await btn(p);
-  b && b.text === 'No hint here' && b.disabled
-    ? ok('a hide too easy to be worth selling says so instead of charging')
+  /* ⚠️ THE WORDING CHANGED ON 2026-08-29 AND THE REASON MATTERS. "No hint here" answered the
+     question the server was asked; it did not answer the one the player has, which is "did I
+     just lose my free hint?" They did not — hint_spend returns before touching the wallet —
+     and the founder's live report of this path was "it didn't launch and the button
+     disappeared": the label was never read at all. It now says the hint is kept, and it holds
+     3.2s instead of 1.4 because a pill that changes and vanishes inside a second and a half in
+     the corner of a photograph somebody is searching is not a message.
+     This path is also now RARE by construction: the button is removed on mount when
+     hint_state reports the hide is not hintable. What survives here is the older-server case,
+     which must keep working exactly as it does. */
+  b && /hint kept/i.test(b.text || '') && b.disabled
+    ? ok(`a hide too big to hint says so, and says the free one is safe ("${b.text}")`)
     : bad(`button reads ${JSON.stringify(b)}`);
   const posted = await p.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
   posted.length === 0 ? ok('and no purchase is offered for it') : bad(`offered a purchase anyway: ${JSON.stringify(posted)}`);
@@ -679,6 +689,39 @@ console.log('\nTHE TAP IS MEASURABLE, AND CARRIES WHAT IS AT STAKE');
     ? ok('hint_tapped is routed WEB_ONLY, so the bridge cannot swallow it')
     : bad('hint_tapped is not in WEB_ONLY — it would be dropped in silence on the live build');
   await page.close();
+}
+
+console.log('\nA HINT IS NOT OFFERED WHERE THERE IS NONE TO GIVE');
+{
+  /* Founder, live, 2026-08-29: "I tapped free hint, it didn't launch, and the hint button
+     disappeared." Correct server behaviour meeting a client that could not know about it.
+     hint_region() returns NULL once the kamo's radius reaches 0.22 — the zone would swallow the
+     figure and point at it — so hint_spend answers `hide_too_easy` and the button retires.
+     ⚠️ ONE HIDE IN THREE. Measured over eight days: 23% to 39% of hides published each day
+     carry r >= 0.22. The only way to discover it was to spend a tap, wait for a round trip,
+     watch nothing happen and see the control vanish — which on a FREE hint reads as "I just
+     burned my one for today". It does not; hint_spend returns before touching the wallet. */
+  const page = await hunt({ caps: { hints: true }, uid: 'user-1',
+                            state: { balance: 0, free_available: true, hintable: false } });
+  const gone = await page.evaluate(() => !document.getElementById('chHint'));
+  gone
+    ? ok('a hide too big for a hint zone never shows the button')
+    : bad('the hint button is still offered on a round that cannot answer it — the tap, the '
+        + 'round trip and the disappearing control are all still there');
+  await page.close();
+
+  /* ⚠️ AND AN OLDER SERVER MUST NOT LOSE HINTS. This file deploys on push and the database does
+     not: a page that reaches a server without the two-argument hint_state gets no `hintable`
+     at all, and reading an ABSENT field as a refusal would take the hint away from everybody
+     for the length of a deploy — far worse than the bug being fixed. Only a definite false
+     removes anything. */
+  const old = await hunt({ caps: { hints: true }, uid: 'user-1',
+                           state: { balance: 2, free_available: false } });
+  const kept = await old.evaluate(() => !!document.getElementById('chHint'));
+  kept
+    ? ok('and a server that cannot answer the question keeps the button, as it does today')
+    : bad('an absent `hintable` was read as a refusal — every hint disappears during a deploy');
+  await old.close();
 }
 
 await browser.close();
