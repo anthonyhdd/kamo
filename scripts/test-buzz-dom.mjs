@@ -865,11 +865,15 @@ console.log('\nTHE RUN PILL IS THE DOOR TO THE DAY\'S BOARD');
   });
   shown ? ok('the board opens') : bad('tapping the pill opened nothing');
 
-  /* THE HEADLINE IS THE CHASE, NOT THE RANK. "#8" is a verdict with nothing to do attached;
-     the rider above is one run away, and saying so is tonight's task. */
-  shown && /pass @HiddenStoatf0/.test(shown.chase || '')
-    ? ok(`it names the next person to pass ("${shown.chase}")`)
-    : bad(`the headline reads ${JSON.stringify(shown && shown.chase)} — it should name the rider above`);
+  /* ⚠️ IT USED TO READ "2 more in a row and you pass @x" AND THE FOUNDER DID NOT LIKE IT.
+     Fair — a coach's line on a scoreboard, and it names another player in the second person,
+     which reads as the app volunteering somebody as your rival rather than reporting what
+     happened. A position is a fact and it is enough: the highlighted row below already shows
+     who is above you. Asserted on the ORDINAL, because "11st" is the bug every naive version
+     of this has. */
+  shown && /You’re 8th today/.test(shown.chase || '')
+    ? ok(`the headline states the position and nothing else ("${shown.chase}")`)
+    : bad(`the headline reads ${JSON.stringify(shown && shown.chase)}`);
 
   /* FIVE, A GAP, THEN THE NEIGHBOURHOOD: 1-5 and 6-10 around a rank of 8, de-duplicated. */
   shown && JSON.stringify(shown.ranks) === JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
