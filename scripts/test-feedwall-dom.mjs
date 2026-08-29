@@ -104,7 +104,7 @@ async function open(rounds,wrapper){
 /* ---- A. FIRST VISIT, NOTHING PLAYED ---- */
 {
   const page=await open(0,false);
-  await page.evaluate(()=>document.getElementById('btnFeed').click());
+  await page.evaluate(()=>window.KAMOFEED.open());
   await page.waitForTimeout(700);
   const wall=await has(page,'kfWall'), feed=await has(page,'kfeed');
   (!wall&&feed) ? ok('a first visit opens the feed, with no wall')
@@ -115,7 +115,7 @@ async function open(rounds,wrapper){
 /* ---- B. ONE ROUND PLAYED ---- */
 {
   const page=await open(1,false);
-  await page.evaluate(()=>document.getElementById('btnFeed').click());
+  await page.evaluate(()=>window.KAMOFEED.open());
   await page.waitForTimeout(700);
   const wall=await has(page,'kfWall'), feed=await has(page,'kfeed');
   (wall&&!feed) ? ok('after one round the browser gets the wall, and the feed does not mount behind it')
@@ -145,7 +145,7 @@ async function open(rounds,wrapper){
 /* ---- C. "NOT NOW" ---- */
 {
   const page=await open(1,false);
-  await page.evaluate(()=>document.getElementById('btnFeed').click());
+  await page.evaluate(()=>window.KAMOFEED.open());
   await page.waitForTimeout(700);
   await page.evaluate(()=>{ const b=[...document.querySelectorAll('#kfWall button')].find(x=>/Not now/i.test(x.textContent)); b.click(); });
   await page.waitForTimeout(400);
@@ -158,7 +158,7 @@ async function open(rounds,wrapper){
 /* ---- D. INSIDE THE WRAPPER ---- */
 {
   const page=await open(9,true);
-  await page.evaluate(()=>document.getElementById('btnFeed').click());
+  await page.evaluate(()=>window.KAMOFEED.open());
   await page.waitForTimeout(700);
   const wall=await has(page,'kfWall'), feed=await has(page,'kfeed');
   (!wall&&feed) ? ok('the installed app is never walled, whatever the browser counter says')

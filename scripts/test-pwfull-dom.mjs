@@ -75,17 +75,26 @@ const html = real.slice(0, at)
      thing on the screen the full arm opens over: on the reveal the sheet is auto-presented, so
      every paywall opened from a finished round had "Can they find you?", the challenge card,
      Challenge a friend and the Instagram button burning through the hero.
-     #covHud, #btnFeed and #sizeStar are here for the SAME reason, and they are the proof the
+     #covHud and #sizeStar are here for the SAME reason, and they are the proof the
      CSS rule needs a probe rather than a reader: it is an allow-list of ids, so every piece
      of chrome added after 2026-08-12 defaulted to showing through. The coverage pill took
      over #scoreChip's slot on 08-15 and not its entry in that list, and "85% hidden · ready
      to challenge" sat lit on top of the hero until a founder screenshot on 08-18. Reading
      visibility rather than the stylesheet is what makes the next omission a red test.
      They read 'visible' rather than 'hidden' while display:none, which is exactly what the
-     close() assertion below wants — visibility and display are independent. */
+     close() assertion below wants — visibility and display are independent.
+     ⚠️ #btnFeed WAS IN THIS LIST AND IS NOT ANY MORE — it was deleted on 2026-08-29 when the
+     tab bar took the feed over. Dropping the id without replacing what it guarded would have
+     quietly shrunk this probe, because the bar is exactly the kind of chrome the note above is
+     about: born long after the allow-list, sitting on the bottom edge, over the hero. It is
+     checked separately (`nav`) rather than folded in here, because navSync hides it with
+     `display` and every id in this object is compared on `visibility` — one object, one
+     meaning. */
   + 'chrome(){const g=q=>getComputedStyle(document.querySelector(q)).visibility;'
   + 'return{brand:g(".brand"),done:g("#btnDone"),back:g("#btnBack"),hint:g("#hint"),'
-  + 'sheet:g("#shareSheet"),cov:g("#covHud"),feed:g("#btnFeed"),star:g("#sizeStar")};},'
+  + 'sheet:g("#shareSheet"),cov:g("#covHud"),star:g("#sizeStar")};},'
+  + 'nav(){const n=document.getElementById("kNav");'
+  + 'return n?getComputedStyle(n).display:"missing";},'
   + 'close(){closePaywall();return this.chrome();},'
   + 'facts(){return{paint:PAINT_SECONDS};}};\n'
   + real.slice(at);
@@ -190,8 +199,18 @@ console.log('\nTHE STAGE GOES QUIET UNDERNEATH, AND WAKES ON CLOSE');
   await page.evaluate(() => window.__f.open('char'));
   const c = await page.evaluate(() => window.__f.chrome());
   Object.values(c).every((v) => v === 'hidden')
-    ? ok('wordmark, Retake, Done, the hint, the share sheet, the coverage pill, the feed button and the Pro star are all hidden under the paywall')
+    ? ok('wordmark, Retake, Done, the hint, the share sheet, the coverage pill and the Pro star are all hidden under the paywall')
     : bad(`stage chrome shows through the full arm: ${JSON.stringify(c)}`);
+  /* THE TAB BAR IS THE NEWEST PIECE OF BOTTOM CHROME AND THE MOST EXPENSIVE ONE TO GET WRONG:
+     it is fixed at z-index 9500, which is above the paywall's own stacking, so a bar that
+     failed to stand down would not merely show through — it would sit ON the purchase button.
+     It is not in the CSS allow-list on purpose; navShouldShow reads NAV_BLOCKERS, and this
+     asserts that mechanism actually fires rather than trusting the list. */
+  const navUp = await page.evaluate(() => window.__f.nav());
+  navUp === 'none'
+    ? ok('and the tab bar stands down under the paywall, over the top of it as it sits')
+    : bad(`the tab bar is still up under the full paywall (display:${navUp}) — at z-index 9500 `
+        + 'that is a navigation bar across the buy button');
   const after = await page.evaluate(() => window.__f.close());
   Object.values(after).every((v) => v !== 'hidden')
     ? ok('and every one of them is back the moment it closes')

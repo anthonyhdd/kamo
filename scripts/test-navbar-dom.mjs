@@ -252,6 +252,39 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   await f.close();
 }
 
+/* ── ①b THE FEED TAB IS THE ONLY DOOR LEFT, SO IT IS THE ONE THAT GETS TAPPED ──────────── */
+{
+  console.log('\n— the Feed tab actually opens the feed, by tap —');
+  /* ⚠️ THIS IS NOT REDUNDANT WITH THE SUITES THAT PLAY THE FEED, AND THE REASON IS RECENT.
+     All of them opened it by clicking #btnFeed, the camera's own button. That button was
+     deleted on 2026-08-29 — the bar replaced it — and the bar's handler is module-scoped, so
+     every one of those suites now opens the feed through window.KAMOFEED.open(). Not one of
+     them touches a control any more. This is the single assertion standing between the fleet
+     and a feed that no user can reach while every feed test stays green.
+     REAL CLICK, NOT .click(). Playwright's actionability check refuses a target that does not
+     receive the event — covered, zero-sized, or behind something — which is exactly the class
+     of failure this app has shipped three times and which a dispatched DOM click sails
+     straight through. */
+  const p = await boot({ arm: 'camera' });
+  await p.waitForTimeout(400);
+  let opened = null, why = null;
+  try {
+    await p.click('#kNav [data-tab="feed"]', { timeout: 4000 });
+    await p.waitForTimeout(900);
+    opened = await feedUp(p);
+  } catch (e) { why = String(e.message).split('\n')[0].slice(0, 120); }
+  opened
+    ? ok('a real tap on the Feed tab opens the feed')
+    : bad('the Feed tab did not open the feed' + (why ? ' — ' + why : '')
+        + ' — this is the ONLY control that reaches the feed since #btnFeed was deleted');
+  /* AND THE CAMERA IS STILL BEHIND IT. The feed is an overlay over compose; if the tap tore
+     the camera down there is nothing to come back to. */
+  const back = await p.evaluate(() => !!document.getElementById('board'));
+  back ? ok('and the camera is still underneath, ready to be tabbed back to')
+       : bad('the feed tap took the camera down with it');
+  await p.close();
+}
+
 /* ── ② AND IT IS HIDDEN WHERE SOMETHING ELSE OWNS THE BOTTOM ───────────────────────────── */
 {
   console.log('\n— and it gets out of the way —');
@@ -375,6 +408,131 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
       : bad('the SHUTTER is covered at ' + blocked.map((h) => h.at).join(', ')
           + ' — the tab bar is sitting on the capture button, which is the entry point of the '
           + 'entire product');
+  }
+  await p.close();
+}
+
+/* ── ③c THE ROW BESIDE THE SHUTTER, WHICH IS WHERE THE BAR ACTUALLY LANDED ─────────────── */
+{
+  console.log('\n— the camera row is lifted too, and every corner is tappable —');
+  /* ⚠️ THE SHUTTER WAS LIFTED AND THE ROW BESIDE IT WAS NOT — the exact half-fix this file
+     exists to catch. .camBtn sits at bottom:52px and the bar occupies roughly 12→68, so the
+     picker's INVISIBLE 44px hit pad — added precisely because the visible button is 23px —
+     lay under a bar at z-index 9500. Nothing looked wrong: a screenshot shows a small chip
+     near a bar, correctly sized, correctly padded, quietly losing its lower half.
+     THE TORCH WAS THE OTHER HALF. It was pinned at bottom:150px, an inch above a shutter that
+     lived at 30; the bar moved the shutter to 128 and the two became the same rectangle. The
+     founder photographed a flash icon inside the capture ring on 2026-08-29.
+     ⚠️ AND THAT IS WHY THIS ASSERTS AGAINST THE SHUTTER, NOT AGAINST A CONSTANT. Both bugs
+     were an offset measured once against furniture that later moved. A test that hard-codes
+     150 learns nothing the third time somebody lifts the row. */
+  const p = await boot({ arm: 'camera' });
+  await p.waitForTimeout(400);
+  const row = await p.evaluate(() => {
+    const st = document.getElementById('start'); if (st) st.style.display = 'none';
+    const n = document.getElementById('kNav'), sw = document.getElementById('shutterWrap');
+    if (!n || !sw) return { missing: !n ? 'nav' : 'shutter' };
+    sw.style.display = 'block';
+    const d = (el) => !el ? 'nothing' : el.id ? '#' + el.id
+      : '.' + String(el.className.baseVal || el.className || '').split(' ').filter(Boolean).slice(0, 2).join('.');
+    const nr = n.getBoundingClientRect(), sr = sw.getBoundingClientRect();
+    const one = (id) => {
+      const b = document.getElementById(id); if (!b) return { id, gone: true };
+      b.style.display = 'flex';
+      const r = b.getBoundingClientRect();
+      if (!r.width || !r.height) return { id, collapsed: true };
+      /* The picker is 23px with a 44px ::after pad centred on it; the pad is what a thumb
+         actually lands on, so that is the box to hit-test, not the painted square. */
+      const pad = 44, cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+      const box = { x: cx - pad / 2, y: cy - pad / 2, w: pad, h: pad };
+      return { id,
+        onBar: !(r.bottom <= nr.top || r.top >= nr.bottom),
+        padOnBar: !(box.y + box.h <= nr.top || box.y >= nr.bottom),
+        onShutter: !(r.bottom <= sr.top || r.top >= sr.bottom || r.right <= sr.left || r.left >= sr.right),
+        side: cx < innerWidth / 2 ? 'left' : 'right',
+        pts: [[0.5, 0.5], [0.5, 0.12], [0.5, 0.88]].map(([fx, fy]) => {
+          const el = document.elementFromPoint(box.x + box.w * fx, box.y + box.h * fy);
+          return { at: d(el), ours: !!(el && (el === b || b.contains(el))) }; }) };
+    };
+    return { pick: one('btnPhoto'), light: one('btnLight'),
+             navTop: Math.round(nr.top), shutTop: Math.round(sr.top) };
+  });
+  if (row.missing) bad('the camera row could not be measured: ' + JSON.stringify(row));
+  else for (const b of [row.pick, row.light]) {
+    const name = b.id === 'btnPhoto' ? 'the photo picker' : 'the flash';
+    if (b.gone || b.collapsed) { bad(`${name} could not be measured: ` + JSON.stringify(b)); continue; }
+    !b.onBar && !b.padOnBar
+      ? ok(`${name} sits clear of the bar, hit pad included`)
+      : bad(`${name} ${b.onBar ? 'overlaps' : 'has its 44px hit pad under'} the tab bar `
+          + '— present, visible, and losing taps to a bar at z-index 9500');
+    !b.onShutter
+      ? ok(`and clear of the capture button`)
+      : bad(`${name} is ON the shutter — this is the flash-inside-the-capture-ring bug`);
+    const blocked = b.pts.filter((h) => !h.ours);
+    blocked.length === 0
+      ? ok(`and a thumb reaches ${name} top, middle and bottom`)
+      : bad(`${name} is covered at ` + blocked.map((h) => h.at).join(', '));
+  }
+  /* ONE CONTROL PER CORNER, WHICH IS THE WHOLE REASON THE PICKER MOVED. The founder asked for
+     the flash on the left; the left is where the picker was. They cannot share it — the note
+     on #btnPhoto refused a stack in that corner years before this — so the picker took the
+     slot the feed button had just vacated. If a later change puts them back on the same side
+     the screen is lopsided and one of them is on the shutter again. */
+  if (!row.missing && !row.pick.gone && !row.light.gone) {
+    row.light.side === 'left' && row.pick.side === 'right'
+      ? ok('flash left, shutter centre, library right — one control per corner')
+      : bad(`both bottom controls are on the same side (flash:${row.light.side}, `
+          + `picker:${row.pick.side}) — one of them is about to be under the shutter`);
+  }
+  await p.close();
+}
+
+/* ── ③d THE RECAP LANDS ON THE CAMERA, AND MUST NOT LAND ON THE SHUTTER ────────────────── */
+{
+  console.log('\n— the session recap clears the capture button —');
+  /* Same class of bug, third instance on one screen: #chToast was pinned at bottom:126px,
+     which cleared a shutter at 30. The bar moved the shutter to 128 and the recap printed
+     itself inside the capture ring — the founder's photograph, 2026-08-29.
+     ⚠️ WHAT IS UNDER TEST HERE IS THE CSS RULE, AND THE PROBE SAYS SO OUT LOUD. chSessionToast
+     is module-scoped and only fires when a feed session actually played a round, which this
+     fixture cannot stage without seeding a whole session — so the element is built by hand
+     with the id the stylesheet targets. That makes the GEOMETRY real (the rule is the app's,
+     the shutter is the app's, the bar is the app's) and the COPY fake, which is why the copy
+     is asserted in check.mjs against the source instead of here. A test that read back a
+     string this file had just written would be asserting nothing.
+     The rule itself is now in the main <style> rather than injected on first use, which is
+     what makes it readable at all on a camera that has never opened the feed. */
+  const p = await boot({ arm: 'camera' });
+  await p.waitForTimeout(400);
+  const geo = await p.evaluate(() => {
+    const st = document.getElementById('start'); if (st) st.style.display = 'none';
+    const sw = document.getElementById('shutterWrap');
+    const n = document.getElementById('kNav');
+    if (!sw || !n) return { missing: true };
+    sw.style.display = 'block';
+    const d = document.createElement('div'); d.id = 'chToast'; d.className = 'on';
+    d.innerHTML = '<b>x</b><span>y</span>';
+    document.body.appendChild(d);
+    const r = d.getBoundingClientRect(), sr = sw.getBoundingClientRect();
+    const out = { onShutter: !(r.bottom <= sr.top || r.top >= sr.bottom),
+                  above: Math.round(sr.top - r.bottom),
+                  navOn: document.body.classList.contains('nav-on') };
+    d.remove();
+    return out;
+  });
+  if (geo.missing) bad('no camera to measure the recap against');
+  else {
+    geo.navOn
+      ? ok('the camera carries nav-on, which is what the recap hangs its lift on')
+      : bad('no nav-on class on the camera — the recap keeps its old 126px and lands on the shutter');
+    /* ⚠️ A GAP, NOT MERELY "NO OVERLAP" — the same correction the shutter's own assertion
+       needed. Two rectangles that miss each other by 12px read as one crowded pile on a
+       phone, which is how the Capture label got onto the bar at 86px and passed. */
+    !geo.onShutter && geo.above >= 16
+      ? ok(`the recap sits above the capture button (${geo.above}px clear)`)
+      : bad(`the session recap ${geo.onShutter ? 'is printed ON' : 'is only ' + geo.above
+          + 'px above'} the shutter — the founder photographed the first version of this on `
+          + '2026-08-29');
   }
   await p.close();
 }

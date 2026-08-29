@@ -110,7 +110,7 @@ async function feed({ photo = true, run = 0, passSpent = false } = {}) {
   }, { r: ROWS(3), run, ps: passSpent });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
-  await page.evaluate(() => document.getElementById('btnFeed').click());
+  await page.evaluate(() => window.KAMOFEED.open());
   await page.waitForTimeout(900);
   return page;
 }
