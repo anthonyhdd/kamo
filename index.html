@@ -88,6 +88,76 @@
   #start{position:absolute;inset:0;z-index:30;overflow:hidden;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;}
   #start .aurora{position:absolute;inset:0;z-index:0;background:radial-gradient(40% 24% at 50% 42%,rgba(255,255,255,.13),transparent 72%);}
   @keyframes auroraFloat{from{transform:translate(-3%,-2%) scale(1)}to{transform:translate(4%,3%) scale(1.14)}}
+  /* ═══ THE TAB BAR — LIQUID GLASS ═══════════════════════════════════════════════════════════
+     A floating pill rather than a docked bar: docked, it becomes part of the chrome and the
+     photograph stops being the whole screen, which is the one thing this product cannot give
+     up. Floating, it reads as something laid ON the picture.
+     THE GLASS IS THREE THINGS AND ALL THREE ARE NEEDED. A heavy blur so whatever is behind
+     becomes light rather than detail; a saturation lift so that light keeps the colour of the
+     photo instead of going grey; and a bright inset hairline along the TOP edge only, which
+     is what makes a surface read as thick rather than as a translucent rectangle. Drop any one
+     and it looks like a dialog.
+     ⚠️ IT LIVES IN THE DOCUMENT'S OWN STYLESHEET, not the feed's injected one — the feed is
+     torn down and rebuilt, and a bar that vanished with it would be a bar that disappears
+     exactly when somebody closes the thing it is meant to navigate away from. */
+  .kNav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + var(--safe-b));
+    z-index:9500;display:none;align-items:center;gap:6px;padding:7px 9px;border-radius:999px;
+    background:rgba(255,255,255,.10);-webkit-backdrop-filter:blur(24px) saturate(180%);
+    backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.18);
+    /* THE WET EDGE. A bright hairline along the TOP inside and a dark one along the bottom:
+       that pair is what reads as thickness. Without them a blurred rectangle looks like a
+       dialog; with them it looks like something laid on the picture. */
+    box-shadow:0 10px 34px rgba(0,0,0,.38),
+               inset 0 1px 0 rgba(255,255,255,.34),
+               inset 0 -1px 0 rgba(0,0,0,.22);}
+  /* ═══ THE REFRACTION, AND WHY IT IS A SEPARATE CLASS ═══════════════════════════════════════
+     Blur alone is Aero frosted glass. What makes Apple's material read differently is that the
+     background BENDS near the edges — strong displacement at the rounded border, near zero in
+     the middle — so the pill behaves like something with thickness rather than a translucent
+     hole. That is feDisplacementMap over a map shaped like the button.
+     ⚠️ IT IS ADDED BY SCRIPT, BEHIND A FEATURE TEST, AND NEVER WRITTEN INTO THE BASE RULE.
+     A chained backdrop-filter is one CSS value: if a browser rejects `url(#…)` it drops the
+     WHOLE declaration, and the bar loses its blur too — a transparent strip over a photograph,
+     which is worse than plain frosted glass by a distance. WebKit's support for SVG filters on
+     backdrops is exactly the uneven part, and this app IS a WKWebView. So the base rule owns
+     the blur unconditionally and this only ever adds.
+     ⚠️ AND THE SCALE IS DELIBERATELY SMALL. Around a sixth of the reference: at full strength
+     the text sitting on it starts to swim, and this is a control bar, not a demo. */
+  .kNav.glass{-webkit-backdrop-filter:url(#kGlass) blur(20px) saturate(180%);
+    backdrop-filter:url(#kGlass) blur(20px) saturate(180%);}
+  /* ⚠️ CONTRAST IS THE PART EVERYONE SKIPS. Text and icons on a translucent, distorted
+     background fail legibility long before they look wrong to the person who built it. The
+     accessibility setting for exactly this is prefers-reduced-transparency, and it gets a flat
+     opaque bar — not a lighter version of the same problem. */
+  @media (prefers-reduced-transparency: reduce){
+    .kNav,.kNav.glass{background:#12211c;-webkit-backdrop-filter:none;backdrop-filter:none;
+      border-color:rgba(255,255,255,.28);}
+    .kNav button{color:rgba(255,255,255,.72);}
+    .kNav button.on{color:#fff;background:rgba(255,255,255,.20);}
+  }
+  .kNav button{-webkit-appearance:none;appearance:none;background:none;border:0;padding:10px 18px;
+    border-radius:999px;color:rgba(255,255,255,.62);line-height:0;cursor:pointer;
+    transition:color .18s ease,background .18s ease,transform .12s ease;}
+  /* The active tab is brighter and carries a faint pane of its own — the same trick the glass
+     itself uses, one layer in, so "where I am" is legible without a label or a dot. */
+  .kNav button.on{color:#fff;background:rgba(255,255,255,.16);}
+  .kNav button:active{transform:scale(.92);}
+  /* ⚠️ THE BAR LIFTS WHAT IS UNDER IT — IT DOES NOT SIT ON TOP OF IT. Every round keeps its own
+     controls on the bottom edge: give-up at the left, the hint at the right, and the ending
+     card across the whole width. A floating bar centred over that line is precisely the shape
+     of the two failures this product has already paid for — a control present, visible and
+     untappable. So the body carries a class while the bar is up and those three move above it.
+     Set from navSync, which is the one place that knows. */
+  body.nav-on .chQuit,body.nav-on .chHint{bottom:calc(84px + var(--safe-b)) !important;}
+  body.nav-on #chFoot{padding-bottom:calc(78px + var(--safe-b)) !important;}
+  /* ⚠️ AND THE SHUTTER, WHICH IS THE WORST ONE. It sits at bottom:30px centred, z-index 15 —
+     the bar is bottom:12px centred, z-index 9500 and about 45px tall. They occupy the same
+     rectangle and the bar wins, so the capture button, the entry point of the entire product,
+     was covered by the thing meant to navigate to it. Found by reading the two rules against
+     each other rather than by looking at a screenshot, because a covered control looks
+     perfectly fine in a screenshot — which is how this app lost a button twice. */
+  body.nav-on #shutterWrap{bottom:calc(86px + var(--safe-b)) !important;}
+  @media (prefers-reduced-motion: reduce){ .kNav button{transition:none;} }
   .heroWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 30px;margin-bottom:3vh;}
   /* block, not swap: the hero logo is the first thing on screen, and swap renders it in
      the fallback for a beat before snapping to Space Grotesk — a visible font change on
@@ -8869,7 +8939,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -14941,6 +15011,409 @@ const CH_CTA_FIG='<svg class="chCtaIco" viewBox="1.6 1 13.2 22.4" aria-hidden="t
    guessing. Set here and cleared in ending(), which is the single exit — found, missed and
    given up all pass through it — so this cannot be left stuck true by a branch. */
 let chLive=false;
+/* ⚠️ MOVED OUT OF chSeek ON 2026-08-29, and the reason is the navigation bar. The board
+   used to be reachable only from the run pill, which only exists inside a round — so the one
+   screen that makes somebody want to play a round could only be opened by playing one. A tab
+   has to reach it from anywhere, and a function trapped in a closure cannot be called from
+   anywhere. RUN_MARK travels with it: chRunShow still reads it, because an inner scope can
+   see an outer one — the move costs that function nothing. */
+const RUN_MARK='<svg viewBox="1.92 1.3 12.51 21.4" aria-hidden="true"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>';
+/* ═══ THE DAY'S BOARD ═════════════════════════════════════════════════════════════════════
+ *
+ * A board was built once and killed — "naze grave". Three things that made it impossible
+ * have since changed, and it is worth being explicit about them, because if any one of them
+ * regresses this screen goes back to being a wall of noise:
+ *
+ *   · A NAME WAS NOT A PERSON. 575 of 576 generated handles were in use, at 6.03 devices
+ *     each, worst case 15. A row reading "SilentFox" could have been any of fifteen people
+ *     and none of them would have recognised it. Fixed 2026-08-29.
+ *   · NOTHING SAID WHAT A RUN WAS WORTH — the one life was invisible and the exit was free.
+ *   · AND IT COULD BE FARMED. `conceal` did not exist, so a run built on trivially visible
+ *     kamos ranked beside one built on hard ones. streak_board_v2 counts only hides above
+ *     the difficulty floor; a miss still breaks a run whatever it was on.
+ *
+ * ⚠️ MEASURED BEFORE IT WAS BUILT: 60 players reach the board on a normal day, and rank 20
+ * needs a streak of 4, which 27% of them already have. That is what makes a global board
+ * defensible here — the usual objection, that the median sees a wall of unreachable
+ * strangers, is a property of large boards. This one is a small room.
+ *
+ * THE HEADLINE IS THE CHASE, NOT THE RANK. "#37" is a verdict and nothing to do with it;
+ * "2 more and you pass @x" is tonight's task. The low ranks are dense, so the next person is
+ * almost always one or two runs away and the sentence stays true without being engineered.
+ *
+ * FIVE, A GAP, THEN YOUR NEIGHBOURS. A top-20 list makes most readers scroll past strangers
+ * to find themselves. The top five is the aspiration, the neighbourhood is the game. */
+const CH_BOARD_TOP=5, CH_BOARD_AROUND=2;
+let chBoardBusy=false;
+function chBoardOpen(){
+  if(chBoardBusy) return; chBoardBusy=true;
+  let wrap=null;
+  try{
+    wrap=document.createElement("div"); wrap.className="chBoardWrap show";
+    wrap.innerHTML='<div class="chBoardCard">'
+      +'<div class="chBoardHead"><div class="chBoardTitle">'+RUN_MARK+'Today\u2019s runs</div>'
+      +'<div class="chBoardLeft" id="chBoardLeft"></div></div>'
+      /* ⚠️ NOT "Loading…". A placeholder is not a state: this screen is opened to answer one
+         question, and the honest thing to show while the answer is in flight is the question
+         itself. It is also the sentence that will be replaced, so nothing jumps. */
+      +'<div class="chBoardChase" id="chBoardChase">Counting today\u2019s runs\u2026</div>'
+      +'<div id="chBoardRows"></div>'
+      +'<button type="button" class="chBoardShare" id="chBoardShare" style="display:none"></button>'
+      +'<button type="button" class="chBoardClose" id="chBoardClose">Close</button></div>';
+    document.body.appendChild(wrap);
+    /* Held on the element so the tab bar can close this screen without reaching into the
+       closure — leaving the board by tapping another tab is the same act as closing it. */
+    const shut=()=>{ try{ clearInterval(wrap._tk); }catch(_){} try{ wrap.remove(); }catch(_){} chBoardBusy=false; try{ navSync(); }catch(_){} };
+    wrap._shut=shut;
+    /* ⚠️ THE CLOSE BUTTON ONLY EXISTS WHEN THE TAB BAR DOES NOT. With the bar up it is a second
+       way out of a screen that already has one, and the least interesting control on it.
+       Without the bar — a link round, where CH_SEEK gives the whole app to one hide and the
+       board is opened from the run pill — it is the ONLY way out, and hiding it would trap
+       somebody on a leaderboard. Read from the bar's own rule rather than guessed, so the two
+       can never disagree about whether a way out exists. */
+    const closeBtn=wrap.querySelector("#chBoardClose");
+    closeBtn.onclick=shut;
+    try{ closeBtn.style.display=navShouldShow()?"none":"block"; }catch(_){}
+    /* TAP OUTSIDE CLOSES, and the card stops the event so a tap inside never does. The share
+       sheet shipped for weeks without this because its container was pointer-events:none in
+       every state and nobody could tell the difference from a screenshot. */
+    wrap.onclick=(e)=>{ if(e.target===wrap) shut(); };
+    /* Every other control in this app answers a touch — 91 haptic calls elsewhere, and this
+       screen had none. A sheet that arrives without a tick reads as a page, not a place. */
+    try{ haptic(10); }catch(_){}
+    /* ⚠️ THE DEADLINE, TICKING. Midnight UTC is when every run on this board is wiped, and
+       a reset nobody can see is a reset nobody plays against. Cleared with the sheet, so a
+       board closed and reopened does not leave a timer running behind it. */
+    const left=wrap.querySelector("#chBoardLeft");
+    const tick=()=>{ try{
+      if(!left||!left.isConnected) return;
+      const now=new Date();
+      const end=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1);
+      const ms=Math.max(0,end-now.getTime());
+      const h=Math.floor(ms/3600000), m=Math.floor(ms/60000)%60;
+      left.textContent="resets in "+(h>0?h+"h "+m+"m":m+"m");
+    }catch(_){} };
+    tick(); const tk=setInterval(tick,30000);
+    wrap._tk=tk;
+    track("board_opened",{});
+  }catch(_){ chBoardBusy=false; return; }
+  (async()=>{
+    let rows=null;
+    try{ rows=await chRpcRows("streak_board_v2",{p_day:new Date().toISOString().slice(0,10),
+                                                 p_me:kfAuthorKeyRO()||"",p_limit:60}); }catch(_){}
+    try{ chBoardPaint(wrap,rows); }catch(_){}
+  })();
+}
+/* 1st, 2nd, 3rd, 4th — including the teens, which is the case every naive version of this
+   gets wrong: 11th, not 11st. */
+function chBoardOrd(n){ const t=n%100; if(t>=11&&t<=13) return "th";
+  return ({1:"st",2:"nd",3:"rd"})[n%10]||"th"; }
+function chBoardPaint(wrap,rows){
+  const chase=wrap.querySelector("#chBoardChase"), body=wrap.querySelector("#chBoardRows");
+  if(!chase||!body) return;
+  if(!rows||!rows.length){
+    /* ⚠️ AN EMPTY BOARD IS NOT AN ERROR AND IT IS NOT A SENTENCE EITHER. It is the screen the
+       first players of every UTC day meet, and what is true of it is rare: the top is
+       unclaimed and two finds take it. The old copy reported that nobody had a run — a fact,
+       asking for nothing. This SHOWS the prize instead: the gold chip, the word You, and a
+       dash where the number will be. Nobody has to imagine what winning looks like. */
+    chase.textContent="The board is empty. Two in a row and it\u2019s yours.";
+    body.innerHTML="";
+    const row=document.createElement("div"); row.className="chRow ghost";
+    const rk=document.createElement("div"); rk.className="chRowN m1"; rk.textContent="1";
+    const who=document.createElement("div"); who.className="chRowWho"; who.textContent="You?";
+    const meta=document.createElement("div"); meta.className="chRowMeta"; meta.textContent="be first today";
+    const run=document.createElement("div"); run.className="chRowRun"; run.textContent="\u2013";
+    row.appendChild(rk); row.appendChild(who); row.appendChild(meta); row.appendChild(run);
+    body.appendChild(row);
+    return;
+  }
+  const mine=rows.filter(r=>r&&r.me)[0]||null;
+  const myRank=mine?(mine.rank|0):0;
+
+  /* ⚠️ IT USED TO READ "2 more in a row and you pass @x" AND THE FOUNDER DID NOT LIKE IT.
+     Fair — it is a coach's line on a scoreboard, and it names another player in the second
+     person, which reads as the app volunteering somebody as your rival rather than reporting
+     what happened. A position is a fact and it is enough: the highlighted row below already
+     shows who is above you, which is the same information without the pep talk. */
+  if(!mine) chase.textContent="Find two in a row to join.";
+  else if(myRank===1) chase.textContent="You\u2019re first today.";
+  else chase.textContent="You\u2019re "+myRank+chBoardOrd(myRank)+" today.";
+  /* THE SLICE: the top, then your neighbourhood, de-duplicated and in rank order. A Set of
+     ranks rather than of rows, because the same row object is not shared between the two
+     lists and comparing them by identity would print duplicates. */
+  const keep=new Set();
+  rows.slice(0,CH_BOARD_TOP).forEach(r=>keep.add(r.rank|0));
+  if(myRank) for(let d=-CH_BOARD_AROUND;d<=CH_BOARD_AROUND;d++) keep.add(myRank+d);
+  const shown=rows.filter(r=>keep.has(r.rank|0));
+  body.innerHTML="";
+  let last=0, mineEl=null;
+  shown.forEach((r,i)=>{
+    const n=r.rank|0;
+    if(last&&n>last+1){ const g=document.createElement("div"); g.className="chBoardGap"; body.appendChild(g); }
+    last=n;
+    const row=document.createElement("div"); row.className="chRow"+(r.me?" me":"");
+    const rk=document.createElement("div");
+    rk.className="chRowN"+(n<=3?" m"+n:""); rk.textContent=n;
+    const who=document.createElement("div"); who.className="chRowWho";
+    /* textContent, ALWAYS. This is a handle another person typed, rendered on a stranger's
+       device — the third of the three places the name is narrowed (see cleanHandle and
+       create_hide). innerHTML here would be the whole trust boundary undone. */
+    who.textContent=r.me?"You":("@"+(r.who||"someone"));
+    /* THE GLYPH THEN THE NUMBER, the same pair the run pill carries. RUN_MARK is markup we
+       author, never anything a player typed — the handle two lines below is the string that
+       has to go through textContent, and it does. */
+    const run=document.createElement("div"); run.className="chRowRun";
+    run.textContent=String(r.streak|0);
+    const meta=document.createElement("div"); meta.className="chRowMeta";
+    /* ROUNDS FIRST because it is the tiebreak the ranking already uses — two rows showing
+       the same number sit in a deliberate order, and without this nobody can read why.
+       Hints only when there are any: a "0 hints" on every row would turn a neutral fact into
+       a scoreboard of who needed help, and hints are the one thing in this product with
+       measured demand. */
+    meta.textContent=(r.rounds|0)+" rounds"+((r.hints|0)>0?" \u00b7 "+(r.hints|0)+"h":"");
+    /* Staggered so the eye travels the board once. Capped, because a delay that keeps
+       growing turns the last rows into a queue somebody waits through. */
+    row.style.animationDelay=(Math.min(i,9)*0.035).toFixed(3)+"s";
+    /* who, then meta, then the run: the figure owns the right edge and everything else
+       yields to it. Appended in reading order so the DOM matches what the eye does. */
+    row.appendChild(rk); row.appendChild(who); row.appendChild(meta); row.appendChild(run);
+    body.appendChild(row);
+    if(r.me) mineEl=row;
+  });
+  /* ⚠️ AND YOUR ROW IS PUT IN FRONT OF YOU. This screen is opened to answer one question;
+     making somebody scroll a list to find the answer is asking them to do the work the
+     screen exists to do. After the stagger has landed, so it does not fight the entrance,
+     and only when the row is actually off-screen — scrolling a list that is already showing
+     the answer is a jolt for nothing. */
+  /* ═══ WHAT IS ACTUALLY SHAREABLE HERE ═════════════════════════════════════════════════
+     ⚠️ NOT THE RANK. "I'm #8 on KAMO" is a brag with no content: it is about the sender and
+     gives the reader nothing to be curious about. What is worth sending is the number at the
+     TOP — somebody found forty kamos in a row today, which is the fact that makes a stranger
+     open the link. The sender's own row is the contrast, not the headline, and it is what
+     makes the message theirs rather than an advert.
+     The leader is never named: a handle in somebody's group chat is a person who did not
+     agree to be there. The number is the story and it belongs to nobody. */
+  const top=rows[0];
+  const btn=wrap.querySelector("#chBoardShare");
+  if(btn&&top&&(top.streak|0)>0){
+    btn.style.display="block";
+    btn.textContent=mine?"Send the board":"Send today\u2019s best";
+    btn.onclick=async()=>{
+      const best=top.streak|0;
+      const line=(mine&&!top.me)
+        ? "Someone has found "+best+" kamos in a row on KAMO today. I\u2019m on "+(mine.streak|0)+"."
+        : (top.me ? "I\u2019m top of KAMO today \u2014 "+best+" in a row."
+                  : best+" kamos found in a row on KAMO today.");
+      const text=line+" "+refLink("board","rank"+(mine?(mine.rank|0):0));
+      track("board_share_tapped",{rank:mine?(mine.rank|0):0,best:best});
+      /* The same ladder every other share in this file climbs, and in the same order: the
+         wrapper's real sheet when it exists, navigator.share BEFORE any await because the
+         first one spends the activation this tap granted, then the clipboard. AbortError is
+         a decision, not a failure — it must never fall through and claim a copy. */
+      try{
+        if(nativeCaps&&nativeCaps.invite){ postNative({type:"invite",message:text}); return; }
+      }catch(_){}
+      let shared=false,cancelled=false;
+      try{ if(navigator.share){ await navigator.share({text:text}); shared=true; } }
+      catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
+      if(shared||cancelled) return;
+      const okc=await chCopy(text);
+      const was=btn.textContent;
+      btn.textContent=okc?"Copied \u2014 send it":"Couldn\u2019t copy";
+      setTimeout(()=>{ try{ btn.textContent=was; }catch(_){} },1800);
+    };
+  }
+  if(mineEl) setTimeout(()=>{ try{
+    const cr=mineEl.getBoundingClientRect();
+    if(cr.top<0||cr.bottom>innerHeight) mineEl.scrollIntoView({block:"center",behavior:"smooth"});
+    haptic(8);
+  }catch(_){} },520);
+}
+/* ═══ THE TAB BAR ════════════════════════════════════════════════════════════════════════════
+ *
+ * Three places: the camera you make a kamo with, the feed you play, and the day's board.
+ *
+ * ⚠️ THIS IS THE MOST DANGEROUS OBJECT IN THIS FILE, and the reason is the send rate. A bar
+ * pinned to the bottom of every screen is a bar that can cover the one control the whole
+ * product depends on — "Send to a friend" — and that button has been covered TWICE by things
+ * that merely sat near it (the feed's .kfHint pill, 08-20, -62%; the landing arm, 08-22,
+ * halved). Both shipped with the button present, visible, and untappable, and both passed
+ * every DOM assertion. So the bar is HIDDEN, not merely stacked below, on every screen that
+ * owns its own bottom edge, and the suite hit-tests the send button with elementFromPoint
+ * rather than asserting it exists.
+ *
+ * WHAT HIDES IT, and each of these owns the bottom of the screen:
+ *   · a round in progress (.chS) — the give-up pill is bottom-left and the hint bottom-right
+ *   · the share sheet, the paywall, the confirm sheet, the member card (the same list
+ *     chHomeIdle enumerates, and for the same reason)
+ *   · paint mode — the brush, the swatches and Done are all down there
+ *   · the hero, before anyone has granted a camera
+ *
+ * ⚠️ SYNCED BY OBSERVER, NOT BY CALL SITES. Every one of those states is entered from several
+ * places and a missed call is a bar over a send button — the failure this cannot have. A
+ * MutationObserver on the body sees all of them without anybody remembering to say so.
+ */
+let navEl=null, navSyncT=0;
+const NAV_BLOCKERS=["shareSheet","paywall","confirmSheet","kamoPlus","kamoHome"];
+function navShouldShow(){
+  try{
+    /* ⚠️ A ROUND IS NOT A REASON TO HIDE, AND ASSUMING IT WAS HID THE BAR FROM THE FEED — the
+       main screen. In the feed EVERY SLIDE IS A ROUND: .chS is mounted per slide, fixed and
+       full-bleed, so "a round is on screen" is true of the feed at all times. The state that
+       owns the whole app is a LINK round, which is CH_SEEK and nothing else. Caught by the
+       camera-tab hit test reporting no box, with chS true and kfState false. */
+    if(CH_SEEK) return false;
+    if(typeof mode!=="undefined" && mode==="paint") return false;
+    for(const id of NAV_BLOCKERS){
+      const el=document.getElementById(id);
+      if(el&&el.classList.contains("show")) return false;
+    }
+    /* ⚠️ THE HERO IS THE CAMERA TAB'S EMPTY STATE, NOT THE APP'S. Hiding on it unconditionally
+       was too wide: bootCamera leaves #start up until a camera is granted, so a device that
+       refused one — or any browser without a camera at all — kept the hero underneath while the
+       feed played ON TOP of it, and the bar vanished from a screen it belongs on. Checked only
+       when the camera tab is the thing in front. */
+    /* ⚠️ AND ONLY ON A TRUE FIRST LAUNCH. The hero is onboarding — "Start playing" and a line
+       about the camera — and a tab bar under it offers destinations to somebody who has not
+       agreed to anything yet. But a RETURNING device whose camera is refused, or any browser
+       without one, sits on that same hero forever: hiding the bar there would strand them with
+       no route to the feed at all. camEverAsked() is the difference between the two, and it is
+       the same flag the launch already uses to decide whether the feed may take the screen. */
+    if(navWhere()==="cam"){
+      const st=document.getElementById("start");
+      const up=st&&st.style.display!=="none"&&getComputedStyle(st).display!=="none";
+      if(up){ try{ if(!camEverAsked()) return false; }catch(_){ return false; } }
+    }
+    return true;
+  }catch(_){ return false; }
+}
+function navWhere(){
+  try{
+    if(document.querySelector(".chBoardWrap.show")) return "board";
+    if(typeof kfState!=="undefined" && kfState) return "feed";
+    return "cam";
+  }catch(_){ return "cam"; }
+}
+function navSync(){
+  if(!navEl) return;
+  const show=navShouldShow();
+  navEl.style.display=show?"flex":"none";
+  /* The class the lift rules above hang on. On the body rather than inside the round, because
+     the round is rebuilt per slide and would lose it on every swipe. */
+  try{ document.body.classList.toggle("nav-on",show); }catch(_){}
+  if(!show) return;
+  const w=navWhere();
+  try{ navEl.querySelectorAll("[data-tab]").forEach(b=>{
+    b.classList.toggle("on",b.dataset.tab===w);
+    b.setAttribute("aria-current",b.dataset.tab===w?"page":"false");
+  }); }catch(_){}
+}
+function navGo(tab){
+  try{
+    haptic(8);
+    track("nav_tapped",{to:tab,from:navWhere(),emit:"web"});
+    if(tab==="board"){ chBoardOpen(); return; }
+    /* THE BOARD IS A SCREEN NOW, so leaving it is closing it — and the tab you asked for is
+       underneath, already in whatever state you left it. */
+    try{ const b=document.querySelector(".chBoardWrap.show"); if(b&&b._shut) b._shut(); }catch(_){}
+    if(tab==="feed"){ try{ if(!kfState) chFeed({src:"nav"}); }catch(_){} return; }
+    /* CAMERA. The feed is an overlay over compose, so the way to the camera is to close it —
+       the same door the bar replaced at the top of the feed. */
+    try{ if(kfState&&kfState.close) kfState.close(); }catch(_){}
+  }catch(_){}
+  setTimeout(navSync,60);
+}
+/* ═══ THE DISPLACEMENT MAP, AND WHY IT LOOKS LIKE THIS ═══════════════════════════════════════
+ *
+ * feDisplacementMap moves each pixel of the backdrop by the value it finds in a map: 128 is
+ * "stay", 0 pulls one way, 255 the other. So a map that is flat 128 in the middle and ramps
+ * hard at the borders bends the background near the edges and leaves the centre alone — which
+ * is what glass with thickness does, and what a blur on its own never does.
+ *
+ * TWO GREY RAMPS, ONE PER AXIS, COMBINED IN THE FILTER. R drives x and G drives y, so the two
+ * cannot be painted into one gradient without fighting over channels: they arrive as separate
+ * feImages and each is masked into its own channel by a colour matrix before being added. The
+ * ramps sit at 22%/78% — the pill's corner radius is most of its height, so anything narrower
+ * would distort the icons rather than the edge.
+ *
+ * ⚠️ FEATURE-TESTED, NOT ASSUMED, and the failure mode is why. `backdrop-filter` takes one
+ * value: a browser that rejects `url(#kGlass)` drops the blur and the saturation with it,
+ * leaving a transparent strip over somebody's photograph. WKWebView is precisely where support
+ * for SVG filters on backdrops is uneven, and this app is a WKWebView. The base rule keeps the
+ * blur unconditionally; this only ever adds a class on top of it.
+ *
+ * ⚠️ ONE ELEMENT, ON PURPOSE. The blur is the expensive part, not the displacement — the extra
+ * cost of bending is a texture lookup per pixel. What melts a phone is backdrop-filter on many
+ * elements at once, so this belongs to the bar and nothing else. */
+const K_GLASS_SCALE=7;
+function navGlass(){
+  try{
+    if(!navEl) return;
+    /* prefers-reduced-transparency has its own flat rule in CSS; do not also spend the filter. */
+    try{ if(matchMedia("(prefers-reduced-transparency: reduce)").matches) return; }catch(_){}
+    const ok=(window.CSS&&CSS.supports&&(CSS.supports("backdrop-filter","url(#k) blur(1px)")
+             ||CSS.supports("-webkit-backdrop-filter","url(#k) blur(1px)")));
+    if(!ok) return;
+    if(!document.getElementById("kGlass")){
+      const ramp=(x2,y2)=>"data:image/svg+xml;utf8,"+encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" preserveAspectRatio="none">'
+        +'<linearGradient id="g" x1="0" y1="0" x2="'+x2+'" y2="'+y2+'">'
+        +'<stop offset="0" stop-color="#000"/><stop offset=".22" stop-color="#808080"/>'
+        +'<stop offset=".78" stop-color="#808080"/><stop offset="1" stop-color="#fff"/>'
+        +'</linearGradient><rect width="100" height="100" fill="url(%23g)"/></svg>');
+      const NS="http://www.w3.org/2000/svg";
+      const svg=document.createElementNS(NS,"svg");
+      svg.setAttribute("width","0"); svg.setAttribute("height","0");
+      svg.setAttribute("aria-hidden","true");
+      svg.style.cssText="position:absolute;width:0;height:0;overflow:hidden";
+      svg.innerHTML='<filter id="kGlass" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">'
+        +'<feImage href="'+ramp(1,0)+'" preserveAspectRatio="none" result="hx"/>'
+        +'<feImage href="'+ramp(0,1)+'" preserveAspectRatio="none" result="vy"/>'
+        /* Each ramp is greyscale; the matrices keep one channel each so R carries x and G y. */
+        +'<feColorMatrix in="hx" type="matrix" result="rx"'
+        +' values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1"/>'
+        +'<feColorMatrix in="vy" type="matrix" result="gy"'
+        +' values="0 0 0 0 0  1 0 0 0 0  0 0 0 0 0  0 0 0 0 1"/>'
+        +'<feComposite in="rx" in2="gy" operator="arithmetic" k2="1" k3="1" result="map"/>'
+        +'<feDisplacementMap in="SourceGraphic" in2="map" scale="'+K_GLASS_SCALE+'"'
+        +' xChannelSelector="R" yChannelSelector="G"/></filter>';
+      document.body.appendChild(svg);
+    }
+    navEl.classList.add("glass");
+    track("nav_glass",{on:true,emit:"web"});
+  }catch(_){}
+}
+function navMount(){
+  if(navEl) return;
+  try{
+    const ico=(d)=>'<svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor"'
+      +' stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+    const CAM=ico('<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2a1 1 0 0 0 .83-.45l.94-1.4A1 1 0 0 1 9.3 4.7h5.4a1 1 0 0 1 .83.45l.94 1.4A1 1 0 0 0 17.3 7h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.4"/>');
+    const HOME=ico('<path d="M3.5 10.4 12 3.6l8.5 6.8V20a1 1 0 0 1-1 1h-4.6v-6H9.1v6H4.5a1 1 0 0 1-1-1z"/>');
+    /* A podium, not a bar chart: three columns close together with the middle tallest, on a
+       short baseline. The first version spread them from x=4 to x=22 with a full-width rule
+       under them, and at 25px that reads as three unrelated ticks rather than as a ranking. */
+    const BOARD=ico('<path d="M7 20V9.5"/><path d="M12 20V4.5"/><path d="M17 20v-7"/><path d="M4.5 20h15"/>');
+    navEl=document.createElement("nav");
+    navEl.className="kNav"; navEl.id="kNav"; navEl.style.display="none";
+    navEl.setAttribute("aria-label","Main");
+    navEl.innerHTML=
+       '<button type="button" data-tab="cam" aria-label="Camera">'+CAM+'</button>'
+      +'<button type="button" data-tab="feed" aria-label="Feed">'+HOME+'</button>'
+      +'<button type="button" data-tab="board" aria-label="Today’s runs">'+BOARD+'</button>';
+    navEl.querySelectorAll("[data-tab]").forEach(b=>{ b.onclick=()=>navGo(b.dataset.tab); });
+    document.body.appendChild(navEl);
+    try{ navGlass(); }catch(_){}
+    /* Debounced: a paint stroke mutates the DOM continuously, and re-reading five elements on
+       every frame of that is work nobody asked for. 60ms is under a blink and far inside the
+       time any of these screens takes to open. */
+    const bump=()=>{ clearTimeout(navSyncT); navSyncT=setTimeout(navSync,60); };
+    new MutationObserver(bump).observe(document.body,{childList:true,subtree:true,
+                                                      attributes:true,attributeFilter:["class","style"]});
+    navSync();
+  }catch(_){}
+}
 function chSeek(hideId,opts){
   opts=opts||{};
   chLive=true;
@@ -15183,17 +15656,18 @@ function chSeek(hideId,opts){
        part that matters — it is what stops a sheet reading as a hole in the screen, and it is
        exactly the top edge that was black. Values copied from .hpCard rather than approximated,
        so the two cannot drift into looking almost-alike, which is worse than either. */
-    +".chBoardWrap{position:fixed;inset:0;z-index:9400;display:none;align-items:flex-end;justify-content:center;"
-    +"background:rgba(3,5,8,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}"
+    /* ⚠️ A SCREEN, NOT A SHEET, SINCE 2026-08-29. It became a tab — a place you go rather than
+       an interruption — and a half-height sheet sitting above a tab bar reads as neither. Full
+       bleed, its own scroll, and the bottom padding clears the bar instead of hiding under it.
+       The gradient and the mint glow are the app's own, unchanged. */
+    +".chBoardWrap{position:fixed;inset:0;z-index:9400;display:none;flex-direction:column;"
+    +"background:linear-gradient(180deg,#0f2a22,#0a1512 42%,#070d0b);}"
     +".chBoardWrap.show{display:flex;}"
-    +".chBoardCard{position:relative;width:100%;max-width:460px;max-height:86dvh;overflow-y:auto;"
-    +"-webkit-overflow-scrolling:touch;background:linear-gradient(180deg,#0f2a22,#0a1512 60%,#070d0b);"
-    +"border-top-left-radius:26px;border-top-right-radius:26px;border:1px solid rgba(255,255,255,.22);"
-    +"box-shadow:0 -14px 50px rgba(0,0,0,.6);padding:24px 20px calc(20px + var(--safe-b));"
-    +"animation:pwUp .34s cubic-bezier(.2,.9,.3,1);}"
+    +".chBoardCard{position:relative;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;"
+    +"padding:calc(18px + var(--safe-t)) 20px calc(112px + var(--safe-b));"
+    +"animation:pwUp .3s cubic-bezier(.2,.9,.3,1);}"
     /* The glow, and the reason the top is not black. Same radial and same breath as .hpCard. */
     +".chBoardCard::before{content:'';position:absolute;left:0;right:0;top:0;height:210px;pointer-events:none;"
-    +"border-top-left-radius:26px;border-top-right-radius:26px;"
     +"background:radial-gradient(72% 130px at 50% -6%, rgba(95,230,164,.22), transparent 70%);"
     +"animation:pwGlow 3.8s ease-in-out infinite;}"
     /* Everything rides above the glow — the same lift .hpCard gives its own children, without
@@ -16067,7 +16541,6 @@ function chSeek(hideId,opts){
      A compile-time constant, so innerHTML carries no data — the number is still a text node,
      which is this file's rule. (It had a twin in the board's kbRow until 2026-08-16; the
      board is gone and this is now the only place the mark is drawn.) */
-  const RUN_MARK='<svg viewBox="1.92 1.3 12.51 21.4" aria-hidden="true"><path d="M9.4 1.3L10.29 1.3L11.17 1.48L11.87 1.75L12.85 2.36L13.82 3.5L14.16 4.21L14.43 5.18L14.43 6.76L14.16 7.64L13.63 8.61L12.4 9.85L11.26 10.46L10.56 10.64L10.64 10.91L10.38 11.42L10.38 11.79L11.26 13.55L11.71 15.3L11.71 17.78L11.52 18.66L11.17 19.35L10.64 19.89L9.94 20.15L9.15 20.15L8.7 19.98L8.26 19.45L8.26 19.01L8.52 18.66L8.26 18.39L8.18 18.13L8.09 18.39L7.3 18.57L6.76 19.01L6.68 19.27L6.06 20.06L4.66 21.56L4.3 22.44L3.95 22.7L3.33 22.7L1.92 22.09L1.92 3.77L2.9 3.94L3.59 4.82L3.78 5.45L3.78 6.23L3.68 6.33L3.78 6.41L3.95 6.33L4.04 6.41L4.74 6.41L5 6.14L5.09 6.41L5.18 6.33L5.18 5.26L5.45 4.38L5.72 3.77L6.33 2.89L6.86 2.36L7.82 1.75L8.88 1.38L9.32 1.38Z"/></svg>';
   /* THE BREAK CHANGES THE POSE, NOT JUST THE COLOUR. Red alone asks the player to read a hue
      on the one frame that matters; the figure steps out from behind its wall and stands in the
      open instead, which is what losing a run IS in this game — the kamo is no longer hidden.
@@ -16094,202 +16567,6 @@ function chSeek(hideId,opts){
      when it motivates: somebody who has just set their record is told so by "best yet" on the
      win, not by an epitaph. */
   const RUN_HOT=5;
-  /* ═══ THE DAY'S BOARD ═════════════════════════════════════════════════════════════════════
-   *
-   * A board was built once and killed — "naze grave". Three things that made it impossible
-   * have since changed, and it is worth being explicit about them, because if any one of them
-   * regresses this screen goes back to being a wall of noise:
-   *
-   *   · A NAME WAS NOT A PERSON. 575 of 576 generated handles were in use, at 6.03 devices
-   *     each, worst case 15. A row reading "SilentFox" could have been any of fifteen people
-   *     and none of them would have recognised it. Fixed 2026-08-29.
-   *   · NOTHING SAID WHAT A RUN WAS WORTH — the one life was invisible and the exit was free.
-   *   · AND IT COULD BE FARMED. `conceal` did not exist, so a run built on trivially visible
-   *     kamos ranked beside one built on hard ones. streak_board_v2 counts only hides above
-   *     the difficulty floor; a miss still breaks a run whatever it was on.
-   *
-   * ⚠️ MEASURED BEFORE IT WAS BUILT: 60 players reach the board on a normal day, and rank 20
-   * needs a streak of 4, which 27% of them already have. That is what makes a global board
-   * defensible here — the usual objection, that the median sees a wall of unreachable
-   * strangers, is a property of large boards. This one is a small room.
-   *
-   * THE HEADLINE IS THE CHASE, NOT THE RANK. "#37" is a verdict and nothing to do with it;
-   * "2 more and you pass @x" is tonight's task. The low ranks are dense, so the next person is
-   * almost always one or two runs away and the sentence stays true without being engineered.
-   *
-   * FIVE, A GAP, THEN YOUR NEIGHBOURS. A top-20 list makes most readers scroll past strangers
-   * to find themselves. The top five is the aspiration, the neighbourhood is the game. */
-  const CH_BOARD_TOP=5, CH_BOARD_AROUND=2;
-  let chBoardBusy=false;
-  function chBoardOpen(){
-    if(chBoardBusy) return; chBoardBusy=true;
-    let wrap=null;
-    try{
-      wrap=document.createElement("div"); wrap.className="chBoardWrap show";
-      wrap.innerHTML='<div class="chBoardCard">'
-        +'<div class="chBoardHead"><div class="chBoardTitle">'+RUN_MARK+'Today\u2019s runs</div>'
-        +'<div class="chBoardLeft" id="chBoardLeft"></div></div>'
-        /* ⚠️ NOT "Loading…". A placeholder is not a state: this screen is opened to answer one
-           question, and the honest thing to show while the answer is in flight is the question
-           itself. It is also the sentence that will be replaced, so nothing jumps. */
-        +'<div class="chBoardChase" id="chBoardChase">Counting today\u2019s runs\u2026</div>'
-        +'<div id="chBoardRows"></div>'
-        +'<button type="button" class="chBoardShare" id="chBoardShare" style="display:none"></button>'
-        +'<button type="button" class="chBoardClose" id="chBoardClose">Close</button></div>';
-      document.body.appendChild(wrap);
-      const shut=()=>{ try{ clearInterval(wrap._tk); }catch(_){} try{ wrap.remove(); }catch(_){} chBoardBusy=false; };
-      wrap.querySelector("#chBoardClose").onclick=shut;
-      /* TAP OUTSIDE CLOSES, and the card stops the event so a tap inside never does. The share
-         sheet shipped for weeks without this because its container was pointer-events:none in
-         every state and nobody could tell the difference from a screenshot. */
-      wrap.onclick=(e)=>{ if(e.target===wrap) shut(); };
-      /* Every other control in this app answers a touch — 91 haptic calls elsewhere, and this
-         screen had none. A sheet that arrives without a tick reads as a page, not a place. */
-      try{ haptic(10); }catch(_){}
-      /* ⚠️ THE DEADLINE, TICKING. Midnight UTC is when every run on this board is wiped, and
-         a reset nobody can see is a reset nobody plays against. Cleared with the sheet, so a
-         board closed and reopened does not leave a timer running behind it. */
-      const left=wrap.querySelector("#chBoardLeft");
-      const tick=()=>{ try{
-        if(!left||!left.isConnected) return;
-        const now=new Date();
-        const end=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1);
-        const ms=Math.max(0,end-now.getTime());
-        const h=Math.floor(ms/3600000), m=Math.floor(ms/60000)%60;
-        left.textContent="resets in "+(h>0?h+"h "+m+"m":m+"m");
-      }catch(_){} };
-      tick(); const tk=setInterval(tick,30000);
-      wrap._tk=tk;
-      track("board_opened",{});
-    }catch(_){ chBoardBusy=false; return; }
-    (async()=>{
-      let rows=null;
-      try{ rows=await chRpcRows("streak_board_v2",{p_day:new Date().toISOString().slice(0,10),
-                                                   p_me:kfAuthorKeyRO()||"",p_limit:60}); }catch(_){}
-      try{ chBoardPaint(wrap,rows); }catch(_){}
-    })();
-  }
-  function chBoardPaint(wrap,rows){
-    const chase=wrap.querySelector("#chBoardChase"), body=wrap.querySelector("#chBoardRows");
-    if(!chase||!body) return;
-    if(!rows||!rows.length){
-      /* ⚠️ AN EMPTY BOARD IS NOT AN ERROR AND IT IS NOT A SENTENCE EITHER. It is the screen the
-         first players of every UTC day meet, and what is true of it is rare: the top is
-         unclaimed and two finds take it. The old copy reported that nobody had a run — a fact,
-         asking for nothing. This SHOWS the prize instead: the gold chip, the word You, and a
-         dash where the number will be. Nobody has to imagine what winning looks like. */
-      chase.textContent="The board is empty. Two in a row and it\u2019s yours.";
-      body.innerHTML="";
-      const row=document.createElement("div"); row.className="chRow ghost";
-      const rk=document.createElement("div"); rk.className="chRowN m1"; rk.textContent="1";
-      const who=document.createElement("div"); who.className="chRowWho"; who.textContent="You?";
-      const meta=document.createElement("div"); meta.className="chRowMeta"; meta.textContent="be first today";
-      const run=document.createElement("div"); run.className="chRowRun"; run.textContent="\u2013";
-      row.appendChild(rk); row.appendChild(who); row.appendChild(meta); row.appendChild(run);
-      body.appendChild(row);
-      return;
-    }
-    const mine=rows.filter(r=>r&&r.me)[0]||null;
-    const myRank=mine?(mine.rank|0):0;
-    /* THE ONE ABOVE ME, which is the only row on this screen with anything to do attached. */
-    const above=myRank>1 ? rows.filter(r=>(r.rank|0)===myRank-1)[0] : null;
-    if(!mine) chase.textContent="Find two in a row and you are on the board.";
-    else if(myRank===1) chase.textContent="You are first today.";
-    else if(above){
-      const gap=Math.max(1,(above.streak|0)-(mine.streak|0)+1);
-      chase.textContent=gap+" more in a row and you pass "+(above.who?"@"+above.who:"them")+".";
-    } else chase.textContent="You are "+myRank+" today.";
-    /* THE SLICE: the top, then your neighbourhood, de-duplicated and in rank order. A Set of
-       ranks rather than of rows, because the same row object is not shared between the two
-       lists and comparing them by identity would print duplicates. */
-    const keep=new Set();
-    rows.slice(0,CH_BOARD_TOP).forEach(r=>keep.add(r.rank|0));
-    if(myRank) for(let d=-CH_BOARD_AROUND;d<=CH_BOARD_AROUND;d++) keep.add(myRank+d);
-    const shown=rows.filter(r=>keep.has(r.rank|0));
-    body.innerHTML="";
-    let last=0, mineEl=null;
-    shown.forEach((r,i)=>{
-      const n=r.rank|0;
-      if(last&&n>last+1){ const g=document.createElement("div"); g.className="chBoardGap"; body.appendChild(g); }
-      last=n;
-      const row=document.createElement("div"); row.className="chRow"+(r.me?" me":"");
-      const rk=document.createElement("div");
-      rk.className="chRowN"+(n<=3?" m"+n:""); rk.textContent=n;
-      const who=document.createElement("div"); who.className="chRowWho";
-      /* textContent, ALWAYS. This is a handle another person typed, rendered on a stranger's
-         device — the third of the three places the name is narrowed (see cleanHandle and
-         create_hide). innerHTML here would be the whole trust boundary undone. */
-      who.textContent=r.me?"You":("@"+(r.who||"someone"));
-      /* THE GLYPH THEN THE NUMBER, the same pair the run pill carries. RUN_MARK is markup we
-         author, never anything a player typed — the handle two lines below is the string that
-         has to go through textContent, and it does. */
-      const run=document.createElement("div"); run.className="chRowRun";
-      run.textContent=String(r.streak|0);
-      const meta=document.createElement("div"); meta.className="chRowMeta";
-      /* ROUNDS FIRST because it is the tiebreak the ranking already uses — two rows showing
-         the same number sit in a deliberate order, and without this nobody can read why.
-         Hints only when there are any: a "0 hints" on every row would turn a neutral fact into
-         a scoreboard of who needed help, and hints are the one thing in this product with
-         measured demand. */
-      meta.textContent=(r.rounds|0)+" rounds"+((r.hints|0)>0?" \u00b7 "+(r.hints|0)+"h":"");
-      /* Staggered so the eye travels the board once. Capped, because a delay that keeps
-         growing turns the last rows into a queue somebody waits through. */
-      row.style.animationDelay=(Math.min(i,9)*0.035).toFixed(3)+"s";
-      /* who, then meta, then the run: the figure owns the right edge and everything else
-         yields to it. Appended in reading order so the DOM matches what the eye does. */
-      row.appendChild(rk); row.appendChild(who); row.appendChild(meta); row.appendChild(run);
-      body.appendChild(row);
-      if(r.me) mineEl=row;
-    });
-    /* ⚠️ AND YOUR ROW IS PUT IN FRONT OF YOU. This screen is opened to answer one question;
-       making somebody scroll a list to find the answer is asking them to do the work the
-       screen exists to do. After the stagger has landed, so it does not fight the entrance,
-       and only when the row is actually off-screen — scrolling a list that is already showing
-       the answer is a jolt for nothing. */
-    /* ═══ WHAT IS ACTUALLY SHAREABLE HERE ═════════════════════════════════════════════════
-       ⚠️ NOT THE RANK. "I'm #8 on KAMO" is a brag with no content: it is about the sender and
-       gives the reader nothing to be curious about. What is worth sending is the number at the
-       TOP — somebody found forty kamos in a row today, which is the fact that makes a stranger
-       open the link. The sender's own row is the contrast, not the headline, and it is what
-       makes the message theirs rather than an advert.
-       The leader is never named: a handle in somebody's group chat is a person who did not
-       agree to be there. The number is the story and it belongs to nobody. */
-    const top=rows[0];
-    const btn=wrap.querySelector("#chBoardShare");
-    if(btn&&top&&(top.streak|0)>0){
-      btn.style.display="block";
-      btn.textContent=mine?"Send the board":"Send today\u2019s best";
-      btn.onclick=async()=>{
-        const best=top.streak|0;
-        const line=(mine&&!top.me)
-          ? "Someone has found "+best+" kamos in a row on KAMO today. I\u2019m on "+(mine.streak|0)+"."
-          : (top.me ? "I\u2019m top of KAMO today \u2014 "+best+" in a row."
-                    : best+" kamos found in a row on KAMO today.");
-        const text=line+" "+refLink("board","rank"+(mine?(mine.rank|0):0));
-        track("board_share_tapped",{rank:mine?(mine.rank|0):0,best:best});
-        /* The same ladder every other share in this file climbs, and in the same order: the
-           wrapper's real sheet when it exists, navigator.share BEFORE any await because the
-           first one spends the activation this tap granted, then the clipboard. AbortError is
-           a decision, not a failure — it must never fall through and claim a copy. */
-        try{
-          if(nativeCaps&&nativeCaps.invite){ postNative({type:"invite",message:text}); return; }
-        }catch(_){}
-        let shared=false,cancelled=false;
-        try{ if(navigator.share){ await navigator.share({text:text}); shared=true; } }
-        catch(err){ if(err&&err.name==="AbortError") cancelled=true; }
-        if(shared||cancelled) return;
-        const okc=await chCopy(text);
-        const was=btn.textContent;
-        btn.textContent=okc?"Copied \u2014 send it":"Couldn\u2019t copy";
-        setTimeout(()=>{ try{ btn.textContent=was; }catch(_){} },1800);
-      };
-    }
-    if(mineEl) setTimeout(()=>{ try{
-      const cr=mineEl.getBoundingClientRect();
-      if(cr.top<0||cr.bottom>innerHeight) mineEl.scrollIntoView({block:"center",behavior:"smooth"});
-      haptic(8);
-    }catch(_){} },520);
-  }
   const chRunShow=(n,mode,best)=>{ if(!runEl||REPLAY) return;
     const v=n|0, b=best|0;
     /* ⚠️ IT WAS A SCOREBOARD FOR THE PEOPLE ALREADY WINNING. Hidden at 0, and `best` passed
@@ -18995,10 +19272,12 @@ function chFeed(opts){
        things at once and settle neither, and the destination is the compose screen on BOTH
        arms anyway, so the glyph is honest either way. The circle, the size and the position are
        untouched — this is a relabel, not a relayout. */
-    +'<div class="kfBar"><button class="kfClose kfCam" id="kfClose" aria-label="New kamo" title="New kamo">'
-      +'<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-      +'<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2a1 1 0 0 0 .83-.45l.94-1.4A1 1 0 0 1 9.3 4.7h5.4a1 1 0 0 1 .83.45l.94 1.4A1 1 0 0 0 17.3 7h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>'
-      +'<circle cx="12" cy="13" r="3.4"/></svg></button>'
+    /* ⚠️ THE CAMERA CAME OUT OF THIS BAR ON 2026-08-29 and the button is GONE, not hidden: the
+       tab bar owns that door now, and two ways to the same screen — one of them a 38px circle
+       in a corner — is a choice nobody asked to make. The wiring that reached for #kfClose is
+       now guarded rather than assuming it, because an unguarded dereference here is a feed
+       that never builds. */
+    +'<div class="kfBar">'
     /* NEXT TO THE ✕, NOT OPPOSITE IT. On the right it landed on top of the round's own clock
        chip, which sits in that corner on every slide — the count showed through the flag. */
     +'<button class="kfClose" id="kfFlag" aria-label="Report this photo" title="Report this photo">⚑</button>'
@@ -19071,6 +19350,10 @@ function chFeed(opts){
            loading:false,done:false,slides:[],active:-1,round:null,played:0,found:0,hinted:false,lap:0,
            dryPages:0};
   kfState=S;
+  /* Held on the state so the tab bar can leave this screen without reaching into the closure.
+     Assigned after close() is declared below — a function declaration, so it is hoisted and
+     this line is safe where it stands. */
+  S.close=close;
   /* THE CLOCK STARTS HERE, and it exists because the last change to this screen could not be
      judged. The feed was made to open on a page fetched at launch instead of one fetched at
      the tap — a whole network round trip removed from the critical path — and the only
@@ -19914,7 +20197,12 @@ function chFeed(opts){
     killHint();
   },{passive:true});
 
-  root.querySelector("#kfClose").onclick=()=>close();
+  /* ⚠️ OPTIONAL SINCE THE TAB BAR TOOK THE CAMERA DOOR. This used to dereference #kfClose
+     unguarded, and removing that button from the bar turned the line into a TypeError at feed
+     BUILD time — the feed would not have opened at all, for everybody, on the first push. The
+     button is gone on purpose (two doors to one screen, one of them a 38px circle in a corner,
+     is a choice nobody asked to make); the wiring survives it. */
+  { const x=root.querySelector("#kfClose"); if(x) x.onclick=()=>close(); }
   /* ---- THE SCOPE PILL AND ITS MENU ------------------------------------------------------
      One centred control, three destinations: the public feed, the creator's own grid, and
      the profile card. The pill names the CURRENT scope, the menu switches it — Instagram's
@@ -20591,6 +20879,11 @@ else {
     try{ if(camEverAsked()) chFeedFromLaunch(); }catch(e){}
   }
 }
+/* ⚠️ MOUNTED UNCONDITIONALLY AND WRAPPED, LIKE EVERYTHING ELSE ON THIS LINE. navShouldShow()
+   decides whether it is ever seen — a link round, the hero and every sheet keep it hidden — so
+   mounting has no branch to get wrong. And a throw here is a blank app for everybody at once,
+   which is the whole reason the boot line is written this way. */
+try{ navMount(); }catch(e){}
 /* Never strand the user on the splash disguise. 2.5s was tuned for "something has gone
    wrong"; at 600ms this also covers the ordinary first-launch case — the permission sheet
    is up, nothing will settle until it is answered, and the user should be reading the hero
