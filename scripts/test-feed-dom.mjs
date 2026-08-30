@@ -1180,6 +1180,28 @@ console.log('\nA CLEARED FEED REOPENS INSTEAD OF SAYING IT IS EMPTY');
   await page.close();
 }
 
+console.log('\nA FEED SLIDE IS NOT SOMEBODY OPENING A CHALLENGE');
+{
+  /* log_link_open exists to measure the SEND LOOP — the middle step between a challenge going
+     out and a stranger playing it, which had no number because seek_traces is only written when
+     a round ENDS. A feed slide is not that. It is the same chSeek() screen, so the call sits
+     one `if (!FEED)` away from firing on every slide, and at ~4900 feed rounds a day against
+     ~190 sends it would bury the thing being measured in its own table — 26 parts noise to one
+     part signal, in a table built to answer a question about signal. */
+  const page = await open(ROWS(3));
+  await page.waitForTimeout(600);
+  const called = await page.evaluate(() => (window.__rpc || []).filter((c) => c[0] === 'log_link_open').length);
+  const played = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+  played > 0
+    ? ok(`the feed mounted ${played} rounds to be wrong about`)
+    : bad('no feed slides mounted — this block would pass without testing anything');
+  called === 0
+    ? ok('and not one of them was filed as a link open')
+    : bad(called + ' feed rounds filed themselves as link opens — the send loop metric is now '
+        + 'mostly feed traffic and cannot answer the question it was built for');
+  await page.close();
+}
+
 console.log('\nDAY ONE — AN EMPTY FEED IS AN INVITATION, NOT A BLACK SCREEN');
 {
   /* ⚠️ THIS BLOCK CARRIES A GUARANTEE THAT USED TO LIVE SOMEWHERE ELSE, AND IT MATTERS MORE

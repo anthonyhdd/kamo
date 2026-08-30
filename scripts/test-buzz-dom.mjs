@@ -223,6 +223,34 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
     ? ok('and it is NOT in the trace jsonb, which the creator gets to read')
     : bad('the device key was put in p_trace — get_seek_traces hands that to any creator '
         + 'replaying the hide, which links a stranger across every round they have played');
+
+  /* ═══ THE OPEN IS COUNTED, NOT ONLY THE ENDING ══════════════════════════════════════════
+     seek_traces is written by sendTrace(), which runs on hit, miss and giveup — endings. A
+     recipient who opens a friend's challenge, looks at the photograph and leaves wrote nothing
+     at all, so "46% of sent hides were opened" was really "46% were opened AND finished": a
+     floor read as an open rate. The send loop is this product's only free acquisition and its
+     middle step had no number.
+     ⚠️ THE HARNESS IS THE POSITIVE CONTROL FOR `wd`, WHICH IS THE POINT OF ASSERTING IT HERE.
+     The browser population on this product is ~89% automated — Amplitude reported 3157 link
+     opens on 2026-08-29 against 191 challenges sent — so a row nobody can filter is a row
+     worth nothing. Playwright IS an automated browser and sets navigator.webdriver, so if this
+     round does not report wd:true the discriminator does not work and the table it feeds
+     cannot be cleaned. */
+  const open = await page.evaluate(() => (window.__calls.find((c) => c[0] === 'log_link_open') || [])[1]);
+  open ? ok('a link round writes its OPEN, before any tap decides anything')
+       : bad('no log_link_open on a link round — the middle step of the send loop stays unmeasured');
+  open && open.p_dev && open.p_dev === durable
+    ? ok('and it carries the same durable device key the trace does')
+    : bad('log_link_open device key ' + JSON.stringify(open && open.p_dev) + ' is not kamo_did '
+        + JSON.stringify(durable) + ' — opens and rounds could not be joined to one person');
+  open && open.p_wd === true
+    ? ok('and this automated browser is flagged wd:true, so real traffic can be told from crawlers')
+    : bad('log_link_open reported wd:' + JSON.stringify(open && open.p_wd) + ' from Playwright, '
+        + 'which IS a webdriver — the flag that separates ~89% automated traffic does not work');
+  open && open.p_host === 'browser'
+    ? ok('and names the surface it was opened on')
+    : bad('log_link_open host: ' + JSON.stringify(open && open.p_host));
+
   const src = await page.evaluate(() => document.querySelector('#chFrame img').src);
   (src.includes('_b.jpg') || src.includes('_w.jpg'))
     ? ok(`THE SNAP: photo swapped to the revealed frame (${src.includes('_w') ? 'mid-wave — il bouge' : 'still'})`)

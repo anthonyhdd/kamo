@@ -16802,6 +16802,30 @@ function chSeek(hideId,opts){
        reports 2 at the moment it opens. Grouping seek_opened by it answers the question
        directly — no funnel, no joins. 0 inside the app, where the counter is not kept. */
     track("seek_opened",TP({round:chRoundsPlayed()+1}));
+    /* ═══ THE OPEN ITSELF, WRITTEN DOWN ══════════════════════════════════════════════════
+       seek_traces is written by sendTrace(), which runs on 'hit', 'miss' and 'giveup' —
+       ENDINGS. Somebody who opens a friend's challenge, looks at the photograph and leaves
+       writes nothing at all. So "46% of sent hides were opened" was really "46% were opened
+       AND played to a finish", a floor that was being read as an open rate — and the send
+       loop is this product's only free acquisition, so its middle step deserves a number.
+       ⚠️ LINK ROUNDS ONLY. A feed slide is not somebody opening a challenge, and at ~4900
+       feed rounds a day against ~190 sends it would bury the thing being measured in its own
+       table.
+       ⚠️ AND AMPLITUDE COULD NOT ANSWER THIS. seek_opened{src:link} already exists and
+       reported 3157 uniques on 2026-08-29 against 191 challenges sent — sixteen opens per
+       link, because the browser population here is ~89% automated. The filters that would
+       clean it (host, wd) do not apply through that API. This writes the three
+       discriminators alongside the row instead and lets the QUERY decide: none of them is
+       proof on its own, and together they are the difference between a number with a caveat
+       and a number with no meaning.
+       Fire-and-forget, after the event and outside the round's critical path: a telemetry
+       row must never be able to delay or break a hunt. */
+    if(!FEED){ try{
+      let dev=""; try{ const x=chDeviceId(); if(x&&x!=="w-nostore") dev=String(x).slice(0,64); }catch(_){}
+      chRpc("log_link_open",{p_id:HID,p_dev:dev,
+        p_wd:!!(navigator&&navigator.webdriver),
+        p_host:window.ReactNativeWebView?"app":"browser"}).catch(()=>{});
+    }catch(_){} }
 
     const camoSrc=CH_URL+"/storage/v1/object/public/hides/"+h.img_path;
     const img=document.createElement("img");
