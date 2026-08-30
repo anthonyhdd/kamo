@@ -1831,6 +1831,23 @@ try {
   bad('THE FEED\'S FIRST ASK IS BROKEN:\n' + why(e));
 }
 
+/* THE READER'S LANGUAGE. The store listing has been in 39 languages since 1.1.4 and the
+   binary declares 36 bundle localizations since 1.1.7; the page was English under all of
+   them. The layer that fixes it is one lookup away from a catastrophe — the dictionary is
+   keyed by the English string, so a lookup that can return undefined renders "Send to a
+   friend" as an empty button, and the send rate is the guard metric on everything.
+   ⚠️ This suite is also the reason every OTHER newPage() now pins locale:'en-US'. They all
+   inherited the machine's language: green on CI's Linux, red on a Mac set to French, for a
+   reason that had nothing to do with the app. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-i18n-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-i18n-dom.mjs', 'I18N TEST', out)
+    : ok('the app speaks the reader\'s language and never speaks nothing (node scripts/test-i18n-dom.mjs)');
+} catch (e) {
+  bad('THE TRANSLATION LAYER IS BROKEN:\n' + why(e));
+}
+
 /* The opener experiment: the banger's POSITION obeys bangerArm, and nothing else moves. A
    leaking holdout, a creator shown the opener, two bangers in one session, a seen opener
    rerunning, or a duplicated slide from the cached first page — every one of these renders a

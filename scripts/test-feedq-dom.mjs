@@ -77,7 +77,7 @@ const ROWS = (n, lq) => Array.from({ length: n }, (_, i) => ({
 const BEST = [{ id: 'best1', img_path: 'best.jpg', name: 'tony', n_attempts: 9, n_found: 4, created_at: '2026-08-10T09:00:00Z', lqip: null }];
 
 async function open({ rows, best, seen } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     if (a.seen) localStorage.setItem('kamo_feed_seen', JSON.stringify(a.seen));
     window.__seed = {

@@ -144,7 +144,7 @@ const HROWS = [{ id: 'a1', img_path: 'x.jpg', cx: .5, cy: .5, r: .12, secs: 9, n
 /* Boots the app at the root, the way a returning device does. The arm is SEEDED and never
    rolled: a coin in here would put the subject of this suite on stage half the time. */
 async function boot({ arm = 'feed', everAsked = true, seek = false, feedFails = false, replies = null, mine = null } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   const errs = [];
   page.on('pageerror', e => errs.push(String(e.message).slice(0, 140)));

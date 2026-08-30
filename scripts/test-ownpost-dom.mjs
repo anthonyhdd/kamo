@@ -113,7 +113,7 @@ const ANSWER = { reveal_hide: { cx: 0.5, cy: 0.5, r: 0.05 }, save_seek_trace: nu
 /* `mine` plants the published-id list the app reads on boot — addInitScript is the one hook
    that survives the navigation, and chMine() is read while the round is being built. */
 async function open({ mine, first, fromReveal, extra }) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(page);
   await page.addInitScript((a) => {
     if (a.mine) localStorage.setItem('kamo_hides', JSON.stringify(a.mine));

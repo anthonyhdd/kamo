@@ -85,7 +85,7 @@ const BANGER = { id: 'best0', img_path: 'b0.jpg', name: null, n_attempts: 9, n_f
  * timer as kfProbe, and opening earlier would test a prefetch that never ran.
  */
 async function open({ arm = 'on', mine = [], seen = [], rows = ROWS } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     window.__seed = {
       feed_page: a.rows,

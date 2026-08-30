@@ -124,7 +124,7 @@ const { globSync } = await import('node:fs');
 const exe = chromeExe();
 if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
 await page.goto(url, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__m, null, { timeout: 10000 });
 
@@ -425,7 +425,7 @@ console.log('\nTHE GRID SELLS NOTHING ON TOP OF THE STATS ROW');
      is exactly what the first draft of this block did. The handle is planted before boot, so
      each case is one clean launch with one state. */
   const state = async (handle, chosen) => {
-    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const p2 = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
     await p2.addInitScript((a) => {
       localStorage.setItem('kamo_handle', a.handle);
       if (a.chosen) localStorage.setItem('kamo_handle_chosen', '1');

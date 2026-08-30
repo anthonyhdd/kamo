@@ -62,7 +62,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
 
 /** A whole round: pick a photo, capture, paint past the floor, finish, open the sheet. */
 async function round({ upload = 200, create = 200 } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   /* ⚠️ BROADEST FIRST, MOST SPECIFIC LAST — in Playwright the LAST matching route registered
      wins. Registered the intuitive way round (specific first), `*.supabase.co/**` swallows

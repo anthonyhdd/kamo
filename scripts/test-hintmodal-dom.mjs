@@ -117,7 +117,7 @@ const HIDE = { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 2
 
 /** Boot a hunt with the given capabilities, user id and canned hint_spend answer. */
 async function hunt({ caps = {}, uid = '', spend = undefined, state = undefined, big = false, price = '' } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(page, big);
   await page.addInitScript(([h, c, u, s, st, pr]) => {
     window.__hintsLive = true;          // on, unless a case below turns it off
@@ -149,7 +149,7 @@ const btn = (page) => page.evaluate(() => {
 /* Seeds the arm and a run before the page boots. The arm is stored, not rolled: a coin here
    would put this suite's subject on stage in half its own runs. */
 async function hunt2({ arm = 'on', run = 0, life = true, price = '$0.99' } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(page, true);
   await page.addInitScript(([h, pr, a, r, l]) => {
     window.__hintsLive = true;
@@ -320,7 +320,7 @@ const modalUp = (p) => p.evaluate(() => { const w = document.querySelector('.hpW
    one, ever. */
 {
   console.log('\n— the receipt —');
-  const p = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const p = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(p, true);
   await p.addInitScript(([h]) => {
     window.__hintsLive = true;
@@ -384,7 +384,7 @@ const modalUp = (p) => p.evaluate(() => { const w = document.querySelector('.hpW
     : bad(`stranger label is ${JSON.stringify(stranger && stranger.text)}`);
   await q.close();
 
-  const r = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const r = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(r, true);
   await r.addInitScript(([h]) => {
     window.__hintsLive = true;
@@ -457,7 +457,7 @@ console.log('\n— every way the purchase can end has a name —');
      The founder confirmed on 2026-08-30 that the purchase completes on his own phone, which
      makes the distinction the whole question rather than a detail. */
   const buyPage = async (bridge, slowTimer) => {
-    const p = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const p = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     await servePhoto(p, true);
     await p.addInitScript(([h, br, st]) => {
       window.__hintsLive = true;

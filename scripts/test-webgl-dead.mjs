@@ -48,7 +48,7 @@ const browser = await chromium.launch({ executablePath: exe });
 let failed = 0;
 const ok = m => console.log('  ✓ ' + m), bad = m => { failed++; console.error('  ✗ ' + m); };
 
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 // The beacon and chWebTrack both post straight to Amplitude — capture instead of sending.
 const tracked = [];
 await page.route('**/api.eu.amplitude.com/**', async (route) => {

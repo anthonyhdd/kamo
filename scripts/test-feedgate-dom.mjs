@@ -102,7 +102,7 @@ const ROWS = Array.from({ length: 8 }, (_, i) => ({
  * armed so the collision on slide 3 is the thing under test.
  */
 async function open({ arm = 'on', mine = [], seen = false, firstOffer = 'spent' } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     window.__seed = {
       feed_page: a.rows,

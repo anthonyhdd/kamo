@@ -68,7 +68,7 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
    file, because the palette is extracted from whatever is in the picture and a flat colour
    would give the swatch row nothing to offer — the same reason a black board is a bug. */
 async function paintScreen() {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   page.on('pageerror', (e) => bad('PAGE ERROR: ' + e.message));
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);

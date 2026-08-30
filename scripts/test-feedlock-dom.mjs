@@ -86,7 +86,7 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
 
 /** Boot the feed. `photo:false` serves no picture at all, which is the chPhotoDead path. */
 async function feed({ photo = true, run = 0, passSpent = false } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r =>
     photo ? r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }) : r.fulfill({ status: 404, body: 'x' }));
   await page.addInitScript((a) => {

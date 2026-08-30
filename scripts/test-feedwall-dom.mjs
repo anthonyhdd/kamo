@@ -54,7 +54,7 @@ const has=(page,id)=>page.evaluate(i=>!!document.getElementById(i),id);
 
 /* rounds: what the seeker writes to localStorage after a round. wrapper: stub ReactNativeWebView. */
 async function open(rounds,wrapper){
-  const page=await browser.newPage({viewport:{width:390,height:844}});
+  const page=await browser.newPage({ locale: 'en-US', viewport:{width:390,height:844}});
   /* ⚠️ ONLY WHILE THE PAGE IS STILL OURS. The note below already explains that case B clicks
      "Get KAMO" and sends the page at kamo.onelink.me, and that a document is created for that
      navigation even though it cannot complete offline. It guarded the seeding against that

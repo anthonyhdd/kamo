@@ -81,7 +81,7 @@ async function tapCta(pageHtml, hid) {
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   let went = null;
   await page.route('**/*', (route) => {
     const u = route.request().url();
@@ -123,7 +123,7 @@ async function cardInWrapper(pageHtml, hid, opts) {
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/*', (route) => route.request().url().startsWith(origin) ? route.continue() : route.abort());
   await page.addInitScript((feed) => {
     window.__seed = { get_hide: {} };

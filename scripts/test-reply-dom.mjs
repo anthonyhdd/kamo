@@ -105,7 +105,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
    which is the seeker's own test's job, not this one's. */
 const SHOT = readFileSync(join(ROOT, 'shot.jpg'));
 async function openHide(name, extra) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   /* THE HIDE'S PHOTO, ANSWERED THE WAY STORAGE ANSWERS IT — 200, image/jpeg, ACAO:*. Without
      this the container's blocked egress is what decides whether chRehide reaches compose at
      all, and block 3 needs the screen it is asserting about to exist. */

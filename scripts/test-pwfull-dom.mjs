@@ -124,7 +124,7 @@ const browser = await chromium.launch({ executablePath: exe });
 
 console.log('\nTHE HARNESS PIN HOLDS — WITHOUT A SEED, HEADLESS GETS THE SHEET');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__f, null, { timeout: 10000 });
   const a = await page.evaluate(() => window.__f.arm());
@@ -135,7 +135,7 @@ console.log('\nTHE HARNESS PIN HOLDS — WITHOUT A SEED, HEADLESS GETS THE SHEET
 }
 
 console.log('\nTHE FULL ARM RENDERS, AND THE RIGHT LINE LIGHTS');
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
 /* kamo_pw_seen ALONGSIDE THE ARM, and it is a fixture fix rather than a behaviour change.
    Since 2026-08-14 the FIRST paywall an install ever sees has to come from the end of a round
    — the nth split showed that impression converts at twice the rate of any other and was
