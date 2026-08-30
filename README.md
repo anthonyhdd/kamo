@@ -65,3 +65,5 @@ load-bearing, so don't rename either one to tidy up.
 
 > iOS note: the web camera only works in **Safari**. Chrome/Firefox/Edge on iOS cannot
 > access it. Picking a photo works everywhere.
+
+<!-- ci probe: index.html is main as-is; this file is not served -->
