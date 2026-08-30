@@ -58,7 +58,7 @@ const shown=(page,id)=>page.evaluate(i=>{ const e=document.getElementById(i);
 
 /* ---- 1. A PLAIN BROWSER. No ReactNativeWebView at all, which is the whole gate. ---- */
 {
-  const page=await browser.newPage({viewport:{width:390,height:844}});
+  const page=await browser.newPage({ locale: 'en-US', viewport:{width:390,height:844}});
   page.on('pageerror',e=>bad('PAGE ERROR (web): '+e.message));
   await page.goto(base+'?debug',{waitUntil:'load'});
   await page.waitForTimeout(600);
@@ -69,7 +69,7 @@ const shown=(page,id)=>page.evaluate(i=>{ const e=document.getElementById(i);
 }
 
 /* ---- 2-4. THE WRAPPER. ---- */
-const page=await browser.newPage({viewport:{width:390,height:844}});
+const page=await browser.newPage({ locale: 'en-US', viewport:{width:390,height:844}});
 page.on('pageerror',e=>bad('PAGE ERROR: '+e.message));
 await page.route('**/storage/v1/object/hides/**', r=>r.fulfill({status:200,body:'{}'}));
 await page.addInitScript(()=>{

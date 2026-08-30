@@ -56,7 +56,7 @@ let failed = 0;
 const ok = (m) => console.log('  ✓ ' + m);
 const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
 await page.goto(base + '?debug', { waitUntil: 'load' });
 await page.waitForFunction(() => !!(window.HIDEY && window.HIDEY.setBg && window.HIDEY.charPos), { timeout: 20000 });

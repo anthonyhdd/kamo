@@ -123,7 +123,7 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 const exe = chromeExe();
 if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
 await page.goto(url, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__rf, null, { timeout: 10000 });
 

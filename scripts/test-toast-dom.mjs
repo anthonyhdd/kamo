@@ -87,7 +87,7 @@ const ROWS = (n) => Array.from({ length: n }, (_, i) => ({
 }));
 
 async function open(url, before) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   page.on('pageerror', (e) => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   await page.addInitScript((rows) => {

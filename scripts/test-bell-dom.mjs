@@ -91,7 +91,7 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
  * `mine` seeds this device's own hide ids, which is what makes a slide a replay.
  */
 async function open({ wrapper = true, caps = { notifAsk: true }, token = '', mine = ['hide0'], rows = ROWS(3) } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     window.__seed = {
       feed_page: a.rows,

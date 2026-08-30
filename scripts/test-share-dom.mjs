@@ -71,7 +71,7 @@ const exe = chromeExe();
 if(!exe){ console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
 const browser=await chromium.launch({executablePath:exe});
 let failed=0; const ok=m=>console.log('  ✓ '+m), bad=m=>{failed++;console.error('  ✗ '+m);};
-const page=await browser.newPage({viewport:{width:390,height:844}});
+const page=await browser.newPage({ locale: 'en-US', viewport:{width:390,height:844}});
 page.on('pageerror',e=>bad('PAGE ERROR: '+e.message));
 // storage upload: 3 seconds, like a phone on LTE
 await page.route('**/storage/v1/object/hides/**', async r=>{ await new Promise(x=>setTimeout(x,3000)); r.fulfill({status:200,body:'{}'}); });
@@ -179,7 +179,7 @@ const r2=await round('ROUND 2 — same session, own hide',1200);
 console.log('\nA PUBLISH THAT PRODUCED NO ROW IS NOT A PUBLISH');
 {
   const walk = async (answer) => {
-    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const p2 = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     const tried = [];
     await p2.route('**/rest/v1/rpc/create_hide', async r => {
       const n = tried.length; tried.push(1);
@@ -259,7 +259,7 @@ console.log('\nA PUBLISH THAT PRODUCED NO ROW IS NOT A PUBLISH');
 console.log('\nTHE VISIBILITY ROW STATES WHAT THE SERVER WAS ACTUALLY TOLD');
 {
   const visRun = async (plan) => {
-    const p2 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const p2 = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     const heard = [];
     await p2.route('**/rest/v1/rpc/create_hide', r => r.fulfill({ status: 200, contentType: 'application/json', body: '"visid1"' }));
     await p2.route('**/rest/v1/rpc/set_hide_public', async r => {
@@ -344,7 +344,7 @@ console.log('\nTHE VISIBILITY ROW STATES WHAT THE SERVER WAS ACTUALLY TOLD');
 console.log('\nA HIDE WITH NO PHOTO CANNOT BE PUT IN THE FEED BY HAND');
 {
   const tryPublic = async (uploadOk) => {
-    const p3 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const p3 = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     const wrote = [];
     await p3.route('**/rest/v1/rpc/create_hide', r => r.fulfill({ status: 200, contentType: 'application/json', body: '"gid1"' }));
     await p3.route('**/rest/v1/rpc/set_hide_public', async r => {
@@ -458,7 +458,7 @@ r4.waited < 900
    and `share-target` are two different messages to the wrapper, and both "work". */
 console.log('\nTHE REVEAL IS THE SHARE, WHEREVER IT IS GOING');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   await page.addInitScript(() => {
     window.__posted = [];
     window.ReactNativeWebView = { postMessage: (raw) => { try { window.__posted.push(JSON.parse(raw)); } catch (e) {} } };
@@ -505,7 +505,7 @@ console.log('\nTHE REVEAL IS THE SHARE, WHEREVER IT IS GOING');
    function directly, through the hook beside it, with a blob that is genuinely over. */
 {
   console.log('\n— the upload ceiling —');
-  const page=await browser.newPage({viewport:{width:390,height:844}});
+  const page=await browser.newPage({ locale: 'en-US', viewport:{width:390,height:844}});
   page.on('pageerror',e=>bad('PAGE ERROR: '+e.message));
   await page.goto(base,{waitUntil:'load'});
   await page.waitForTimeout(400);
@@ -574,7 +574,7 @@ console.log('\nTHE REVEAL IS THE SHARE, WHEREVER IT IS GOING');
    to get past it. */
 {
   console.log('\n— a thumb reaches the send —');
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, body: '{}' }));
   /* ?debug, because window.HIDEY only exists behind it (see its declaration). Without the

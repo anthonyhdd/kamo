@@ -73,7 +73,7 @@ const ok = m => console.log('  ✓ ' + m), bad = m => { failed++; console.error(
 /* One wrong tap ends the round — the miss branch calls ending() directly, it does not wait for
    max_taps — so the whole fixture is: seed the two numbers, load, tap once, read the pill. */
 async function breakRun(run, best, width, life = false, how = 'miss') {
-  const page = await browser.newPage({ viewport: { width, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width, height: 844 }, deviceScaleFactor: 2 });
   /* The camo photo is an absolute Supabase URL, so it cannot come off the local server. A real
      decoded image matters here and did not in test-seek-dom: an <img> that never loads leaves
      .chFrame at zero height, and a tap on a zero-height frame is a tap on nothing. */
@@ -175,7 +175,7 @@ async function breakRun(run, best, width, life = false, how = 'miss') {
    These read the pill AT MOUNT, with no tap, because that is the state the old fixture could
    not reach — breakRun() taps, and a tap is what produced the only state that was ever tested. */
 async function atMount(run, best, width) {
-  const page = await browser.newPage({ viewport: { width, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ contentType: 'image/png', body: PNG }));
   await page.addInitScript(([r, b]) => {
     window.__seed = {

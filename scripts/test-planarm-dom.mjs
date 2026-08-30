@@ -91,7 +91,7 @@ const WEEKLY = '€3.49', LIFETIME = '€16.99';
 const BOTH = { weekly: WEEKLY, lifetime: LIFETIME, trial: '3 days' };
 
 async function open(seed, prices, wrapper) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   /* INSIDE THE APP vs IN A BROWSER IS A DIFFERENT PAYWALL, and only one of them is this
      experiment's population. pwWebOffer() replaces the CTA with "Get KAMO — free" whenever
      there is no wrapper, because a browser cannot sell KAMO+ at all — so the store-failure
@@ -142,7 +142,7 @@ async function open(seed, prices, wrapper) {
  * moment both arms are decided, so its setter is the restore hook. Nothing downstream — boot,
  * the 3D scene, the particle work — inherits a frozen Math.random. */
 async function openDenied(roll) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   await page.addInitScript((r) => {
     Object.defineProperty(navigator, 'webdriver', { get: () => false, configurable: true });
     const DENIED = new Set(['kamo_pw_design', 'kamo_plan_arm']);

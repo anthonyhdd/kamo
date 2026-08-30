@@ -155,7 +155,7 @@ const { globSync } = await import('node:fs');
 const exe = chromeExe();
 if (!exe) { console.log('· no Chrome or Chromium found — skipping (set PW_CHROME=<path>)'); server.close(); process.exit(0); }
 const browser = await chromium.launch({ executablePath: exe });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
 await page.goto(url, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__b, null, { timeout: 10000 });
 /* The bar only has a height once the paint screen is up, and there is no camera here. */

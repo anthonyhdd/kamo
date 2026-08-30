@@ -65,7 +65,7 @@ const ROWS = Array.from({ length: 8 }, (_, i) => ({
 
 /** A whole round on a given arm, ending where the arm says it ends. */
 async function round({ arm = 'on', publishes = true } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.addInitScript((a) => {
     localStorage.setItem('kamo_land_arm', a);

@@ -68,7 +68,7 @@ let failed = 0;
 const ok = m => console.log('  ✓ ' + m);
 const bad = m => { failed++; console.error('  ✗ ' + m); };
 
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
 page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
 
 /* THE WIRE. Every event this page sends goes through one POST, so recording it records

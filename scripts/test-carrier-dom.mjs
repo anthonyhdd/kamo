@@ -98,7 +98,7 @@ const browser = await chromium.launch({ executablePath: exe });
 /* Nothing may leave the machine: the page posts to Amplitude on its own from the boot beacon,
    and a test that let those out would be reporting fake events into the live project. */
 async function open(wrapper) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   if (wrapper) await page.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; });
   await page.route('**/*', (route) => {
     const u = route.request().url();
