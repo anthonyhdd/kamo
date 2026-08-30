@@ -115,6 +115,20 @@ async function open(locale) {
   n.length === 1
     ? ok(`all ${Object.keys(r.sizes).length} dictionaries carry the same ${n[0]} keys`)
     : bad(`dictionaries disagree on size: ${JSON.stringify(r.sizes)}`);
+  const tmpl = await page.evaluate(() => ({
+    fr: window.kTn('Hint · {n} left', 3),
+    en: (window.KLANG.fr['Hint · {n} left'] || '').includes('{n}'),
+    miss: window.kTn('Nobody translated this {n} sentence', 7),
+  }));
+  !tmpl.fr.includes('{n}') && tmpl.fr.includes('3')
+    ? ok(`a number is a hole in the sentence, not a concatenation ("${tmpl.fr}")`)
+    : bad(`kTn left its placeholder or lost the number: ${JSON.stringify(tmpl.fr)}`);
+  tmpl.en
+    ? ok('and every template keeps its {n} slot, so word order stays the translator\'s call')
+    : bad('a template lost its {n} placeholder in the dictionary');
+  tmpl.miss === 'Nobody translated this 7 sentence'
+    ? ok('an untranslated template still fills its hole')
+    : bad(`kTn fallback broke: ${JSON.stringify(tmpl.miss)}`);
   await page.close();
 }
 

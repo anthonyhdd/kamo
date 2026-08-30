@@ -112,8 +112,8 @@ const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 const HIDE = { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 20, max_taps: 5, name: 'tony' };
 
 /** Boot a hunt with the given capabilities, user id and canned hint_spend answer. */
-async function hunt({ caps = {}, uid = '', spend = undefined, state = undefined, big = false, price = '' } = {}) {
-  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+async function hunt({ caps = {}, uid = '', spend = undefined, state = undefined, big = false, price = '', locale = 'en-US' } = {}) {
+  const page = await browser.newPage({ locale, viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(page, big);
   await page.addInitScript(([h, c, u, s, st, pr]) => {
     window.__hintsLive = true;          // on, unless a case below turns it off
@@ -603,6 +603,26 @@ for (const [name, st, price] of [
   clear
     ? ok(`${name} ("${g.label}") clears the give-up button by ${Math.round(g.hint.l - g.quit.r)}px`)
     : bad(`${name} ("${g.label}") overlaps the give-up button: hint ${JSON.stringify(g.hint)} quit ${JSON.stringify(g.quit)}`);
+  await p.close();
+}
+
+/* ⚠️ AND IN THE READER'S LANGUAGE, which is a new axis since 2026-08-30. Both labels grow
+   when translated — "Skip this one · 1 today" becomes "Passer celui-ci · 1 par jour" — and
+   the collision this section exists for is a function of label WIDTH. The cap is arithmetic
+   (each pill is bounded to calc(50% - 18px) in opposite 12px corners, so they cannot meet
+   whatever the font or the language), but the whole point of the section is that reasoning
+   about this in the head is how it shipped broken the first time. So it is measured. */
+for (const loc of ['fr-FR', 'de-DE', 'ru-RU', 'th-TH']) {
+  const p = await hunt({ caps: { hints: true }, uid: 'user-1', locale: loc,
+                         state: { balance: 0, free_available: false }, price: 'CHF 1.00' });
+  const g = await p.evaluate(() => {
+    const b = (id) => { const e = document.getElementById(id); if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; };
+    return { hint: b('chHint'), quit: b('chQuit'), q: (document.getElementById('chQuit') || {}).textContent };
+  });
+  const clear = g.hint && g.quit && (g.hint.l >= g.quit.r || g.hint.r <= g.quit.l || g.hint.b <= g.quit.t || g.hint.t >= g.quit.b);
+  clear
+    ? ok(`${loc} ("${g.q}") clears the give-up button by ${Math.round(g.hint.l - g.quit.r)}px`)
+    : bad(`${loc} ("${g.q}") overlaps the give-up button: hint ${JSON.stringify(g.hint)} quit ${JSON.stringify(g.quit)}`);
   await p.close();
 }
 
