@@ -17757,7 +17757,16 @@ function chSeek(hideId,opts){
        save_seek_trace stores it verbatim (no key whitelist, checked), so a field costs nothing
        and is queryable immediately.
        ⚠️ ANYTHING PUT HERE IS PUBLIC-ISH TELEMETRY ON A ROW ANY CREATOR CAN REPLAY. Facts about
-       the ROUND belong here; nothing about the person does. */
+       the ROUND belong here; nothing about the person does.
+       ⚠️ AND THAT RULE WAS ALREADY BROKEN WHEN THIS WAS WRITTEN — `k` and `ho` are both stable
+       per-person identifiers and get_seek_traces handed the whole jsonb to the creator, so any
+       creator replaying a hide received a key that follows a stranger across every round they
+       have ever played. Fixed on the READ side (2026-08-30) rather than by removing the fields,
+       because streak_board_v2 groups on `k` and counts hints on `ho`: the function now strips
+       both before returning, which also repairs every row already written. `who` stays — a
+       handle somebody chose to display is the point of "@marie found you".
+       ⚠️ SO THE DEVICE KEY DOES NOT GO IN HERE. It rides its own COLUMN (see sendTrace), which
+       get_seek_traces does not select and no creator can reach. */
     function sendTrace(why,extra){
       if(traceSent) return; traceSent=true;
       try{
@@ -17770,7 +17779,35 @@ function chSeek(hideId,opts){
            cost something; see the note on chFeedFromLaunch. */
         try{ trace.ho=hintOwner()||""; }catch(_){ trace.ho=""; }
         if(extra) for(const k in extra) trace[k]=extra[k];
-        chRpc("save_seek_trace",{p_id:HID,p_trace:trace}).catch(()=>{});
+        /* ═══ THE PLAYER BECOMES COUNTABLE HERE, AND IT IS NOT `k` ═══════════════════════════
+           Retention was only ever measurable for people who had PUBLISHED, because the author
+           key is minted on the first publish and nowhere else — so somebody who opens the app
+           every day and plays twenty rounds without ever making one was, to every query we can
+           run, nobody at all. Founder, 2026-08-30: "Rétention devrait juste être des active
+           users non ? Pas besoin de créer non ??". He is right, and the data could not answer
+           him.
+           ⚠️ MINTING `k` HERE WOULD HAVE BEEN THE OBVIOUS FIX AND IT IS FORBIDDEN. kfAuthorKey()
+           mints when the key is missing; calling it on a play would stamp an author identity
+           onto every anonymous visitor who ever opened a link — and `k` is the LEADERBOARD's
+           entry ticket. The board's population would silently become "everyone who ever tapped
+           a share link". So this is a SEPARATE identity, on a separate column, that no board
+           and no creator ever reads.
+           ⚠️ NOTHING IS MINTED AT ALL, IN FACT. chDeviceId() already exists, is already durable
+           (localStorage + cookie + IndexedDB since 2026-08-21) and is already sent on every
+           analytics event by chWebTrack. This adds no new identifier to anybody's device; it
+           writes the one that is already there onto a row a query can group by.
+           ⚠️ THE "w-nostore" SENTINEL IS NEVER SENT, and that is not tidiness. chDeviceId()
+           returns it when every store refused — so it is SHARED by every such device. Written
+           through, all of them would collapse into one row-group that plays all day and never
+           churns: a single fabricated super-retained user, inflating exactly the number this
+           exists to measure. An absent key is honest; a shared one is a lie.
+           ⚠️ AND THE THREE-ARGUMENT FORM IS A NEW OVERLOAD, NOT A CHANGED SIGNATURE — the page
+           deploys on push and the database does not, so the 2-argument form stays live for
+           pages loaded a minute before this one. The migration goes FIRST for the same reason
+           in reverse: a page calling a signature PostgREST does not have yet loses the trace
+           entirely. See infra/2026-08-30-players-are-countable.sql. */
+        let dev=""; try{ const x=chDeviceId(); if(x&&x!=="w-nostore") dev=String(x).slice(0,64); }catch(_){}
+        chRpc("save_seek_trace",{p_id:HID,p_trace:trace,p_device:dev}).catch(()=>{});
       }catch(_){}
     }
 

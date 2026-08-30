@@ -90,7 +90,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
    what it means in the answer key. Two false diagnoses today came from measuring the
    harness instead of the layout; this is the fix for both. */
 const BIG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAYYAAANMCAIAAADXDp1JAAAIBUlEQVR42u3UoQ0AAAgEsR8dgWBsZsAhmnSCE5fqAXgiEgCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCWpAFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJakAWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlSQBYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZakAmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlqQCYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWJAFgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFiSCoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWJIKgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYkgSAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAFwtCOGXsyEGUNgAAAABJRU5ErkJggg==', 'base64');
-async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0, reduced = false, passLeft = false, board = null }) {
+async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0, reduced = false, passLeft = false, board = null, noStore = false }) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
@@ -102,7 +102,21 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
     route.fulfill(big ? { status: 200, contentType: 'image/png', body: BIG }
                       : { status: 200, contentType: 'image/jpeg', body: JPG });
   });
-  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft, board }) => {
+  await page.addInitScript(({ hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft, board, noStore }) => {
+    /* ⚠️ REFUSED, NOT ABSENT. Safari in private mode hands you a localStorage that EXISTS and
+       throws on write, which is exactly the shape chDeviceId() was built to survive — deleting
+       the object instead would throw somewhere else and test the harness. Cookies swallow
+       writes, IndexedDB is gone: all three stores refused, which is the only state in which
+       chDeviceId() returns its shared "w-nostore" sentinel. */
+    if (noStore) {
+      try {
+        const dead = { getItem: () => null, setItem() { throw new Error('QuotaExceededError'); },
+                       removeItem() {}, clear() {}, key: () => null, length: 0 };
+        Object.defineProperty(window, 'localStorage', { configurable: true, get: () => dead });
+      } catch (e) {}
+      try { Object.defineProperty(document, 'cookie', { configurable: true, get: () => '', set() {} }); } catch (e) {}
+      try { Object.defineProperty(window, 'indexedDB', { configurable: true, get: () => undefined }); } catch (e) {}
+    }
     /* ⚠️ THE LIFE IS SEEDED EXPLICITLY, ALWAYS. "0" means spent and anything else — a missing
        key included — means available, so an unseeded break case silently becomes a SAVE case
        that still renders a pill, and the assertion passes while testing the other mechanic. */
@@ -132,7 +146,7 @@ async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false
       if (fn === 'streak_board_v2') return Promise.resolve(window.__board || []);
       return Promise.resolve(null);
     };
-  }, { hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft, board });
+  }, { hit, pct, others, name, cy, round, oldRound, ansCx, run, life, best, passLeft, board, noStore });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(700);
   return page;
@@ -184,6 +198,31 @@ console.log('\nAIM & MISS — reticle above the finger, one buzz ends it, snap +
   const tr = await page.evaluate(() => (window.__calls.find(c => c[0] === 'save_seek_trace') || [])[1]);
   tr && tr.p_trace && tr.p_trace.end && tr.p_trace.why === 'miss' && Array.isArray(tr.p_trace.a)
     ? ok('trace carries the buzz instant and the aims') : bad('trace malformed: ' + JSON.stringify(tr && tr.p_trace && Object.keys(tr.p_trace)));
+
+  /* ═══ THE PLAYER IS COUNTABLE, AND NOT VIA THE AUTHOR KEY ═══════════════════════════════════
+     Until 2026-08-30 retention could only be computed for people who had PUBLISHED — the author
+     key is minted on the first publish and nowhere else, so a device that opens the app daily
+     and plays twenty rounds without making one was, to every query, nobody. Founder: "Rétention
+     devrait juste être des active users non ? Pas besoin de créer non ??".
+     ⚠️ IT MUST NOT BE `k`, AND THAT IS THE ASSERTION THAT MATTERS MOST HERE. Minting the author
+     key on a play would stamp a board identity onto every anonymous link visitor, and `k` is the
+     leaderboard's entry ticket — its population would quietly become "anyone who tapped a link".
+     ⚠️ AND IT MUST NOT BE IN THE TRACE. get_seek_traces hands that jsonb to the creator, so a
+     stable per-person key in there follows a stranger across every hide they ever play. It rides
+     its own column, which that function does not select. */
+  const durable = await page.evaluate(() => { try { return localStorage.getItem('kamo_did'); } catch (e) { return null; } });
+  tr && typeof tr.p_device === 'string' && tr.p_device.length > 0
+    ? ok('the round files a device key, so a player who never publishes is countable')
+    : bad('no p_device on save_seek_trace: ' + JSON.stringify(tr && Object.keys(tr))
+        + ' — pure players stay invisible, which is the whole point of the column');
+  tr && durable && tr.p_device === durable
+    ? ok('and it is the DURABLE id already on the device, not a freshly minted one')
+    : bad(`p_device ${JSON.stringify(tr && tr.p_device)} is not kamo_did ${JSON.stringify(durable)} `
+        + '— an id minted per round counts one person as many and reads as zero retention');
+  tr && tr.p_trace && !('d' in tr.p_trace) && !tr.p_trace.device
+    ? ok('and it is NOT in the trace jsonb, which the creator gets to read')
+    : bad('the device key was put in p_trace — get_seek_traces hands that to any creator '
+        + 'replaying the hide, which links a stranger across every round they have played');
   const src = await page.evaluate(() => document.querySelector('#chFrame img').src);
   (src.includes('_b.jpg') || src.includes('_w.jpg'))
     ? ok(`THE SNAP: photo swapped to the revealed frame (${src.includes('_w') ? 'mid-wave — il bouge' : 'still'})`)
@@ -1005,6 +1044,43 @@ console.log('\nTHE RUN PILL IS THE DOOR TO THE DAY\'S BOARD');
     ? ok('and offers no share, because there is nothing yet to send')
     : bad('the empty board offered a share');
   await fresh.close();
+}
+
+/* ── A DEVICE THAT CANNOT REMEMBER ANYTHING SENDS NOTHING ──────────────────────────────── */
+console.log('\n— a storage-refused device is left uncounted, not merged —');
+{
+  /* ⚠️ THE SENTINEL IS SHARED, AND THAT IS THE WHOLE DANGER. chDeviceId() returns the literal
+     "w-nostore" when localStorage, cookies and IndexedDB have all refused — so it is the SAME
+     string on every such device. Written through to device_key they would collapse into one
+     row-group that plays every day and never churns: a single fabricated super-retained user,
+     inflating the exact number this column was added to measure, and doing it invisibly because
+     the row looks perfectly normal.
+     An absent key is honest. A shared one is a lie, and it is the kind that reads as good news. */
+  const p = await boot({ hit: false, pct: 55, others: 4, frames: true, noStore: true });
+  await p.waitForTimeout(500);
+  await p.mouse.move(200, 500); await p.mouse.down(); await p.waitForTimeout(60);
+  await p.mouse.move(210, 520); await p.waitForTimeout(60); await p.mouse.up();
+  await p.waitForTimeout(1200);
+  const call = await p.evaluate(() => (window.__calls.find(c => c[0] === 'save_seek_trace') || [])[1]);
+  const sentinel = await p.evaluate(() => {
+    /* Proves the fixture actually reached the state under test rather than quietly leaving a
+       working store behind — the harness fault that would turn this whole block green for the
+       wrong reason. */
+    try { localStorage.setItem('probe', '1'); return 'localStorage still writable'; } catch (e) {}
+    try { if (window.indexedDB) return 'indexedDB still present'; } catch (e) {}
+    return 'all stores refused';
+  });
+  sentinel === 'all stores refused'
+    ? ok('the fixture really is a device with nowhere to write')
+    : bad('the no-store fixture did not take: ' + sentinel);
+  call
+    ? ok('the round still files its trace — telemetry must not depend on storage')
+    : bad('no save_seek_trace at all on a storage-refused device');
+  call && !call.p_device
+    ? ok('and it files NO device key rather than the shared sentinel')
+    : bad(`a storage-refused device sent p_device=${JSON.stringify(call && call.p_device)} — every `
+        + 'such device shares that string, so they merge into one user who never churns');
+  await p.close();
 }
 
 await browser.close(); server.close();
