@@ -94,7 +94,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
  * window.ReactNativeWebView instead would ALSO redirect track() into the native bridge, and
  * every assertion in this file reads the Amplitude wire. */
 async function boot(seed, priced) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   const sent = [];
   await page.route('**/api.eu.amplitude.com/**', async r => {
     try { (JSON.parse(r.request().postData() || '{}').events || []).forEach(e => sent.push(e)); } catch {}

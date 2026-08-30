@@ -69,7 +69,7 @@ const ok = (m) => console.log('  ✓ ' + m), bad = (m) => { failed++; console.er
 /* Drive the real entry points the wrapper uses — setNativeCaps then setPrices — rather than
    reaching into module state, so this exercises the same path a device does. */
 async function paywallCopy(caps, prices) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForFunction(() => window.KAMO && window.KAMO.setPrices, { timeout: 5000 });
   await page.evaluate(([c, p]) => {
@@ -128,7 +128,7 @@ console.log('\nTHE PAYWALL ONLY PROMISES WHAT THE STORE WILL HONOUR');
 
 /* 4 — before the store answers at all, nothing may be claimed as absent. */
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForFunction(() => window.KAMO && window.KAMO.setNativeCaps, { timeout: 5000 });
   await page.evaluate((c) => window.KAMO.setNativeCaps(c), CAPS_109);

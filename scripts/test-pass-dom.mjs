@@ -123,7 +123,7 @@ digest === PASS_HASH
       + 'below is measuring the wrong secret');
 
 async function fresh() {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__p, null, { timeout: 10000 });
   /* THE SHEET HAS TO BE OPEN FOR #pwRestore TO BE HOLDABLE, and since 2026-08-16 openPaywall()

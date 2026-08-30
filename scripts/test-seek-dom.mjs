@@ -66,7 +66,7 @@ const browser=await chromium.launch({executablePath:exe});
 let failed=0;
 const ok=m=>console.log('  ✓ '+m), bad=m=>{failed++;console.error('  ✗ '+m);};
 async function head(name){
-  const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2});
+  const page=await browser.newPage({ locale: 'en-US', viewport:{width:390,height:844},deviceScaleFactor:2});
   await servePhoto(page);
   await page.addInitScript((n)=>{ window.__seed={get_hide:{img_path:'x.jpg',secs:9,n_attempts:0,n_found:0,limit_s:20,max_taps:5,name:n}}; }, name);
   await page.goto(base+'?h=abc123',{waitUntil:'load'});
@@ -108,7 +108,7 @@ console.log('\nTHE SEEKER IS TOLD WHO THEY ARE PLAYING');
 console.log('\nAND IT IS READABLE — CLEAR OF THE CLOCK, AND ON THE SCREEN');
 {
   const geo = async (name, W, H) => {
-    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
+    const page = await browser.newPage({ locale: 'en-US', viewport: { width: W, height: H }, deviceScaleFactor: 2 });
     await servePhoto(page);
     await page.addInitScript((n) => { window.__seed = { get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: null, max_taps: null, name: n } }; }, name);
     await page.goto(base + '?h=abc123', { waitUntil: 'load' });
@@ -161,7 +161,7 @@ console.log('\nAND IT IS READABLE — CLEAR OF THE CLOCK, AND ON THE SCREEN');
 console.log('\nTHE TAP LANDS WHERE IT WAS AIMED, EVEN IF THE PICTURE SLIDES');
 {
   const shot = async (moveBy) => {
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     await servePhoto(page);
     await page.addInitScript(() => {
       window.__seed = { get_hide: { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 20, max_taps: 5, name: 'tony' },

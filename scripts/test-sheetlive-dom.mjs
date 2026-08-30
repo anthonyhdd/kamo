@@ -127,7 +127,7 @@ const ok = (m) => console.log('  ✓ ' + m);
 const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 
 async function open(wrapper) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   if (wrapper) await page.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; });
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__s, null, { timeout: 10000 });

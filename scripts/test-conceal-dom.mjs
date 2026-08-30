@@ -70,7 +70,7 @@ let failed = 0;
 const ok = (m) => console.log('  ✓ ' + m);
 const bad = (m) => { failed++; console.error('  ✗ ' + m); };
 
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 await page.goto(base, { waitUntil: 'load' });
 await page.waitForFunction(() => window.KAMO && typeof window.KAMO.conceal === "function", { timeout: 15000 });
 
