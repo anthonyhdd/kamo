@@ -41,9 +41,24 @@ scripts/check.mjs` is the answer that stays true. `playwright-core` is not a dep
 install it anywhere and point `PW_CORE` at it, or the browser tests skip loudly and you are
 pushing on the static checks alone.
 
-**Always sync the mirror in the same breath.** Copy `index.html` across — the whole file, and
-nothing to restore on the way. The two are byte-identical after a correct sync; the mirror's own
-`CNAME` is what makes the domain work, and that is a separate file.
+**The mirror syncs ITSELF — do not copy anything across by hand.**
+`.github/workflows/sync-mirror.yml` runs `scripts/sync-mirror.sh` on every push to `main` that
+touches a served file, and commits to `kamo-mirror` as `kamo-sync`. The script is still the
+source of truth for *how*; the workflow only guarantees that it runs. The two files are
+byte-identical after a correct sync, and the mirror's own `CNAME` is what makes the domain work
+— a separate file the script refuses to push without.
+
+⚠️ **Your local `~/kamo-mirror` clone goes stale within hours and that looks exactly like
+drift.** It is not: the sync happens on a runner, so nothing ever updates your clone. Reading
+its `git log` produced a confident, wrong "the mirror is seven commits behind" on 2026-08-30 —
+and running `scripts/sync-mirror.sh` by hand on that stale clone spends fifteen minutes on the
+gate and then dies on a non-fast-forward push. **`git fetch` first, and compare the served
+files by blob sha**, never by the last sync commit's message:
+
+```
+diff <(git -C ~/kamo rev-parse origin/main:index.html) \
+     <(git -C ~/kamo-mirror rev-parse origin/main:index.html)
+```
 
 ⚠️ This paragraph told you until 2026-08-17 to restore an `og:image` pointing at
 `kamo.bliss-coach.com`. **Do not.** The tag stopped being per-origin at `fd44f93` — both repos
