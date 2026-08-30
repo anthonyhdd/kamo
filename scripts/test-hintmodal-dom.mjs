@@ -67,6 +67,12 @@ for (const [anchor, patch] of [
      gets longer. Testing only the states that exist today would pin the geometry to the one
      storefront that has no currency symbol. */
   ['let hintPackPrice="";', 'try{ if(window.__price) hintPackPrice=window.__price; }catch(e){}'],
+  /* EVERY EVENT THIS FILE SENDS, RECORDED. Added for ⑨: "where does the hint sale die" is
+     answered by which of three names fires, and none of them has a DOM consequence to assert
+     on. Patched at track()'s own declaration so it catches names routed direct and names routed
+     through the bridge alike — whether a name reaches Amplitude at all is a different question,
+     asserted in check.mjs against WEB_ONLY. */
+  ['function track(event,props){', 'try{ (window.__ev=window.__ev||[]).push([event,props||{}]); }catch(e){}'],
 ]) {
   if (html.indexOf(anchor) < 0) { console.error('  ✗ anchor missing from index.html: ' + anchor); process.exit(1); }
   html = html.replace(anchor, anchor + patch);
@@ -440,7 +446,90 @@ if (process.env.SHOT) {
   console.log('  · screenshot -> ' + process.env.SHOT);
 }
 
-await browser.close();
-server.close();
+/* ── ⑨ WHERE THE SALE DIES, WHICH THE DATA COULD NOT SAY ───────────────────────────────── */
+console.log('\n— every way the purchase can end has a name —');
+{
+  /* ⚠️ THIS EXISTS BECAUSE OF A REAL NUMBER: 112 people have opened the hint purchase and 0
+     have completed one; the only grant in the database belongs to the founder's own device.
+     Until now the page tracked hint_purchase_initiated and then went silent whatever happened,
+     so "Apple's sheet never opened" and "the player looked at $0.99 and said no" produced the
+     SAME telemetry — and those two call for opposite work. Three names separate them.
+     The founder confirmed on 2026-08-30 that the purchase completes on his own phone, which
+     makes the distinction the whole question rather than a detail. */
+  const buyPage = async (bridge, slowTimer) => {
+    const p = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    await servePhoto(p, true);
+    await p.addInitScript(([h, br, st]) => {
+      window.__hintsLive = true;
+      window.__seed = { get_hide: h, save_seek_trace: null,
+                        hint_state: { balance: 0, free_available: false },
+                        hint_intent: { ok: true }, hint_claim: { claimed: true } };
+      window.__price = '$0.99'; window.__caps = { hints: true }; window.__uid = 'rc_user_1';
+      try { localStorage.setItem('kamo_hint_modal_arm', 'on'); } catch (e) {}
+      /* NO BRIDGE is the one case that must be built by ABSENCE — postNative returns false when
+         window.ReactNativeWebView is missing, so a silent postMessage stub would exercise the
+         opposite branch while looking identical from here. */
+      if (br) window.ReactNativeWebView = { postMessage() {} };
+      if (st) {
+        /* Only the 45s backstop is shortened; every other timer the page sets is left alone so
+           nothing else in the round is hurried into a different order. */
+        const t = window.setTimeout;
+        window.setTimeout = (fn, ms, ...a) => t(fn, ms === 45000 ? 40 : ms, ...a);
+      }
+    }, [HIDE, !!bridge, !!slowTimer]);
+    await p.goto(base + '?h=abc123', { waitUntil: 'load' });
+    await p.waitForTimeout(900);
+    await p.click('#chHint');
+    await p.waitForTimeout(400);
+    await p.click('.hpBuy');
+    await p.waitForTimeout(450);
+    return p;
+  };
+  const names = (p) => p.evaluate(() => (window.__ev || []).map((e) => e[0]));
+
+  const web = await buyPage(false, false);
+  const wn = await names(web);
+  wn.includes('hint_purchase_initiated') && wn.includes('hint_buy_no_bridge')
+    ? ok('no bridge → the attempt AND its dead end are both named')
+    : bad('a purchase with no bridge reported ' + JSON.stringify(wn.filter((x) => /hint_(buy|purchase)/.test(x))));
+
+  /* THE SHEET CLOSED WITH NOTHING BOUGHT — native answered, so the store worked and the answer
+     was no. window.KAMO.hint is the wrapper's toast channel, and it is what ends the buy. */
+  const said = await buyPage(true, false);
+  await said.evaluate(() => { try { window.KAMO.hint('Purchase failed'); } catch (e) {} });
+  await said.waitForTimeout(300);
+  const sn = await names(said);
+  sn.includes('hint_buy_ended')
+    ? ok('native says the sheet closed → hint_buy_ended, so a refusal is countable')
+    : bad('the sheet closed and nothing was recorded: ' + JSON.stringify(sn.filter((x) => /hint_buy/.test(x))));
+  !sn.includes('hint_buy_no_answer')
+    ? ok('and it is NOT also counted as silence')
+    : bad('one ending fired two names — the funnel would double-count and never reconcile');
+
+  /* THE ONE THAT SETTLES IT: nothing answers at all. Reaching the backstop means the sheet
+     never opened, or the wrapper does not handle this product — a different world from a
+     refusal, and until today the same silence. */
+  const dead = await buyPage(true, true);
+  await dead.waitForTimeout(200);
+  const dn = await names(dead);
+  dn.includes('hint_buy_no_answer')
+    ? ok('a wrapper that never answers → hint_buy_no_answer, which is the breakage signal')
+    : bad('nothing answered and nothing was recorded: ' + JSON.stringify(dn.filter((x) => /hint_buy/.test(x)))
+        + ' — this is the exact silence that made 112 dead purchases unreadable');
+  !dn.includes('hint_buy_ended')
+    ? ok('and silence is not filed as a refusal')
+    : bad('silence was recorded as a refusal — the two answers call for opposite work');
+
+  /* AND THE ATTEMPT CARRIES THE RevenueCat SPLIT. 493 of 494 wallets have no app user id, and
+     the only one that does produced the only sale; without this property that stays a story. */
+  const props = await dead.evaluate(() => (window.__ev || []).find((e) => e[0] === 'hint_purchase_initiated'));
+  props && props[1] && typeof props[1].rc === 'boolean'
+    ? ok('and the attempt says whether the device had a RevenueCat id')
+    : bad('hint_purchase_initiated carries no rc flag: ' + JSON.stringify(props && props[1]));
+
+  await web.close(); await said.close(); await dead.close();
+}
+
+await browser.close(); server.close();
 console.log(failed ? `\n✗ ${failed} hint-modal check(s) failed` : '\n✓ the hint modal sells, and a thumb can reach it');
 process.exit(failed ? 1 : 0);
