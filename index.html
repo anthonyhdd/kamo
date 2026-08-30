@@ -8958,7 +8958,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","hint_buy_no_bridge","hint_buy_ended","hint_buy_no_answer","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -17370,12 +17370,23 @@ function chSeek(hideId,opts){
          (hint_purchase_initiated → purchase_completed) would have carried, in its numerator,
          taps that never reached Apple's sheet. It now fires on the taps that actually open a
          sheet; the refusals are hint_blocked{reason:"no_claim_path"} and belong there. */
-      track("hint_purchase_initiated",TP({}));
+      /* ⚠️ `rc` IS THE WHOLE POINT OF ADDING A PROPERTY HERE. 493 of the 494 hint wallets in
+         the database have no RevenueCat app user id — chUserId is injected once per launch by
+         App.js from a single getAppUserID() inside a silent catch, and a device that loses that
+         cold-start race stays unidentified for the whole session (see the note on hintOwner).
+         The one wallet that HAS an id produced the only completed purchase this product has
+         ever had. That is either a coincidence on n=1 or it is the answer, and one boolean on
+         an event that already fires settles it. */
+      track("hint_purchase_initiated",TP({rc:!!chUserId}));
       /* `source:"hint"` for the same reason the paywall now sends one, plus a second: this
          is the only purchase that never touches the paywall, so without it the hint pack's
          `purchase_completed` would land in the same unattributed bucket as a subscription
          and quietly inflate whichever door was last opened. */
       if(!postNative({type:"purchase",product:HINT_PACK_ID,source:"hint"})){
+        /* NO BRIDGE AT ALL — a plain browser. hintsOn() gates the button on nativeCaps.hints
+           so this should be unreachable; if it ever reports, that gate is wrong and the pack is
+           being offered where it cannot be sold. */
+        track("hint_buy_no_bridge",TP({}));
         retireHint("Get the app");
         return;
       }
@@ -17388,7 +17399,17 @@ function chSeek(hideId,opts){
          opens it on a hide whose zone is already drawn, and that spelling would have left the
          button stuck on "…" forever for anyone who cancelled Apple's sheet there. hintPending
          is the real condition anyway: the success path clears it before it draws. */
-      setTimeout(()=>{ if(hintPending){ hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle(); } },45000);
+      setTimeout(()=>{ if(hintPending){
+        /* ⚠️ THE ONE THAT ACTUALLY SETTLES THE QUESTION. Native answers on every path it
+           knows: a success calls bought(), and a cancellation or a store failure both reach
+           ended(). Reaching this timer means NOTHING answered — the sheet never opened, or the
+           wrapper does not handle this product at all — which is a different world from "the
+           player looked at $0.99 and said no", and until now the two were the same silence.
+           ⚠️ IT MEANS "NO ANSWER IN 45s", NOT "NEVER", and the name says so. A player sitting
+           in Apple's sheet for a minute lands here and may still buy afterwards; the credit
+           poll is unaffected. So this is a floor on the breakage, not a count of it. */
+        track("hint_buy_no_answer",TP({}));
+        hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle(); } },45000);
     }
 
     /* CALLED BY NATIVE AFTER A SUCCESSFUL PACK PURCHASE, and it polls rather than trusting
@@ -17509,6 +17530,14 @@ function chSeek(hideId,opts){
          mid-poll must not hand back a control that is about to say "5 left". */
       ended: ()=>{
         if(!hintPending||hintPolling) return;
+        /* THE SHEET CLOSED AND NOTHING WAS BOUGHT, and this is the branch that means the store
+           WORKED — it opened, and the answer was no. Native reaches here from userCancelled
+           and from every failure and unavailability alike, so this event deliberately does not
+           claim which: splitting a refusal from a store error needs a property the wrapper does
+           not send today, and inventing one here would be a guess wearing a number.
+           What it does establish is the half we could not see: hint_purchase_initiated minus
+           this minus hint_buy_no_answer is the count of sales that reached Apple and completed. */
+        track("hint_buy_ended",TP({}));
         hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle();
       },
     };
