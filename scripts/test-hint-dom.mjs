@@ -113,7 +113,7 @@ const HIDE = { img_path: 'x.jpg', secs: 9, n_attempts: 0, n_found: 0, limit_s: 2
 
 /** Boot a hunt with the given capabilities, user id and canned hint_spend answer. */
 async function hunt({ caps = {}, uid = '', spend = undefined, state = undefined, big = false, price = '' } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(page, big);
   await page.addInitScript(([h, c, u, s, st, pr]) => {
     window.__hintsLive = true;          // on, unless a case below turns it off
@@ -608,7 +608,7 @@ for (const [name, st, price] of [
 
 console.log('\nTHE HINT STAYS OFF UNTIL THE PACK IS APPROVED');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(page);
   await page.addInitScript((h) => {
     window.__hintsLive = false;                     // the flag as it ships

@@ -91,7 +91,7 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
    harness instead of the layout; this is the fix for both. */
 const BIG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAYYAAANMCAIAAADXDp1JAAAIBUlEQVR42u3UoQ0AAAgEsR8dgWBsZsAhmnSCE5fqAXgiEgCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCWpAFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJakAWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlSQBYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAZakAmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBlqQCYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQGWJAFgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFgSgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYEoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWBKAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBFiSCoAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEWJIKgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRYkgSAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAlgRYEoAlAZYEYEmAJQFYEmBJAJYEYEmAJQFYEmBJAJYEWBKAJQGWBGBJgCUBWBJgSQCWBGBJgCUBWBJgSQCWBFgSgCUBlgRgSYAlAVgSYEkAlgRgSYAlAVgSYEkAFwtCOGXsyEGUNgAAAABJRU5ErkJggg==', 'base64');
 async function boot({ hit, pct, others, frames, name = 'tony', deadPhoto = false, cy = 0.5, big = false, round = 1, oldRound = 0, ansCx = 0.5, run = 0, life = true, best = 0, reduced = false, passLeft = false, board = null, noStore = false }) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route => {
     const u = route.request().url();
@@ -440,7 +440,7 @@ console.log('\nWIN — percentile spoken, same snap');
    Emulated for real: asserting on the CSS text would prove nothing about what the branch does. */
 console.log('\nWIN UNDER REDUCE MOTION — a still bloom, and it still leaves');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   await page.route('**/storage/v1/object/public/hides/**', route =>
     route.fulfill({ status: 200, contentType: 'image/jpeg', body: JPG }));
@@ -531,7 +531,7 @@ console.log('\nLEGACY HIDE — no frames uploaded: marker fallback, no flip');
    not an absent asset, and it was being treated as permanent. */
 console.log('\nA BLIP ON THE REVEAL FRAME IS RETRIED, NOT SURRENDERED TO');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
   let bTries = 0;
   await page.route('**/storage/v1/object/public/hides/**', route => {

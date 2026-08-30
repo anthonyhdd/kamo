@@ -138,7 +138,7 @@ const ROWS = n => Array.from({ length: n }, (_, i) => ({
    screen instead of against the round. One transparent pixel is all any of these cases need. */
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 async function open(rows, extra, before) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   if (before) await before(page);
   await page.addInitScript((a) => {
@@ -227,7 +227,7 @@ console.log('\nTHE FEED PLAYS REAL ROUNDS, ONE AT A TIME');
  * silent, the page came from memory. There is no other way for that to be true. */
 console.log('\nTHE FEED OPENS ON THE PAGE THE PROBE ALREADY FETCHED');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((r) => {
     window.__seed = {
       feed_page: r,
@@ -277,7 +277,7 @@ console.log('\nTHE FEED OPENS ON THE PAGE THE PROBE ALREADY FETCHED');
 console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
 {
   const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const sent = [];
   await page.route('**/api.eu.amplitude.com/**', async r => {
     try { (JSON.parse(r.request().postData() || '{}').events || []).forEach(e => sent.push(e)); } catch {}
@@ -438,7 +438,7 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
      assertion below reads 0s and passes against everything, including the bug. That is what
      the first run of this block did. */
   const PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAF0lEQVQIW2NkYGD4z8DAwMgABXAGNgEAJz0BAWv6xkkAAAAASUVORK5CYII=', 'base64');
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PX }));
   await page.route('**/api.eu.amplitude.com/**', r => r.fulfill({ status: 200, body: '{}' }));
   await page.addInitScript((r) => {
@@ -1055,7 +1055,7 @@ console.log('\nBLOCKING AN AUTHOR OUTLIVES THE PHOTO IT WAS ASKED FOR');
    control. Same round, same ending, mounted outside the feed. */
 console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   /* The photo has to arrive here too: a link round whose image 404s now retires itself with
      "This one didn't load" and takes the give-up button with it, so without this the click
      below lands on nothing and the card this block is about never exists. */
@@ -1096,7 +1096,7 @@ console.log('\nAND IT DOES NOT APPEAR WHERE THERE IS NO FEED');
    thing. */
 console.log('\nTHE VISIBILITY ANSWER IS WHAT REACHES THE WIRE');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   await page.addInitScript(() => { window.__seed = { set_hide_public: null }; });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(600);
@@ -1151,7 +1151,7 @@ console.log('\nTHE VISIBILITY ANSWER IS WHAT REACHES THE WIRE');
 console.log('\nA CLEARED FEED REOPENS INSTEAD OF SAYING IT IS EMPTY');
 {
   const rows = ROWS(3);
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   await page.addInitScript((r) => {
     /* Every hide already played on this device — the exact state 31 of 66 opens hit today. */
     localStorage.setItem('kamo_feed_seen', JSON.stringify(r.map(x => x.id)));
@@ -1254,7 +1254,7 @@ console.log('\nDAY ONE — AN EMPTY FEED IS AN INVITATION, NOT A BLACK SCREEN');
 
 console.log('\nPUBLIC IS A DEFAULT, NOT A POLICY');
 {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript(() => { window.__seed = { set_hide_public: null }; });
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(700);
@@ -1364,7 +1364,7 @@ console.log('\nTHE ROUND\'S CHROME NEVER COVERS THE FEED\'S CONTROLS');
 console.log('\nTHE SWIPE HINT CLEARS THE ENDING CARD');
 {
   const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
   await page.addInitScript((r) => {
     window.__seed = {

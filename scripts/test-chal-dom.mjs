@@ -80,7 +80,7 @@ const REPLIES = [
 ];
 
 async function open({ mine, replies, seen, hasReplies } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     if (a.mine) localStorage.setItem('kamo_hides', JSON.stringify(a.mine));
     if (a.seen) localStorage.setItem('kamo_feed_seen', JSON.stringify(a.seen));

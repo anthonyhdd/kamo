@@ -80,7 +80,7 @@ const REPLY = { id: 'r1', img_path: 'r1.jpg', name: 'zoe', created_at: '2026-08-
  * probe lands, which is the whole of chHomeIdle().
  */
 async function launch({ arm = 'on', reply = REPLY, seenAt = '', busy = null, link = '', hero = false } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.addInitScript((a) => {
     window.__seed = {
       my_replies: a.reply ? [a.reply] : [],
