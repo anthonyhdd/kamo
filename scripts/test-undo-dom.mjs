@@ -179,9 +179,24 @@ console.log('\nAND A MOVE IS ONE STEP LIKE ANY OTHER');
   const after = await cov(page);
   /* The paint goes back where it was, which is the two-stroke board — NOT the one-stroke
      board the old spelling landed on. The mask stays where the drag put it; the stack has
-     never held the mask and this suite does not pretend otherwise. */
-  after !== null && Math.abs(after - two) <= 2
-    ? ok(`Undo after a move returns to the two-stroke board (${after}% vs ${two}%)`)
+     never held the mask and this suite does not pretend otherwise.
+
+     ⚠️ ASSERTED AS "WHICH BOARD", NOT AS "WITHIN 2%". It used to read
+     Math.abs(after - two) <= 2, and that is not the question this section asks. Moving the
+     figure changes the surface the coverage is measured over, so `after` legitimately lands
+     a little under `two` — by 2 points on macOS and 3 on CI's Linux, because antialiasing
+     differs. On 2026-08-30 a runner-image change moved it from 20% to 19% and turned this
+     red on eight consecutive merges, on a file nobody had touched. A guard that a font
+     update can flip was measuring the renderer, not the undo stack.
+
+     The defect it exists for is unambiguous at this resolution: commitMove() filing its
+     entry after the shift meant one Undo spent the move AND took the previous stroke, which
+     lands on `one` — ten points away, not three. So the assertion is that the board came
+     back to the two-stroke side of the midpoint. It still fails the moment a stroke is
+     eaten, and it no longer fails when a runner grows a new font. */
+  const midpoint = (one + two) / 2;
+  after !== null && after > midpoint && Math.abs(after - two) < Math.abs(after - one)
+    ? ok(`Undo after a move returns to the two-stroke board (${after}% — two were ${two}%, one was ${one}%)`)
     : bad(`Undo after a move landed on ${after}% — one stroke was ${one}%, two were ${two}%`);
   await page.close();
 }
