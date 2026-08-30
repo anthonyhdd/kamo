@@ -593,6 +593,37 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
       }
     }
 
+    /* ═══ THE THREE NAMES THAT SAY WHERE A HINT SALE DIED MUST REACH AMPLITUDE ═════════════
+       Analytics from the page reach Amplitude two ways: through the wrapper, where a compiled
+       WEB_EVENTS allow-list drops any name the SHIPPED BINARY does not already know, or direct
+       via WEB_ONLY. No released build knows these three — they were born 2026-08-30 — so off
+       WEB_ONLY they are dropped in total silence, and the funnel they exist to open would read
+       zero while looking perfectly instrumented. That is the exact failure they were written to
+       end: 112 hint purchases opened, 0 completed, and no way to tell a refusal from a sheet
+       that never appeared.
+       BOTH DIRECTIONS ARE CHECKED. A name on the list that nothing fires is a promise of data
+       that will never arrive; a name fired but not listed is data thrown away. */
+    {
+      const NEW_BUY = ['hint_buy_no_bridge', 'hint_buy_ended', 'hint_buy_no_answer'];
+      const listed = (n) => new RegExp('"' + n + '"').test(html.slice(html.indexOf('const WEB_ONLY=new Set('),
+                                                                    html.indexOf('const WEB_ONLY=new Set(') + 4000));
+      const fired = (n) => new RegExp('track\\("' + n + '"').test(html);
+      const unlisted = NEW_BUY.filter((n) => !listed(n));
+      const unfired = NEW_BUY.filter((n) => !fired(n));
+      if (html.indexOf('const WEB_ONLY=new Set(') < 0) {
+        bad('WEB_ONLY MOVED — this check reads it by literal and can no longer find it.');
+      } else if (unlisted.length) {
+        bad('NOT ON WEB_ONLY: ' + unlisted.join(', ') + '. No shipped binary knows these names, '
+          + 'so through the bridge they are dropped in silence and the hint-purchase funnel '
+          + 'reads zero while looking instrumented.');
+      } else if (unfired.length) {
+        bad('ON WEB_ONLY BUT NEVER FIRED: ' + unfired.join(', ') + '. An allow-list entry with '
+          + 'no caller promises a number that will never arrive.');
+      } else {
+        ok('the three hint-purchase endings are routed direct and all three are fired');
+      }
+    }
+
     /* And the constants those templates interpolate must actually exist. A rename would
        otherwise turn a promise into "undefined seconds to paint". */
     const refs = new Set();
