@@ -15354,8 +15354,19 @@ function navShouldShow(){
        main screen. In the feed EVERY SLIDE IS A ROUND: .chS is mounted per slide, fixed and
        full-bleed, so "a round is on screen" is true of the feed at all times. The state that
        owns the whole app is a LINK round, which is CH_SEEK and nothing else. Caught by the
-       camera-tab hit test reporting no box, with chS true and kfState false. */
-    if(CH_SEEK) return false;
+       camera-tab hit test reporting no box, with chS true and kfState false.
+       ⚠️ ...IN A BROWSER, AND ONLY THERE. Inside the app the same line was a trap, and the
+       widget is how it surfaced: KamoWidget's widgetURL is https://playkamo.com/h/<id> — the
+       SHARE-LINK route — so tapping your own widget opened the app in a link round and took
+       the tab bar with it. One hide, no camera, no feed, no board, no way anywhere.
+       The rule was written for the stranger following a friend's link in Safari, and for them
+       it is still right: nothing is installed and the tabs lead nowhere. Somebody arriving
+       from a widget, a notification, or any link opened INSIDE the app already has the app.
+       ⚠️ Gated on window.ReactNativeWebView, which CLAUDE.md says never to gate a FEATURE on
+       because it is true in wrappers that implement nothing. That warning is about handlers.
+       The question here is the one thing the flag genuinely answers — is this the installed
+       app — and `props.wrapper` and the analytics `host` already read it exactly this way. */
+    if(CH_SEEK && !window.ReactNativeWebView) return false;
     /* ⚠️ THE BOARD ALWAYS KEEPS ITS BAR, BEFORE ANY OTHER TEST. Founder, from a real device:
        "the menu sometimes disappears on the leaderboard." I could not reproduce it in the
        harness — opened from the bar it stays, and the run-pill path needs a run the fixture has

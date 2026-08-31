@@ -121,7 +121,6 @@ const answerAndScroll = async (page) => {
   await page.evaluate(() => { const s = document.getElementById('kfScroll'); s.scrollTop = s.clientHeight; });
 };
 
-
 const ROWS = n => Array.from({ length: n }, (_, i) => ({
   id: 'hide' + i, img_path: 'p' + i + '.jpg', name: i ? null : 'tony',
   n_attempts: i, n_found: 0, created_at: '2026-08-1' + (2 - (i % 3)) + 'T10:0' + i + ':00Z',
@@ -143,11 +142,16 @@ const HROWS = [{ id: 'a1', img_path: 'x.jpg', cx: .5, cy: .5, r: .12, secs: 9, n
 
 /* Boots the app at the root, the way a returning device does. The arm is SEEDED and never
    rolled: a coin in here would put the subject of this suite on stage half the time. */
-async function boot({ arm = 'feed', everAsked = true, seek = false, feedFails = false, replies = null, mine = null } = {}) {
+async function boot({ arm = 'feed', everAsked = true, seek = false, feedFails = false, replies = null, mine = null, wrapper = false } = {}) {
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
   const errs = [];
   page.on('pageerror', e => errs.push(String(e.message).slice(0, 140)));
+  /* THE WRAPPER, STUBBED AT ITS THINNEST. Only the presence of the object matters here —
+     navShouldShow asks "is this the installed app", not "does it implement anything". A
+     postMessage that swallows is enough, and stubbing no further keeps this from becoming a
+     test of the bridge. */
+  if (wrapper) await page.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; });
   await page.addInitScript(([a, ea, ff, rows, rep, mn]) => {
     window.__seed = {
       feed_page: ff ? undefined : rows,
@@ -172,6 +176,7 @@ async function boot({ arm = 'feed', everAsked = true, seek = false, feedFails = 
   return page;
 }
 const feedUp = p => p.evaluate(() => !!document.querySelector('.kfBar'));
+
 const seekUp = p => p.evaluate(() => !!document.getElementById('chStage'));
 /* The camera is not "the screen in front" — it is whether the compose surface exists at all.
    Both arms must have it, because closing the feed has to land somewhere. */
@@ -744,6 +749,52 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
     : bad('the glass class was added without a feature test passing');
   await p.close();
 }
+
+/* ⑨ THE LINK ROUND, AND THE ONE PLACE THE RULE HAD TO STOP.
+   navShouldShow() drops the bar on CH_SEEK, which is right for the stranger following a
+   friend's link in Safari: nothing is installed and the tabs lead nowhere. Inside the app the
+   same rule is a trap, and the widget is how it surfaced — KamoWidget opens
+   https://playkamo.com/h/<id>, the share-link route, so tapping your own widget landed you in
+   a link round with no camera, no feed and no board. Both halves are asserted because either
+   one alone reads as correct. */
+async function linkRoundBar() {
+  console.log('\n⑨ A LINK ROUND KEEPS THE BAR INSIDE THE APP, AND DROPS IT IN A BROWSER');
+  const web = await boot({ seek: true });
+  await seekUp(web)
+    ? ok('a share link opens its round in the browser')
+    : bad('the browser link round never mounted — the case below would assert nothing');
+  const webBar = await web.evaluate(() => {
+    const n = document.getElementById('kNav');
+    return { shown: !!n && getComputedStyle(n).display !== 'none', cls: document.body.classList.contains('nav-on') };
+  });
+  !webBar.shown && !webBar.cls
+    ? ok('and a browser gets no tab bar — the tabs lead nowhere for somebody with no app')
+    : bad(`the browser link round showed the bar (display shown=${webBar.shown}, nav-on=${webBar.cls})`);
+  await web.close();
+
+  const app = await boot({ seek: true, wrapper: true });
+  const appBar = await app.evaluate(() => {
+    const n = document.getElementById('kNav');
+    const r = n && n.getBoundingClientRect();
+    return {
+      shown: !!n && getComputedStyle(n).display !== 'none',
+      cls: document.body.classList.contains('nav-on'),
+      tabs: n ? [...n.querySelectorAll('[data-tab]')].map(b => b.dataset.tab) : [],
+      box: r ? Math.round(r.width) : 0,
+    };
+  });
+  appBar.shown && appBar.box > 0
+    ? ok(`the same round inside the app keeps its bar (${appBar.tabs.join('/')})`)
+    : bad('the widget trap is still there — a link round in the app has no way out');
+  /* The lift class is not decoration: body.nav-on is what moves .chQuit and .chHint above the
+     bar. A bar shown without it puts the give-up button underneath — present, visible and
+     untappable, the shape this product has already paid for three times. */
+  appBar.cls
+    ? ok('and body.nav-on is set, so the round\'s own controls lift above it')
+    : bad('the bar is up without body.nav-on — give-up and hint are sitting under it');
+  await app.close();
+}
+await linkRoundBar();
 
 await browser.close();
 server.close();
