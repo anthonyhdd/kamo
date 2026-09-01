@@ -1,0 +1,57 @@
+# Backup nightly de la base Supabase KAMO (projet qpztlobbnjyjbxqyuzgg).
+#
+# Filet de sécurité gratuit en complément des backups quotidiens du plan Pro :
+# pg_dump des schémas public + auth + storage, stocké en artifact privé du repo
+# (rétention 30 jours). ~148 MB de base => dump en quelques secondes.
+#
+# Prérequis (une fois) : secret repo SUPABASE_DB_URL.
+#   ⚠️ Les runners GitHub n'ont PAS d'IPv6 : la connexion directe
+#   db.qpztlobbnjyjbxqyuzgg.supabase.co échoue. Utiliser le SESSION POOLER
+#   (IPv4), copiable dans Dashboard > Connect > Session pooler :
+#   postgresql://postgres.qpztlobbnjyjbxqyuzgg:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+#
+# Restauration (vers le même projet ou un projet neuf) :
+#   pg_restore -d "$DB_URL" --clean --if-exists --no-owner --no-privileges kamo-<stamp>.dump
+name: DB backup (Supabase)
+
+on:
+  schedule:
+    - cron: '17 3 * * *' # 03:17 UTC, heure creuse pour l'audience KAMO
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # La base est en Postgres 17 : il faut un pg_dump 17 (celui d'ubuntu-latest est trop vieux).
+      - name: Install postgresql-client-17
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: pg_dump
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "::error::Secret SUPABASE_DB_URL manquant (URL session pooler, voir l'en-tête du workflow)"
+            exit 1
+          fi
+          STAMP=$(date -u +%Y%m%d-%H%M)
+          pg_dump "$DB_URL" \
+            --format=custom \
+            --no-owner --no-privileges \
+            -n public -n auth -n storage \
+            -f "kamo-$STAMP.dump"
+          ls -lh kamo-*.dump
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kamo-db-backup-${{ github.run_id }}
+          path: kamo-*.dump
+          retention-days: 30
+          if-no-files-found: error
