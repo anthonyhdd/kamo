@@ -1023,7 +1023,7 @@ chMake ? ok(`CH_MAKE=${chMake[1]}`) : bad('CH_MAKE not found');
   const at = html.indexOf('const bytes=chPrepare();');
   const seg = at < 0 ? '' : html.slice(at, at + 900).replace(/\/\*[\s\S]*?\*\//g, '');
   const watched = /chPhotoGone\s*=\s*true/.test(seg);
-  const headline = /chPhotoGone\s*\?\s*"The photo didn't upload\."/.test(html);
+  const headline = /chPhotoGone\s*\?\s*(?:kT\()?"The photo didn't upload\."/.test(html);
   !decl
     ? bad('chPhotoGone is gone — nothing distinguishes a row with no picture from a published hide')
     : at < 0
@@ -2263,6 +2263,63 @@ try {
     : use === -1 ? bad('the module-scope applyTrialCopy() call is gone')
     : decl < use ? ok('nativeCaps is declared before the module-scope applyTrialCopy() call')
     : bad('nativeCaps is declared AFTER applyTrialCopy() runs — TDZ ReferenceError, blank app for everyone');
+}
+
+/* ---- 16. The dictionary, held to the source ---------------------------------------------------
+   Since 2026-09-03 every string a user reads goes through kT(), keyed by its English, and
+   KLANG answers in FULL for ru/es/pt/fr — 28% of the hides of the fortnight before came from a
+   device set to something other than English, Russian alone 12.7%. The eleven other languages
+   keep the core set (static markup and the first call sites) and fall back to English for the
+   rest, exactly as they did before. Every browser the DOM suite runs in is en-US, where the
+   dictionary is never consulted, so the four ways this silently degrades are asserted from the
+   SOURCE, not from a screen:
+   - a key whose English changed at the call site: the entry can never be shown again;
+   - a call site with no entry in a full language: English, to exactly the users it exists for;
+   - a translation that lost or invented a {n} / {0}: the number the sentence was about is gone;
+   - a translation that broke the markup a key carries: an unclosed <b> on a live card.
+   The English is the key ON PURPOSE — so the fallback is always the sentence that shipped. */
+{
+  const { callKeys, staticKeys, dictionary, FULL, placeholders, tags } = await import('./lib/i18n.mjs');
+  let dict = null;
+  try { dict = dictionary(html); } catch (e) { bad('KLANG does not parse as strict JSON: ' + e.message); }
+  if (dict) {
+    const calls = callKeys(html);
+    const statics = staticKeys(html);
+    const wanted = new Set([...calls.map((k) => k.key), ...statics]);
+    const langs = Object.keys(dict);
+    const noFull = FULL.filter((l) => !dict[l]);
+    noFull.length ? bad('KLANG has no entry for a language the UI is meant to be complete in: ' + noFull.join(', ')) : ok(`KLANG carries ${langs.length} languages, ${FULL.join('/')} in full`);
+    const union = new Set(langs.flatMap((l) => Object.keys(dict[l])));
+    const dead = [...union].filter((k) => !wanted.has(k));
+    dead.length
+      ? bad(`${dead.length} KLANG key(s) match no kT() call and no static text — the English was edited at the call site and the translation is now unreachable; update the key here too:\n    ` + dead.slice(0, 10).map((k) => JSON.stringify(k)).join('\n    '))
+      : ok('every KLANG key is still a key the page asks for');
+    for (const l of FULL) {
+      const missing = [...wanted].filter((k) => !(k in dict[l]));
+      missing.length
+        ? bad(`${l}: ${missing.length} string(s) go through kT() or sit in the static markup with NO translation — they ship in English to every ${l} user; add the entry or, if the string is not copy, take it out of kT():\n    ` + missing.slice(0, 12).map((k) => JSON.stringify(k)).join('\n    '))
+        : ok(`${l}: all ${wanted.size} strings the page asks for are translated (${calls.length} call sites, ${statics.length} static)`);
+    }
+    /* The languages that are not full still have to agree with each other: one core set, so a
+       Turkish user and a Polish user get the same screens translated, never a lottery. */
+    const core = langs.filter((l) => !FULL.includes(l));
+    const coreSets = core.map((l) => Object.keys(dict[l]).sort().join('\n'));
+    new Set(coreSets).size <= 1 ? ok(`the ${core.length} core languages carry one and the same key set (${Object.keys(dict[core[0]] || {}).length} keys)`) : bad('the core languages disagree on which keys they carry');
+    const broken = [];
+    for (const l of langs) for (const [k, v] of Object.entries(dict[l])) {
+      if (typeof v !== 'string' || !v.trim()) broken.push(`${l}: ${JSON.stringify(k)} is empty`);
+      else if (placeholders(v) !== placeholders(k)) broken.push(`${l}: ${JSON.stringify(k)} has {${placeholders(k)}} but the translation has {${placeholders(v)}}`);
+      else if (tags(v) !== tags(k)) broken.push(`${l}: ${JSON.stringify(k)} carries <${tags(k)}> but the translation <${tags(v)}>`);
+    }
+    broken.length ? bad('translations that would lose a value or break markup:\n    ' + broken.slice(0, 10).join('\n    ')) : ok('every translation keeps its placeholders and its markup');
+    /* kT must be defined BEFORE the module script uses it — a top-level const table calls it at load. */
+    const blockAt = html.indexOf('function kT(s)');
+    const moduleAt = html.indexOf('<script type="module">');
+    blockAt > 0 && blockAt < moduleAt ? ok('kT is defined before the module script that calls it') : bad('kT is not defined ahead of the module script — every kT( call throws at load');
+    /* And nothing that is a contract has been wrapped by mistake: event names, bridge types, RPCs. */
+    const contracts = [...html.matchAll(/(?:track|postNative|chRpc|chRpcRows)\(\s*\{?\s*(?:type:)?\s*kTn?\(/g)];
+    contracts.length ? bad(`${contracts.length} analytics/bridge/RPC name(s) pass through kT() — a translated event name forks every funnel by language`) : ok('no analytics, bridge or RPC name goes through kT()');
+  }
 }
 
 if (staleSuites.length) {

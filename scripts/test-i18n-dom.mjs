@@ -111,9 +111,13 @@ async function open(locale) {
   r.empties.length === 0
     ? ok('no dictionary entry is an empty string')
     : bad(`${r.empties.length} empty translation(s): ${r.empties.slice(0, 5).join(', ')}`);
-  const n = [...new Set(Object.values(r.sizes))];
-  n.length === 1
-    ? ok(`all ${Object.keys(r.sizes).length} dictionaries carry the same ${n[0]} keys`)
+  /* Since 2026-09-03 four languages are COMPLETE (every kT call, every static string) and the
+     others carry the core set they always did. So: one size among the full four, one size
+     among the rest, and the full four strictly larger. check.mjs holds both sets to the source. */
+  const FULL = ['ru', 'es', 'pt', 'fr'];
+  const full = [...new Set(FULL.map(l => r.sizes[l]))], core = [...new Set(Object.keys(r.sizes).filter(l => !FULL.includes(l)).map(l => r.sizes[l]))];
+  full.length === 1 && core.length === 1 && full[0] > core[0]
+    ? ok(`ru/es/pt/fr carry ${full[0]} keys each, the ${Object.keys(r.sizes).length - 4} core languages ${core[0]} each`)
     : bad(`dictionaries disagree on size: ${JSON.stringify(r.sizes)}`);
   const tmpl = await page.evaluate(() => ({
     fr: window.kTn('Hint · {n} left', 3),
@@ -129,6 +133,66 @@ async function open(locale) {
   tmpl.miss === 'Nobody translated this 7 sentence'
     ? ok('an untranslated template still fills its hole')
     : bad(`kTn fallback broke: ${JSON.stringify(tmpl.miss)}`);
+  /* The TAGGED form, for sentences with two holes and more: kT`${a} of ${b} have found it`
+     keys as "{0} of {1} have found it" and the translation may put {1} before {0}. */
+  const tg = await page.evaluate(() => {
+    const key = '\n{0} of {1} have found it — fastest {2}. One tap to find it.';   // the re-send line, newline included
+    const fr = (window.KLANG.fr || {})[key] || null;
+    return {
+      miss: window.kT`${3} of ${7} nobody translated ${'x'}`,
+      fr, got: window.kT`\n${3} of ${7} have found it — fastest ${'4.1s'}. One tap to find it.`,
+      empty: window.kT`${null} left`,
+    };
+  });
+  tg.miss === '3 of 7 nobody translated x'
+    ? ok('an untranslated tagged template substitutes its values in order')
+    : bad(`tagged fallback broke: ${JSON.stringify(tg.miss)}`);
+  if (tg.fr) {
+    const want = tg.fr.replace('{0}', '3').replace('{1}', '7').replace('{2}', '4.1s');
+    tg.got === want && !/\{\d\}/.test(tg.got)
+      ? ok(`a translated tagged template fills every hole ("${tg.got}")`)
+      : bad(`tagged translation gave ${JSON.stringify(tg.got)}, wanted ${JSON.stringify(want)}`);
+  } else bad('the sample tagged key has no French entry — the re-send line ships in English');
+  tg.empty === ' left' ? ok('a null value becomes nothing, never "null"') : bad(`null substituted as ${JSON.stringify(tg.empty)}`);
+  await page.close();
+}
+
+/* 2b. NO SCREEN LEAKS A RAW PLACEHOLDER. A translation that names a {n} the call never fed, or
+       a call that feeds {0} to a key written with {n}, shows the braces to the user. Scanned on
+       the first screen in every full language, and on a Russian seeker card, where the
+       report lines carry the most holes. */
+for (const L of ['ru', 'es', 'pt', 'fr']) {
+  const page = await open({ ru: 'ru-RU', es: 'es-ES', pt: 'pt-BR', fr: 'fr-FR' }[L]);
+  const r = await page.evaluate(() => ({
+    lang: document.documentElement.lang,
+    leak: (document.body.innerText.match(/\{(\d|n)\}/g) || []).length,
+    hero: (document.querySelector('#start') || {}).textContent || '',
+  }));
+  r.lang === L && !r.hero.includes('Hide a kamo so well') && r.leak === 0
+    ? ok(`${L}: the first screen is translated and shows no raw placeholder`)
+    : bad(`${L}: lang=${r.lang} leak=${r.leak} hero=${JSON.stringify(r.hero.slice(0, 60))}`);
+  await page.close();
+}
+{
+  const page = await browser.newPage({ locale: 'ru-RU', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/api*.amplitude.com/**', r => r.fulfill({ status: 200, body: '{}' }));
+  await page.route('**/rest/v1/rpc/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: 'null' }));
+  await page.route('**/rest/v1/rpc/get_hide', r => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ img_path: 'p.jpg', name: 'tony', n_attempts: 4, n_found: 1, best_ms: 4100, created_at: '2026-09-01T12:00:00Z', is_public: true }) }));
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAABAAAAAQCAYAAAAf8/9hAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64') }));
+  await page.goto(base + '?h=abc123', { waitUntil: 'load' });
+  await page.waitForTimeout(2500);
+  const r = await page.evaluate(() => ({
+    leak: (document.body.innerText.match(/\{(\d|n)\}/g) || []).length,
+    english: /hid a kamo here|One tap to find|I give up/.test(document.body.innerText),
+    text: document.body.innerText.replace(/\s+/g, ' ').slice(0, 300),
+  }));
+  errors.length === 0 ? ok('a challenge link opens in Russian without a page error') : bad('page error on the Russian seeker: ' + errors.join(' | '));
+  r.leak === 0 && !r.english
+    ? ok('the seeker card is Russian and shows no raw placeholder')
+    : bad(`Russian seeker: leak=${r.leak} english=${r.english} — ${r.text}`);
   await page.close();
 }
 
