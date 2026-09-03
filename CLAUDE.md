@@ -67,6 +67,22 @@ instruction now *introduces* the very difference it was written to preserve, on 
 decides what a share link looks like in a thread. It was found by diffing the two files instead
 of trusting this line; do that before believing any other claim of divergence here.
 
+## The UI speaks the phone's language, and the gate holds it to it
+
+`KLANG` (a classic `<script>` before the module) is the dictionary, **keyed by the English
+string itself**, and `kT("…")` / `kTn("… {n} …", n)` / the tagged `` kT`${a} of ${b} …` `` are the
+lookups — a missing entry falls back to the English, never to blank. Since 2026-09-03 every
+string a user reads goes through one of them, and **ru, es, pt and fr are complete** (28% of
+hides come from a non-English device, Russian alone 12.7%); the eleven other languages carry
+the core set only. Two consequences that are easy to get wrong:
+
+- **Editing English copy means editing the four entries in `KLANG` too.** `check.mjs` fails on a
+  `kT` key with no ru/es/pt/fr entry AND on an entry whose key no longer exists — the second is
+  the sneaky one: the English changed at the call site and the translation silently detached.
+- **Never branch on rendered text.** `won=/^Found/.test(head)` would have booked every Russian
+  win as a loss; the flag now travels as `eopts.won`. Match on state, ids or `kT("key")`, not on
+  what a user sees.
+
 ## Two origins, on purpose
 
 - `anthonyhdd.github.io/kamo/` — what the app loads. **Never attach a custom domain to this

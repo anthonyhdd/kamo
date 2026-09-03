@@ -94,6 +94,10 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
        user-activation debt, so it CAN hold for the id. navigator.share cannot — the first
        await spends the activation the tap granted and WebKit refuses the sheet. A version
        of this that waited on the web path would kill the share for everyone on 1.0.2. */
+    /* The copy goes through kT() since 2026-09-03. In Node there is no dictionary, so kT is
+       the English identity — plain string back, tagged template stitched in order — which is
+       exactly what the page does for an en-US reader. */
+    kT: (s, ...v) => (s && s.raw ? s.map((p, i) => (i < v.length ? p + (v[i] == null ? '' : v[i]) : p)).join('') : s),
     chAwaitId: async () => { calls.waited++; return chId; },
     inviteUrl: () => 'https://anthonyhdd.github.io/kamo/?i=1',
     chCopy: async (t) => { calls.clipboard++; calls.text = t; return clipboardOk; },
