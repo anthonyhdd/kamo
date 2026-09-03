@@ -109,24 +109,135 @@
     "until it is settled every number below is being tuned in the dark.",
     "",
     "Anything invalid is ignored field by field and falls back to what shipped in the binary,",
-    "so a typo costs you that one value, never the feature."
+    "so a typo costs you that one value, never the feature.",
+    "",
+    "LOCALES — 2026-09-03. `locales` is a map by language (\"ja\", \"pt\", \"zh-Hans\" …). Each entry may",
+    "carry any subset of titleHigh / titleNormal / body / yes / no; a missing field falls back to",
+    "the top-level string. Same clamps as the top level (90 / 90 / 240 / 30 / 30), field by field.",
+    "Read by kamo-app storeReview.js from 1.1.8; every earlier binary ignores the key entirely, so",
+    "this shipped BEFORE the build on purpose — config serving the day the build arrives, not a",
+    "build that 404s and runs on defaults. Why: on 2026-09-03 KAMO had ZERO ratings in JP, VN, MX,",
+    "DE, IT, KR while the ask fired ~100x/day — in English, to people whose store page was translated."
   ],
-
   "enabled": true,
-
   "sharesBeforeAsk": 1,
   "finishesBeforeAsk": 1,
   "minScore": 30,
-
   "maxSoftAsks": 5,
   "maxHardAsks": 3,
   "minDaysBetweenAsks": 14,
   "settleMs": 900,
-
   "highScore": 85,
   "titleHigh": "Nobody's finding that one 🫥",
   "titleNormal": "Vanished.",
   "body": "You just hid a kamo in plain sight. Worth 10 seconds?",
   "yes": "Sure",
-  "no": "Not now"
+  "no": "Not now",
+  "locales": {
+    "fr": {
+      "titleHigh": "Personne ne le trouve 🫥",
+      "titleNormal": "Disparu.",
+      "body": "Tu viens de cacher un kamo en pleine vue. Dix secondes pour le dire ?",
+      "yes": "D'accord",
+      "no": "Plus tard"
+    },
+    "es": {
+      "titleHigh": "Nadie lo encuentra 🫥",
+      "titleNormal": "Desapareció.",
+      "body": "Acabas de esconder un kamo a plena vista. ¿Vale 10 segundos?",
+      "yes": "Claro",
+      "no": "Ahora no"
+    },
+    "pt": {
+      "titleHigh": "Ninguém acha esse 🫥",
+      "titleNormal": "Sumiu.",
+      "body": "Você acabou de esconder um kamo à vista de todos. Vale 10 segundos?",
+      "yes": "Claro",
+      "no": "Agora não"
+    },
+    "de": {
+      "titleHigh": "Den findet keiner 🫥",
+      "titleNormal": "Verschwunden.",
+      "body": "Du hast gerade einen Kamo vor aller Augen versteckt. 10 Sekunden wert?",
+      "yes": "Klar",
+      "no": "Nicht jetzt"
+    },
+    "it": {
+      "titleHigh": "Nessuno lo trova 🫥",
+      "titleNormal": "Sparito.",
+      "body": "Hai appena nascosto un kamo in bella vista. Vale 10 secondi?",
+      "yes": "Certo",
+      "no": "Non ora"
+    },
+    "ru": {
+      "titleHigh": "Его никто не находит 🫥",
+      "titleNormal": "Исчез.",
+      "body": "Ты только что спрятал kamo у всех на виду. Стоит 10 секунд?",
+      "yes": "Давай",
+      "no": "Не сейчас"
+    },
+    "uk": {
+      "titleHigh": "Його ніхто не знаходить 🫥",
+      "titleNormal": "Зник.",
+      "body": "Ти щойно сховав kamo на видноті. Вартує 10 секунд?",
+      "yes": "Давай",
+      "no": "Не зараз"
+    },
+    "pl": {
+      "titleHigh": "Nikt go nie znajduje 🫥",
+      "titleNormal": "Zniknął.",
+      "body": "Właśnie ukryłeś kamo na widoku. Warte 10 sekund?",
+      "yes": "Jasne",
+      "no": "Nie teraz"
+    },
+    "tr": {
+      "titleHigh": "Kimse bulamıyor 🫥",
+      "titleNormal": "Kayboldu.",
+      "body": "Az önce herkesin gözü önünde bir kamo sakladın. 10 saniyeye değer mi?",
+      "yes": "Tabii",
+      "no": "Şimdi değil"
+    },
+    "vi": {
+      "titleHigh": "Chẳng ai tìm ra 🫥",
+      "titleNormal": "Biến mất rồi.",
+      "body": "Bạn vừa giấu một kamo ngay trước mắt mọi người. Đáng 10 giây chứ?",
+      "yes": "Được",
+      "no": "Để sau"
+    },
+    "id": {
+      "titleHigh": "Tak ada yang menemukan 🫥",
+      "titleNormal": "Lenyap.",
+      "body": "Kamu baru saja menyembunyikan kamo di depan mata. Sepadan 10 detik?",
+      "yes": "Boleh",
+      "no": "Nanti saja"
+    },
+    "th": {
+      "titleHigh": "ไม่มีใครหาเจอ 🫥",
+      "titleNormal": "หายไปแล้ว",
+      "body": "คุณเพิ่งซ่อน kamo ไว้ต่อหน้าทุกคน ให้ 10 วินาทีได้ไหม",
+      "yes": "ได้",
+      "no": "ไว้ก่อน"
+    },
+    "ja": {
+      "titleHigh": "誰にも見つからない 🫥",
+      "titleNormal": "消えた。",
+      "body": "みんなの目の前に kamo を隠しました。10秒だけ、いいですか？",
+      "yes": "いいよ",
+      "no": "あとで"
+    },
+    "ko": {
+      "titleHigh": "아무도 못 찾아요 🫥",
+      "titleNormal": "사라졌어요.",
+      "body": "방금 모두의 눈앞에 kamo를 숨겼어요. 10초만 괜찮을까요?",
+      "yes": "좋아요",
+      "no": "나중에"
+    },
+    "zh": {
+      "titleHigh": "没人找得到 🫥",
+      "titleNormal": "消失了。",
+      "body": "你刚把一个 kamo 藏在众目睽睽之下。值 10 秒吗？",
+      "yes": "好",
+      "no": "以后再说"
+    }
+  }
 }
