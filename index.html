@@ -3638,8 +3638,15 @@ let planArm;
  * crash on WEB_ONLY. The property track() stamps on everything IS the assignment record.
  * Kill it by setting the rollout to 0 — a stored "on" keeps its arm, which is what a rollback
  * should do here: the card is one-per-device and already spent, so nobody meets it twice on
- * the way out. */
-const FEED_GATE_ROLLOUT=50;
+ * the way out.
+ *
+ * READ 2026-09-03 AND CLOSED AT 0 — NO EFFECT. Seven days, in-app, `wd=false` (see the warning
+ * below; the first read of this arm was 2.4:1 toward off and it was ALL harness traffic):
+ * off 842 feed opens / 543 publishes / 235 sends, on 771 / 501 / 226. Publishes per feed-open
+ * 64.5% off vs 65.0% on; sends per publish 43.3% vs 45.1%. The card neither buys a publish nor
+ * costs a send, at ~800 openers per arm per week and 17 days of running. It goes, and the
+ * simpler door stays. */
+const FEED_GATE_ROLLOUT=0;
 let gateArm;
 {
   const s=lsGet("kamo_feed_gate_arm");
@@ -3677,8 +3684,14 @@ let gateArm;
  * banger_arm; stop rule mirrors the gate's — if the "on" arm PLAYS fewer rounds than "off",
  * the proven door is buying glances with plays and it goes. feed_best_seeded carries pos:0|3
  * so exposure is visible per session. Kill: rollout to 0 — a stored arm keeps reading, the
- * next session simply seeds at 3 again (kfSeedBanger tests the arm live). */
-const FEED_BANGER_ROLLOUT=50;
+ * next session simply seeds at 3 again (kfSeedBanger tests the arm live).
+ *
+ * READ 2026-09-03 AND CLOSED AT 0 — NO EFFECT, and the stop rule is met on the normalised
+ * number. Seven days, in-app, `wd=false`: on 844 feed opens / 619 rounds / 542 publishes /
+ * 231 sends, off 769 / 601 / 502 / 230. Rounds per feed-open 0.733 on vs 0.781 off — the
+ * proven door plays slightly FEWER rounds per opener, which is the shape the stop rule names,
+ * and every other ratio is flat. Position of the banger is not what decides the session. */
+const FEED_BANGER_ROLLOUT=0;
 let bangerArm;
 {
   const s=lsGet("kamo_feed_banger_arm");
@@ -9508,7 +9521,16 @@ function track(event,props){
    * are the only two suites that assert on the wire rather than on `window.__tr`. It is not
    * done here because it drops `seek_opened` and `feed_opened` by ~80% on the day it ships, and
    * shipping a discontinuity that size into the middle of a live experiment is how a real
-   * result gets read as a collapse. Land it between experiments, and annotate the date. */
+   * result gets read as a collapse. Land it between experiments, and annotate the date.
+   *
+   * MEASURED 2026-09-03, AND IT IS NOT A ROUNDING ERROR: of 2675 `feed_opened` carrying
+   * `host=app` over seven days, **1062 (40%) carry `wd=true`** — and every one of them is
+   * pinned to the `off` arm by the harness rules above, so the harness does not merely add
+   * noise, it stacks one side of every split. The first read of gate/banger showed off ahead
+   * 2.4:1 on feed opens while `app_opened` (native, unreachable by the harness) was 50/50;
+   * filtering `wd=false` collapsed the gap to 842/771 and the effect with it. **Every arm read
+   * off web events must filter `wd=false`.** Whoever finally lands the upstream refusal: the
+   * discontinuity is the events, not the arms — annotate the date here. */
   const p={wd:navigator.webdriver===true,page_host:location.host,
            ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,home_arm:homeArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
