@@ -15381,7 +15381,9 @@ function chBoardPaint(wrap,rows){
  *   · a round in progress (.chS) — the give-up pill is bottom-left and the hint bottom-right
  *   · the share sheet, the paywall, the confirm sheet, the member card (the same list
  *     chHomeIdle enumerates, and for the same reason)
- *   · paint mode — the brush, the swatches and Done are all down there
+ *   · paint mode — the brush, the swatches and Done are all down there — but ONLY while the
+ *     camera screen is the one in front: `mode` is never reset on the way to the reveal, so
+ *     asking it from under the feed shut the feed's only door (see navShouldShow)
  *   · the hero, before anyone has granted a camera
  *
  * ⚠️ SYNCED BY OBSERVER, NOT BY CALL SITES. Every one of those states is entered from several
@@ -15417,7 +15419,6 @@ function navShouldShow(){
        destination this bar owns. Whatever the state underneath is doing, it gets no vote here.
        Placed first so nothing below can override it. */
     if(document.querySelector(".chBoardWrap.show")) return true;
-    if(typeof mode!=="undefined" && mode==="paint") return false;
     for(const id of NAV_BLOCKERS){
       const el=document.getElementById(id);
       if(el&&el.classList.contains("show")) return false;
@@ -15434,6 +15435,25 @@ function navShouldShow(){
        no route to the feed at all. camEverAsked() is the difference between the two, and it is
        the same flag the launch already uses to decide whether the feed may take the screen. */
     if(navWhere()==="cam"){
+      /* ⚠️ PAINT IS A STATE OF THE COMPOSE SCREEN, NOT OF THE APP — AND READING IT AS THE APP'S
+         SEALED THE FEED SHUT. The brush, the swatches and Done own the bottom of the camera
+         screen, so the bar has to leave while they are there; that part is right and it is why
+         this test exists. What was wrong is that it was asked UNCONDITIONALLY, and `mode` is
+         never set back to "compose" on the way to the reveal — enterFinished() hides the paint
+         tools and shows the reveal without touching it, so a finished hide is still `mode ===
+         "paint"` for the whole of the reveal, the share sheet, and everything reached from
+         them. #ssSeeLive is reached from exactly there: it closes the sheet and opens the feed
+         seeded on the hide just published, and the feed inherited a paint state belonging to a
+         screen that is now two layers down. No tab bar — and the feed's own camera button came
+         out on 2026-08-29 precisely because the bar owns that door, so there was no ✕, no
+         camera, no board and no way back to compose. The most-travelled path in the product,
+         publish → send → "See it live", ended in a room with no doors. Founder, 2026-09-08:
+         "y'a plus de bouton vers la caméra".
+         The fix is the one this file already applies to the hero one line down: a state of the
+         camera screen only gets a vote when the camera screen is what is in front. Anything
+         full-bleed over it — the feed, a link round inside the app — keeps its bar whatever
+         compose was last doing underneath. */
+      if(typeof mode!=="undefined" && mode==="paint") return false;
       const st=document.getElementById("start");
       const up=st&&st.style.display!=="none"&&getComputedStyle(st).display!=="none";
       if(up){ try{ if(!camEverAsked()) return false; }catch(_){ return false; } }
