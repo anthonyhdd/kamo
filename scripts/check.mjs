@@ -1875,6 +1875,21 @@ try {
   bad('THE OPEN EXPERIMENT IS BROKEN:\n' + why(e));
 }
 
+/* The ask experiment decides who spends iOS's ONE permission prompt, and every way it can be
+   wrong is a message that silently does or does not cross the native bridge. A leaking holdout
+   is a month spent on two identical halves; an arm that swallows the send as well leaves the
+   app with no return path at all; and a new event name off WEB_ONLY makes the whole thing read
+   as if it never fired. None of that is visible on screen, which is the whole reason for a
+   suite rather than a comment. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-askarm-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-askarm-dom.mjs', 'ASK-ARM TEST', out)
+    : ok('the permission prompt is spent on the send, the holdout is intact, and the split is readable (node scripts/test-askarm-dom.mjs)');
+} catch (e) {
+  bad('THE PERMISSION-ASK EXPERIMENT IS BROKEN:\n' + why(e));
+}
+
 /* The row is written without waiting for the bytes, on purpose — the share link has to be
    instant. So a refused upload leaves a row whose img_path points at nothing, and until this
    suite existed the sheet went on announcing that hide as live, over a Send button. That is
