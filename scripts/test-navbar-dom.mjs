@@ -796,6 +796,118 @@ async function linkRoundBar() {
 }
 await linkRoundBar();
 
+/* ⑩ THE PATH EVERY CREATOR TAKES, AND THE ROOM IT LEFT THEM IN.
+   `mode` is the compose screen's state and enterFinished() does not reset it — the reveal, the
+   share sheet and everything reached from them still read "paint". navShouldShow() asked that
+   question unconditionally, so #ssSeeLive — close the sheet, open the feed on the hide just
+   published — handed the creator a feed with no tab bar. The feed's own camera button was
+   removed on 2026-08-29 on the grounds that the bar owns that door, so there was no ✕, no
+   camera, no board: publish → send → "See it live" ended with no way back to the camera at all.
+   Founder, 2026-09-08.
+   Driven through the real round rather than by poking `mode`, because `mode` is a module-level
+   binding that nothing outside the module can set — a test that assigned window.mode would
+   assert against a state the app has never been in. */
+async function afterPublishBar() {
+  console.log('\n⑩ "SEE IT LIVE" LANDS IN A FEED THAT STILL HAS ITS BAR');
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  page.on('pageerror', e => bad('PAGE ERROR: ' + e.message));
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('kamo_cam_asked', '1');
+      localStorage.setItem('kamo_land_arm', 'off');   // the landing arm is dead; this door is #ssSeeLive
+      localStorage.setItem('kamo_feed_swiped', '1');
+    } catch (e) {}
+  });
+  /* Broadest first, most specific last — the LAST matching route wins in Playwright. */
+  await page.route('**/*.supabase.co/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: 'null' }));
+  await page.route('**/api*.amplitude.com/**', r => r.fulfill({ status: 200, body: '{}' }));
+  await page.route('**/rest/v1/rpc/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: 'null' }));
+  await page.route('**/rest/v1/rpc/feed_page', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ROWS(6)) }));
+  await page.route('**/rest/v1/rpc/get_hide', r => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ img_path: 'mine.jpg', name: null, n_attempts: 0, n_found: 0, created_at: '2026-09-07T12:00:00Z' }) }));
+  await page.route('**/rest/v1/rpc/create_hide', r => r.fulfill({ status: 200, contentType: 'application/json', body: '"mineid1"' }));
+  await page.route('**/storage/v1/object/hides/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
+
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForTimeout(700);
+  /* A photo rather than the camera: there is no getUserMedia on the runner, and the picker is
+     the same compose screen by every measure this file cares about. */
+  await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 1200; c.height = 1600;
+    const g = c.getContext('2d'); g.fillStyle = '#6b7f5a'; g.fillRect(0, 0, 1200, 1600);
+    for (let i = 0; i < 200; i++) { g.fillStyle = `rgba(${90 + Math.random() * 90 | 0},${110 + Math.random() * 70 | 0},${80 + Math.random() * 60 | 0},.6)`; g.beginPath(); g.arc(Math.random() * 1200, Math.random() * 1600, 12 + Math.random() * 60, 0, 7); g.fill(); }
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+    const dt = new DataTransfer(); dt.items.add(new File([blob], 'room.jpg', { type: 'image/jpeg' }));
+    const inp = document.getElementById('fileInput'); inp.files = dt.files;
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(1300);
+  await page.evaluate(() => document.getElementById('shutter').click());
+  await page.waitForTimeout(1500);
+  /* Enough paint to clear CH_MIN_COVERAGE — Done refuses under the floor, and a refused Done
+     would leave this case asserting the bar on the paint screen instead. */
+  const b = await page.evaluate(() => { const r = document.getElementById('board').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+  for (let k = 0; k < 22; k++) {
+    const y = b.y + b.h * (.28 + k * .016);
+    await page.mouse.move(b.x + b.w * .30, y); await page.mouse.down();
+    for (let i = 0; i <= 14; i++) await page.mouse.move(b.x + b.w * (.30 + .40 * i / 14), y);
+    await page.mouse.up();
+  }
+  await page.evaluate(() => document.getElementById('btnDone').click());
+  await page.waitForTimeout(4500);   // the reveal, the sheet, and the upload behind them
+
+  const onReveal = await page.evaluate(() => {
+    const n = document.getElementById('kNav'), s = document.getElementById('shareSheet');
+    return { bar: !!n && getComputedStyle(n).display !== 'none',
+             sheet: !!s && (s.classList.contains('peek') || s.classList.contains('show')),
+             live: !!document.getElementById('ssSeeLive') };
+  });
+  /* The reveal keeps its own bottom — the sheet, the handle, Share/Save — so the bar staying
+     away there is the behaviour, not the bug. Asserted so the fix below cannot be mistaken for
+     "show the bar everywhere". */
+  onReveal.sheet && !onReveal.bar
+    ? ok('the reveal still keeps the bar off — the sheet owns that bottom edge')
+    : bad(`reveal state wrong: sheet ${onReveal.sheet}, bar ${onReveal.bar}`);
+
+  await page.evaluate(() => document.getElementById('ssSeeLive').click());
+  await page.waitForTimeout(3000);
+
+  const after = await page.evaluate(() => {
+    const n = document.getElementById('kNav');
+    const r = n && n.getBoundingClientRect();
+    const cam = n && n.querySelector('[data-tab="cam"]');
+    const cr = cam && cam.getBoundingClientRect();
+    const hit = cr ? document.elementFromPoint(cr.left + cr.width / 2, cr.top + cr.height / 2) : null;
+    return {
+      feed: !!document.getElementById('kfeed'),
+      bar: !!n && getComputedStyle(n).display !== 'none' && !!r && r.width > 0,
+      cls: document.body.classList.contains('nav-on'),
+      camReached: !!(hit && cam && cam.contains(hit)),
+      /* The other door is gone on purpose (2026-08-29). If it ever comes back this stops being
+         the only way out and the case should be re-read, not silently relaxed. */
+      kfClose: !!document.getElementById('kfClose'),
+    };
+  });
+  after.feed
+    ? ok('"See it live" opens the feed on the hide just published')
+    : bad('no feed after "See it live" — the case below would assert nothing');
+  after.bar
+    ? ok('and the feed it opens has the tab bar, paint state or not')
+    : bad('the creator landed in a feed with NO tab bar — and no ✕ either: publish, send, and no way back to the camera');
+  after.camReached
+    ? ok('and a thumb actually reaches the camera tab')
+    : bad('the camera tab is present but something else answers the tap');
+  after.cls
+    ? ok('and body.nav-on is set, so the round under it lifts its own controls')
+    : bad('the bar is up without body.nav-on');
+  !after.kfClose
+    ? ok('with the bar as the only door out, exactly as the feed bar was rewritten to assume')
+    : bad('#kfClose is back — two doors to the same screen, and this case now proves less than it reads');
+  await page.close();
+}
+await afterPublishBar();
+
 await browser.close();
 server.close();
 console.log(failed ? `\n✗ ${failed} tab-bar check(s) failed` : '\n✓ the tab bar is where it belongs, and out of the way where it is not');
