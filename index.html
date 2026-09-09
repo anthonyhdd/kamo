@@ -2964,6 +2964,12 @@
          once, and a prompt with no preceding context gets refused. Notifications are the only
          mechanism this app has for telling a creator somebody played their hide — there is no
          other return path — so the sentence is load-bearing, not decoration.
+         ⚠️ "SECONDS LATER" IS NOW ONLY HALF TRUE, AND THIS LINE MATTERS MORE ON THE OTHER HALF,
+         NOT LESS. On the `tap` arm of NOTIF_ASK_ROLLOUT nothing is asked at publish — the
+         prompt waits for chMarkSent() — so this stops being the last sentence read before a
+         dialog and becomes the promise the send is made against, still on screen when the
+         dialog finally arrives. Either way it is the only context that prompt ever gets, which
+         is why it survives the peek rule on both arms.
          Two audiences, two truths. Inside the wrapper there IS something that will tell them.
          In a browser there is not, and #ssGet directly below sells exactly that gap ("KAMO can
          notify you. A browser tab can't."); promising a notification here would be the sheet
@@ -3083,11 +3089,15 @@
          notifAskResult lands on already_denied and the honest answer is the Settings route it
          already prints. It is a first ask only for the rest of ok=false — a capability that
          arrived late, a per-install cap, a schedule that failed for its own reasons.
-         The bigger lever is NOT here: it is that the one prompt iOS grants is currently spent
-         automatically, on a sheet the user has not yet said yes to. Gating it behind a
-         deliberate tap is the standard fix and usually the difference between a third and two
-         thirds — but it reverses a decision already written down two rows up, so it is the
-         founder's call and not this button's job.
+         THE BIGGER LEVER IS NO LONGER PENDING, AND IT DID NOT LAND ON THIS BUTTON. "The one
+         prompt iOS grants is currently spent automatically, on a sheet the user has not yet
+         said yes to" stood here until 2026-09-08, waiting on a founder's call. The call came:
+         NOTIF_ASK_ROLLOUT now holds half of devices back from spending it at publish, and on
+         that arm chMarkSent() spends it instead — after a challenge has provably gone out.
+         THIS BUTTON IS UNCHANGED and needed no change. It hangs off __kamoNotifResult with
+         ok=false, which still fires on the `tap` arm; it simply fires from the send rather
+         than from the publish. So the recovery it offers now reaches people who have actually
+         sent something, which is a better room to ask in than the one it was written for.
          Same .ssGet styling on purpose — same slot, same shape, opposite surface, no new CSS.
          ⚠️ AND THAT SHARED CLASS IS WHY THERE IS AN EXTRA PEEK RULE. .ssGet is on the list of
          children the folded sheet KEEPS, so borrowing the look silently borrowed the peek
@@ -3836,6 +3846,58 @@ let openArm;
   else {
     openArm=(Math.random()*100<REPLY_OPEN_ROLLOUT)?"on":"off";
     lsSet("kamo_reply_open_arm",openArm);
+  }
+}
+
+/* ═══ THE PERMISSION ASK — WHO SPENDS iOS'S ONE PROMPT, AND WHEN ══════════════════════════
+ *
+ * armResultsPing() posts notif-schedule at PUBLISH — the first touch of the share sheet — and
+ * the wrapper, having no permission yet, spends iOS's single lifetime prompt right there.
+ * Seconds after the sheet opened, on a hide that has not been sent, behind one grey line of
+ * context (#ssSub, which exists only to give that prompt something to stand on).
+ *
+ * MEASURED OVER THE 30 DAYS TO 2026-09-08: web_notif_armed ok=false for 4170 users against
+ * ok=true for 838. 16.7%. Five creators in six are left unreachable, and iOS asks EXACTLY
+ * ONCE — so every one of those refusals is permanent, spent before the person had done
+ * anything the app could point at. (It is improving on its own: 12.4% the week of 08-10
+ * against 30.2% the week of 08-31. Whatever is driving that is not this arm, and this arm
+ * has to be read against the same weeks, not against the August average.)
+ *
+ * That prompt is the whole return path. armResultsPing is the only mechanism this app has for
+ * telling a creator somebody played their hide — there is no push without a token and no
+ * token without this grant — and D1 open is 16.9%.
+ *
+ * `tap` moves the spend to chMarkSent(), the one moment a challenge has PROVABLY gone out. A
+ * creator who just sent a hide to somebody has a reason to be told what happened to it. A
+ * creator who published and shut the sheet has nothing to be notified about, and on this arm
+ * keeps their one prompt for a door that is worth it — the feed's kfBell, or their next hide.
+ *
+ * ⚠️ BE HONEST ABOUT THE ARITHMETIC BEFORE READING THIS. Only 47.6% of publishers send, so
+ * this arm meets less than half the population the auto arm asks. If acceptance merely
+ * DOUBLES, armed-per-publisher is a WASH: 100%×16.7% against 48%×33%. Volume is not the win
+ * being chased here — qualification is. An arm on a hide nobody received is a nudge pointing
+ * at an empty card, and a refusal spent there is spent for the life of the install.
+ * So read it as web_notif_armed{ok=true} over `hide_sent`, NEVER over `hide_published`, and
+ * read D1 beside it. On the auto arm those two denominators are the same number; on this arm
+ * they are not, which is the entire point and also the easiest way to misread it.
+ *
+ * ⚠️ AND FILTER wd=false, like every other arm read off web events — see the note on track().
+ *
+ * KILL: rollout to 0 and push, about two minutes, no build. A stored arm keeps its side.
+ * FINISH: rollout to 100 and the holdout is gone the same way. */
+const NOTIF_ASK_ROLLOUT=50;
+let askArm;
+{
+  const s=lsGet("kamo_notif_ask_arm");
+  if(s==="tap"||s==="auto") askArm=s;
+  /* Pinned for the harness, and this one earns it: a coin here changes what the share sheet
+     puts on the native bridge on half the runs of every suite that publishes a hide. The
+     stored value is still read first, so test-askarm-dom.mjs seeds the arm it wants. */
+  else if(navigator.webdriver) askArm="auto";
+  else if(NOTIF_ASK_ROLLOUT<=0) askArm="auto";
+  else {
+    askArm=(Math.random()*100<NOTIF_ASK_ROLLOUT)?"tap":"auto";
+    lsSet("kamo_notif_ask_arm",askArm);
   }
 }
 
@@ -9060,7 +9122,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","hint_buy_no_bridge","hint_buy_ended","hint_buy_no_answer","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","hint_buy_no_bridge","hint_buy_ended","hint_buy_no_answer","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","save_no_ack","save_ok","web_notif_armed","notif_ask_deferred","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -9547,7 +9609,7 @@ function track(event,props){
    * off web events must filter `wd=false`.** Whoever finally lands the upstream refusal: the
    * discontinuity is the events, not the arms — annotate the date here. */
   const p={wd:navigator.webdriver===true,page_host:location.host,
-           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,home_arm:homeArm,emit:"web"};
+           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,home_arm:homeArm,ask_arm:askArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -13622,6 +13684,27 @@ function chAttachPush(){
    and the person they had in mind have all gone. */
 function armResultsPing(sent){
   if(!(nativeCaps && nativeCaps.notifSchedule)) return;
+  /* ⚠️ THIS LINE IS WHERE iOS'S ONE PROMPT GETS SPENT, and on the `tap` arm it does not get to
+     spend it on a hide nobody has sent. See NOTIF_ASK_ROLLOUT for the measurement and for how
+     to read the result without fooling yourself.
+     THREE CONDITIONS, AND EACH ONE NARROWS THE CHANGE ON PURPOSE:
+     · `askArm==="tap"` — the holdout keeps today's behaviour exactly, byte for byte.
+     · `!sent` — chMarkSent() always arms. The send IS the deliberate act this arm waits for;
+       gating that too would leave nobody to ask and no notification to schedule.
+     · `!pushToken` — a token exists only on the far side of a grant (see setPushToken), so a
+       device that already said yes keeps its publish-time nudge. Nothing is taken from anyone
+       who is already reachable; the only people who lose the unsent-hide reminder are the ones
+       who were never going to receive it, because the schedule behind it was being swallowed.
+     Deliberately NOT reaching for ssOfferBell() here. That button hangs off __kamoNotifResult
+     with ok=false, which is the wrapper answering a schedule we no longer send — so on this
+     path there is no answer to hang it on, and revealing a permission ask on a sheet the user
+     has not acted on is the very thing this arm exists to stop doing. The recovery door is
+     still open where it was earned: chMarkSent arms for real, and its ok=false still offers
+     the bell. */
+  if(askArm==="tap" && !sent && !pushToken){
+    try{ track("notif_ask_deferred",{reason:"unsent"}); }catch(e){}
+    return;
+  }
   postNative({type:"notif-schedule",notif:sent?{
     key:"results",
     delayMinutes:180,
