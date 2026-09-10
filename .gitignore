@@ -4,3 +4,11 @@
 # Installed ad hoc to run the DOM suites (PW_CORE=. node scripts/check.mjs).
 # 60 MB of vendor code that must never reach a repo whose pushes deploy to users.
 node_modules/
+
+# Agent instructions. NOT tracked, and the omission is deliberate.
+# This repo is public because GitHub Pages only serves public repos, and Pages serves the repo
+# root — so a tracked CLAUDE.md was readable at anthonyhdd.github.io/kamo/CLAUDE.md by anyone
+# who asked, crawlers included. It carried the unit economics, the account ids, and the two
+# founder gestures with the shape of PASS_HASH. Removed from every commit on 2026-09-10.
+# Keep the file on disk; never let `git add -A` put it back.
+CLAUDE.md
