@@ -1693,6 +1693,21 @@ try {
   bad('THE CHALLENGES PANEL IS BROKEN:\n' + why(e));
 }
 
+/* ---- 12b-sexies. The podium on the ending card --------------------------------------------
+   Several friends on one link, finally seeing each other. Its four silent failure modes —
+   submit_attempt going out without the seeker (every board a list of "Someone"s), a stranger's
+   handle reaching the card as markup, a board of one printed as a podium, and the name field
+   not writing the handle / not stamping the row — are all runtime state, so they get a
+   browser. */
+try {
+  const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-board-dom.mjs')], { stdio: 'pipe' }).toString();
+  out.includes('skipping')
+    ? skipped('test-board-dom.mjs', 'BOARD TEST', out)
+    : ok('the podium behaves (node scripts/test-board-dom.mjs)');
+} catch (e) {
+  bad('THE PODIUM IS BROKEN:\n' + why(e));
+}
+
 /* ---- 12b-bis. The share sends THIS round's hide, and sends it now -------------------------
    Two field-reported bugs that hid each other: the upload starting on the same gesture as
    the tap (an 8s wait, then the generic invite), and chId surviving capture() so the second
