@@ -13,6 +13,9 @@
  *
  * 3. A BOARD OF ONE IS A MIRROR. The card must print nothing when the only row is the
  *    reader's own — "First one in." is the sentence for that, and it is already there.
+ *    And anonymous players are never LISTED: the first shipped version printed six lines of
+ *    "Someone" over a stranger's photo (founder, 2026-09-11: "Très moche"). They are counted
+ *    in the summary line, and the chip row only exists when somebody on it has a name.
  *
  * 4. THE NAME FIELD IS THE DELIVERY. A seeker with no handle gets the field, and submitting it
  *    must do three things at once: write kamo_handle through setHandle (the one writer), stamp
@@ -115,13 +118,15 @@ async function round({ board, handle } = {}) {
 
 const read = (page) => page.evaluate(() => {
   const box = document.querySelector('#chFoot .chCard .chBoard');
-  const rows = box ? [...box.querySelectorAll('.chBRow')] : [];
+  const rows = box ? [...box.querySelectorAll('.chBChip')] : [];
   return {
     board: !!box,
-    bold: !!(box && box.querySelector('b')),
-    rows: rows.map(r => ({ me: r.classList.contains('me'), who: r.querySelector('.chBWho').textContent, ms: r.querySelector('.chBMs').textContent })),
+    /* The chip's own <b> is the name's element; a <b> INSIDE it would be served markup. */
+    bold: !!(box && box.querySelector('.chBChip b b, .chBSum b')),
+    rows: rows.map(r => ({ me: r.classList.contains('me'), who: r.querySelector('b').textContent, ms: r.querySelector('span').textContent })),
     sum: box && box.querySelector('.chBSum') ? box.querySelector('.chBSum').textContent : null,
     sign: !!(box && box.querySelector('.chBSign')),
+    ask: !!(box && box.querySelector('.chBName')),
     submit: (window.__calls || []).find(c => c[0] === 'submit_attempt'),
     signs: (window.__calls || []).filter(c => c[0] === 'sign_attempt'),
     handle: localStorage.getItem('kamo_handle'),
@@ -140,7 +145,7 @@ console.log('\nTHE SEEKER RIDES THE ATTEMPT');
 
   console.log('\nTHE PODIUM PRINTS STRANGERS AS TEXT');
   s.board ? ok('a board of three lands on the ending card') : bad('no .chBoard on the card');
-  s.rows.length === 3 ? ok('three rows, one per player') : bad(`expected 3 rows, got ${s.rows.length}`);
+  s.rows.length === 3 ? ok('three chips, one per named player and the reader') : bad(`expected 3 chips, got ${s.rows.length}`);
   /* Narrowed to [A-Za-z0-9_.] on the way in, exactly as the server narrows it, so the markup
      is not even text here: it is gone. What must never happen is a <b> in the card. */
   !s.bold && s.rows.some(r => r.who === '@bevilb')
@@ -157,7 +162,11 @@ console.log('\nTHE SEEKER RIDES THE ATTEMPT');
     : bad(`kamo_threads is ${JSON.stringify(s.threads)}`);
 
   console.log('\nTHE NAME FIELD IS THE DELIVERY');
-  s.sign ? ok('a seeker with no handle is offered the field') : bad('no name field for a nameless seeker');
+  s.ask && !s.sign ? ok('a seeker with no handle is offered a link, not a form') : bad(`nameless seeker: link ${s.ask}, form ${s.sign}`);
+  await page.evaluate(() => document.querySelector('#chFoot .chBName').click());
+  await page.waitForTimeout(150);
+  const opened = await read(page);
+  opened.sign && !opened.ask ? ok('the tap opens the field in place') : bad(`after the tap: form ${opened.sign}, link ${opened.ask}`);
   await page.evaluate(() => {
     const f = document.querySelector('#chFoot .chBSign');
     f.querySelector('input').value = ' @marie! ';
@@ -184,12 +193,26 @@ console.log('\nA BOARD OF ONE IS A MIRROR');
   await page.close();
 }
 
+console.log('\nANONYMOUS PLAYERS ARE COUNTED, NEVER LISTED');
+{
+  const ANON = [
+    { root: 'abc123', n_players: 11, my_pos: 7, pos: 1, name: null, hit: true, ms: 700, me: false },
+    { root: 'abc123', n_players: 11, my_pos: 7, pos: 2, name: null, hit: true, ms: 1100, me: false },
+    { root: 'abc123', n_players: 11, my_pos: 7, pos: 7, name: null, hit: true, ms: 2400, me: true },
+  ];
+  const { page } = await round({ board: ANON, handle: 'tony' });
+  const s = await read(page);
+  s.board && s.rows.length === 0 ? ok('no chip row when nobody on it has a name') : bad(`chips: ${JSON.stringify(s.rows)}`);
+  s.sum === '#7 of 11 on this photo' ? ok('the sentence carries the whole board') : bad(`summary was ${JSON.stringify(s.sum)}`);
+  await page.close();
+}
+
 console.log('\nA NAMED SEEKER IS NOT ASKED');
 {
   const { page } = await round({ handle: 'tony' });
   const s = await read(page);
   s.submit && s.submit[1] && s.submit[1].p_who === 'tony' ? ok('the existing handle rides the attempt') : bad(`p_who was ${JSON.stringify(s.submit && s.submit[1] && s.submit[1].p_who)}`);
-  s.board && !s.sign ? ok('the board shows and the name field does not') : bad(`board ${s.board}, field ${s.sign}`);
+  s.board && !s.sign && !s.ask ? ok('the board shows and the name offer does not') : bad(`board ${s.board}, field ${s.sign}, link ${s.ask}`);
   await page.close();
 }
 

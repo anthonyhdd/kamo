@@ -16427,20 +16427,19 @@ function chSeek(hideId,opts){
        `.me` is the one row that is about the reader, lifted with the mint the card uses for
        every "you did this" line; `.hit` on the time only, because a miss prints a cross and a
        cross in mint would read as a win. */
-    +".chBoard{width:100%;max-width:340px;display:flex;flex-direction:column;gap:6px;margin-bottom:2px;}"
-    +".chBList{display:flex;flex-direction:column;gap:2px;}"
-    +".chBRow{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:8px;padding:5px 10px;border-radius:10px;font-size:14px;text-align:left;}"
-    +".chBRow.me{background:rgba(255,255,255,.09);}"
-    +".chBPos{font-family:var(--display);font-weight:800;font-size:13px;opacity:.55;}"
-    +".chBWho{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
-    +".chBRow.me .chBWho{color:#b9ffd9;}"
-    +".chBMs{font-family:var(--display);font-weight:700;font-variant-numeric:tabular-nums;opacity:.6;}"
-    +".chBRow.hit .chBMs{opacity:1;}"
+    +".chBoard{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:2px;}"
+    +".chBChips{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;}"
+    +".chBChip{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.08);font-size:12.5px;font-weight:700;white-space:nowrap;max-width:100%;}"
+    +".chBChip.me{background:rgba(185,255,217,.16);color:#b9ffd9;}"
+    +".chBChip i{font-style:normal;font-family:var(--display);font-weight:800;font-size:11px;opacity:.5;}"
+    +".chBChip b{font-weight:700;overflow:hidden;text-overflow:ellipsis;max-width:120px;}"
+    +".chBChip span{font-family:var(--display);font-variant-numeric:tabular-nums;opacity:.65;}"
     +".chBSum{font-size:12.5px;opacity:.7;text-align:center;}"
-    +".chBSign{display:flex;gap:6px;width:100%;}"
-    +".chBSign input{flex:1;min-width:0;height:38px;border-radius:11px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;padding:0 12px;font-size:15px;font-family:inherit;}"
+    +".chBName{height:28px;padding:0 10px;border:none;border-radius:999px;background:none;color:rgba(255,255,255,.6);font-size:12.5px;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-family:inherit;}"
+    +".chBSign{display:flex;gap:6px;width:min(100%,260px);}"
+    +".chBSign input{flex:1;min-width:0;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;padding:0 10px;font-size:14px;font-family:inherit;}"
     +".chBSign input::placeholder{color:rgba(255,255,255,.45);}"
-    +".chBSign button{height:38px;padding:0 12px;border:none;border-radius:11px;background:#fff;color:#0a0b0e;font-family:var(--display);font-weight:700;font-size:13.5px;white-space:nowrap;cursor:pointer;}"
+    +".chBSign button{width:34px;height:34px;border:none;border-radius:10px;background:#fff;color:#0a0b0e;font-weight:800;font-size:15px;cursor:pointer;}"
     +".chCta{position:relative;overflow:hidden;width:100%;max-width:340px;height:56px;border:none;border-radius:16px;cursor:pointer;"
       +"font-family:var(--display);font-size:17.5px;font-weight:700;letter-spacing:-.3px;color:#0a0b0e;background:#fff;"
       +"box-shadow:0 10px 28px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;animation:pwBuyGlow 3s ease-in-out infinite;}"
@@ -18587,11 +18586,17 @@ function chSeek(hideId,opts){
        a stranger's feed photo is a real round with a real board, but not a rally this player
        joined, and remembering it would fill Challenges with the feed. */
     function chBoardMount(){
+      /* ⚠️ NEVER ON THE PUBLIC FEED. Shipped 2026-09-11 on every real round and the founder's
+         first screenshot was a stranger's photo with eleven anonymous players: six lines of
+         "Someone", a table over the reveal, and nothing a person could send to anyone.
+         The podium is for a round SOMEBODY IS IN — a link they were sent, or a rally opened
+         from Challenges — and only there. A feed slide skips the fetch entirely. */
+      if(FEED&&!CH_CHAL_IDS.has(HID)) return;
       const pk=chPlayKey();
       chRpcRows("hide_board",{p_id:HID,p_device:pk||null}).then(rows=>{
         if(!ended||!rows||!rows.length) return;
         const root=rows[0]&&rows[0].root;
-        if(root&&(!FEED||CH_CHAL_IDS.has(HID))){
+        if(root){
           chRememberThread(root);
           /* AND THE LINK ROUND IS SPENT, on the same list the feed keeps. thread_hides will
              hand this exact hide back as the rally's root, and the Challenges grid decides
@@ -18603,49 +18608,64 @@ function chSeek(hideId,opts){
         const others=rows.filter(r=>r&&!r.me);
         if(!others.length) return;
         const foot=$$("chFoot"), card=foot&&foot.querySelector(".chCard"); if(!card) return;
-        const box=document.createElement("div"); box.className="chBoard";
-        const list=document.createElement("div"); list.className="chBList";
+        const clean=(v)=>String(v||"").replace(/[^A-Za-z0-9_.]/g,"").slice(0,16);
         const n=(rows[0].n_players|0), my=(rows[0].my_pos|0);
-        let meWho=null;
-        rows.slice(0,6).forEach(r=>{
-          if(!r) return;
-          const row=document.createElement("div"); row.className="chBRow"+(r.me?" me":"")+(r.hit?" hit":"");
-          const pos=document.createElement("span"); pos.className="chBPos"; pos.textContent=String(r.pos|0);
-          const who=document.createElement("span"); who.className="chBWho";
-          const nm=String(r.name||"").replace(/[^A-Za-z0-9_.]/g,"").slice(0,16);
-          who.textContent = nm ? "@"+nm : (r.me ? kT("you") : kT("Someone"));
-          if(r.me) meWho=who;
-          const t=document.createElement("span"); t.className="chBMs";
-          t.textContent = r.hit ? (((r.ms|0)>0?(r.ms|0):0)/1000).toFixed(1)+"s" : "✗";
-          row.appendChild(pos); row.appendChild(who); row.appendChild(t);
-          list.appendChild(row);
-        });
-        box.appendChild(list);
-        if(my&&n>=2){ const s=document.createElement("div"); s.className="chBSum"; s.textContent=kT`#${my} of ${n} on this photo`; box.appendChild(s); }
-        /* THE NAME, ASKED FOR ONLY NOW. 63% of the people who open KAMO open it on a link and
-           never publish, so they have no handle and their row says "you" here and "Someone"
-           on everybody else's phone. This is the one moment a stranger has a reason to type a
-           name — their row is on a board their friends can see — so the field appears here and
-           nowhere earlier. setHandle(…, true) is the same writer the naming card uses; the
-           server stamps the name onto the row already filed (sign_attempt). Only offered when
-           the row can be reached at all: no device key, no row to sign. */
         const mine=rows.find(r=>r&&r.me);
-        if(mine&&!mine.name&&!getHandle()&&pk){
-          const f=document.createElement("form"); f.className="chBSign";
-          const inp=document.createElement("input"); inp.type="text"; inp.maxLength=16; inp.autocomplete="off";
-          inp.placeholder=kT("Your name"); inp.setAttribute("aria-label",kT("Your name"));
-          const b=document.createElement("button"); b.type="submit"; b.textContent=kT("Add your name");
-          f.appendChild(inp); f.appendChild(b);
-          f.onsubmit=(ev)=>{
-            ev.preventDefault();
-            const h=setHandle(inp.value,true); if(!h) return;
-            chRpc("sign_attempt",{p_id:HID,p_device:pk,p_who:h}).catch(()=>{});
-            if(meWho) meWho.textContent="@"+h;
-            f.remove();
-            track("round_board_signed",TP({}));
-          };
-          box.appendChild(f);
+        const box=document.createElement("div"); box.className="chBoard";
+        /* ONE LINE OF CHIPS, NOT A TABLE. Named players and the reader, three names at most,
+           in rank order. Anonymous players are not listed — a chip that says "Someone" is
+           furniture — they are counted in the line underneath. No named player and the row
+           does not exist; the sentence carries the whole board. */
+        const named=rows.filter(r=>r&&(r.me||clean(r.name))).slice(0,4);
+        let meWho=null;
+        if(named.some(r=>!r.me)){
+          const chips=document.createElement("div"); chips.className="chBChips";
+          named.forEach(r=>{
+            const c=document.createElement("span"); c.className="chBChip"+(r.me?" me":"");
+            const pos=document.createElement("i"); pos.textContent=String(r.pos|0);
+            const who=document.createElement("b"); const nm=clean(r.name);
+            who.textContent = nm ? "@"+nm : kT("you");
+            if(r.me) meWho=who;
+            const t=document.createElement("span");
+            t.textContent = r.hit ? (((r.ms|0)>0?(r.ms|0):0)/1000).toFixed(1)+"s" : "✗";
+            c.appendChild(pos); c.appendChild(who); c.appendChild(t);
+            chips.appendChild(c);
+          });
+          box.appendChild(chips);
         }
+        if(my&&n>=2){ const sm=document.createElement("div"); sm.className="chBSum"; sm.textContent=kT`#${my} of ${n} on this photo`; box.appendChild(sm); }
+        /* THE NAME, ASKED FOR ONLY NOW. 63% of the people who open KAMO open it on a link and
+           never publish, so they have no handle and their chip says "you" here and they are
+           uncounted by name on everybody else's phone. This is the one moment a stranger has
+           a reason to type a name — their friends are on the same line — so the offer lives
+           here and nowhere earlier. A LINK, NOT A FORM: the field opens on the tap, so the
+           card at rest carries one quiet word rather than an input box. setHandle(…, true) is
+           the same writer the naming card uses; the server stamps the name onto the row
+           already filed (sign_attempt). Only offered when the row can be reached at all: no
+           device key, no row to sign. */
+        if(mine&&!mine.name&&!getHandle()&&pk){
+          const ask=document.createElement("button"); ask.type="button"; ask.className="chBName";
+          ask.textContent=kT("Add your name");
+          ask.onclick=()=>{
+            const f=document.createElement("form"); f.className="chBSign";
+            const inp=document.createElement("input"); inp.type="text"; inp.maxLength=16; inp.autocomplete="off";
+            inp.placeholder=kT("Your name"); inp.setAttribute("aria-label",kT("Your name"));
+            const b=document.createElement("button"); b.type="submit"; b.textContent="✓"; b.setAttribute("aria-label",kT("Add your name"));
+            f.appendChild(inp); f.appendChild(b);
+            f.onsubmit=(ev)=>{
+              ev.preventDefault();
+              const h=setHandle(inp.value,true); if(!h) return;
+              chRpc("sign_attempt",{p_id:HID,p_device:pk,p_who:h}).catch(()=>{});
+              if(meWho) meWho.textContent="@"+h;
+              f.remove();
+              track("round_board_signed",TP({}));
+            };
+            ask.replaceWith(f);
+            try{ inp.focus(); }catch(_){}
+          };
+          box.appendChild(ask);
+        }
+        if(!box.childNodes.length) return;
         card.insertBefore(box,card.firstChild);
         try{ requestAnimationFrame(chFootClear); }catch(_){}
         track("round_board_shown",TP({players:n,pos:my,won:endWon}));
