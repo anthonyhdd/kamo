@@ -1,9 +1,10 @@
 -- 2026-09-11 — A ROUND WITH SEVERAL PEOPLE IN IT.
 --
--- ⚠️ NOT YET APPLIED. Apply through the dashboard SQL editor BEFORE the index.html that calls
--- these functions reaches main. The page climbs down to the older overloads when a new one
--- 404s, so a page deployed first loses nothing — but the board, the finders and the thread
--- simply do not exist until this runs. Mirror the "APPLIED <date>" line here once it has.
+-- APPLIED 2026-09-11 to Supabase project qpztlobbnjyjbxqyuzgg (migration `round_board`),
+-- before the index.html that calls it reached main. The page climbs down to the older
+-- overloads when a new one 404s, so the order was belt-and-braces rather than load-bearing.
+-- Measured on apply: 2394 replies, 2392 of them threaded into 1466 rallies (longest: 20
+-- hides); the 2 left NULL answer a parent that has already expired, which is the honest state.
 --
 -- THE ASK. Founder, 2026-09-11: "il faut qu'on fasse un moyen que le joueur puisse jouer avec
 -- plusieurs copains". The link already goes to several people at once — it is pasted into a
@@ -41,6 +42,14 @@ alter table public.attempts add column if not exists who text;
 
 create index if not exists attempts_hide_device_idx
   on public.attempts (hide_id, device_key) where device_key is not null;
+
+-- hides.thread_id belongs to section 5 (the rally) and is explained there. It is CREATED here
+-- because hide_board, in section 4, is a `language sql` function: Postgres checks its body at
+-- creation and refuses a column that does not exist yet. The first draft of this file had it
+-- in section 5 and the whole migration rolled back on that line.
+alter table public.hides add column if not exists thread_id text;
+
+create index if not exists hides_thread_idx on public.hides (thread_id) where thread_id is not null;
 
 -- ═══ 2. THE SEVENTH AND EIGHTH ARGUMENT ══════════════════════════════════════════════════════
 --
@@ -260,9 +269,8 @@ grant execute on function public.hide_finders(text[]) to anon, authenticated;
 -- the root's id on every reply under it. Set by a trigger rather than by a seventeenth
 -- create_hide argument: it is derived entirely from reply_to, which the row already carries,
 -- and a trigger reaches every overload at once without editing any of them.
-alter table public.hides add column if not exists thread_id text;
-
-create index if not exists hides_thread_idx on public.hides (thread_id) where thread_id is not null;
+-- (thread_id itself is added in section 1, above: hide_board is a SQL function, checked at
+-- creation, and it reads the column — so the column has to exist before section 4 runs.)
 
 create or replace function public.set_hide_thread()
 returns trigger
