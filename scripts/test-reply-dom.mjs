@@ -171,7 +171,7 @@ console.log('\nTHE REPLY KNOWS WHO IT IS FOR');
   });
   await page.waitForFunction(() => window.KAMOREPLY.state().to === '', null, { timeout: 4000 }).catch(() => {});
   const cleared = await page.evaluate(() => ({ st: window.KAMOREPLY.state(), label: window.KAMOREPLY.label() }));
-  cleared.st.to === '' && cleared.label === 'Send to a friend'
+  cleared.st.to === '' && cleared.label === 'Send to your friends'
     ? ok('picking a different photo ends the conversation — no target, generic label')
     : bad('after a new photo: ' + JSON.stringify(cleared));
 
@@ -206,7 +206,7 @@ console.log('\nAND THE FILE INPUT IS A DOOR TOO — THE ONLY ONE A BROWSER HAS')
   });
   await page.waitForFunction(() => window.KAMOREPLY.state().to === '', null, { timeout: 5000 }).catch(() => {});
   const after = await page.evaluate(() => ({ st: window.KAMOREPLY.state(), label: window.KAMOREPLY.label() }));
-  after.st.to === '' && after.label === 'Send to a friend'
+  after.st.to === '' && after.label === 'Send to your friends'
     ? ok('#fileInput ends the conversation exactly like the native picker')
     : bad('after a new photo through #fileInput: ' + JSON.stringify(after));
 

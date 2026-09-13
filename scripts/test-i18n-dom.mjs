@@ -97,7 +97,7 @@ async function open(locale) {
   const page = await open('fr-FR');
   const r = await page.evaluate(() => ({
     unknown: window.kT('a string nobody ever translated'),
-    known: window.kT('Send to a friend'),
+    known: window.kT('Send to your friends'),
     empties: Object.keys(window.KLANG).flatMap(l =>
       Object.entries(window.KLANG[l]).filter(([, v]) => !v || !String(v).trim()).map(([k]) => l + ':' + k)),
     sizes: Object.fromEntries(Object.keys(window.KLANG).map(l => [l, Object.keys(window.KLANG[l]).length])),
@@ -105,9 +105,9 @@ async function open(locale) {
   r.unknown === 'a string nobody ever translated'
     ? ok('an untranslated string comes back as itself, never blank')
     : bad(`kT() returned ${JSON.stringify(r.unknown)} for an unknown key`);
-  r.known && r.known !== 'Send to a friend'
+  r.known && r.known !== 'Send to your friends'
     ? ok('and a known one comes back translated')
-    : bad(`kT("Send to a friend") returned ${JSON.stringify(r.known)}`);
+    : bad(`kT("Send to your friends") returned ${JSON.stringify(r.known)}`);
   r.empties.length === 0
     ? ok('no dictionary entry is an empty string')
     : bad(`${r.empties.length} empty translation(s): ${r.empties.slice(0, 5).join(', ')}`);
@@ -201,9 +201,9 @@ for (const L of ['ru', 'es', 'pt', 'fr']) {
   const page = await open('sw-KE');
   const r = await page.evaluate(() => ({
     hero: (document.querySelector('#start') || {}).textContent || '',
-    loc: window.kT('Send to a friend'),
+    loc: window.kT('Send to your friends'),
   }));
-  r.hero.includes('Hide a kamo so well') && r.loc === 'Send to a friend'
+  r.hero.includes('Hide a kamo so well') && r.loc === 'Send to your friends'
     ? ok('a language with no dictionary gets English, whole')
     : bad(`sw-KE was not left in English: ${JSON.stringify(r.hero.slice(0, 80))}`);
   await page.close();
