@@ -45,7 +45,7 @@ async function run({ nativeInvite, share, clipboardOk = true, chId = 'abc123', s
      visible result is on this button — no sheet opens and no screen moves, so the label and
      the state classes are the whole of the feedback. */
   const cls = new Set();
-  const btn = { innerHTML: 'Send to a friend', textContent: 'Send to a friend', onclick: null, disabled: false,
+  const btn = { innerHTML: 'Send to your friends', textContent: 'Send to your friends', onclick: null, disabled: false,
     classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) } };
 
   const env = {
