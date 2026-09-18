@@ -9332,7 +9332,7 @@ const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened
    it, seen by the person who made it. The two are not the same number — prepare can fail and
    retry successfully — and this one is the one that matters, because it counts hides that
    were announced as live and were not. */
-"hide_photo_missing",
+"hide_photo_missing","hide_photo_recovered",
 /* `land_on_own_hide` is the landing arm's exposure — the publishes that actually ended in the
    feed, as distinct from the ones where the arm was live and the id never arrived. Without it
    a publish that failed to seed is indistinguishable from a control-arm publish, and the arm
@@ -12685,6 +12685,9 @@ function chBlob(src){
    than 400 leaves room for the multipart envelope. A reply still STARTS at 0.82 for the reason
    the note above gives — this only steps down when the alternative is not existing. */
 const CH_BLOB_BUDGET=380000;
+/* How long to keep trying to land the bytes after a refused upload, in ms per attempt. See
+   the note at the retry site in chPrepare for why there are three and why they reach 20s. */
+const CH_PREP_RETRIES=[2500,8000,20000];
 async function chFitBudget(b){
   if(!b||b.size<=CH_BLOB_BUDGET) return b;
   const src=await createImageBitmap(b).catch(()=>null);
@@ -12821,7 +12824,7 @@ function chThaw(){
   if(chId||!chSlotV) return;
   if(chPrep) chPrevUp=chPrep;
   chPrep=null; chStale=true;
-  try{ chPrepare._retried=false; }catch(e){}
+  try{ chPrepare._tries=0; }catch(e){}
 }
 /* THE ID MUST NOT WAIT ON THE BYTES. This is the split that fixes the share going out with
  * no game in it.
@@ -12939,6 +12942,19 @@ function chPrepare(){
            detail=" "+(j.code||j.error||"")+(j.statusCode?" "+j.statusCode:""); }catch(_){}
       throw new Error("upload "+up.status+detail);
     }
+    /* ⚠️ AND A RECOVERY HAS TO BE SAID OUT LOUD, because the failure already was. chUpload
+       watches the FIRST chPrepare() promise only: when that one resolves null it sets
+       chPhotoGone and files `hide_photo_missing`, and nothing was ever bound to the retry
+       that follows. So a round rescued 2.5s later kept a sheet reading "the photo did not
+       land" over a hide that had one, and stayed counted as a loss.
+       That is not a detail — `hide_photo_missing` is the number the upload path is judged on
+       (800 users over 2026-08-04 → 09-17, against 10,080 who published), and until this line
+       it could only ever overstate. */
+    if(chPhotoGone){
+      chPhotoGone=false;
+      try{ kfRenderVis(); }catch(_){}
+      track("hide_photo_recovered",{tries:(chPrepare._tries|0)+1});
+    }
     return slot;
   })().catch((e)=>{
     /* Cleared, so the tap can try again rather than inheriting a dead promise for the
@@ -12958,10 +12974,22 @@ function chPrepare(){
        created first, so chId is set within a round trip and that guard would refuse every
        retry there is — the one case this exists for. What it must not do is retry into a
        round that has moved on, which is what `finished` and the slot identity say. */
-    if(!chPrepare._retried){
-      chPrepare._retried=true;
+    /* ⚠️ A LADDER, NOT ONE SHOT — and the runway for it was already in the note above.
+       "The sender is looking at their reveal for a median 154 seconds" is the budget, and a
+       single attempt at 2.5s spends 1.6% of it. A radio that dropped in a lift, a tunnel or a
+       backgrounded app is not back in two and a half seconds; it is back in twenty.
+       2500 / 8000 / 20000: three attempts across the first half-minute, which is inside the
+       window the sender is still on this screen and still owns the round. A phone with no
+       signal at all burns four requests and stops — the same intent the single retry had,
+       with more chances to catch a connection that returns.
+       Every guard is unchanged and each one matters: `!chPrep` so a flight already running is
+       never doubled, `finished` so a round the user left is never retried, and the slot
+       identity so bytes can never land against a hide that has moved on. */
+    const tries=(chPrepare._tries|0);
+    if(tries<CH_PREP_RETRIES.length){
+      chPrepare._tries=tries+1;
       const mySlot=chSlotV;
-      setTimeout(()=>{ if(!chPrep&&finished&&chSlotV===mySlot) chPrepare(); },2500);
+      setTimeout(()=>{ if(!chPrep&&finished&&chSlotV===mySlot) chPrepare(); },CH_PREP_RETRIES[tries]);
     }
     return null;
   });
@@ -13032,7 +13060,7 @@ let chVisUnsaved=null;
    needs to fix, and telling a creator their private hide is "still in the feed" would be a
    worse lie than the one this whole change is about. */
 let chVisServer=false;
-function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._retried=false; chPubFailed=false; chPhotoGone=false; chVisUnsaved=null; chVisServer=false; chRound++; }
+function chResetRound(){ chId=""; chPrep=null; chSlotV=null; chInviteNudged=false; chPrepare._tries=0; chPubFailed=false; chPhotoGone=false; chVisUnsaved=null; chVisServer=false; chRound++; }
 
 /* WHO MADE IT — a random per-device string, so a viewer can say "not this person again".
  *
