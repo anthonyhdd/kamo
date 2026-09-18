@@ -3378,7 +3378,15 @@ let dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
  * Cleared on every capture, and that is not housekeeping. A photo taken off the camera is a
  * new hide addressed to nobody, and carrying the previous answer's target into it would put a
  * notification on a stranger's lock screen about a hide that has nothing to do with them. */
+/* How long a rehide's photo may take before the wait is called a failure. Long enough for a
+   full-resolution JPEG on a slow phone connection, short enough that nobody is held on a
+   spinner past the point they would have left anyway. Read `reply_photo_failed{reason:
+   "timeout"}` against `compose_ready{photo_ms}` before moving it. */
+const REPLY_PHOTO_MS=12000;
 let chReplyTo="", chReplyName="";
+/* How long the rehide's photo fetch took, in ms — read once by compose_ready and reset there.
+   -1 when this compose did not come from a rehide. See chRehide for why it is measured. */
+let chReplyPhotoMs=null;
 /* WHERE THE REPLY WAS BORN. A reply started from a FEED round belongs to a browsing session:
    the player was mid-scroll, took a detour through compose to answer somebody, and the send
    receipt is the end of the detour — so the feed comes back on its own (founder, 2026-08-16:
@@ -5011,7 +5019,13 @@ function enterCompose(){
    * forever, which is exactly the trap documented on hero_shown. WEB_ONLY routes it through
    * chWebTrack instead, so it lands from both surfaces and carries `host`, which is the one
    * property this whole comparison is built on. */
-  track("compose_ready",{origin:photoSrc||"none",reply:!!chReplyTo,kind:bgKind});
+  /* `photo_ms` is the wait this screen was hiding behind — see chRehide. -1 on every compose
+     that did not come from a rehide, so the rehide population stays separable without a
+     second event. Reset here rather than in chRehide: this is the one place that has
+     certainly read it. */
+  track("compose_ready",{origin:photoSrc||"none",reply:!!chReplyTo,kind:bgKind,
+    photo_ms:(chReplyPhotoMs==null?-1:chReplyPhotoMs)});
+  chReplyPhotoMs=null;
 }
 /* Reached only from the Retake confirmation (#cfYes), which calls exitFinished() first —
    so `finished` is already false and nothing still needs beforeBoard or the reveal. The
@@ -8822,8 +8836,18 @@ window.KAMO.torchFailed=()=>{ torchOn=false; if(typeof updateLightBtn==="functio
 window.KAMO.revealDone=()=>{ clearTimeout(showBusy._t); try{ busyEl.style.display="none"; }catch(e){} };
 /* Never show a blocking overlay without an escape hatch: if native never calls
    revealDone() (dropped bridge message, encoder hang), clear it after 25s and say so. */
-function showBusy(on){ clearTimeout(showBusy._t); try{ busyEl.style.display=on?"flex":"none"; }catch(e){}
-  if(on) showBusy._t=setTimeout(()=>{ try{ busyEl.style.display="none"; }catch(e){} showHint(kT("Couldn't build the reveal — sharing the still instead")); },25000); }
+/* THE LABEL IS A PARAMETER NOW, because a second caller needs this overlay and must not
+   claim to be building a reveal. The default is the markup's own string — captured, not
+   re-translated, so kTr's pass over #busy at load is what keeps speaking for the reveal. */
+function showBusy(on,label,onGiveUp,ms){ clearTimeout(showBusy._t);
+  try{
+    const l=busyEl&&busyEl.querySelector(".lbl");
+    if(l){ if(showBusy._lbl==null) showBusy._lbl=l.textContent; l.textContent=label||showBusy._lbl; }
+    busyEl.style.display=on?"flex":"none";
+  }catch(e){}
+  if(on) showBusy._t=setTimeout(()=>{ try{ busyEl.style.display="none"; }catch(e){}
+    if(typeof onGiveUp==="function"){ onGiveUp(); return; }
+    showHint(kT("Couldn't build the reveal — sharing the still instead")); },ms||25000); }
 
 /* ===== SHARE: the challenge card (hidden scene + wordmark + referral CTA) ===== */
 let referralCode="";
@@ -18531,22 +18555,66 @@ function chSeek(hideId,opts){
          reads, and no cache entry can be the wrong kind. It also buys the thing the old path
          never had: a failure we can SEE. Nobody is dropped onto a black board any more.
          The object URL is revoked once decoded — `photo` holds the bitmap from there on. */
+      /* ══ AND THE TAP HAS TO SAY SOMETHING WHILE IT WAITS ════════════════════════════════
+         The fetch below is a full-resolution JPEG over whatever connection the player is on,
+         and until now NOTHING was on screen for its duration: ctl.destroy() has just taken
+         the ending card away, and the next thing to render is the compose screen, after the
+         bytes land. Tap "Challenge back", watch the card vanish, wait on a blank stage.
+
+         That gap is where the answer dies, and it is the browser's loss almost entirely.
+         2026-08-04 → 09-17, unique users: `seek_rehide_tapped` 4,884 in a browser against
+         1,417 in the app; `reply_started` fires for 4,865 of the browser taps, so they all
+         reach this function — and only 3,480 get as far as `compose_ready`. 1,385 people
+         tapped, got no answer, and left before the screen they asked for existed. The same
+         step inside the wrapper barely loses anyone, because there the photo is usually
+         already on the device.
+
+         So: the overlay that already exists for the reveal render, one abort so a hung
+         request cannot hold it forever, and the duration filed on compose_ready. This does
+         not make the fetch faster. It makes it visible, which is the part the player needs,
+         and it makes the wait measurable, which is the part the next change needs. */
+      /* `Loading…` RATHER THAN A TRUER SENTENCE, on purpose: it is already a key in every
+         dictionary in KLANG (it is the paywall Buy button's waiting state), so this overlay
+         speaks the reader's language from the first deploy. A new English-only string here
+         would be the one blank-looking screen on half the planet — the exact failure
+         test-i18n-dom.mjs exists to prevent. */
+      showBusy(true,kT("Loading…"),()=>{
+        showHint(kT("Couldn't load that photo — try again in a second"),3200);
+        try{ chClearReply(); }catch(_){}
+      },REPLY_PHOTO_MS+1500);
       (async()=>{
-        let url="";
+        let url=""; const t0=Date.now();
         try{
-          const r=await fetch(src,{mode:"cors",credentials:"omit"});
+          /* ⚠️ A TIMEOUT, NOT JUST A CATCH. fetch() has no deadline of its own: a request that
+             stalls mid-body never settles, so the old code could sit in this await for as long
+             as the tab lived. Only 5 `reply_photo_failed` were ever recorded against 1,385 lost
+             — the losses were not failures that fired, they were waits that never ended.
+             AbortController is what turns the second kind into the first. */
+          const ac=(typeof AbortController!=="undefined")?new AbortController():null;
+          const to=ac?setTimeout(()=>{ try{ ac.abort(); }catch(_){} },REPLY_PHOTO_MS):0;
+          let r;
+          try{ r=await fetch(src,ac?{mode:"cors",credentials:"omit",signal:ac.signal}
+                                  :{mode:"cors",credentials:"omit"}); }
+          finally{ if(to) clearTimeout(to); }
           if(!r.ok) throw new Error("http "+r.status);
           const b=await r.blob();
           if(!b||!b.size) throw new Error("empty");
           url=URL.createObjectURL(b);
+          chReplyPhotoMs=Date.now()-t0;
         }catch(e){
-          track("reply_photo_failed",{reason:String((e&&e.message)||e).slice(0,80)});
+          showBusy(false);
+          /* `ms` separates the two failures that used to look alike: a server saying no in
+             200ms, and a connection that simply never answered. Only the second is what the
+             abort above exists for, and only the second is fixed by a faster photo. */
+          const aborted=!!(e&&(e.name==="AbortError"||String(e).indexOf("abort")>=0));
+          track("reply_photo_failed",{reason:aborted?"timeout":String((e&&e.message)||e).slice(0,80),ms:Date.now()-t0});
           showHint(kT("Couldn't load that photo — try again in a second"),3200);
           /* No compose, no black board, no black hide. The reply address goes with it: a hide
              made later off the camera must not be stamped as an answer to this one. */
           try{ chClearReply(); }catch(_){}
           return;
         }
+        showBusy(false);
         photo.removeAttribute("crossorigin");
         photo.onload=()=>{ syncPreviewFit(); try{ URL.revokeObjectURL(url); }catch(_){} };
         /* A blob that decodes to nothing is the same dead end as a failed fetch, and it is the
