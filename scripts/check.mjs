@@ -1345,6 +1345,33 @@ try {
   bad('NIGHTLY PURGE BROKEN:\n' + why(e));
 }
 
+/* ---- 7-ter. THE WATCHDOG, WHOSE OWN TESTS WERE RUN BY NOTHING -------------------------------
+   scripts/test-watchdog.mjs has existed since the watchdog did and this file never called it,
+   so neither did CI. The suite that proves our only production alarm fails on the things it
+   claims to catch had, in practice, never run on a pull request — which is the same shape of
+   hole as the one the watchdog itself exists to close, one level up: a gate that reports
+   success for a run in which it did nothing.
+
+   Both suites are hermetic. They drive a local http server and override KAMO_WATCH_ORIGINS,
+   which is also what keeps the challenge-link and universal-links checks pointed away from
+   the real playkamo.com — so this adds no network to the gate and cannot go red on a train.
+
+   The second one is the supervisor: whether a red sweep is worth an email. It is the half
+   that decides if the alarm is trusted or filtered to a folder, and it takes about 80s
+   because it watches real loops in real time, at seconds instead of hours. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-watchdog.mjs')], { stdio: 'pipe' });
+  ok('the watchdog fails on everything it claims to catch (node scripts/test-watchdog.mjs for the detail)');
+} catch (e) {
+  bad('WATCHDOG BROKEN — our only production alarm:\n' + why(e));
+}
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-watchdog-watch.mjs')], { stdio: 'pipe' });
+  ok('it keeps sweeping, tolerates a blip, still calls an outage an outage (node scripts/test-watchdog-watch.mjs)');
+} catch (e) {
+  bad('WATCHDOG SUPERVISOR BROKEN — the alarm either cries wolf or sleeps through an outage:\n' + why(e));
+}
+
 /* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
    Everything above reads the file. Two bugs shipped this week that reading the file could not
    see: the preview card was whitelisted in the short sheet's CSS while nothing ever added the
