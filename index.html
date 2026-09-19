@@ -18083,6 +18083,17 @@ function chSeek(hideId,opts){
          touching the wallet. Nothing on screen said so.
          So the button is no longer OFFERED where it cannot work. Same source of truth as the
          spend (hint_region), so the two can never disagree.
+         ⚠️ AND "ONE HIDE IN THREE" BECAME THREE IN FIVE, WHICH IS A DIFFERENT PRODUCT. The
+         published median r went 0.093 (week of 08-17) → 0.101 (08-31) → 0.249 (09-07) → 0.251
+         (09-14): 57% of new hides and 37% of the whole live stock sat above 0.22, so the only
+         consumable this app sells had no door on most rounds. Nothing broke — this branch did
+         exactly what it says — and the result was still "on voit pas le hint bouton" (founder,
+         2026-09-19). The threshold was not raised, because at r = 0.22 the containing zone is
+         already 1.24 × the frame and lighting the whole photo is not a hint. hint_region() now
+         answers a big kamo with a SMALL disc drawn INSIDE the answer instead of a huge one
+         around it — "tap in here" rather than "somewhere in there" — so the refusal below is
+         a filet rather than a third of the fleet's rounds. See
+         infra/2026-09-19-hint-on-a-big-kamo.sql for the geometry and the rollback.
          ⚠️ THE WIDER CALL FALLS BACK, because the database does not deploy with this file: a
          page that reaches a server without the two-argument overload keeps exactly today's
          behaviour — the button, the tap, and the refusal — rather than losing hints entirely,
@@ -18097,8 +18108,26 @@ function chSeek(hideId,opts){
           if(!st||typeof st.balance!=="number") return;
           /* Only ever acts on a definite NO. `undefined` is the older overload answering, and
              an absent field must never be read as a refusal. */
+          /* ⚠️ IT SAYS SO — IT DOES NOT VANISH. This used to be hintBtn.remove(), and deleting
+             the control is what made the whole problem unreadable for three weeks: the only
+             consumable this app sells had no door on 37% of live hides, the number was sitting
+             in hint_unavailable the entire time, and the way it finally surfaced was the
+             founder opening the app and saying "on voit pas le hint bouton". A control that
+             deletes itself cannot be reported, cannot be recognised, and looks exactly like a
+             feature that was never built.
+             So the retirement is the one the SPEND path already uses — same sentence, already
+             translated into es/fr/pt/ru, and the half the player cares about is in it: nothing
+             was taken. `.spent` is the receipt styling: readable, full strength, not the 45%
+             husk that `[disabled]` alone would draw. Disabled, so the rule this branch was
+             written under still holds — it is not sitting there looking tappable.
+             ⚠️ AND IT IS NOW RARE. hint_region() hints a big kamo instead of refusing it
+             (2026-09-19-hint-on-a-big-kamo.sql), so on a live hide `hintable` is false only
+             for one that is blocked, expired or gone. This is the filet, not the common path
+             — but it is the filet that was hiding the common path, so it stays visible. */
           if(st.hintable===false){
-            try{ hintBtn.remove(); }catch(_){}
+            hintBtn.textContent=kT("This kamo is too big — hint kept");
+            hintBtn.classList.add("spent");
+            hintBtn.disabled=true;
             track("hint_unavailable",{reason:"too_big"});
             return;
           }
