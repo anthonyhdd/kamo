@@ -1345,14 +1345,41 @@ try {
   bad('NIGHTLY PURGE BROKEN:\n' + why(e));
 }
 
-/* ---- 7-ter. The black-slab sweep -------------------------------------------------------------
+/* ---- 7-ter. THE WATCHDOG, WHOSE OWN TESTS WERE RUN BY NOTHING -------------------------------
+   scripts/test-watchdog.mjs has existed since the watchdog did and this file never called it,
+   so neither did CI. The suite that proves our only production alarm fails on the things it
+   claims to catch had, in practice, never run on a pull request — which is the same shape of
+   hole as the one the watchdog itself exists to close, one level up: a gate that reports
+   success for a run in which it did nothing.
+
+   Both suites are hermetic. They drive a local http server and override KAMO_WATCH_ORIGINS,
+   which is also what keeps the challenge-link and universal-links checks pointed away from
+   the real playkamo.com — so this adds no network to the gate and cannot go red on a train.
+
+   The second one is the supervisor: whether a red sweep is worth an email. It is the half
+   that decides if the alarm is trusted or filtered to a folder, and it takes about 80s
+   because it watches real loops in real time, at seconds instead of hours. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-watchdog.mjs')], { stdio: 'pipe' });
+  ok('the watchdog fails on everything it claims to catch (node scripts/test-watchdog.mjs for the detail)');
+} catch (e) {
+  bad('WATCHDOG BROKEN — our only production alarm:\n' + why(e));
+}
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-watchdog-watch.mjs')], { stdio: 'pipe' });
+  ok('it keeps sweeping, tolerates a blip, still calls an outage an outage (node scripts/test-watchdog-watch.mjs)');
+} catch (e) {
+  bad('WATCHDOG SUPERVISOR BROKEN — the alarm either cries wolf or sleeps through an outage:\n' + why(e));
+}
+
+/* ---- 7-quater. The darkness sweep ------------------------------------------------------------
    infra/edge-measure-lqip.ts decides, once and for everyone, that a hide never appears in the
    feed again — kfLooksBlack()'s verdict, made durable instead of re-made on every device on
    every page. Nothing on the page can see this file and nothing in the database forces it to
    stay honest, so the properties that must never regress — anything too dark to play reads
    dark, an ORDINARY photograph does not, an unjudgeable placeholder is NULL rather than 0/0,
    and the three arrays stay aligned — are asserted here. Chained for the same reason as the
-   three above. */
+   ones above. */
 try {
   execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edge-lqip.mjs')], { stdio: 'pipe' });
   ok('the darkness sweep buries what cannot be played and not the rest (node scripts/test-edge-lqip.mjs for the detail)');
