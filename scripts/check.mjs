@@ -1345,6 +1345,21 @@ try {
   bad('NIGHTLY PURGE BROKEN:\n' + why(e));
 }
 
+/* ---- 7-ter. The black-slab sweep -------------------------------------------------------------
+   infra/edge-measure-lqip.ts decides, once and for everyone, that a hide never appears in the
+   feed again — kfLooksBlack()'s verdict, made durable instead of re-made on every device on
+   every page. Nothing on the page can see this file and nothing in the database forces it to
+   stay honest, so the properties that must never regress — anything too dark to play reads
+   dark, an ORDINARY photograph does not, an unjudgeable placeholder is NULL rather than 0/0,
+   and the three arrays stay aligned — are asserted here. Chained for the same reason as the
+   three above. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edge-lqip.mjs')], { stdio: 'pipe' });
+  ok('the darkness sweep buries what cannot be played and not the rest (node scripts/test-edge-lqip.mjs for the detail)');
+} catch (e) {
+  bad('DARKNESS SWEEP BROKEN:\n' + why(e));
+}
+
 /* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
    Everything above reads the file. Two bugs shipped this week that reading the file could not
    see: the preview card was whitelisted in the short sheet's CSS while nothing ever added the
