@@ -17867,17 +17867,56 @@ function chSeek(hideId,opts){
          The one wallet that HAS an id produced the only completed purchase this product has
          ever had. That is either a coincidence on n=1 or it is the answer, and one boolean on
          an event that already fires settles it. */
+      /* ═══ A BROWSER CANNOT BUY, SO IT IS SENT TO THE STORE INSTEAD OF INTO A WALL ═══
+         MEASURED 2026-09-23: every `hint_buy_no_bridge` on record — 71 of them between 08-24
+         and 09-23 — carries host="browser", and the browser half of hint_purchase_initiated
+         is 71 over the same window. A perfect 1:1. The note below was right that the gate is
+         wrong; what it could not say is that the gate is wrong ONE WAY ONLY, and that the
+         people falling through it are the most valuable readers this page has.
+         WHAT THEY GOT UNTIL NOW: retireHint() disables the button, writes "Get the app" on
+         it, and DELETES it 1.4s later. Somebody who tapped Buy on a $0.99 pack — the
+         strongest purchase intent a browser reader ever shows — was handed a greyed-out
+         label that then vanished. 71 times, with 19,388 browser seekers a month behind it
+         (project_kamo_loop_truths). Now the tap does the only thing it can do: go to the
+         store, attributed through refLink() like every other outbound link in this file.
+         ⚠️ THE CHECK MOVED ABOVE THE INTENT STAMP, AND THAT MAKES A SERIES STEP DOWN.
+         hint_purchase_initiated will drop by about a third overnight — 225 events become the
+         154 that were in the app all along. That is the count becoming true, not the pack
+         dying: the comment above this one is explicit that this event exists to count taps
+         that actually open a sheet, and a browser tap never opened one. Compare after
+         2026-09-23 with after, never across it.
+         A NEW EVENT NAME IS SAFE ON THIS PATH for the same reason pwWebInstall says so: the
+         wrapper's allow-list drops names it does not know, and this branch cannot run inside
+         the wrapper by construction, so track() posts straight to Amplitude. */
+      if(!window.ReactNativeWebView){
+        track("hint_buy_no_bridge",TP({reason:"browser"}));
+        const u=refLink("hint",HID||"");
+        track("paywall_install_tapped",{source:"hint",tier:u===appLink?"plain":"onelink"});
+        haptic(16);
+        /* Written, not retired: the label has to survive the navigation starting, and
+           retireHint() would delete the control out from under someone whose store is still
+           opening. */
+        hintBtn.disabled=true; hintBtn.textContent=kT("Get the app");
+        location.href=u;
+        return;
+      }
       track("hint_purchase_initiated",TP({rc:!!chUserId}));
       /* `source:"hint"` for the same reason the paywall now sends one, plus a second: this
          is the only purchase that never touches the paywall, so without it the hint pack's
          `purchase_completed` would land in the same unattributed bucket as a subscription
          and quietly inflate whichever door was last opened. */
       if(!postNative({type:"purchase",product:HINT_PACK_ID,source:"hint"})){
-        /* NO BRIDGE AT ALL — a plain browser. hintsOn() gates the button on nativeCaps.hints
-           so this should be unreachable; if it ever reports, that gate is wrong and the pack is
-           being offered where it cannot be sold. */
-        track("hint_buy_no_bridge",TP({}));
-        retireHint(kT("Get the app"));
+        /* THE BRIDGE IS THERE AND REFUSED THE MESSAGE — a different world from the browser
+           branch above, and the reason is what separates them. postNative() returns false on
+           exactly two things: no window.ReactNativeWebView (handled above, and it is 100% of
+           what this event has ever reported) or postMessage THROWING, which means the WebView
+           bridge exists and is broken — the content process died and took it with it is the
+           only known way to get here (onContentProcessDidTerminate, ~18/24h).
+           So this branch is now expected to be empty. If `reason:"post_threw"` ever shows
+           volume, the bug is the bridge, not the gate, and retiring the button is right:
+           there is no store to send them to, they already have the app. */
+        track("hint_buy_no_bridge",TP({reason:"post_threw"}));
+        retireHint(kT("Hints unavailable"));
         return;
       }
       hintPending=true; hintBuyStarted=true; hintBalAtBuy=hintKnownBal;
