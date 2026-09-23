@@ -263,11 +263,30 @@
   .heroCta.demote{background:rgba(255,255,255,.05);color:#fff;border:1.5px solid var(--stroke);
     box-shadow:none;animation:none;height:52px;font-size:15.5px;letter-spacing:-.2px;}
   .heroCta.demote::after{display:none;}
-  .heroPick{width:100%;margin-top:10px;padding:15px 16px;border-radius:16px;cursor:pointer;border:1.5px solid var(--stroke);
-    background:rgba(255,255,255,.05);color:#fff;font-family:var(--display);font-weight:700;font-size:15.5px;letter-spacing:-.2px;-webkit-tap-highlight-color:transparent;}
-  .heroPick:active{transform:scale(.98);}
+  /* ⚠️ UN LIEN, PAS UN SECOND BOUTON. C'était une pile pleine largeur — bordure 1.5px, fond,
+     rayon 16px, 15px de padding — soit exactement la silhouette de la CTA principale, posée
+     juste dessous. Deux boutons de même poids sur le premier écran, ce n'est pas un choix,
+     c'est une hésitation : la caméra EST le produit, et la photo est la sortie de secours.
+     Demandé par le fondateur le 2026-09-23 (« un peu plus caché »).
+     Ce qui reste : le mot, en plus petit, sans bordure ni fond, à 58 % d'opacité. Toujours
+     lisible, toujours tapable — et la cible de tap ne rétrécit PAS, le padding vertical est
+     conservé, parce qu'un lien discret qu'on rate est une régression, pas de la discrétion.
+     ⚠️ `.promote` continue d'écraser tout ça une ligne plus bas, et c'est la règle qui compte :
+     caméra refusée, ce lien redevient la seule porte d'entrée et reprend son plein poids. La
+     discrétion ne vaut que tant qu'il existe une alternative. */
+  .heroPick{width:100%;margin-top:6px;padding:13px 16px;border-radius:12px;cursor:pointer;border:none;
+    background:none;color:rgba(255,255,255,.58);font-family:var(--font);font-weight:600;font-size:13.5px;letter-spacing:-.1px;-webkit-tap-highlight-color:transparent;
+    text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(255,255,255,.28);}
+  .heroPick:active{transform:scale(.98);color:#fff;}
   /* camera refused → this is now the way in, so it stops looking secondary */
-  .heroPick.promote{background:#fff;border-color:#fff;color:#0a0b0e;font-weight:900;}
+  /* ⚠️ CETTE RÈGLE DOIT TOUT RECONSTRUIRE DEPUIS QUE LE REPOS EST UN LIEN. Avant, le repos
+     était déjà un bouton et `.promote` n'avait qu'à le repeindre — il lui suffisait de poser
+     un fond blanc et `border-color`. Maintenant que le repos n'a ni bordure, ni fond, ni
+     taille de bouton, et qu'il est souligné, une simple repeinture laisserait un texte blanc
+     souligné de 13,5px pour seule porte d'entrée sur un appareil sans caméra. Tout ce que le
+     repos a retiré est donc remis ICI, explicitement. */
+  .heroPick.promote{background:#fff;border:1.5px solid #fff;color:#0a0b0e;font-family:var(--display);font-weight:900;
+    font-size:15.5px;letter-spacing:-.2px;padding:15px 16px;border-radius:16px;margin-top:10px;text-decoration:none;}
   #heroMsg{display:none;margin-top:14px;font-family:var(--font);font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.6);}
   /* Quieter than #heroMsg: that one reports a failure the user has to act on, this one
      is reassurance nobody asked for out loud. Same size, less contrast. */
@@ -15785,6 +15804,20 @@ function navShouldShow(){
       if(typeof mode!=="undefined" && mode==="paint") return false;
       const st=document.getElementById("start");
       const up=st&&st.style.display!=="none"&&getComputedStyle(st).display!=="none";
+      /* ⚠️ PENDANT LE BOOT, LA BARRE N'EST PAS SUR UN ÉCRAN — ELLE EST SUR LE SPLASH.
+         `#start.booting` est l'état qui fait ressembler cet écran EXACTEMENT au splash natif
+         (icône centrée sur noir, toute la copie du hero masquée — voir la règle plus haut, le
+         natif tient splash.png jusqu'à onLoadEnd pour la même raison). Le test
+         `camEverAsked()` juste en dessous ne l'attrape pas : il répond « cet appareil a déjà
+         vu la caméra », ce qui est VRAI pour tout habitué — donc la barre s'affichait par-
+         dessus le faux splash à chaque ouverture, le temps que la caméra démarre. Rapporté par
+         le fondateur le 2026-09-23 : « à l'app open, le menu du bas superpose ».
+         ⚠️ ET ÇA N'ÉCHOUE PAS FERMÉ, ce qui est tout l'intérêt de choisir `booting` plutôt
+         qu'un délai : la classe est retirée par revealHero() (ligne ~4488) dès que le boot se
+         termine, quelle qu'en soit l'issue. Un appareil dont la caméra est refusée retombe
+         donc immédiatement sur le test d'origine et RÉCUPÈRE sa barre — c'est précisément
+         l'échouage que le commentaire ci-dessus protège, et il reste protégé. */
+      if(up && st.classList.contains("booting")) return false;
       if(up){ try{ if(!camEverAsked()) return false; }catch(_){ return false; } }
     }
     return true;
@@ -16107,7 +16140,21 @@ function chSeek(hideId,opts){
     +".chZoom{line-height:0;will-change:transform;}"
     +".chFrame{position:relative;line-height:0;}"
     +".chFrame img{display:block;max-width:100vw;max-height:100dvh;width:auto;height:auto;pointer-events:none;}"
-    +".chFrame.found{outline:3px solid var(--mint);outline-offset:-3px;box-shadow:0 0 46px rgba(95,230,164,.4);}"
+    /* ⚠️ UNE LUEUR, PLUS UN LISERÉ. C'était `outline:3px solid var(--mint)` : un rectangle
+       plein, 3 pixels, en mint pur, posé sur les quatre bords de la photo. Sur un vrai
+       téléphone ça ne lit pas comme « trouvé », ça lit comme un contour de debug — le mint
+       pur est la couleur la plus saturée du fichier et rien d'autre dans l'app n'en pose 3px
+       d'affilée. Verdict du fondateur sur capture, 2026-09-23 : « c'est hyper moche ».
+       Ce qui la remplace dit la même chose en entrant DANS l'image au lieu de se poser
+       dessus : un halo interne qui monte des bords vers le centre, la lueur externe
+       conservée mais resserrée, et une hairline à 55 % d'opacité et 1,5px — assez pour
+       fermer la forme, trop peu pour devenir le sujet.
+       ⚠️ `outline` ET PAS `border` : .chFrame enveloppe un <img> et un border pousserait la
+       photo de sa propre épaisseur, donc décalerait la clé de réponse par rapport aux
+       coordonnées normalisées que le tap utilise. L'outline ne prend aucune place dans la
+       boîte, c'est la raison d'origine et elle tient toujours. */
+    +".chFrame.found{outline:1.5px solid rgba(95,230,164,.55);outline-offset:-1.5px;"
+    +"box-shadow:inset 0 0 70px rgba(95,230,164,.20),0 0 26px rgba(95,230,164,.22);}"
     /* Words float OVER the photo now, on a scrim that dies before mid-screen — the image
        is the interface and everything else is a guest on it. pointer-events:none all the
        way down so a hunt can start on the first pixel of the screen. */
@@ -16818,6 +16865,67 @@ function chSeek(hideId,opts){
       for(let i=1;i<reps;i++) setTimeout(()=>{ try{ postNative({type:"haptic",style:"impact"}); }catch(_){} }, i*80);
     }
     try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){}
+  };
+
+  /* ═══ LA SÉRIE SE SENT, ET ELLE SE SENT DE PLUS EN PLUS ═══════════════════════════════════
+   *
+   * Jusqu'ici une trouvaille valait UN `success`, la même secousse au 2e kamo qu'au 12e — et
+   * la série, le seul chiffre que ce jeu demande de protéger, ne se sentait pas du tout. Le
+   * nombre d'impulsions suit maintenant la série et leur espacement se resserre : au début on
+   * compte les coups, plus haut ils se rapprochent jusqu'à devenir un roulement. Demandé par
+   * le fondateur le 2026-09-23.
+   *
+   * ⚠️ AUCUN NATIF N'EST REQUIS, ET C'EST CE QUI DÉCIDE DE LA FORME. Le handler du wrapper
+   * expose déjà cinq styles (`impact`, `heavy`, `success`, `error`, sélection par défaut) —
+   * App.js, `msg.type === 'haptic'`. Tout ce qui suit n'est que du choix de style et du
+   * `setTimeout`, donc ça part en web, sans build et sans App Review. Ne PAS inventer un
+   * sixième style ici : un nom que le wrapper ne connaît pas tombe dans le `else` et devient
+   * une sélection, c'est-à-dire la plus faible des cinq — l'inverse de l'intention.
+   *
+   * ⚠️ DEUX PLAFONDS, PAS UN. `RUN_BUZZ_MAX` borne le nombre d'impulsions ; l'espacement a son
+   * propre plancher. Sans le second, une série de 30 donnerait 6 impulsions collées en 200 ms,
+   * soit une bouillie indistinguable de la mort — or ce sont les deux extrémités du jeu et
+   * elles doivent rester reconnaissables les yeux fermés.
+   *
+   * ⚠️ ET ELLE NE COMMENCE QU'À 2. Une série de 1 n'est pas une série : c'est la règle que ce
+   * fichier applique déjà partout ailleurs (le pill, `run_broken` qui ne parle qu'à partir de
+   * 2, « 1 best yet » jugé « du bruit déguisé en exploit »). Fêter un 1 les rendrait tous
+   * pareils. */
+  const RUN_BUZZ_MAX=6;
+  const runBuzz=(run)=>{
+    try{
+      const n=Math.min(run|0,RUN_BUZZ_MAX);
+      if(n<2) return;
+      /* 900 ms entre deux coups à 2, ~340 à 6 : la série accélère en se remplissant. */
+      const gap=Math.max(340,900-(n-2)*140);
+      const web=[];
+      for(let i=0;i<n;i++){
+        /* Le DERNIER coup est un `heavy` — la série se referme sur une ponctuation, sinon
+           six impulsions identiques ne racontent rien qu'un compteur. */
+        const style=(i===n-1)?"heavy":"impact";
+        setTimeout(()=>{ try{ postNative({type:"haptic",style:style}); }catch(_){} }, i*gap);
+        if(i) web.push(gap-18);
+        web.push(18);
+      }
+      /* Le web n'a pas de styles : le motif porte seul la montée. */
+      try{ navigator.vibrate&&navigator.vibrate(web); }catch(_){}
+    }catch(_){}
+  };
+
+  /* LA MORT EST UN BLOC, PAS UNE SÉQUENCE. « Beaucoup de vibrations, ou une qui dure longtemps
+     d'un coup » — iOS ne sait pas tenir une vibration continue depuis expo-haptics, il n'y a
+     pas d'API pour ça. Le plus proche est une rafale de `heavy` assez serrée pour que l'oreille
+     interne ne sépare plus les coups : 10 × 60 ms ≈ 600 ms de roulement. L'`error` part en
+     premier et donne le verdict ; la rafale est ce qui le fait durer.
+     ⚠️ C'est délibérément à l'opposé de runBuzz sur les DEUX axes — plus dense que tout ce que
+     la série peut produire (60 contre un plancher à 340) et d'un style plus lourd du début à la
+     fin. Une victoire et une défaite ne doivent jamais être confondues dans la poche. */
+  const deathBuzz=()=>{
+    try{
+      postNative({type:"haptic",style:"error"});
+      for(let i=1;i<10;i++) setTimeout(()=>{ try{ postNative({type:"haptic",style:"heavy"}); }catch(_){} }, i*60);
+      try{ navigator.vibrate&&navigator.vibrate([90,40,90,40,120,40,160,40,220]); }catch(_){}
+    }catch(_){}
   };
 
   /* Self-removing on purpose: the ending card mounts a moment later, and an effect layer
@@ -19149,12 +19257,25 @@ function chSeek(hideId,opts){
              distribution of run_broken `at` moves right after this ships, it worked. */
           track("run_saved",TP({at:sk.run,src:FEED?"feed":"link"}));
         }
-        else if(sk.run>0)     chRunShow(sk.run, sk.record?"pb":"", sk.best);
+        /* ⚠️ LA SÉRIE BUZZE ICI ET PAS DANS chCelebrate, PARCE QUE chCelebrate NE SAIT PAS
+           COMPTER. Il tire au moment du tap réussi, avant que chSeekRecord() n'ait décidé sur
+           quelle série la manche atterrit — il n'a donc que la trouvaille à annoncer, et c'est
+           bien ce qu'il fait avec son `success`. La série est un second fait, connu seulement
+           ici, et elle se sent par-dessus : la trouvaille dit « oui », la série dit « combien ».
+           Le décalage suffit à les séparer — le `success` a déjà rendu la main quand la
+           première impulsion part. */
+        else if(sk.run>0){    chRunShow(sk.run, sk.record?"pb":"", sk.best);
+                              runBuzz(sk.run); }
         else if(sk.broke>=2){ chRunShow(sk.broke,"dead",sk.best);
           /* A broken run is the one loss with something behind it, and it gets the error
              buzz — the stake has to be FELT, which is exactly what run_broken's `at`
              distribution is watching for. */
-          buzzHaptic([40,60,40],"error",3);
+          /* ⚠️ REMPLACE buzzHaptic([40,60,40],"error",3). Les trois coups à 80 ms d'écart de
+             buzzHaptic étaient plus COURTS que ce que la série produit désormais à son pic —
+             la mort se sentait moins qu'une victoire, ce qui est exactement à l'envers.
+             deathBuzz() est le seul bloc du fichier, et c'est voulu : il n'y a qu'une façon de
+             perdre une série. */
+          deathBuzz();
           /* THE ONE NUMBER THAT SAYS WHETHER ANY OF THIS WORKED. If the run is doing its job,
              the distribution of `at` climbs — people are looking longer before they tap —
              and the 3.5s median of a failed round rises with it. If `at` stays pinned at 2
