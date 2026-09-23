@@ -5117,7 +5117,7 @@ function backToCompose(){ figLayer=null; figctx=null; shadeSrc=null;
    with the dismiss listener on the document, so a tap through it still reaches what is under it.
    window.KAMOSEEK survives too: chSeekRecord()'s lifetime counters (kamo_seeks /
    kamo_seek_hits) fed the second line and are read by the tests and the run pill besides. */
-let chToastEl=null, chToastT=null;
+let chToastEl=null, chToastT=null, chToastArmT=null;
 function chToastShow(title,sub){
   try{
     /* ⚠️ THE STYLESHEET IS NOT INJECTED HERE ANY MORE — see the main <style>. It was built
@@ -5126,7 +5126,7 @@ function chToastShow(title,sub){
        it on a camera that had never opened the feed. It now sits beside the other
        body.nav-on lifts, which is also where the next person moving that furniture will
        look. */
-    if(chToastEl){ try{ chToastEl.remove(); }catch(_){} clearTimeout(chToastT); document.removeEventListener("pointerdown",chToastTap,true); }
+    if(chToastEl){ try{ chToastEl.remove(); }catch(_){} clearTimeout(chToastT); clearTimeout(chToastArmT); document.removeEventListener("pointerdown",chToastTap,true); }
     const el=document.createElement("div"); el.id="chToast";
     el.innerHTML="<b></b>"+(sub?"<span></span>":"");
     el.querySelector("b").textContent=title;
@@ -5134,13 +5134,27 @@ function chToastShow(title,sub){
     document.body.appendChild(el); chToastEl=el;
     requestAnimationFrame(()=>el.classList.add("on"));
     chToastT=setTimeout(chToastDismiss,3400);
-    document.addEventListener("pointerdown",chToastTap,true);
+    /* ⚠️ THE DISMISS LISTENER IS ARMED LATE, AND THAT DELAY IS THE WHOLE FIX. It used to go on
+       in the same frame as the toast, on the DOCUMENT, in capture — so the very next tap
+       anywhere on screen killed it. Harmless for the recap this was built for, which appeared
+       on a viewfinder nobody was touching; wrong for its only caller today. The hint-pack
+       unlock arrives at the end of a purchase, i.e. after a burst of taps, with a finger still
+       moving: the founder bought a pack on 2026-09-23, watched the button change to "4 hints
+       left", and never saw the "5 hints unlocked" toast at all. A toast that can be dismissed
+       before it has finished fading IN is not a toast, it is a race.
+       460ms is the fade (380ms) plus a frame or two: long enough that the gesture which opened
+       it cannot close it, short enough that a deliberate tap still gets rid of it. */
+    chToastArmT=setTimeout(()=>{ document.addEventListener("pointerdown",chToastTap,true); },460);
   }catch(_){}
 }
 function chToastTap(){ chToastDismiss(); }
 function chToastDismiss(){
   const el=chToastEl; if(!el) return;
   clearTimeout(chToastT);
+  /* AND THE PENDING ARM, or a dismiss that happens inside the 460ms grace leaves a timer that
+     attaches a listener to a toast which no longer exists — it would then swallow the next
+     tap on the page and never be removed. */
+  clearTimeout(chToastArmT);
   document.removeEventListener("pointerdown",chToastTap,true);
   el.classList.remove("on");
   setTimeout(()=>{ try{ el.remove(); }catch(_){} if(chToastEl===el) chToastEl=null; },380);
@@ -9241,7 +9255,7 @@ function trackCarried(kind,props){
    levels" could be a legibility bug or a control nobody opens, and nothing distinguishes
    them. It goes on the direct path so it reports from 1.0.2 too, which is most of the
    fleet — an allow-list entry would only measure builds that ship after the next review. */
-const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","hint_buy_no_bridge","hint_buy_ended","hint_buy_no_answer","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","support_opened","save_no_ack","save_ok","web_notif_armed","notif_ask_deferred","handle_restored","hide_signed",
+const WEB_ONLY=new Set(["settings_opened","nav_tapped","nav_glass","board_opened","board_share_tapped","hint_unavailable","reply_opened_first","hint_tapped","hint_modal_shown","hint_modal_dismissed","hint_buy_no_bridge","hint_buy_ended","hint_buy_no_answer","hint_moment_failed","compose_ready","update_banner_shown","update_banner_tapped","feed_scope_changed","mine_grid_shown","replay_paywall_tapped","webgl_dead","brush_changed","size_floor_reached","camera_lenses","session_video_sent","pose_changed","sheet_presented","sheet_minimized","hide_published","hide_sent","finish_selected","hide_published_stale","hide_prepare_failed","hide_publish_failed","hide_publish_blocked","char_selected","invite_native","invite_shared","invite_copied","results_pending","challenge_preview_opened","creator_pass_used","home_opened","home_results_shown","home_results_expanded","replay_watched","replay_finished","replay_closed","replay_empty","resend_tapped","resend_shared","resend_copied","discord_opened","support_opened","save_no_ack","save_ok","web_notif_armed","notif_ask_deferred","handle_restored","hide_signed",
 /* THE FEED'S FUNNEL, ROUTED DIRECT ON PURPOSE. A web event only reaches Amplitude through
    the wrapper if the SHIPPED BINARY's WEB_EVENTS allow-list already knows its name — and no
    released build knows any of these, so through the bridge they would be dropped in total
@@ -17967,7 +17981,20 @@ function chSeek(hideId,opts){
       hintPolling=true;
       hintPending=true; hintBtn.disabled=true; hintWait(true);
       try{
-        for(let i=0;i<6;i++){
+        /* ⚠️ THE WAIT RAMPS, IT IS NOT FLAT — and the flat version is what the buyer felt.
+           Six tries 1500ms apart means the second attempt is at 1.5s, the third at 3.0s, the
+           fourth at 4.5s, whatever the webhook actually did. RevenueCat commonly lands the
+           grant inside a second, and this slept through it: the credit was sitting in the
+           wallet while the button held a spinner. Reported on 2026-09-23 as "un loader hyper
+           lent" on a purchase whose grant row is timestamped 12:33:16.
+           400 / 700 / 1100 then 1500 keeps the same total window (8.2s against 7.5s, and one
+           more attempt) while catching a fast webhook in under half the time. The first try
+           still runs before any sleep, so a grant that is already there costs nothing.
+           ⚠️ DO NOT MAKE THE FIRST GAPS SHORTER THAN THIS. Each iteration is an hint_claim
+           plus a hint_spend RPC; tightening the ramp turns a slow webhook into a burst against
+           our own database on every purchase, for a control one person is watching. */
+        const HINT_POLL_MS=[400,700,1100,1500,1500,1500,1500];
+        for(let i=0;i<=HINT_POLL_MS.length;i++){
           /* THE CLAIM COMES FIRST ON AN UNIDENTIFIED DEVICE, because the grant the webhook
              just wrote is under the RevenueCat id and this wallet is under the device key.
              Idempotent and fail-closed server-side, so polling it six times is harmless. */
@@ -17982,8 +18009,32 @@ function chSeek(hideId,opts){
                same reason it was wrong on a refused stamp: this branch is reached by somebody
                who has just PAID, and the balance is what they are owed a sight of. A credit
                that lands at zero is a webhook that has not finished, not a spend. */
+            /* ⚠️ THE ACKNOWLEDGEMENT COMES BEFORE THE NEW BALANCE, AND THE ORDER IS THE POINT.
+               markSpent() writes "✓ 4 hints left" on the button. Run first — as it was until
+               2026-09-23 — the very first thing somebody who just bought FIVE hints sees about
+               their purchase is the number four, because the hide they were stuck on spends one
+               the instant the credit lands. That is the subtraction the note below forbids in
+               the COPY, performed on them by the interface instead. Measured on the founder's
+               own purchase: grant of 5 at 12:33:16, a spend 13 seconds later, and "4 hints left"
+               with no 5 anywhere in the story.
+               The toast names what they bought; the button then names what is left. Same two
+               facts, the right way round.
+               AND A FAILURE IS NO LONGER INVISIBLE. These three calls each sat in their own
+               empty catch, so a throw in any one of them deleted that part of the moment
+               without a trace — indistinguishable from "it works and nobody mentioned it",
+               which is precisely the state this was found in. They stay INDEPENDENT (a dead
+               haptic must not cost the toast) and each one now says so. */
+            const hintMoment=(step,fn)=>{ try{ fn(); }catch(e){
+              try{ track("hint_moment_failed",TP({step,reason:String((e&&e.message)||e).slice(0,80)})); }catch(_){} } };
+            hintMoment("haptic",()=>haptic(20));
+            hintMoment("burst",()=>confettiBurst(hintBtn));
+            hintMoment("toast",()=>chToastShow(kT`${HINT_PACK_SIZE} hints unlocked`,
+                                               kT("They keep for your next kamos")));
             if(r.balance>0) markSpent(r.balance); else { hintBtn.textContent=kT("✓ Hint revealed"); hintBtn.classList.add("spent"); hintBtn.disabled=true; }
-            /* ⚠️ EVERY PURCHASE IN THIS APP GETS A MOMENT — EXCEPT THIS ONE. Trial and lifetime
+            /* ⚠️ THE CALLS THIS NOTE ARGUES FOR NOW RUN ABOVE markSpent(), NOT HERE — see the
+               ordering note there for why. The reasoning below is unchanged and is why they
+               exist at all; only their position moved.
+               ⚠️ EVERY PURCHASE IN THIS APP GETS A MOMENT — EXCEPT THIS ONE. Trial and lifetime
                both land on showKamoPlus(): a burst, a haptic, a line that names the plan they
                bought. A hint pack landed on a button quietly changing to "✓ 4 hints left" on a
                screen they were about to leave. Same money, same decision, no acknowledgement.
@@ -17999,10 +18050,6 @@ function chSeek(hideId,opts){
                that the rest survive this hide. The figure interpolates; rule 5c forbids a number
                typed into copy that sells, and a receipt for a sale is copy that sells. */
             hintMarkBought();
-            try{ haptic(20); }catch(_){}
-            try{ confettiBurst(hintBtn); }catch(_){}
-            try{ chToastShow(kT`${HINT_PACK_SIZE} hints unlocked`,
-                             kT("They keep for your next kamos")); }catch(_){}
             /* NOT COUNTED WHEN THE SERVER SAYS `already`. Bought from the post-use offer, this
                hide's hint was spent a moment ago and hint_spend returns the same zone without
                touching the wallet — so the pack lands intact, and a second hint_used here would
@@ -18011,7 +18058,7 @@ function chSeek(hideId,opts){
             if(r.used!=="already") track("hint_used",TP({via:"purchased",balance:r.balance|0}));
             return;
           }
-          await new Promise(res=>setTimeout(res,1500));
+          await new Promise(res=>setTimeout(res,HINT_POLL_MS[i]||1500));
         }
         /* Paid and still not credited. The hints are NOT lost — they are in the wallet the
            moment the webhook lands — so say the true thing rather than "failed".
