@@ -16839,7 +16839,7 @@ function chSeek(hideId,opts){
      exactly the population it exists for. */
   /* _pwT is the round's deferred first-offer (see ending()). A round that is torn down has no
      business opening a paywall a second later, on whatever screen replaced it. */
-  ctl.destroy=()=>{ killed=true; chLive=false; try{ clearInterval(ctl._clock); }catch(_){} try{ clearTimeout(ctl._pwT); }catch(_){} try{ w.remove(); }catch(_){} };
+  ctl.destroy=()=>{ killed=true; chLive=false; try{ clearInterval(ctl._clock); }catch(_){} try{ clearInterval(ctl._tick); }catch(_){} try{ clearTimeout(ctl._pwT); }catch(_){} try{ w.remove(); }catch(_){} };
   /* TWO CHANNELS, ONE CALL. navigator.vibrate is a no-op on every iPhone (WKWebView never
      implemented it), so the strongest moments in this game — the find, the snap — have been
      haptically SILENT for the entire iOS fleet since the day they shipped. The bridge is the
@@ -16867,48 +16867,64 @@ function chSeek(hideId,opts){
     try{ navigator.vibrate&&navigator.vibrate(p); }catch(_){}
   };
 
-  /* ═══ LA SÉRIE SE SENT, ET ELLE SE SENT DE PLUS EN PLUS ═══════════════════════════════════
+  /* ═══ LA SÉRIE EST UN BATTEMENT, PAS UNE FANFARE ═══════════════════════════════════════
    *
-   * Jusqu'ici une trouvaille valait UN `success`, la même secousse au 2e kamo qu'au 12e — et
-   * la série, le seul chiffre que ce jeu demande de protéger, ne se sentait pas du tout. Le
-   * nombre d'impulsions suit maintenant la série et leur espacement se resserre : au début on
-   * compte les coups, plus haut ils se rapprochent jusqu'à devenir un roulement. Demandé par
-   * le fondateur le 2026-09-23.
+   * ⚠️ CE BLOC A DÉJÀ ÉTÉ ÉCRIT UNE FOIS À L'ENVERS, ET LA CORRECTION EST LE SUJET. La
+   * première version tirait une RAFALE au moment où la série avançait — une célébration, à la
+   * fin de la manche. Le fondateur a testé et n'a rien senti de ce qu'il avait demandé :
+   * « je suis passé à un autre hide et je ressens pas la vibration par seconde qui aille de
+   * plus en plus vite ». La demande n'était pas de fêter une série acquise, c'était de la
+   * FAIRE PORTER pendant qu'on en risque la perte. La rafale est supprimée (« pas besoin de
+   * rafale ou la série avance », 2026-09-23) : ce qui suit bat PENDANT la chasse.
    *
-   * ⚠️ AUCUN NATIF N'EST REQUIS, ET C'EST CE QUI DÉCIDE DE LA FORME. Le handler du wrapper
-   * expose déjà cinq styles (`impact`, `heavy`, `success`, `error`, sélection par défaut) —
-   * App.js, `msg.type === 'haptic'`. Tout ce qui suit n'est que du choix de style et du
-   * `setTimeout`, donc ça part en web, sans build et sans App Review. Ne PAS inventer un
-   * sixième style ici : un nom que le wrapper ne connaît pas tombe dans le `else` et devient
-   * une sélection, c'est-à-dire la plus faible des cinq — l'inverse de l'intention.
+   * Une impulsion par seconde tant qu'on porte une série, et l'intervalle se resserre à mesure
+   * qu'elle monte : 1000 ms à 1, ~260 ms à 8. Plus la série est haute, plus la main sait ce
+   * qu'elle est en train de risquer — et c'est exactement le moment où l'information sert,
+   * c'est-à-dire avant le tap, pas après.
    *
-   * ⚠️ DEUX PLAFONDS, PAS UN. `RUN_BUZZ_MAX` borne le nombre d'impulsions ; l'espacement a son
-   * propre plancher. Sans le second, une série de 30 donnerait 6 impulsions collées en 200 ms,
-   * soit une bouillie indistinguable de la mort — or ce sont les deux extrémités du jeu et
-   * elles doivent rester reconnaissables les yeux fermés.
+   * ⚠️ AUCUN NATIF REQUIS. Le wrapper expose cinq styles (App.js, `msg.type === 'haptic'`) ;
+   * ceci n'est que du choix de style et du setInterval, donc ça part en web, sans build. Ne
+   * PAS inventer un sixième nom : un style inconnu tombe dans le `else` du wrapper et devient
+   * une sélection, la plus faible des cinq.
    *
-   * ⚠️ ET ELLE NE COMMENCE QU'À 2. Une série de 1 n'est pas une série : c'est la règle que ce
-   * fichier applique déjà partout ailleurs (le pill, `run_broken` qui ne parle qu'à partir de
-   * 2, « 1 best yet » jugé « du bruit déguisé en exploit »). Fêter un 1 les rendrait tous
-   * pareils. */
-  const RUN_BUZZ_MAX=6;
-  const runBuzz=(run)=>{
+   * ⚠️ `impact` ET PAS PLUS LOURD. Une impulsion qui se répète n'a pas le droit au poids d'une
+   * impulsion unique : ce qui est agréable une fois devient un marteau au dixième coup. Le
+   * lourd reste réservé à ce qui n'arrive qu'une fois — la mort, juste en dessous.
+   *
+   * ⚠️ TROIS ARRÊTS, ET ILS SONT TOUS NÉCESSAIRES. La fin de manche (sinon le battement
+   * couvre le buzz de fin — et navigator.vibrate REMPLACE un motif en cours, donc l'un
+   * mangerait l'autre), la destruction de la manche (le feed démonte un slide dès qu'on passe
+   * au suivant, et un intervalle survivant vibrerait pour une manche que personne ne regarde
+   * plus), et `document.hidden` (sinon l'app vibre dans la poche, écran éteint).
+   *
+   * ⚠️ ET UN PLAFOND DE BATTEMENTS, parce qu'une manche n'a pas de durée garantie. La médiane
+   * d'une manche ratée est de 3,5 s — donc 3 ou 4 coups — mais rien n'interdit de laisser un
+   * hide ouvert dix minutes, et une vibration par seconde pendant dix minutes est une panne,
+   * pas une fonctionnalité. 30 coups couvrent très largement toute manche réelle puis le
+   * battement s'éteint de lui-même. */
+  const RUN_TICK_MAX=8, RUN_TICK_BEATS=30;
+  const runTickStop=()=>{ try{ clearInterval(ctl._tick); }catch(_){} ctl._tick=null; };
+  const runTickStart=()=>{
     try{
-      const n=Math.min(run|0,RUN_BUZZ_MAX);
-      if(n<2) return;
-      /* 900 ms entre deux coups à 2, ~340 à 6 : la série accélère en se remplissant. */
-      const gap=Math.max(340,900-(n-2)*140);
-      const web=[];
-      for(let i=0;i<n;i++){
-        /* Le DERNIER coup est un `heavy` — la série se referme sur une ponctuation, sinon
-           six impulsions identiques ne racontent rien qu'un compteur. */
-        const style=(i===n-1)?"heavy":"impact";
-        setTimeout(()=>{ try{ postNative({type:"haptic",style:style}); }catch(_){} }, i*gap);
-        if(i) web.push(gap-18);
-        web.push(18);
-      }
-      /* Le web n'a pas de styles : le motif porte seul la montée. */
-      try{ navigator.vibrate&&navigator.vibrate(web); }catch(_){}
+      runTickStop();
+      const run=(chStreak().run|0);
+      /* À PARTIR DE 1 : « après le premier streak ». Il n'y a rien à risquer à 0, et un
+         battement sans enjeu n'est que du bruit. */
+      if(run<1) return;
+      const n=Math.min(run,RUN_TICK_MAX);
+      const every=Math.max(260,1000-(n-1)*105);
+      let beats=0;
+      ctl._tick=setInterval(()=>{
+        try{
+          if(killed||!chLive||beats>=RUN_TICK_BEATS){ runTickStop(); return; }
+          /* Écran éteint ou app en arrière-plan : on saute le coup sans arrêter le compte —
+             revenir sur la manche doit la retrouver telle qu'on l'a laissée. */
+          if(document.hidden) return;
+          beats++;
+          postNative({type:"haptic",style:"impact"});
+          try{ navigator.vibrate&&navigator.vibrate(10); }catch(_){}
+        }catch(_){ runTickStop(); }
+      },every);
     }catch(_){}
   };
 
@@ -16917,9 +16933,12 @@ function chSeek(hideId,opts){
      pas d'API pour ça. Le plus proche est une rafale de `heavy` assez serrée pour que l'oreille
      interne ne sépare plus les coups : 10 × 60 ms ≈ 600 ms de roulement. L'`error` part en
      premier et donne le verdict ; la rafale est ce qui le fait durer.
-     ⚠️ C'est délibérément à l'opposé de runBuzz sur les DEUX axes — plus dense que tout ce que
-     la série peut produire (60 contre un plancher à 340) et d'un style plus lourd du début à la
-     fin. Une victoire et une défaite ne doivent jamais être confondues dans la poche. */
+     ⚠️ C'est délibérément à l'opposé du BATTEMENT sur les DEUX axes — plus dense que tout ce
+     que la série peut produire (60 ms contre un plancher à 260) et d'un style plus lourd du
+     début à la fin (`heavy` contre `impact`). Une victoire et une défaite ne doivent jamais
+     être confondues dans la poche, et c'est ce double écart qui le garantit : si un jour le
+     plancher du battement descend sous ~120 ms, les deux se ressembleront et il faudra
+     descendre celui-ci avec. */
   const deathBuzz=()=>{
     try{
       postNative({type:"haptic",style:"error"});
@@ -17536,6 +17555,11 @@ function chSeek(hideId,opts){
        not already mid-run. */
     if(!REPLAY){ const s0=chStreak(); chRunShow(s0.run,"",s0.best); }
     const startClock=()=>{ if(t0) return; t0=Date.now(); clockEl.style.display="block";
+      /* LE BATTEMENT COMMENCE AVEC LA CHASSE, pas au montage. startClock() est appelé au
+         DÉCODE de la photo — le moment où il y a quelque chose à chercher — et il est déjà
+         idempotent (`if(t0) return`), donc le battement hérite de cette garantie au lieu
+         d'en redemander une. */
+      runTickStart();
       clock=setInterval(()=>{ syncPause(); clockEl.textContent=(elapsed()/1000).toFixed(1)+"s"; },100);
       ctl._clock=clock; };   // the handle destroy() clears — see `killed` above
     /* THE CLOCK STARTS AT DECODE, not at the first touch. With one buzz there is no
@@ -19160,6 +19184,11 @@ function chSeek(hideId,opts){
        product, not a punishment, and a second ending screen would be a second thing to
        maintain and diverge. */
     function ending(head,sub,eopts){
+      /* AVANT TOUT LE RESTE. Le battement et le buzz de fin se disputeraient le même canal :
+         navigator.vibrate REMPLACE un motif en cours, et côté natif le wrapper recevrait deux
+         messages pour un seul moment. La manche est finie — il n'y a plus rien à risquer,
+         donc plus rien à faire battre. */
+      try{ runTickStop(); }catch(_){}
       chLive=false;   // the hunt is over — see the declaration for what reads this
       /* ⚠️ ASK WHERE THE KAMO WAS, AND ONLY NOW. On the modern path the reveal swaps in the _b
          frame — the body is simply THERE — and the client never learns cx/cy at all. The two
@@ -19257,15 +19286,12 @@ function chSeek(hideId,opts){
              distribution of run_broken `at` moves right after this ships, it worked. */
           track("run_saved",TP({at:sk.run,src:FEED?"feed":"link"}));
         }
-        /* ⚠️ LA SÉRIE BUZZE ICI ET PAS DANS chCelebrate, PARCE QUE chCelebrate NE SAIT PAS
-           COMPTER. Il tire au moment du tap réussi, avant que chSeekRecord() n'ait décidé sur
-           quelle série la manche atterrit — il n'a donc que la trouvaille à annoncer, et c'est
-           bien ce qu'il fait avec son `success`. La série est un second fait, connu seulement
-           ici, et elle se sent par-dessus : la trouvaille dit « oui », la série dit « combien ».
-           Le décalage suffit à les séparer — le `success` a déjà rendu la main quand la
-           première impulsion part. */
-        else if(sk.run>0){    chRunShow(sk.run, sk.record?"pb":"", sk.best);
-                              runBuzz(sk.run); }
+        /* PAS DE BUZZ ICI, ET C'EST UN CHOIX REVENU EN ARRIÈRE. Une rafale a occupé cette
+           ligne le 2026-09-23 ; elle est partie le jour même (« pas besoin de rafale ou la
+           série avance »). La trouvaille a déjà son `success` dans chCelebrate, et la série,
+           elle, se sent PENDANT la manche suivante — voir runTickStart(). Rien à ajouter au
+           moment où le chiffre monte : il est déjà à l'écran. */
+        else if(sk.run>0)     chRunShow(sk.run, sk.record?"pb":"", sk.best);
         else if(sk.broke>=2){ chRunShow(sk.broke,"dead",sk.best);
           /* A broken run is the one loss with something behind it, and it gets the error
              buzz — the stake has to be FELT, which is exactly what run_broken's `at`
