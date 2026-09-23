@@ -8740,6 +8740,20 @@ const hintFanout=(k)=>{ const L=hintRounds();
     if(!h||!h.el||!h.el.isConnected){ L.splice(i,1); continue; }
     try{ h[k]&&h[k](); }catch(_){} } };
 const hintBuyEnded=()=>{ try{ hintFanout("ended"); }catch(_){} };
+/* ═══ WHAT THE WRAPPER HEARD, so hint_buy_no_answer stops meaning two opposite things ═══
+   That event is 76 records, 100% host="app", 49% of in-app hint purchase attempts, and it
+   cannot distinguish the wrapper losing the message from a buyer taking longer than 45s in
+   Apple's sheet. Its own comment says as much ("a floor on the breakage, not a count of it"),
+   which is why the number has never been acted on.
+   MODULE-SCOPE, NOT PER-ROUND. The feed mounts several rounds at once and the ack arrives on
+   whichever one posted the purchase; the 45s timer that reads it closes over its own round.
+   One shared value is correct here precisely because only one purchase can be in flight —
+   purchaseInFlight on the native side guarantees it, and a second tap is answered with
+   buyDone() rather than a second sheet.
+   RESET BY THE POST, never by the reader: a stale "sheet" from the previous purchase would
+   turn the next real breakage into "the buyer was slow". */
+let lastBuyAck="";
+window.KAMO.buyAck=(stage)=>{ lastBuyAck=String(stage||"").slice(0,16); };
 window.KAMO.buyDone=()=>{ setPwBuyLoading(false); hintBuyEnded(); };
 /* `setPrice` (singular) was defined here and never injected by ANY native build — the
    wrapper only ever calls setPrices. Removed rather than left as a decoy. */
@@ -17919,6 +17933,7 @@ function chSeek(hideId,opts){
          is the only purchase that never touches the paywall, so without it the hint pack's
          `purchase_completed` would land in the same unattributed bucket as a subscription
          and quietly inflate whichever door was last opened. */
+      lastBuyAck="";   /* see window.KAMO.buyAck — cleared by the POST, never by the reader */
       if(!postNative({type:"purchase",product:HINT_PACK_ID,source:"hint"})){
         /* THE BRIDGE IS THERE AND REFUSED THE MESSAGE — a different world from the browser
            branch above, and the reason is what separates them. postNative() returns false on
@@ -17951,7 +17966,17 @@ function chSeek(hideId,opts){
            ⚠️ IT MEANS "NO ANSWER IN 45s", NOT "NEVER", and the name says so. A player sitting
            in Apple's sheet for a minute lands here and may still buy afterwards; the credit
            poll is unaffected. So this is a floor on the breakage, not a count of it. */
-        track("hint_buy_no_answer",TP({}));
+        /* `ack` IS THE WHOLE POINT OF THIS EVENT NOW. Four readings, and they call for four
+           different things:
+             unsupported — the binary predates the ack (nativeCaps.buyAck absent). Says
+                           nothing about this purchase; it is the denominator being honest
+                           instead of every old build reporting as breakage.
+             none        — the bridge delivered nothing. THE bug, and the only one worth a fix.
+             received    — the handler ran and StoreKit was never reached: the package did not
+                           resolve. Invisible until now, and neither of the two readings this
+                           event was argued over.
+             sheet       — Apple owned the screen. Not a defect: a slow buyer. */
+        track("hint_buy_no_answer",TP({ack:(nativeCaps&&nativeCaps.buyAck)?(lastBuyAck||"none"):"unsupported"}));
         hintPending=false; hintWait(false); hintBtn.disabled=false; hintIdle(); } },45000);
     }
 
