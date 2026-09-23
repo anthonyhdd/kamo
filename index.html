@@ -3660,7 +3660,24 @@ const PLAN_LIFETIME_ROLLOUT=0;
 let planArm;
 {
   const s=lsGet("kamo_plan_arm");
-  if(s==="weekly"||s==="lifetime") planArm=s;
+  /* THE STORED "lifetime" NO LONGER WINS ON A REAL DEVICE, and the paragraph above is the
+     reasoning it replaces. That note retired the arm for new devices only, on the grounds
+     that the lifetime hero is "merely mediocre" — 0.85pp worse on the tap — so leaving the
+     already-bucketed half on it cost little. That was true while the fleet was mostly new
+     installs. It stopped being true when acquisition stopped: on 2026-09-23 the paywall
+     population is the RETURNING fleet, i.e. precisely the devices that were bucketed during
+     the experiment, and the hero they are stuck on is the one product in this app that
+     carries NO introductory offer. The weekly's 3-day trial is the only thing that ever
+     converted here (81 of 85 trials), and a device pinned to lifetime cannot be shown it as
+     the hero however eligible its Apple ID is.
+     THE HARNESS KEEPS ITS SEED. test-planarm-dom seeds kamo_plan_arm to reach the lifetime
+     rendering path — #pwLifeLine and the unsellable-lifetime fallback — and that path still
+     ships to everybody on the second line, so it still has to be testable. Under
+     navigator.webdriver the store wins exactly as before; on a real device, a rollout of 0
+     means nobody is in the arm, including the people who used to be. Set the rollout above 0
+     and the stored value is honoured again everywhere, which is what an A/B needs. */
+  if((s==="weekly"||s==="lifetime") && (PLAN_LIFETIME_ROLLOUT>0 || navigator.webdriver)) planArm=s;
+  else if(s==="weekly"||s==="lifetime") planArm="weekly";
   /* Pinned for the harness for the same reason pwArm is: every DOM test in scripts/ boots
      this page in headless Chromium, and a coin flipped at load makes the CTA assertions
      flaky. A test that wants the lifetime arm seeds kamo_plan_arm="lifetime" before load. */
@@ -5858,12 +5875,47 @@ const BRUSH_MIN=2, BRUSH_MAX=64, BRUSH_CURVE=2.2;
    made. FREE_BRUSH is the middle one and is now 20 — the note below warns it must never
    DRIFT BACK UP, and this moves it the safe way. The paid range keeps a reason to exist at
    both ends: 2-9 for real detail, 37-64 for filling fast. */
-const FREE_SIZES=[10,20,36];
+/* THE FINE END GOES BACK BEHIND KAMO+, AND THIS IS THE ONE CHANGE IN THIS BLOCK'S HISTORY
+   THAT WAS NOT MADE ON A MEASUREMENT. 16/26/40 -> 14/26/46 -> 10/20/36 walked the smallest
+   free stop from 16 down to 10 across three passes, each answering a spacing or a thickness
+   complaint, none of them asking what was left to sell. At 10 the free floor sits at t=0.39
+   on the bar: the fine end — "fine enough to work an edge", which is what the paywall copy
+   actually promises and the only thing PRO_SIZES still names — is a stop and a half away
+   from free. 10 traces most edges. The founder's reading on 2026-09-23, and he is right
+   that the pitch and the control had drifted apart.
+   16/24/40 puts the floor back where the note above put it deliberately ("the smallest free
+   size is 16, deliberately not tiny") and keeps the 2.5x spread that made three stops read
+   as three, at t=0.51 / 0.62 / 0.80.
+   ⚠️ FREE_BRUSH MOVES 20 -> 24 WITH IT, and that is the direction the note below warns
+   about, so read the warning before undoing this: what it was written against is the 44/64
+   roller that cost 30% of share opens on 2026-08-04, not 24 — the same note defends 24 by
+   name as "a size you can actually work an outline with". Nothing here goes near 44.
+   ⚠️ THE TRIPWIRE IS SHARES, NOT TRIALS, and it is the same one as last time: share_opened
+   per paint_completed. Locking this control has cost this app 30% of its only free
+   acquisition channel once already, and `size` is simultaneously the most-shown paywall and
+   the worst-converting one (2.5% to trial against round_end's 9.4%). So the upside here is
+   giving KAMO+ something real to sell, NOT a lift on the size paywall — if share opens fall
+   again, this is wrong whatever the trial line does, and the fine stop goes back down. */
+/* THE MIDDLE AND THE TOP ARE ARITHMETIC, NOT TASTE. test-brush-dom requires every adjacent
+   pair to sit more than 0.16 apart in t, which is what stops three stops reading as one —
+   and t is BRUSH_CURVE 2.2, so the spacing is far from linear in pixels. Once the floor is
+   16 (t=0.51) the other two are almost fully determined: 16/24/40 fails at 0.12 and 0.18,
+   16/29/46 clears at 0.18 and 0.17. The top is back at 46, where 14/26/46 already had it. */
+const FREE_SIZES=[16,29,46];
 /* How many colours are sampled off the scene for a free row. Named because the PAYWALL makes
    a claim about it ("Free gets N shades off the photo") and a number that lives in two places
    is a number that will one day disagree with itself. extractPalette() reads this. */
 const FREE_SHADES=3;
-const FREE_BRUSH=FREE_SIZES[1];   // the default a free round starts on
+/* THE FIRST STOP, NOT THE MIDDLE ONE — and the index is the whole change, so read why before
+   putting it back to [1]. Raising the floor to 16 forces the middle stop to 29 (see the
+   spacing note above), and 29 as the size every free round STARTS on is the one direction
+   this file has a measured disaster in: the version pinned at the 44/64 roller cost 30% of
+   share opens on 2026-08-04, and "the brush was so thick" is a complaint the ad comments
+   made out loud. Nothing anywhere says a finer default hurt anything.
+   So the floor doubles as the default: a free round now starts at 16, FINER than the 20 it
+   started on before, while the fine range under it goes back behind KAMO+. The other two
+   stops are still one tap away — this picks where the round opens, not what it allows. */
+const FREE_BRUSH=FREE_SIZES[0];   // the default a free round starts on
 /* THE LOCKED SIZES, DRAWN. A free user could not previously learn that a paid range existed:
    only the dot they were standing on was rendered, the thumb was hidden for them, and the
    bar looked like a continuous rail whose bottom half silently snapped back up. Nothing on
@@ -12083,6 +12135,11 @@ let sizing=false, freeSizing=false;
        FREE_BRUSH is 24, a size you can actually work an outline with. That is the whole
        difference between this and the version that failed, and it is why FREE_BRUSH must
        not drift back up.
+       ⚠️ THE NUMBER IN THAT SENTENCE IS STALE AND THE RULE IS NOT. FREE_BRUSH was 24 when
+       this was written, went to 20, and is 16 since 2026-09-23 — every move has been DOWN,
+       which is the safe direction this paragraph is asking for. It is left at 24 rather
+       than edited because the argument is about the 44/64 roller it is contrasted with,
+       and rewriting the figure would quietly turn a warning into a spec.
 /* WHERE IT LANDED, AND WHY THE PENDULUM STOPPED HERE. Read the four notes above as a
    pendulum: every touch sells → nothing sells → every touch sells → nothing sells. Both ends
    were wrong for the same reason, which none of those notes names: the locked range was
