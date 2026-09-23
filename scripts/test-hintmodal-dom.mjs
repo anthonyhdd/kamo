@@ -459,6 +459,23 @@ console.log('\n— every way the purchase can end has a name —');
   const buyPage = async (bridge, slowTimer) => {
     const p = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     await servePhoto(p, true);
+    /* THE NO-BRIDGE TAP NOW LEAVES FOR THE STORE, AND THAT TAKES `window.__ev` WITH IT.
+       Aborting the two store routes is not enough and the first attempt at this failed on
+       exactly that: Playwright builds a NEW DOCUMENT for the cross-origin navigation (the
+       long note in test-feedwall-dom.mjs is about the same edge), so the array the events
+       were pushed into no longer exists by the time names() reads it — which reports as an
+       empty list and looks identical to "nothing fired".
+       So this path is asserted the way test-pwgate-dom asserts the paywall pill: on what the
+       page SENT. A request listener survives the document, and the events are real network
+       posts rather than a harness-side mirror. */
+    await p.route('**/onelink.me/**', (r) => r.abort());
+    await p.route('**/apps.apple.com/**', (r) => r.abort());
+    const sent = [];
+    await p.route('**/api.eu.amplitude.com/**', async (r) => {
+      try { (JSON.parse(r.request().postData() || '{}').events || []).forEach((e) => sent.push(e)); } catch {}
+      await r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":200}' });
+    });
+    p.__sent = sent;
     await p.addInitScript(([h, br, st]) => {
       window.__hintsLive = true;
       window.__seed = { get_hide: h, save_seek_trace: null,
@@ -489,9 +506,22 @@ console.log('\n— every way the purchase can end has a name —');
 
   const web = await buyPage(false, false);
   const wn = await names(web);
-  wn.includes('hint_purchase_initiated') && wn.includes('hint_buy_no_bridge')
-    ? ok('no bridge → the attempt AND its dead end are both named')
-    : bad('a purchase with no bridge reported ' + JSON.stringify(wn.filter((x) => /hint_(buy|purchase)/.test(x))));
+  /* ⚠️ THE CONTRACT CHANGED ON 2026-09-23 AND THIS ASSERTION CHANGED WITH IT. It used to
+     require hint_purchase_initiated on this path — "the attempt AND its dead end are both
+     named". Both halves are now wrong on purpose. Every hint_buy_no_bridge ever recorded
+     (71/71) carried host="browser", matching the browser half of hint_purchase_initiated to
+     the unit: the tap could never reach a sheet, so counting it as purchase intent put taps
+     that never opened one into the numerator of the funnel that decides whether the pack
+     sells. And the dead end is no longer a dead end — the strongest install intent this page
+     sees now goes to the store instead of a disabled label that deletes itself.
+     So: the refusal is still named, the intent is NOT, and an install tap is. */
+  const wsent = (web.__sent || []).map((e) => e.event_type);
+  const wall = wn.concat(wsent);
+  wall.includes('hint_buy_no_bridge') && wall.includes('paywall_install_tapped')
+    && !wall.includes('hint_purchase_initiated')
+    ? ok('no bridge → the refusal is named and the tap leaves for the store, not for a wall')
+    : bad('a purchase with no bridge reported ' + JSON.stringify(
+        wall.filter((x) => /hint_(buy|purchase)|install_tapped/.test(x))));
 
   /* THE SHEET CLOSED WITH NOTHING BOUGHT — native answered, so the store worked and the answer
      was no. window.KAMO.hint is the wrapper's toast channel, and it is what ends the buy. */
