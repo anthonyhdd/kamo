@@ -279,6 +279,8 @@ console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
   const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const sent = [];
+  /* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+  await page.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
   await page.route('**/api.eu.amplitude.com/**', async r => {
     try { (JSON.parse(r.request().postData() || '{}').events || []).forEach(e => sent.push(e)); } catch {}
     await r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":200}' });
@@ -440,6 +442,8 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
   const PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAF0lEQVQIW2NkYGD4z8DAwMgABXAGNgEAJz0BAWv6xkkAAAAASUVORK5CYII=', 'base64');
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PX }));
+  /* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+  await page.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
   await page.route('**/api.eu.amplitude.com/**', r => r.fulfill({ status: 200, body: '{}' }));
   await page.addInitScript((r) => {
     window.__seed = {

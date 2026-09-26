@@ -79,6 +79,8 @@ async function capture(boom) {
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 
   const sent = [];
+  /* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+  await page.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
   await page.route('**/*', (route) => {
     const u = route.request().url();
     if (u.startsWith(origin)) return route.continue();

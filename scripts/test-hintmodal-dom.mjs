@@ -471,6 +471,8 @@ console.log('\n— every way the purchase can end has a name —');
     await p.route('**/onelink.me/**', (r) => r.abort());
     await p.route('**/apps.apple.com/**', (r) => r.abort());
     const sent = [];
+    /* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+    await p.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
     await p.route('**/api.eu.amplitude.com/**', async (r) => {
       try { (JSON.parse(r.request().postData() || '{}').events || []).forEach((e) => sent.push(e)); } catch {}
       await r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":200}' });
