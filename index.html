@@ -10661,10 +10661,13 @@ async function nativeShare(target){
      better text: the link has to travel beside the post, not inside it. The clipboard is
      still the only channel that reaches everyone left on the older binary.
      Synchronous and BEFORE any await — a clipboard write outside the user gesture is
-     refused. The hint waits 700ms so the share sheet is what they see first. */
-  let linkCopied=false;
-  try{ navigator.clipboard.writeText(message); linkCopied=true; }catch(e){}
-  if(linkCopied) setTimeout(()=>showHint(kT("Link copied — paste it with your post"),3200),700);
+     refused. The hint waits 700ms so the share sheet is what they see first.
+     THROUGH chCopy(), NOT A BARE writeText() (2026-09-27). The bare call sat in a synchronous
+     try/catch, which cannot see a rejected promise: a refused write surfaced as an unhandled
+     rejection AND still announced "Link copied" to somebody holding nothing. chCopy() calls
+     writeText inside its Promise executor — synchronously, so still inside the gesture — and
+     only a copy that really landed earns the hint. See the note on chCopy(). */
+  chCopy(message).then(ok=>{ if(ok) setTimeout(()=>showHint(kT("Link copied — paste it with your post"),3200),700); });
   // Any media share on a binary that can encode → animated reveal MP4 (native module). Falls
   // back to the static image when the wrapper doesn't advertise the capability (older build)
   // or has no before frame; `asReveal` already folds both of those conditions in.
