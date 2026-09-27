@@ -3333,6 +3333,9 @@ if (kLoc) { try { document.documentElement.lang = kLoc; } catch (e) {} kTr(docum
      and nothing without a real message ever reaches `web_error` again. */
   var sentJs=0, sentRes=0;
   function post(type,props){
+    /* Same rule as chWebTrack: a webdriver page stays off production Amplitude unless a suite
+       that reads the wire opts in. See the note there. */
+    if(navigator.webdriver===true && window.__KAMO_AMP_WIRE!==true) return;
     try{
       var did; try{ did=localStorage.getItem("kamo_did")||"web-error-anon"; }catch(_){ did="web-error-anon"; }
       props.href=location.href.split("?")[0]; props.wrapper=!!window.ReactNativeWebView; props.emit="web";
@@ -9759,6 +9762,9 @@ function track(event,props){
    * cache, so it mixes both populations and has to be excluded too. check.mjs fails by name if
    * either property leaves this payload.
    *
+   * ✅ LANDED 2026-09-27 — chWebTrack and the boot beacon now refuse to POST under webdriver
+   * (opt-in: window.__KAMO_AMP_WIRE). `wd` stays on the payload: it still separates the two
+   * populations in every window BEFORE that date. The deferral below is kept as the record.
    * THE REAL REPAIR IS UPSTREAM and is deliberately not done here: chWebTrack should refuse to
    * POST under webdriver, with an opt-in for test-carrier-dom and test-variantprop-dom, which
    * are the only two suites that assert on the wire rather than on `window.__tr`. It is not
@@ -9965,6 +9971,9 @@ function chDeviceId(){
 }
 try{ didRestore(); }catch(e){}
 function chWebTrack(event,props){
+  /* The harness stays off production Amplitude (2026-09-27): 6 554 fake "users" on 09-23. Suites
+     that read the wire opt in with window.__KAMO_AMP_WIRE. Full story on track()'s note. */
+  if(navigator.webdriver===true && window.__KAMO_AMP_WIRE!==true) return;
   try{
     /* EU, NOT api2. This project runs with serverZone:"EU" (see kamo-app/analytics.js), so
        api2.amplitude.com answers 400 "Invalid API key" for this key — and the .catch below

@@ -2032,6 +2032,21 @@ try {
         + 'harness traffic as people. See the note at its declaration in index.html.');
 }
 
+/* The harness stays off production Amplitude (2026-09-27). Every DOM suite boots index.html under
+   navigator.webdriver and mints a fresh device id per boot; until this guard, all of it landed in
+   the live project — 6 554 "users" on 2026-09-23 against ~120 real ones. Both direct POSTs
+   (chWebTrack and the boot-crash beacon) must return early under webdriver unless the page opted
+   in with window.__KAMO_AMP_WIRE. Losing it looks like nothing: the dashboards just fill back up. */
+{
+  const sites = [...html.matchAll(/fetch\("https:\/\/api\.eu\.amplitude\.com\/2\/httpapi"/g)].map((m) => m.index);
+  const guard = /navigator\.webdriver\s*===\s*true\s*&&\s*window\.__KAMO_AMP_WIRE\s*!==\s*true\s*\)\s*return/;
+  const bare = sites.filter((i) => !guard.test(html.slice(Math.max(0, i - 3000), i)));
+  sites.length >= 2 && !bare.length
+    ? ok(`all ${sites.length} direct Amplitude POSTs refuse webdriver pages unless they opt in`)
+    : bad(`${bare.length || 'no'} direct Amplitude POST(s) without the webdriver guard (found ${sites.length}) — `
+        + 'the test suites go back to minting thousands of fake users in production. See chWebTrack.');
+}
+
 /* ---- 13. The control the paywall sells --------------------------------------------------
    "KAMO+ unlocks the whole range, down to fine detail" is a promise about a slider, made to
    someone deciding whether to pay. A member silently snapped to the three presets looks exactly
