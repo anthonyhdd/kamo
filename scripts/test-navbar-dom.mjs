@@ -197,8 +197,8 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
   const f = await boot({ arm: 'feed' });
   let v = await seen(f);
   v && v.shown ? ok('the feed has it') : bad('no tab bar on the feed — the main screen: ' + JSON.stringify(v));
-  JSON.stringify(v && v.tabs) === JSON.stringify(['cam', 'feed', 'board'])
-    ? ok('three tabs, camera then feed then board') : bad('tabs: ' + JSON.stringify(v && v.tabs));
+  JSON.stringify(v && v.tabs) === JSON.stringify(['cam', 'feed', 'board', 'plus'])
+    ? ok('three tabs, camera then feed then board — then the ✦') : bad('tabs: ' + JSON.stringify(v && v.tabs));
   JSON.stringify(v && v.on) === JSON.stringify(['feed'])
     ? ok('and the feed tab is the one lit') : bad('lit: ' + JSON.stringify(v && v.on));
 
@@ -455,6 +455,43 @@ const cameraBooted = p => p.evaluate(() => !!document.getElementById('board'));
     : bad(`a held feed survived a capture (${fired}, ${gone} root(s) left) — every chFeed() `
         + 'after a publish bails on kfState, so "See it live" would open nothing');
   await p.close();
+}
+
+/* ── ①b THE ✦ IN THE BAR ─────────────────────────────────────────────────────────────────
+   The KAMO+ door follows the bar onto every screen (2026-09-29): the feed became home for most
+   returning devices on 08-29 and the ✦ only lived in the camera's corner. Three things can go
+   quietly wrong: it opens the wrong source (and the door becomes unmeasurable), it lights up
+   like a screen (and the bar points at a tab you are not on), or it is still offered to a
+   member who has nothing left to buy. */
+{
+  console.log('\n— the ✦ in the bar opens KAMO+, lights nothing, and leaves members alone —');
+  const f = await boot({ arm: 'feed', wrapper: true });
+  const plus = () => f.evaluate(() => {
+    const b = document.querySelector('#kNav [data-tab="plus"]');
+    return b ? { shown: getComputedStyle(b).display !== 'none', svg: !!b.querySelector('svg') } : null;
+  });
+  let p = await plus();
+  p && p.shown && p.svg ? ok('the ✦ is in the bar on the feed, drawn with the traced glyph')
+    : bad('no ✦ in the bar: ' + JSON.stringify(p));
+  await f.evaluate(() => document.querySelector('#kNav [data-tab="plus"]').click());
+  await f.waitForTimeout(400);
+  /* The page's code is a module, so pwLastSource is out of reach from here: what is asserted is
+     the sheet itself. The `nav_plus` source is the one line in navGo that calls it. */
+  const after = await f.evaluate(() => ({
+    open: document.getElementById('paywall').classList.contains('show'),
+    lit: [...document.querySelectorAll('#kNav [data-tab]')].filter((b) => b.classList.contains('on')).map((b) => b.dataset.tab),
+  }));
+  after.open ? ok('a tap opens the paywall')
+    : bad('the ✦ tap did not open the paywall');
+  after.lit.indexOf('plus') < 0 ? ok('and the ✦ is never lit — it is a sheet, not a screen')
+    : bad('lit after the ✦ tap: ' + JSON.stringify(after.lit));
+  /* navSync runs off the bar's MutationObserver; setPro repaints enough of the page to trip it. */
+  await f.evaluate(() => { window.KAMO.setPro(true); });
+  await f.waitForTimeout(500);
+  p = await plus();
+  p && !p.shown ? ok('a member does not see it') : bad('✦ still offered to a member: ' + JSON.stringify(p));
+  (f.__errs || []).length ? bad('page errors: ' + JSON.stringify(f.__errs)) : ok('no page errors');
+  await f.close();
 }
 
 /* ── ② AND IT IS HIDDEN WHERE SOMETHING ELSE OWNS THE BOTTOM ───────────────────────────── */

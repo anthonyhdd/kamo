@@ -189,6 +189,12 @@
   #chToast b{font-size:14.5px;font-weight:700;color:#fff;letter-spacing:-.2px;}
   #chToast span{font-size:12px;font-weight:600;color:var(--mint);}
   @media (prefers-reduced-motion: reduce){ .kNav button{transition:none;} }
+  /* THE ✦ IN THE BAR — the KAMO+ door on every screen the bar is on, not only the camera.
+     Same traced glyph as #btnPlus, same line weight, tinted mint so it reads as the offer and
+     not as a fourth place to go. Never "on": it opens a sheet, it is not a screen. */
+  .kNav button[data-tab="plus"]{color:var(--mint);}
+  .kNav button[data-tab="plus"] svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.3;
+    stroke-linejoin:round;stroke-linecap:round;}
   .heroWrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 30px;margin-bottom:3vh;}
   /* block, not swap: the hero logo is the first thing on screen, and swap renders it in
      the fallback for a beat before snapping to Space Grotesk — a visible font change on
@@ -6910,7 +6916,9 @@ const PW_CAP={ size:1, color:1, round_end:2, time:2 };
    1057 -> 20 = 1.89%, in line with `first`. Cutting on the 0% would have cut the mint region,
    which is one of the four things on this screen that still sells. Nothing to gate here: the
    name is gone from the set and its orphaned listener is gone with it. */
-const PW_USER_INITIATED=new Set(["plus","mark","brand","size","char","heatmap","replay"]);
+/* `nav_plus` is the ✦ in the tab bar (2026-09-29), kept apart from `plus` (the camera corner) so
+   the two doors can be read separately. */
+const PW_USER_INITIATED=new Set(["plus","nav_plus","mark","brand","size","char","heatmap","replay"]);
 
 /* 3 -> 1. The note above asked for `nth_interruption` to settle whether 3 was too low; the
    revenue settled it from the other side first. ~11000 views over 14 days bought 4 active
@@ -15854,11 +15862,15 @@ function navSync(){
     b.classList.toggle("on",b.dataset.tab===w);
     b.setAttribute("aria-current",b.dataset.tab===w?"page":"false");
   }); }catch(_){}
+  /* Nothing to sell a member. Re-read on every sync because isPro flips mid-session. */
+  try{ const p=navEl.querySelector('[data-tab="plus"]'); if(p) p.style.display=isPro?"none":""; }catch(_){}
 }
 function navGo(tab){
   try{
     haptic(8);
     track("nav_tapped",{to:tab,from:navWhere(),emit:"web"});
+    /* A sheet over the current screen, not a navigation: nothing underneath is closed or held. */
+    if(tab==="plus"){ openPaywall("nav_plus"); return; }
     if(tab==="board"){ chBoardOpen(); return; }
     /* THE BOARD IS A SCREEN NOW, so leaving it is closing it — and the tab you asked for is
        underneath, already in whatever state you left it. */
@@ -15962,7 +15974,15 @@ function navMount(){
     navEl.innerHTML=
        '<button type="button" data-tab="cam" aria-label="'+kT("Camera")+'">'+CAM+'</button>'
       +'<button type="button" data-tab="feed" aria-label="'+kT("Feed")+'">'+HOME+'</button>'
-      +'<button type="button" data-tab="board" aria-label="'+kT("Today’s runs")+'">'+BOARD+'</button>';
+      +'<button type="button" data-tab="board" aria-label="'+kT("Today’s runs")+'">'+BOARD+'</button>'
+      /* THE KAMO+ DOOR FOLLOWS THE BAR. Until 2026-08-29 the ✦ in the camera's corner was the
+         paywall's biggest user-initiated door; the bar then made the feed home for most
+         returning devices, and the feed has no ✦. Paywall views from `plus` fell from 86% of
+         `color`'s to ~40% the week after, with conversion per view unchanged — the door was
+         still there, people just stopped standing next to it. Cloned from #btnPlus so the
+         glyph stays the traced artwork, never a second drawing of it. */
+      +'<button type="button" data-tab="plus" aria-label="KAMO+">'
+      +((document.querySelector("#btnPlus svg")||{}).outerHTML||"✦")+'</button>';
     navEl.querySelectorAll("[data-tab]").forEach(b=>{ b.onclick=()=>navGo(b.dataset.tab); });
     document.body.appendChild(navEl);
     try{ navGlass(); }catch(_){}
