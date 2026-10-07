@@ -3868,6 +3868,43 @@ let hintArm;
   }
 }
 
+/* ═══ ONE FREE HINT A LIFETIME, NOT ONE A DAY ════════════════════════════════════════════════
+ *
+ * The daily free hint is the reason the pack is almost never offered. 14 days to 2026-10-07:
+ * 152 players tapped Hint, 86 spent a hint (all but one of them the free daily), and only 15
+ * ever reached the pack's screen — the offer only exists for somebody who wants a SECOND hint
+ * the same day, and almost nobody hunts that much. Of those 15, 8 started a purchase. The
+ * appetite is there; the door is not.
+ *
+ *   daily   today: one free hint per day, then the pack.
+ *   once    the first hint this device ever spends is free — it proves on screen what a hint
+ *           buys — and every later one is the pack.
+ *
+ * CLIENT-SIDE ON PURPOSE. hint_state still answers free_available=true once a day; the "once"
+ * arm reads that as false when this device has spent a free hint before. The server is not
+ * touched, so the rollback is this file. A device that loses both stores (reinstall, cleared
+ * site data) gets one more free hint — the same leak the daily rule already has, never worse.
+ * Devices that spent free hints BEFORE this shipped carry no mark, so each gets one more.
+ *
+ * STOP RULE: purchases (hint_purchase_initiated → hint_used{via:purchased}) per hint_tapped,
+ * split by free_arm. Watch seek_found and D1/D7 on "once" too — a hint nobody can get may cost
+ * more players than it sells packs.
+ *
+ * KILL: rollout to 0 and push. A stored arm keeps its side, so set the rollout AND the arm read
+ * below to "daily" to end it for everyone. */
+const HINT_FREE_ONCE_ROLLOUT=50;
+let freeArm;
+{
+  const s=lsGet("kamo_hint_free_arm");
+  if(s==="daily"||s==="once") freeArm=s;
+  /* Pinned for the harness: every hint suite in scripts/ was written against the daily rule. */
+  else if(navigator.webdriver) freeArm="daily";
+  else {
+    freeArm=(Math.random()*100<HINT_FREE_ONCE_ROLLOUT)?"once":"daily";
+    lsSet("kamo_hint_free_arm",freeArm);
+  }
+}
+
 /* ═══ THE FEED IS THE HOME, FOR 85 OF EVERY 100 RETURNING DEVICES ══════════════════════════
  *
  * Founder's call, 2026-08-27, and it is a rollout rather than an experiment on purpose: at
@@ -9781,7 +9818,7 @@ function track(event,props){
    * off web events must filter `wd=false`.** Whoever finally lands the upstream refusal: the
    * discontinuity is the events, not the arms — annotate the date here. */
   const p={wd:navigator.webdriver===true,page_host:location.host,
-           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,home_arm:homeArm,ask_arm:askArm,emit:"web"};
+           ...(props||{}),trial_arm:trialArm,design_arm:pwArm,plan_arm:planArm,gate_arm:gateArm,banger_arm:bangerArm,open_arm:openArm,land_arm:landArm,hint_arm:hintArm,free_arm:freeArm,home_arm:homeArm,ask_arm:askArm,emit:"web"};
   if(!WEB_ONLY.has(event) && postNative({type:"track",event:event,props:p})) return;
   chWebTrack(event,p);
 }
@@ -9885,6 +9922,18 @@ function hintEverBought(){
 function hintMarkBought(){
   try{ localStorage.setItem(HINT_BOUGHT_KEY,"1"); }catch(_){}
   try{ document.cookie="kamo_hint_bought=1; path=/; max-age=63072000; samesite=lax"+(location.protocol==="https:"?"; secure":""); }catch(_){}
+}
+/* HAS THIS DEVICE EVER SPENT A FREE HINT — read only by the "once" arm (see freeArm). Same two
+   stores and the same failure mode as hintEverBought: losing both reads false, which is one
+   more free hint, never one fewer. The only writer is a hint_spend that answered used:"free". */
+const HINT_FREE_USED_KEY="kamo_hint_free_used";
+function hintFreeEverUsed(){
+  try{ if(localStorage.getItem(HINT_FREE_USED_KEY)==="1") return true; }catch(_){}
+  try{ return /(?:^|;\s*)kamo_hint_free_used=1/.test(document.cookie||""); }catch(_){ return false; }
+}
+function hintMarkFreeUsed(){
+  try{ localStorage.setItem(HINT_FREE_USED_KEY,"1"); }catch(_){}
+  try{ document.cookie="kamo_hint_free_used=1; path=/; max-age=63072000; samesite=lax"+(location.protocol==="https:"?"; secure":""); }catch(_){}
 }
 function didCkPut(d){
   try{ document.cookie="kamo_did="+encodeURIComponent(d)+"; path=/; max-age=63072000; samesite=lax"+(location.protocol==="https:"?"; secure":""); }catch(e){}
@@ -17860,6 +17909,7 @@ function chSeek(hideId,opts){
       if(r.region){
         drawHintZone(r.region);
         track("hint_used",TP({via:r.used,balance:r.balance|0}));
+        if(r.used==="free") hintMarkFreeUsed();
         /* SPENT THE LAST ONE — SO THE BUTTON BECOMES THE OFFER, RIGHT HERE.
            It used to read "Hint used" and go dead, which meant the only route to the pack was
            to leave this hide, open ANOTHER one, tap Hint, and discover on the round trip that
@@ -17968,6 +18018,9 @@ function chSeek(hideId,opts){
        server for a hint it already knows is not there. */
     let hintEmpty=false;
     const setHintLabel=(bal,free)=>{
+      /* The "once" arm: the server's daily free hint does not exist for a device that has
+         already had its one. See freeArm. */
+      if(free&&freeArm==="once"&&hintFreeEverUsed()) free=false;
       hintEmpty=!free&&!(bal>0);
       hintIdleLabel=hintLabelFor(bal,free);
       if(!hintZone&&!hintPending&&!hintBusy) hintIdle();
