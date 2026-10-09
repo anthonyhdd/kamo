@@ -1448,6 +1448,7 @@ console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
     await page.route('**/rest/v1/rpc/report_hide', r => dead ? r.abort('failed') : r.fulfill({ status: 204, body: '' }));
     const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
     await page.evaluate(() => document.getElementById('kfFlag').click());
+    await page.evaluate(() => document.querySelector('#kfeed .kfRepGo').click());
     await page.waitForTimeout(1800);
     const after = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
     const s = await seen(page);
@@ -1464,6 +1465,46 @@ console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
         ? ok('and a real one — 204, no body, exactly as PostgREST answers a void rpc — is thanked')
         : bad(`a live report reads "${s.txt}" — an empty answer is being read as a failure`);
     }
+    await page.close();
+  }
+}
+
+/* ONE TAP ON THE ⚑ IS A QUESTION, NOT A VERDICT (2026-10-10). The flag reported AND dropped in
+   a single tap, and on a locked slide it was the only free way past a photo — so it became the
+   "next" button: 41% of public hides reported on 2026-10-09, 1,258 authors shadowbanned by
+   mistake, a feed of 8 photos. The tap now opens a sheet; nothing is sent and nothing leaves
+   until "Report" is pressed, and Cancel (or the backdrop) leaves the slide exactly where it was. */
+console.log('\nTHE ⚑ ASKS BEFORE IT REPORTS');
+{
+  for (const how of ['cancel', 'backdrop']) {
+    const page = await open(ROWS(3));
+    let calls = 0;
+    await page.route('**/rest/v1/rpc/report_hide', r => { calls++; r.fulfill({ status: 204, body: '' }); });
+    const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+    await page.evaluate(() => document.getElementById('kfFlag').click());
+    await page.waitForTimeout(400);
+    const asked = await page.evaluate(() => {
+      const w = document.querySelector('#kfeed .kfRep');
+      return { open: !!w, title: w ? w.querySelector('h3').textContent : null,
+               slides: document.querySelectorAll('.kfSlide').length };
+    });
+    asked.open && asked.title === 'Report this photo?'
+      ? ok(`one tap opens the sheet ("${asked.title}")`)
+      : bad(`one tap on the ⚑ did not open a confirmation sheet (${JSON.stringify(asked)})`);
+    asked.slides === before && calls === 0
+      ? ok('and on its own sends nothing and drops nothing')
+      : bad(`one tap already acted: slides ${before} → ${asked.slides}, report_hide calls ${calls}`);
+    await page.evaluate((how) => {
+      const w = document.querySelector('#kfeed .kfRep');
+      if (!w) return;
+      if (how === 'cancel') w.querySelector('.kfRepNo').click(); else w.click();
+    }, how);
+    await page.waitForTimeout(800);
+    const after = await page.evaluate(() => ({ open: !!document.querySelector('#kfeed .kfRep'),
+      slides: document.querySelectorAll('.kfSlide').length }));
+    !after.open && after.slides === before && calls === 0
+      ? ok(`${how === 'cancel' ? 'Cancel' : 'a tap on the backdrop'} closes it and the photo stays, unreported`)
+      : bad(`after ${how}: sheet open=${after.open}, slides ${before} → ${after.slides}, report_hide calls ${calls}`);
     await page.close();
   }
 }
