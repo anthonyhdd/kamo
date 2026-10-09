@@ -1443,11 +1443,30 @@ console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
      So report_hide is deliberately NOT seeded here. The seed short-circuits chRpc at its
      declaration and would test a version of the transport that does not exist; letting the
      fetch run and answering it 204 is the only way this assertion means anything. */
+  /* THE ⚑ ASKS FIRST (2026-10-09): one tap was being used as "next" and every tap was an
+     anonymous report. Cancel must leave the photo, the feed and the server untouched. */
+  {
+    const page = await open(ROWS(3));
+    let calls = 0;
+    await page.route('**/rest/v1/rpc/report_hide', r => { calls++; r.fulfill({ status: 204, body: '' }); });
+    const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+    await page.evaluate(() => document.getElementById('kfFlag').click());
+    const asked = await page.evaluate(() => !!document.getElementById('kfRepAsk'));
+    asked ? ok('the ⚑ asks before it reports') : bad('the ⚑ reported without asking');
+    await page.evaluate(() => document.getElementById('kfRepNo') && document.getElementById('kfRepNo').click());
+    await page.waitForTimeout(600);
+    const after = await page.evaluate(() => ({ n: document.querySelectorAll('.kfSlide').length, ask: !!document.getElementById('kfRepAsk') }));
+    after.n === before && !after.ask && calls === 0
+      ? ok('and Cancel sends nothing and keeps the photo')
+      : bad(`Cancel: slides ${before} → ${after.n}, sheet still up ${after.ask}, report_hide calls ${calls}`);
+    await page.close();
+  }
   for (const dead of [false, true]) {
     const page = await open(ROWS(3));
     await page.route('**/rest/v1/rpc/report_hide', r => dead ? r.abort('failed') : r.fulfill({ status: 204, body: '' }));
     const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
     await page.evaluate(() => document.getElementById('kfFlag').click());
+    await page.evaluate(() => document.getElementById('kfRepYes').click());
     await page.waitForTimeout(1800);
     const after = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
     const s = await seen(page);
