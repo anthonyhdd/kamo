@@ -1461,6 +1461,43 @@ console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
       : bad(`Cancel: slides ${before} → ${after.n}, sheet still up ${after.ask}, report_hide calls ${calls}`);
     await page.close();
   }
+  /* AND THE SENTENCE IN THE SHEET MUST BE TRUE WHERE IT IS READ (2026-10-10). "Swipe up" over a
+     locked, unplayed slide sent the skipper to a gesture the slide refuses. Locked: the sheet
+     names the bottom button. Played: the swipe is real and the sentence says so. */
+  {
+    const page = await open(ROWS(3));
+    const sub = async () => {
+      await page.evaluate(() => document.getElementById('kfFlag').click());
+      const t = await page.evaluate(() => { const s = document.querySelector('#kfRepAsk .cfSub'); return s ? s.textContent : null; });
+      await page.evaluate(() => document.getElementById('kfRepNo') && document.getElementById('kfRepNo').click());
+      return t;
+    };
+    const locked = await sub();
+    const quit = await page.evaluate(() => { const q = document.querySelector('.kfSlide.kfLock #chQuit');
+      if (!q) return null; const r = q.getBoundingClientRect();
+      return { txt: q.textContent, low: r.top > innerHeight / 2, shown: r.width > 0 && getComputedStyle(q).display !== 'none' }; });
+    quit && quit.low && quit.shown
+      ? ok(`and that button is there, in the bottom half ("${quit.txt}")`)
+      : bad(`the sheet points at a bottom button the locked slide does not show (${JSON.stringify(quit)})`);
+    /button at the bottom/.test(locked || '') && !/Swipe/.test(locked || '')
+      ? ok(`on a locked slide the sheet names the way out that exists ("${locked}")`)
+      : bad(`on a locked slide the sheet reads "${locked}" — the swipe is refused there`);
+    await page.evaluate(() => {
+      const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+      if (!st) return;
+      const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+      st.dispatchEvent(new PointerEvent('pointerdown', o));
+      st.dispatchEvent(new PointerEvent('pointerup', o));
+    });
+    await page.waitForFunction(
+      () => ![...document.querySelectorAll('.kfSlide')].some(x => x.classList.contains('kfLock')),
+      { timeout: 9000 }).catch(() => {});
+    const played = await sub();
+    /Swipe up/.test(played || '')
+      ? ok(`once the round is answered it says the swipe ("${played}")`)
+      : bad(`on a played slide the sheet reads "${played}"`);
+    await page.close();
+  }
   for (const dead of [false, true]) {
     const page = await open(ROWS(3));
     await page.route('**/rest/v1/rpc/report_hide', r => dead ? r.abort('failed') : r.fulfill({ status: 204, body: '' }));
