@@ -111,10 +111,33 @@ async function stroke(page, y) {
   await page.waitForTimeout(220);
 }
 
+/* THE ROWS ARE FOUND, NOT WRITTEN DOWN. They were [320..448] every 32px, which assumed where
+   the figure lands — and the figure's size is the renderer's call, not this suite's. When the
+   suites moved to Playwright's headless shell (#450, 2026-09-23) the figure came out shorter,
+   ending near y≈410, so the last two rows painted empty background and the ladder read
+   [11,16,21,25,25]: a red that measured the browser, not Undo. A throwaway board paints one
+   candidate row at a time and keeps the rows that actually moved the number; the real board
+   then paints exactly those. Same photo, same viewport, so the figure lands in the same place
+   on both. Spacing stays 32px so no two strokes overlap. */
+async function figureRows(n) {
+  const page = await paintScreen();
+  const rows = [];
+  let prev = (await cov(page)) || 0;
+  for (let y = 160; y <= 700 && rows.length < n; y += 32) {
+    await stroke(page, y);
+    const v = await cov(page);
+    if (v !== null && v > prev) rows.push(y);
+    if (v !== null) prev = v;
+  }
+  await page.close();
+  return rows;
+}
+
 console.log('\nONE TAP OF UNDO IS ONE STROKE');
 {
+  const ROWS = await figureRows(5);
+  if (ROWS.length < 5) bad(`only ${ROWS.length} rows of the board reach the figure: ${JSON.stringify(ROWS)}`);
   const page = await paintScreen();
-  const ROWS = [320, 352, 384, 416, 448];
   const up = [];
   for (const y of ROWS) { await stroke(page, y); up.push(await cov(page)); }
 
