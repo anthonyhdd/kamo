@@ -90,17 +90,25 @@ const BOARD = [
   { root: 'abc123', n_players: 3, my_pos: 2, pos: 3, name: 'tom', hit: false, ms: 2100, me: false },
 ];
 const SOLO = [{ root: 'abc123', n_players: 1, my_pos: 1, pos: 1, name: null, hit: true, ms: 4000, me: true }];
+/* The rally: the root itself (this round), and one hide back from @tom. The root must be
+   filtered out — it is the photo on screen — and tom's must become a door. */
+const THREAD = [
+  { id: 'abc123', reply_to: null, name: 'tony', img_path: 'x.jpg', round: 1, n_attempts: 3, n_found: 2, created_at: '2026-09-11T10:00:00Z' },
+  { id: 'r1', reply_to: 'abc123', name: 'tom', img_path: 'r1.jpg', round: 2, n_attempts: 0, n_found: 0, created_at: '2026-09-11T11:00:00Z' },
+];
 
-async function round({ board, handle } = {}) {
+async function round({ board, handle, seen, thread, buzz } = {}) {
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await servePhoto(page);
   await page.addInitScript((a) => {
     if (a.handle) localStorage.setItem('kamo_handle', a.handle);
-    window.__seed = { get_hide: a.hide, submit_attempt: a.win, hide_board: a.board,
-                      sign_attempt: null, reveal_hide: null, save_seek_trace: null };
-  }, { hide: HIDE, win: WIN, board: board || BOARD, handle: handle || '' });
+    if (a.seen) localStorage.setItem('kamo_feed_seen', JSON.stringify(a.seen));
+    window.__seed = { get_hide: a.hide, submit_attempt: a.win, hide_board: a.board, thread_hides: a.thread,
+                      sign_attempt: null, reveal_hide: null, save_seek_trace: null, log_link_open: null };
+  }, { hide: HIDE, win: WIN, board: board || BOARD, handle: handle || '', seen: seen || null, thread: thread || THREAD });
   await page.goto(base + '?h=abc123', { waitUntil: 'load' });
   await page.waitForTimeout(900);
+  if (buzz === false) { await page.waitForTimeout(1200); return { page, live: true }; }
   const live = await page.evaluate(() => {
     const stage = document.getElementById('chStage');
     const img = document.querySelector('.chFrame img');
@@ -131,6 +139,10 @@ const read = (page) => page.evaluate(() => {
     signs: (window.__calls || []).filter(c => c[0] === 'sign_attempt'),
     handle: localStorage.getItem('kamo_handle'),
     threads: localStorage.getItem('kamo_threads'),
+    head: (document.getElementById('chHead') || {}).textContent || '',
+    rally: [...document.querySelectorAll('#chFoot .chRally .chRallyItem')].map(b => ({ who: b.querySelector('b').textContent, played: b.classList.contains('played') })),
+    gets: (window.__calls || []).filter(c => c[0] === 'get_hide').map(c => c[1].p_id),
+    rounds: document.querySelectorAll('.chS').length,
   };
 });
 
@@ -182,15 +194,46 @@ console.log('\nTHE SEEKER RIDES THE ATTEMPT');
   me2 && me2.who === '@marie' && !t.sign
     ? ok('"you" becomes @marie on the board and the field goes away')
     : bad(`after signing the me row reads ${JSON.stringify(me2)}, field ${t.sign ? 'still there' : 'gone'}`);
+
+  console.log('\nTHE RALLY, AT THE SAME LINK');
+  s.rally.length === 1 && s.rally[0].who === '@tom' && !s.rally[0].played
+    ? ok('the other hide of the rally is a door under the podium, and the photo on screen is not')
+    : bad(`rally row: ${JSON.stringify(s.rally)}`);
+  await page.evaluate(() => document.querySelector('#chFoot .chRallyItem').click());
+  await page.waitForTimeout(900);
+  const next2 = await read(page);
+  next2.gets.includes('r1') && next2.rounds === 1
+    ? ok('tapping it opens that round in place — one screen, the old one torn down')
+    : bad(`after the tap: get_hide for ${JSON.stringify(next2.gets)}, ${next2.rounds} screen(s)`);
+  await page.close();
+}
+
+console.log('\nTHE SAME LINK, OPENED AGAIN');
+{
+  /* This device already played abc123 (it is in kamo_feed_seen). The link opens on the
+     result: no clock, no aim, no attempt filed — and the board, live. */
+  const { page } = await round({ seen: ['abc123'], handle: 'tony', buzz: false });
+  const s = await read(page);
+  !s.submit ? ok('nothing is filed — a played link is not a second round') : bad('submit_attempt was called on a re-opened link');
+  s.head === 'You already played this one.' ? ok('the card says so') : bad(`head was ${JSON.stringify(s.head)}`);
+  s.board && s.rows.length === 3 ? ok('and carries the podium as it stands') : bad(`board ${s.board}, chips ${s.rows.length}`);
+  s.rally.length === 1 ? ok('and the rally row') : bad(`rally row: ${JSON.stringify(s.rally)}`);
   await page.close();
 }
 
 console.log('\nA BOARD OF ONE IS A MIRROR');
 {
-  const { page } = await round({ board: SOLO });
+  const { page } = await round({ board: SOLO, thread: [] });
   const s = await read(page);
-  !s.board ? ok('a round nobody else has played prints no podium') : bad('a solo board was printed');
+  !s.board ? ok('a round nobody else has played, in no rally, prints nothing') : bad('a solo board was printed');
   await page.close();
+  /* And with a rally behind it, the rally row shows alone — no chips, no rank. */
+  const r2 = await round({ board: SOLO });
+  const s2 = await read(r2.page);
+  s2.board && s2.rows.length === 0 && s2.sum === null && s2.rally.length === 1
+    ? ok('with a rally behind it, only the rally row shows')
+    : bad(`solo + rally: chips ${s2.rows.length}, sum ${JSON.stringify(s2.sum)}, rally ${s2.rally.length}`);
+  await r2.page.close();
 }
 
 console.log('\nANONYMOUS PLAYERS ARE COUNTED, NEVER LISTED');

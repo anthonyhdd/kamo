@@ -118,6 +118,45 @@ async function getHide(id: string) {
   }
 }
 
+/* THE LINK IS ALIVE, AND THE PREVIEW SHOULD SAY SO. Since 2026-09-11 an attempt carries who
+   played it, and hide_finders answers "who found this one, fastest first" for anyone holding
+   the id. So the line under the photo in a group chat can carry the board as it stands —
+   "@marie found it in 3.2s. Who's faster?" — instead of the same invitation forever. A
+   second share of the same link re-unfurls with the newer line; the first stays whatever it
+   was when it was sent, which is how chat apps work and is fine. Fails to an empty list,
+   never to a missing preview. */
+async function getFinders(id: string): Promise<Array<{ name: string; ms: number }>> {
+  try {
+    const r = await fetch(SUPABASE_URL + "/rest/v1/rpc/hide_finders", {
+      method: "POST",
+      headers: { apikey: ANON, Authorization: "Bearer " + ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_ids: [id] }),
+    });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return Array.isArray(j) ? j : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/* WHAT THE PREVIEW SAYS UNDER THE PHOTO, from most alive to least. The handle is narrowed to
+   the same alphabet the database accepts, and the seconds are printed the way the app prints
+   them (one decimal, "s"). Every branch ends on the question the in-app message ends on. */
+function liveDesc(hide: { n_attempts?: number; n_found?: number; best_ms?: number },
+                  finders: Array<{ name: string; ms: number }>): string {
+  const s = (ms: number) => (Math.max(0, ms | 0) / 1000).toFixed(1) + "s";
+  const first = finders.find((f) => f && f.name && (f.ms | 0) > 0);
+  if (first) {
+    const who = String(first.name).replace(/[^A-Za-z0-9_.]/g, "").slice(0, 16);
+    if (who) return `@${who} found it in ${s(first.ms)}. Who's faster?`;
+  }
+  const tried = hide.n_attempts | 0, found = hide.n_found | 0, best = hide.best_ms | 0;
+  if (found > 0 && best > 0) return `${found} of ${tried} found it — fastest ${s(best)}. Who's fastest?`;
+  if (tried > 0) return `${tried} tried, nobody has found it yet. One tap.`;
+  return "One tap to find it. Who's fastest?";
+}
+
 /* EVERY TAG THAT CARRIES THE PHOTO, and twitter:image is one of them. It went missing for
  * one deploy on 2026-08-12 while the copy was being corrected — a line dropped in a
  * hand-copied rewrite — and the whole point of this function is that the picture reaches
@@ -188,7 +227,7 @@ Deno.serve(async (req: Request) => {
      Kept in lockstep with the app: chSeek() opens on the same sentence. */
   const generic = {
     title: "Someone hid a kamo in here",
-    desc: "One tap to find it.",
+    desc: "One tap to find it. Who's fastest?",
     // The branded 1200x630 card from the landing, not the app icon. This card is what
     // every link older than 30 days (the storage retention window), every blocked hide
     // and every bogus id renders as — a share of ALL links ever sent that only grows.
@@ -210,6 +249,7 @@ Deno.serve(async (req: Request) => {
   // Expired, blocked or bogus: send them to the app rather than to a dead game, and keep the
   // generic card so the message never renders as a broken link.
   if (!hide) return html(page({ ...generic, self }));
+  const finders = await getFinders(id);
 
   const who = String(hide.name || "").trim().replace(/^@+/, "").slice(0, 24);
   const image = `${SUPABASE_URL}/storage/v1/object/public/hides/${encodeURIComponent(hide.img_path)}`;
@@ -220,7 +260,7 @@ Deno.serve(async (req: Request) => {
     // ("@tony hid a kamo here"). Unsigned hides still beat the old card, because the
     // photo carries it.
     title: who ? `@${who} hid a kamo in here` : generic.title,
-    desc: generic.desc,
+    desc: liveDesc(hide, finders),
     image,
     to: `${SITE}?h=${encodeURIComponent(id)}`,
     get: installLink(id),
