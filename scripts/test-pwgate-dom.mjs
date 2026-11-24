@@ -96,6 +96,8 @@ const bad = m => { failed++; console.error('  ✗ ' + m); };
 async function boot(seed, priced) {
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } });
   const sent = [];
+  /* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+  await page.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
   await page.route('**/api.eu.amplitude.com/**', async r => {
     try { (JSON.parse(r.request().postData() || '{}').events || []).forEach(e => sent.push(e)); } catch {}
     await r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":200}' });

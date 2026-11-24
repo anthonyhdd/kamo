@@ -45,6 +45,21 @@ export function chromeExe() {
       if (existsSync(p)) return p;
     }
   } catch { /* not the CI image */ }
+  /* THEN PLAYWRIGHT'S OWN HEADLESS SHELL, before any installed browser. A headless run of
+     /Applications/Google Chrome.app is the same app bundle as the founder's everyday Chrome:
+     while one is alive (or orphaned after a killed test), macOS treats Chrome as already open
+     and clicking it in the Dock does nothing. On 2026-09-23 that happened twice in one evening.
+     The headless shell is a separate binary, so tests can never squat the real browser.
+     Install once: node <PW_CACHE>/node_modules/playwright-core/cli.js install chromium-headless-shell */
+  const msPw = HOME ? join(HOME, 'Library/Caches/ms-playwright') : '';
+  try {
+    for (const e of readdirSync(msPw).filter((d) => d.startsWith('chromium_headless_shell-')).sort().reverse()) {
+      for (const arch of ['chrome-headless-shell-mac-arm64', 'chrome-headless-shell-mac-x64']) {
+        const p = join(msPw, e, arch, 'chrome-headless-shell');
+        if (existsSync(p)) return p;
+      }
+    }
+  } catch { /* no playwright browsers installed */ }
   for (const p of [
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Chromium.app/Contents/MacOS/Chromium',

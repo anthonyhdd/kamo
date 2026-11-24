@@ -1345,6 +1345,48 @@ try {
   bad('NIGHTLY PURGE BROKEN:\n' + why(e));
 }
 
+/* ---- 7-ter. THE WATCHDOG, WHOSE OWN TESTS WERE RUN BY NOTHING -------------------------------
+   scripts/test-watchdog.mjs has existed since the watchdog did and this file never called it,
+   so neither did CI. The suite that proves our only production alarm fails on the things it
+   claims to catch had, in practice, never run on a pull request — which is the same shape of
+   hole as the one the watchdog itself exists to close, one level up: a gate that reports
+   success for a run in which it did nothing.
+
+   Both suites are hermetic. They drive a local http server and override KAMO_WATCH_ORIGINS,
+   which is also what keeps the challenge-link and universal-links checks pointed away from
+   the real playkamo.com — so this adds no network to the gate and cannot go red on a train.
+
+   The second one is the supervisor: whether a red sweep is worth an email. It is the half
+   that decides if the alarm is trusted or filtered to a folder, and it takes about 80s
+   because it watches real loops in real time, at seconds instead of hours. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-watchdog.mjs')], { stdio: 'pipe' });
+  ok('the watchdog fails on everything it claims to catch (node scripts/test-watchdog.mjs for the detail)');
+} catch (e) {
+  bad('WATCHDOG BROKEN — our only production alarm:\n' + why(e));
+}
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-watchdog-watch.mjs')], { stdio: 'pipe' });
+  ok('it keeps sweeping, tolerates a blip, still calls an outage an outage (node scripts/test-watchdog-watch.mjs)');
+} catch (e) {
+  bad('WATCHDOG SUPERVISOR BROKEN — the alarm either cries wolf or sleeps through an outage:\n' + why(e));
+}
+
+/* ---- 7-quater. The darkness sweep ------------------------------------------------------------
+   infra/edge-measure-lqip.ts decides, once and for everyone, that a hide never appears in the
+   feed again — kfLooksBlack()'s verdict, made durable instead of re-made on every device on
+   every page. Nothing on the page can see this file and nothing in the database forces it to
+   stay honest, so the properties that must never regress — anything too dark to play reads
+   dark, an ORDINARY photograph does not, an unjudgeable placeholder is NULL rather than 0/0,
+   and the three arrays stay aligned — are asserted here. Chained for the same reason as the
+   ones above. */
+try {
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'test-edge-lqip.mjs')], { stdio: 'pipe' });
+  ok('the darkness sweep buries what cannot be played and not the rest (node scripts/test-edge-lqip.mjs for the detail)');
+} catch (e) {
+  bad('DARKNESS SWEEP BROKEN:\n' + why(e));
+}
+
 /* ---- 8. The share sheet, rendered in a real browser -----------------------------------------
    Everything above reads the file. Two bugs shipped this week that reading the file could not
    see: the preview card was whitelisted in the short sheet's CSS while nothing ever added the
@@ -1988,6 +2030,21 @@ try {
         + 'tells this project\'s users apart from its own test suites is gone, and every arm '
         + 'read (gate, banger, open, land, plan, design) silently goes back to reading 2:1 '
         + 'harness traffic as people. See the note at its declaration in index.html.');
+}
+
+/* The harness stays off production Amplitude (2026-09-27). Every DOM suite boots index.html under
+   navigator.webdriver and mints a fresh device id per boot; until this guard, all of it landed in
+   the live project — 6 554 "users" on 2026-09-23 against ~120 real ones. Both direct POSTs
+   (chWebTrack and the boot-crash beacon) must return early under webdriver unless the page opted
+   in with window.__KAMO_AMP_WIRE. Losing it looks like nothing: the dashboards just fill back up. */
+{
+  const sites = [...html.matchAll(/fetch\("https:\/\/api\.eu\.amplitude\.com\/2\/httpapi"/g)].map((m) => m.index);
+  const guard = /navigator\.webdriver\s*===\s*true\s*&&\s*window\.__KAMO_AMP_WIRE\s*!==\s*true\s*\)\s*return/;
+  const bare = sites.filter((i) => !guard.test(html.slice(Math.max(0, i - 3000), i)));
+  sites.length >= 2 && !bare.length
+    ? ok(`all ${sites.length} direct Amplitude POSTs refuse webdriver pages unless they opt in`)
+    : bad(`${bare.length || 'no'} direct Amplitude POST(s) without the webdriver guard (found ${sites.length}) — `
+        + 'the test suites go back to minting thousands of fake users in production. See chWebTrack.');
 }
 
 /* ---- 13. The control the paywall sells --------------------------------------------------

@@ -51,6 +51,8 @@ const ok = m => console.log('  ✓ ' + m), bad = m => { failed++; console.error(
 const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 // The beacon and chWebTrack both post straight to Amplitude — capture instead of sending.
 const tracked = [];
+/* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+await page.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
 await page.route('**/api.eu.amplitude.com/**', async (route) => {
   try { const b = JSON.parse(route.request().postData() || '{}'); (b.events || []).forEach(e => tracked.push(e.event_type)); } catch {}
   route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });

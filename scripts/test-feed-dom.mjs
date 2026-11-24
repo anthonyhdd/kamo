@@ -279,6 +279,8 @@ console.log('\nTHE FEED SAYS HOW LONG IT TOOK TO OPEN');
   const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const sent = [];
+  /* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+  await page.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
   await page.route('**/api.eu.amplitude.com/**', async r => {
     try { (JSON.parse(r.request().postData() || '{}').events || []).forEach(e => sent.push(e)); } catch {}
     await r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":200}' });
@@ -440,6 +442,8 @@ console.log('\nCOVERING THE ROUND STOPS ITS CLOCK');
   const PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAF0lEQVQIW2NkYGD4z8DAwMgABXAGNgEAJz0BAWv6xkkAAAAASUVORK5CYII=', 'base64');
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.route('**/storage/v1/object/public/hides/**', r => r.fulfill({ status: 200, contentType: 'image/png', body: PX }));
+  /* Reads the wire, so it opts back in — index.html keeps webdriver pages off production Amplitude otherwise (see chWebTrack). */
+  await page.addInitScript(() => { window.__KAMO_AMP_WIRE = true; });
   await page.route('**/api.eu.amplitude.com/**', r => r.fulfill({ status: 200, body: '{}' }));
   await page.addInitScript((r) => {
     window.__seed = {
@@ -1439,11 +1443,67 @@ console.log('\nA REPORT THAT DID NOT SEND DOES NOT SAY IT DID');
      So report_hide is deliberately NOT seeded here. The seed short-circuits chRpc at its
      declaration and would test a version of the transport that does not exist; letting the
      fetch run and answering it 204 is the only way this assertion means anything. */
+  /* THE ⚑ ASKS FIRST (2026-10-09): one tap was being used as "next" and every tap was an
+     anonymous report. Cancel must leave the photo, the feed and the server untouched. */
+  {
+    const page = await open(ROWS(3));
+    let calls = 0;
+    await page.route('**/rest/v1/rpc/report_hide', r => { calls++; r.fulfill({ status: 204, body: '' }); });
+    const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
+    await page.evaluate(() => document.getElementById('kfFlag').click());
+    const asked = await page.evaluate(() => !!document.getElementById('kfRepAsk'));
+    asked ? ok('the ⚑ asks before it reports') : bad('the ⚑ reported without asking');
+    await page.evaluate(() => document.getElementById('kfRepNo') && document.getElementById('kfRepNo').click());
+    await page.waitForTimeout(600);
+    const after = await page.evaluate(() => ({ n: document.querySelectorAll('.kfSlide').length, ask: !!document.getElementById('kfRepAsk') }));
+    after.n === before && !after.ask && calls === 0
+      ? ok('and Cancel sends nothing and keeps the photo')
+      : bad(`Cancel: slides ${before} → ${after.n}, sheet still up ${after.ask}, report_hide calls ${calls}`);
+    await page.close();
+  }
+  /* AND THE SENTENCE IN THE SHEET MUST BE TRUE WHERE IT IS READ (2026-10-10). "Swipe up" over a
+     locked, unplayed slide sent the skipper to a gesture the slide refuses. Locked: the sheet
+     names the bottom button. Played: the swipe is real and the sentence says so. */
+  {
+    const page = await open(ROWS(3));
+    const sub = async () => {
+      await page.evaluate(() => document.getElementById('kfFlag').click());
+      const t = await page.evaluate(() => { const s = document.querySelector('#kfRepAsk .cfSub'); return s ? s.textContent : null; });
+      await page.evaluate(() => document.getElementById('kfRepNo') && document.getElementById('kfRepNo').click());
+      return t;
+    };
+    const locked = await sub();
+    const quit = await page.evaluate(() => { const q = document.querySelector('.kfSlide.kfLock #chQuit');
+      if (!q) return null; const r = q.getBoundingClientRect();
+      return { txt: q.textContent, low: r.top > innerHeight / 2, shown: r.width > 0 && getComputedStyle(q).display !== 'none' }; });
+    quit && quit.low && quit.shown
+      ? ok(`and that button is there, in the bottom half ("${quit.txt}")`)
+      : bad(`the sheet points at a bottom button the locked slide does not show (${JSON.stringify(quit)})`);
+    /button at the bottom/.test(locked || '') && !/Swipe/.test(locked || '')
+      ? ok(`on a locked slide the sheet names the way out that exists ("${locked}")`)
+      : bad(`on a locked slide the sheet reads "${locked}" — the swipe is refused there`);
+    await page.evaluate(() => {
+      const st = document.querySelector('.chS.chIn .chStage') || document.querySelector('.chStage');
+      if (!st) return;
+      const o = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 400 };
+      st.dispatchEvent(new PointerEvent('pointerdown', o));
+      st.dispatchEvent(new PointerEvent('pointerup', o));
+    });
+    await page.waitForFunction(
+      () => ![...document.querySelectorAll('.kfSlide')].some(x => x.classList.contains('kfLock')),
+      { timeout: 9000 }).catch(() => {});
+    const played = await sub();
+    /Swipe up/.test(played || '')
+      ? ok(`once the round is answered it says the swipe ("${played}")`)
+      : bad(`on a played slide the sheet reads "${played}"`);
+    await page.close();
+  }
   for (const dead of [false, true]) {
     const page = await open(ROWS(3));
     await page.route('**/rest/v1/rpc/report_hide', r => dead ? r.abort('failed') : r.fulfill({ status: 204, body: '' }));
     const before = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
     await page.evaluate(() => document.getElementById('kfFlag').click());
+    await page.evaluate(() => document.getElementById('kfRepYes').click());
     await page.waitForTimeout(1800);
     const after = await page.evaluate(() => document.querySelectorAll('.kfSlide').length);
     const s = await seen(page);

@@ -12,17 +12,39 @@ name: Production watchdog
 # A failed run emails the repo owner. That is the whole alerting mechanism — no API keys, no
 # third-party service, nothing to keep paid for.
 
+# ⚠️ AND FOR THIRTY DAYS IT DID NOT RUN. The cron below says every ten minutes. Measured on
+# 2026-09-18 across the 403 runs of the previous month: 9.4% of those fires actually happened,
+# the median gap between two checks was 49 minutes, the 90th percentile 4h33, and the worst
+# 12h32 — longer than the outage this file is named after. Scheduled workflows are explicitly
+# best-effort and GitHub sheds the frequent ones hardest. Nothing in the repo could show it:
+# the cron line reads "10 minutes" and a run that never fires leaves no trace.
+#
+# So the schedule is no longer the mechanism, it is the way back in. A fired run now WATCHES —
+# scripts/watchdog-watch.mjs sweeps every two minutes until its deadline — so one fire buys
+# ~5h45 of real coverage instead of one instant. Whenever a fire gets through while nothing is
+# watching, it starts the next watcher. Free: this repo is public, and the job sleeps through
+# almost all of those minutes.
+#
+# The re-test that keeps this honest lives in the script, not here: ~700 sweeps a day would
+# otherwise turn every CDN hiccup into an email, and a filtered alert is worse than no alert.
+
 on:
   schedule:
-    # Every 10 minutes. NOT every minute: GitHub's smallest cron interval is 5 minutes and
-    # scheduled runs are explicitly best-effort — under load they are delayed or dropped, so a
-    # tighter schedule buys noise rather than resolution. Ten minutes turns a four-hour outage
-    # into a ten-minute one, which is the difference that matters.
+    # Every 10 minutes — unchanged, and now a floor rather than a promise. Each fire that
+    # lands covers the hours after it, so the gaps GitHub leaves in this schedule stop being
+    # gaps in coverage. NOT every minute: 5 minutes is the smallest interval GitHub accepts
+    # and a tighter schedule is shed harder, which is the whole finding above.
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
-# One run at a time. A backlog of delayed scheduled runs all reporting the same outage is how
-# an alert becomes something you filter to a folder.
+# One watcher at a time. A backlog of delayed scheduled runs all reporting the same outage is
+# how an alert becomes something you filter to a folder.
+#
+# WHAT THIS LOOKS LIKE NOW, so it is not mistaken for a fault: while a watcher is live, every
+# scheduled fire becomes a PENDING run, and GitHub cancels the previously pending one when the
+# next arrives. So the Actions tab shows cancelled entries alongside the long green ones. That
+# is the mechanism working — at most one running plus one waiting, never a queue — and the
+# waiting one takes over the instant the live watcher reaches its deadline.
 concurrency:
   group: watchdog
   cancel-in-progress: false
@@ -30,11 +52,27 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 350, against the watcher's own 340-minute deadline: the script must be the thing that
+    # ends the run, so the log ends with a handover line rather than a cancellation. A job
+    # killed by this timeout is indistinguishable from a runner that died, which is the one
+    # state this workflow must never be confused about.
+    #
+    # ⚠️ AND A LONG JOB CAN DIE WITHOUT PRODUCTION BEING DOWN. A reclaimed or lost runner is
+    # reported as a failed run, which sends the same email as a real outage — a hazard this
+    # workflow did not have when every run lasted forty seconds. READ THE LAST LINE OF THE LOG,
+    # it is written to answer exactly this and it is one of three:
+    #   "✗ KAMO IS BROKEN IN PRODUCTION — confirmed twice"  → real, and seen twice
+    #   "✗ N TRANSIENT FAILURES in M min"                   → an origin degraded, not dead
+    #   "✓ watched for N min · … · healthy at handover"     → the watch simply ended
+    # A red run whose log ends in NONE of those is the runner, not the app. Check production
+    # yourself before acting: node scripts/watchdog.mjs, which is the same sweep in 40 seconds.
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Check what production is serving
-        run: node scripts/watchdog.mjs
+      # node scripts/watchdog.mjs is still the single sweep, unchanged, and still what you run
+      # by hand on a laptop. This only decides when to run it and whether a red sweep is real.
+      - name: Watch what production is serving
+        run: node scripts/watchdog-watch.mjs

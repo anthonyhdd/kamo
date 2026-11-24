@@ -188,6 +188,44 @@ async function swipe(page, n = 1) {
     await page.waitForTimeout(1100);
   }
 }
+/* THE CARD IS PROMISED, BUT NOT ON A PARTICULAR SLIDE — and confusing the two is how this
+   file reports the gate as broken when the gate did exactly what it is documented to do.
+   `kfGate` is re-armed from EVERY activate() once S.played >= 4, its 900ms timer is guarded
+   on `S.active===i`, and kfGateWanted() refuses whenever something is over the screen. So a
+   slide left within 900ms of registering loses its card SILENTLY, and the only thing that
+   brings it back is the next slide — "deferred, never cancelled", in the app's own words.
+   "On slide 4" is asserted ONCE, in the first section, on its own page and with
+   feed_gate_shown.n === 4. That is where that claim belongs and it is not weakened here.
+   Every section after it needs a card in order to test something else — the tap, the pass —
+   and a card one slide late makes all of their assertions fail together, none of them naming
+   the cause. CI run 35351668153 (2026-09-18) is exactly that shape: three reds in the tap
+   section, with feed_gate_passed at 0 and feed_gate_shown at 0, so nothing had mounted and
+   nothing had been scrolled past — a card that never came, not one that came and went.
+   Irreproducible on demand: 16 green runs here, four of them under a 16x CPU throttle.
+   A read that cannot tell "the card is late" from "the card is gone" has to scroll on and
+   look again. That is what a thumb does, and it is the only thing that separates the two. */
+async function cardUp(page, extraSlides = 2) {
+  for (let i = 0; ; i++) {
+    const up = await page.waitForSelector('.kfGate', { timeout: 20000 }).then(() => true, () => false);
+    if (up) return true;
+    if (i >= extraSlides) return false;
+    await swipe(page);
+  }
+}
+/* What the page looked like when no card came, because "never mounted" has several
+   lookalike causes — wrong arm, the device flag already spent, a sheet in the way, a feed
+   that never reached slide 4 — and they are indistinguishable from the assertion alone. */
+const gateState = page => page.evaluate(() => {
+  const s = document.getElementById('kfScroll');
+  return {
+    top: s && s.scrollTop, h: s && s.clientHeight,
+    slides: s ? s.querySelectorAll('.kfSlide').length : -1,
+    slid: (window.__tr || []).filter(e => e[0] === 'feed_slide').map(e => e[1] && e[1].n),
+    arm: localStorage.getItem('kamo_feed_gate_arm'),
+    seen: localStorage.getItem('kamo_feed_gate_seen'),
+    paywall: (() => { try { return document.getElementById('paywall').classList.contains('show'); } catch (_) { return 'err'; } })(),
+  };
+});
 const card = page => page.evaluate(() => {
   const g = document.querySelector('.kfGate');
   return g ? (g.textContent || '').trim() : null;
@@ -204,21 +242,24 @@ console.log('\nTHE CARD MEETS SOMEBODY WHO HAS NEVER MADE ONE, ON SLIDE 4');
                             : bad('the card appeared before slide 4');
 
   await swipe(page);
-  /* WAIT FOR THE CARD, for the same reason the third section below already does. The two
-     negative reads above must NOT wait — a card that is absent is what they assert — but this
-     one is positive, and swipe()'s 1100ms sleep is only 200ms clear of the gate's own 900ms
-     timer, which does not even start until the feed has registered the slide. When it does not
-     clear, all THREE assertions in this section fail together: the card text, feed_gate_shown,
-     and "the card replaced the round" (that last one reads `.kfGate` too, so a missing card
+  /* WAIT FOR THE CARD, AND ON THIS SLIDE ONLY — `cardUp(page, 0)` is the wait with the extra
+     slides switched off, because THIS is the section that owns "on slide 4": the read below
+     asserts feed_gate_shown.n === 4, and a card collected off slide 5 would satisfy the
+     wait and then fail that. The two negative reads above must not wait at all — a card that
+     is absent is what they assert.
+     It waits because swipe()'s 1100ms sleep is only 200ms clear of the gate's own 900ms
+     timer, which does not even start until the feed has registered the slide. When it does
+     not clear, all THREE assertions here fail together: the card text, feed_gate_shown, and
+     "the card replaced the round" (that last one reads `.kfGate` too, so a missing card
      fails it as a behavioural claim it never tested). Three reds, one cause, none of them the
      gate. Reproduced 2 runs in 5 here on 2026-08-23, and once on CI, against 0 in 5 on the
      unchanged tree — small numbers either way, which is exactly why this waits instead of
-     being argued about. `.catch` keeps a card that genuinely never mounts as the readable
-     assertion below rather than an uncaught timeout. */
-  await page.waitForSelector('.kfGate', { timeout: 20000 }).catch(() => {});
+     being argued about. A card that genuinely never mounts stays the readable assertion
+     below, now carrying the page's state, rather than an uncaught timeout. */
+  await cardUp(page, 0);
   const t = await card(page);
   t && /Make one/.test(t) ? ok('slide 4 asks, in a card the thumb can pass')
-                          : bad(`no card on slide 4: ${JSON.stringify(t)}`);
+                          : bad(`no card on slide 4: ${JSON.stringify(t)} :: ${JSON.stringify(await gateState(page))}`);
 
   const shown = await evs(page, 'feed_gate_shown');
   shown.length === 1 && shown[0][1] && shown[0][1].n === 4
@@ -243,17 +284,18 @@ console.log('\nA TAP LEAVES FOR THE CAMERA, AND IS COUNTED ONCE');
 {
   const page = await open();
   await swipe(page, 3);
-  /* WAIT FOR THE CARD BEFORE CLICKING IT. This block opens a FRESH page — the section above
-     proved the gate mounts, but on its own page, and nothing here had established that this
-     one had caught up. So querySelector could return null and the whole suite died on
-     "Cannot read properties of null (reading 'click')" — not a failed assertion, an
-     uncaught throw, which reads in CI as the feature being broken rather than the test
-     racing it. Measured on an unchanged tree: 2 failures in 3 local runs, while the same
-     commit had gone green on main twelve minutes earlier. Same idiom as the wait further
-     down, which is the one place this file already got right. */
-  const up = await page.waitForSelector('.kfGate button', { timeout: 20000 })
-    .then(() => true, () => false);
-  if (!up) bad('the card never mounted, so the tap below is not being tested');
+  /* WAIT FOR THE CARD BEFORE CLICKING IT, AND SCROLL ON IF IT IS LATE. This block opens a
+     FRESH page — the section above proved the gate mounts on slide 4, but on its own page,
+     and nothing here had established that this one had caught up. So querySelector could
+     return null and the whole suite died on "Cannot read properties of null (reading
+     'click')" — not a failed assertion, an uncaught throw, which reads in CI as the feature
+     being broken rather than the test racing it. Measured on an unchanged tree: 2 failures
+     in 3 local runs, while the same commit had gone green on main twelve minutes earlier.
+     The extra slides are cardUp()'s doing and its comment says why: what this section tests
+     is the TAP, not which slide carried the card, and the gate is armed again on every slide
+     after the fourth. */
+  const up = await cardUp(page);
+  if (!up) bad(`the card never mounted in three slides, so the tap below is not being tested :: ${JSON.stringify(await gateState(page))}`);
   /* Guarded rather than assumed: without the card this line used to throw on a null, which
      ends the whole suite mid-section and reads in CI as the feature exploding. */
   if (up) await page.evaluate(() => document.querySelector('.kfGate button').click());
@@ -293,9 +335,11 @@ console.log('\nA THUMB GOING PAST IS THE OTHER HALF OF THE RATIO');
      a card that genuinely outlives its slide all still fail, they just stop failing for
      being asked too early. The wait is inside the suite rather than in swipe() because the
      thing to wait for is the app reacting, not the scrollbar arriving — a settle-on-scroll
-     wait was tried here first and is stricter than the app is, so it failed every run. */
-  await page.waitForSelector('.kfGate', { timeout: 20000 }).catch(() => {});
-  await card(page) !== null || bad('no card to scroll past');
+     wait was tried here first and is stricter than the app is, so it failed every run.
+     The first of the three is cardUp(), extra slides and all: this section needs A card to
+     scroll past, never a card on a named slide, and the feed_gate_shown count at the bottom
+     still holds it to exactly one mount however many slides it took. */
+  await cardUp(page) || bad(`no card to scroll past :: ${JSON.stringify(await gateState(page))}`);
   await swipe(page);
   await page.waitForFunction(
     () => (window.__tr || []).some(e => e[0] === 'feed_gate_passed'),

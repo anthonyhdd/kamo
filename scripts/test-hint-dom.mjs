@@ -711,23 +711,40 @@ console.log('\nTHE TAP IS MEASURABLE, AND CARRIES WHAT IS AT STAKE');
   await page.close();
 }
 
-console.log('\nA HINT IS NOT OFFERED WHERE THERE IS NONE TO GIVE');
+console.log('\nA HINT THAT CANNOT BE GIVEN SAYS SO — IT DOES NOT DELETE ITSELF');
 {
-  /* Founder, live, 2026-08-29: "I tapped free hint, it didn't launch, and the hint button
-     disappeared." Correct server behaviour meeting a client that could not know about it.
-     hint_region() returns NULL once the kamo's radius reaches 0.22 — the zone would swallow the
-     figure and point at it — so hint_spend answers `hide_too_easy` and the button retires.
-     ⚠️ ONE HIDE IN THREE. Measured over eight days: 23% to 39% of hides published each day
-     carry r >= 0.22. The only way to discover it was to spend a tap, wait for a round trip,
-     watch nothing happen and see the control vanish — which on a FREE hint reads as "I just
-     burned my one for today". It does not; hint_spend returns before touching the wallet. */
+  /* THIS ASSERTION USED TO DEMAND THE OPPOSITE, AND THAT IS THE WHOLE LESSON.
+     It read "a hide too big for a hint zone never shows the button", written when
+     hint_region() refused at r >= 0.22 and that was one hide in three. The published median
+     then went 0.093 -> 0.101 -> 0.249 -> 0.251 across four weeks: 57% of new hides and 37% of
+     the entire live stock crossed the line, so the only consumable this app sells had no door
+     on most rounds. The number was sitting in hint_unavailable the whole time (4894 against
+     16074 hint_offered over fourteen days) and nobody read it, because a control that DELETES
+     ITSELF cannot be reported and cannot be recognised — it looks exactly like a feature that
+     was never built. It surfaced as three words from the founder: "on voit pas le hint bouton".
+     So the refusal is now the same retirement the SPEND path already uses: visible, honest,
+     already translated, and carrying the half the player cares about — nothing was taken.
+     Untappable, so the rule it was written under ("a control that cannot succeed should not
+     sit there looking tappable") still holds. And it is a filet now rather than a third of the
+     fleet: hint_region() answers a big kamo with a small disc drawn INSIDE the answer instead
+     of a huge one around it — see infra/2026-09-19-hint-on-a-big-kamo.sql. */
   const page = await hunt({ caps: { hints: true }, uid: 'user-1',
                             state: { balance: 0, free_available: true, hintable: false } });
-  const gone = await page.evaluate(() => !document.getElementById('chHint'));
-  gone
-    ? ok('a hide too big for a hint zone never shows the button')
-    : bad('the hint button is still offered on a round that cannot answer it — the tap, the '
-        + 'round trip and the disappearing control are all still there');
+  const b = await btn(page);
+  b && b.disabled && /too big/i.test(b.text)
+    ? ok(`a hide with no hint to give keeps the control and says why ("${b.text}")`)
+    : bad(`the un-hintable round renders ${JSON.stringify(b)} — a button that removes itself is `
+        + 'how this went unread for three weeks');
+  /* NOT THE 45% HUSK. `.chHint[disabled]` is a dead control; this one is a statement and has
+     to be readable — the same reason the paid-balance receipt is drawn at full strength. */
+  const opac = await page.evaluate(() => { const e = document.getElementById('chHint'); return e && +getComputedStyle(e).opacity; });
+  opac === 1
+    ? ok('and it is drawn at full strength, not as the husk of a broken button')
+    : bad(`the refusal is drawn at opacity ${opac} — unreadable is the same as absent`);
+  /* AND IT SELLS NOTHING. hint_spend returns before touching the wallet on such a hide, so a
+     screen that opened a sheet here would be charging for a refusal. */
+  const posted = await page.evaluate(() => window.__posted.filter((m) => m && m.type === 'purchase'));
+  posted.length === 0 ? ok('and nothing is sold on a hide that has no hint in it') : bad(`posted ${JSON.stringify(posted)}`);
   await page.close();
 
   /* ⚠️ AND AN OLDER SERVER MUST NOT LOSE HINTS. This file deploys on push and the database does

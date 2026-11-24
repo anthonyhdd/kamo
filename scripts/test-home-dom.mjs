@@ -58,6 +58,19 @@ const html = real.slice(0, at)
      directly — the guard that makes it a no-op when no handle is set lives in that handler,
      and calling past it would assert a path no finger can take. */
   + 'tapName(){document.getElementById("khTitle").click();return this.state();},'
+  /* THE SUPPORT DOOR. openMail and track are both function DECLARATIONS at module scope, so
+     they can be swapped from in here — which is the only way to read a mailto: clicking the
+     real one hands the URL to the OS and the page learns nothing. What is captured is the
+     string the user's mail app would have been given, which is the whole artefact under
+     test: the address, and the diagnostics that make a reply possible. */
+  + 'contact(){window.__mail=null;window.__ev=null;'
+  + 'const _m=openMail,_t=track;openMail=(u)=>{window.__mail=u;};track=(n,p)=>{if(n==="support_opened")window.__ev=p;};'
+  + 'document.getElementById("khContact").click();'
+  + 'openMail=_m;track=_t;'
+  + 'return{url:window.__mail,ev:window.__ev,'
+  + 'open:document.getElementById("kamoHome").classList.contains("show"),'
+  + 'hint:(document.getElementById("hint")||{}).textContent||"",'
+  + 'label:(document.getElementById("khContact")||{}).textContent.trim()};},'
   /* chRpc is a function DECLARATION, so it is replaceable from inside the module. Stubbed per
      id so the aggregate can be checked against known rows — and so a null (an expired or
      blocked hide, which get_hide answers with nothing) is exercised rather than assumed. */
@@ -213,6 +226,42 @@ console.log('\nTHE CARD OPENS FOR EVERYONE, AND CLAIMS ONLY WHAT IS TRUE');
   pro.upsell === 'absent'
     ? ok('and is not sold what they already own')
     : bad(`the upsell row is ${pro.upsell} for a member`);
+}
+
+/* ══ REACHING A HUMAN ════════════════════════════════════════════════════════════════════
+   This is the app's only route to a person, and every part of it fails silently if it
+   breaks: a mailto with no address opens an empty draft, a mailto with no body produces
+   "it doesn't work" from a device nobody can identify, and a handler that closes the card
+   dismisses the screen at the moment somebody asked for help. None of it is visible from a
+   screenshot, and none of it would ever be reported — the people it fails are the ones who
+   have already given up on telling us anything. */
+console.log('\nTHE SUPPORT DOOR OPENS A DRAFT SOMEBODY CAN ACTUALLY ANSWER');
+{
+  await page.evaluate(() => { window.__h.wipe(); window.__h.open(false); });
+  await page.evaluate(() => { try { localStorage.setItem('kamo_handle', 'Tony_99'); } catch (e) {} });
+  const c = await page.evaluate(() => window.__h.contact());
+  /^mailto:anthony@blisscoach\.app\?/.test(c.url || '')
+    ? ok('it addresses the one support mailbox the legal pages already publish')
+    : bad(`the button did not produce a mailto to the support address (${JSON.stringify(c.url)})`);
+  const body = decodeURIComponent(((c.url || '').split('&body=')[1] || '').replace(/\+/g, ' '));
+  /\bid: w/.test(body)
+    ? ok('and carries the device id every hide, attempt and board row is keyed on')
+    : bad('no device id in the draft — the report cannot be looked up, which is what makes it answerable');
+  /\bname: @Tony_99\b/.test(body) && /\bplan: free\b/.test(body) && /\bapp: web\b/.test(body)
+    ? ok('plus the handle, the entitlement and whether it is the app or a browser')
+    : bad(`the diagnostics block is incomplete:\n${body}`);
+  c.open
+    ? ok('the card stays open behind the draft — iOS hands them back to the screen they left')
+    : bad('the card closed itself the moment the user asked for help');
+  (c.hint || '').includes('anthony@blisscoach.app')
+    ? ok('and the address is said out loud, so the button still helps on a phone with no mail account')
+    : bad(`the hint does not carry the address (${JSON.stringify(c.hint)}) — a failed openURL would leave them with nothing`);
+  (c.ev && c.ev.plan === 'free')
+    ? ok('the tap reports, so a support door nobody finds can be told from one nobody needs')
+    : bad(`support_opened did not fire with a plan (${JSON.stringify(c.ev)})`);
+  c.label === 'Contact the team'
+    ? ok('and it says what it does')
+    : bad(`the button reads ${JSON.stringify(c.label)}`);
 }
 
 console.log('\nTHE HANDLE IS KEPT, AND KEPT CLEAN');

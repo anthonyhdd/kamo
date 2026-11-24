@@ -71,4 +71,14 @@ jobs:
         run: |
           git config --global user.name "kamo-sync"
           git config --global user.email "noreply@github.com"
-          bash scripts/sync-mirror.sh "Sync from kamo@${GITHUB_SHA::7}"
+          # A session that merges usually runs scripts/sync-mirror.sh by hand seconds later, so
+          # its push often lands between our checkout and our push, and ours is rejected as
+          # stale. That was a red run + an email on nearly every merge while production was
+          # fine. So on rejection: take the mirror's latest state and run the script again — it
+          # then either reports "already in sync" (exit 0) or pushes what is still missing.
+          SUBJECT="Sync from kamo@${GITHUB_SHA::7}"
+          bash scripts/sync-mirror.sh "$SUBJECT" && exit 0
+          echo "→ push rejected — the mirror moved under us; retrying on its latest state"
+          git -C ../kamo-mirror fetch -q origin main
+          git -C ../kamo-mirror reset -q --hard origin/main
+          bash scripts/sync-mirror.sh "$SUBJECT"
