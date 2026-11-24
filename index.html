@@ -3993,8 +3993,40 @@ let openArm;
  * ⚠️ AND FILTER wd=false, like every other arm read off web events — see the note on track().
  *
  * KILL: rollout to 0 and push, about two minutes, no build. A stored arm keeps its side.
- * FINISH: rollout to 100 and the holdout is gone the same way. */
-const NOTIF_ASK_ROLLOUT=50;
+ * FINISH: rollout to 100 and the holdout is gone the same way.
+ *
+ * ═══ READ AND KILLED, 2026-11-24. THE ARM WON ITS OWN METRIC AND LOST THE GOAL ═══════════
+ *
+ * 73 days, 2026-09-12 → 11-24, wd=false, in-app. The coin split clean: 857 publishers on
+ * `tap` against 860 on `auto`, so nothing below is a population artefact.
+ *
+ *                                        auto            tap
+ *   acceptance when asked          284/1010 = 28.1%   208/488 = 42.6%
+ *   NOTIFS ARMED PER PUBLISHER      284/860 = 33.0%   208/857 = 24.3%
+ *   RETURN WITHIN 2 DAYS                      33.2%             32.5%
+ *   guard: hide_sent/hide_published            39.7%             38.2%
+ *
+ * The mechanism worked. Asking after a send instead of at publish raised acceptance by half,
+ * exactly as designed, and the guard metric never moved — the send rate was never in danger.
+ *
+ * It still lost, and the paragraph above predicted how: reach fell to 48% of publishers while
+ * acceptance rose only ×1.52, and 0.48 × 1.52 = 0.73, so armed-per-publisher should land at
+ * 73% of the holdout's. It landed at 74%. A quarter fewer creators reachable.
+ *
+ * ⚠️ AND THE PART THAT MATTERS MORE THAN THIS EXPERIMENT. The holdout made 36% MORE publishers
+ * reachable and both arms came back at the same ~33%. More permissions did not produce more
+ * returns. "The return machinery is all built; permission is the entire bottleneck" — the line
+ * this whole arm was built on — is FALSIFIED. Permission was the broken thing that looked like
+ * the bottleneck because it was the one that was measurable. Whatever actually decides whether
+ * a creator comes back on day 2, it is not whether a nudge was armed. Do not spend another arm
+ * on the permission; the next one belongs on what the returning user is shown, or on what the
+ * nudge is allowed to say.
+ *
+ * The constant and the two branches stay. `askArm` still rides every event, the holdout logic
+ * is three lines, and test-askarm-dom.mjs still proves the holdout cannot leak — so re-running
+ * this, or running the opposite arm, is a one-digit edit rather than a re-implementation. At 0
+ * every device is `auto`, which is the behaviour that shipped before 2026-09-09. */
+const NOTIF_ASK_ROLLOUT=0;
 let askArm;
 {
   const s=lsGet("kamo_notif_ask_arm");
